@@ -1,3 +1,4 @@
+import copy
 import errno
 import json
 import math
@@ -161,9 +162,12 @@ def test_ud_fields(morph):
     }
     assert analysis.labels == frozenset({"intr"})
     assert list(analysis.feats) == sorted(analysis.feats)
-    with pytest.raises(TypeError):
-        analysis.feats["Tense"] = "Pres"
-    assert analysis.feats is morph.analyze("стали")[0].feats
+    feats = analysis.feats
+    feats["Tense"] = "Pres"
+    assert analysis.feats["Tense"] == "Past"
+    assert json.loads(json.dumps(analysis.feats)) == analysis.feats
+    assert copy.deepcopy(analysis) == analysis
+    assert pickle.loads(pickle.dumps(analysis.feats)) == analysis.feats
 
 
 @pytest.mark.parametrize(

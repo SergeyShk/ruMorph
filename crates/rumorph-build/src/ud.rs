@@ -125,7 +125,6 @@ const POS_EXCEPTIONS: &[(&str, &str, &str)] = &[
     ("NPRO", "нечего", "VERB"),
     ("NUMR", "достаточно", "ADV"),
     ("NUMR", "мало", "ADV"),
-    ("NUMR", "много", "ADV"),
     ("NUMR", "недостаточно", "ADV"),
     ("PRCL", "бы", "AUX"),
     ("PRCL", "всё", "PRON"),
@@ -215,15 +214,15 @@ fn has(grammemes: &[&str], grammeme: &str) -> bool {
     grammemes.contains(&grammeme)
 }
 
-/// Часть речи UD по части речи OpenCorpora, граммемам и лемме
-fn pos(oc: &str, grammemes: &[&str], lemma: &str) -> &'static str {
+/// Часть речи UD по части речи OpenCorpora, граммемам и лемме; `true` - часть речи из `POS_EXCEPTIONS`
+fn pos(oc: &str, grammemes: &[&str], lemma: &str) -> (&'static str, bool) {
     if let Some(&(_, _, pos)) = POS_EXCEPTIONS
         .iter()
         .find(|&&(oc_pos, word, _)| oc_pos == oc && word == lemma)
     {
-        return pos;
+        return (pos, true);
     }
-    match oc {
+    let pos = match oc {
         "NOUN"
             if ["Name", "Surn", "Patr", "Geox", "Orgn", "Trad"]
                 .iter()
@@ -246,8 +245,15 @@ fn pos(oc: &str, grammemes: &[&str], lemma: &str) -> &'static str {
         "PRCL" => "PART",
         "INTJ" => "INTJ",
         _ => "X",
-    }
+    };
+    (pos, false)
 }
+
+/// Части речи OpenCorpora: в пометы не попадают
+const OPENCORPORA_POS: &[&str] = &[
+    "NOUN", "ADJF", "ADJS", "COMP", "VERB", "INFN", "PRTF", "PRTS", "GRND", "NUMR", "ADVB", "NPRO",
+    "PRED", "PREP", "CONJ", "PRCL", "INTJ",
+];
 
 /// Граммемы, которые переходят в признаки UD (остальные лексические граммемы становятся пометами)
 const CONSUMED: &[&str] = &[
@@ -261,7 +267,7 @@ const CONSUMED: &[&str] = &[
 pub fn convert(tag: &str, lemma: &str) -> Ud {
     let grammemes: Vec<&str> = tag.split([',', ' ']).filter(|g| !g.is_empty()).collect();
     let oc = grammemes.first().copied().unwrap_or("");
-    let pos = pos(oc, &grammemes, lemma);
+    let (pos, exception) = pos(oc, &grammemes, lemma);
     let g = |name: &str| has(&grammemes, name);
     let mut feats = BTreeMap::new();
     let verbal = matches!(oc, "VERB" | "INFN" | "PRTF" | "PRTS" | "GRND");
@@ -315,6 +321,13 @@ pub fn convert(tag: &str, lemma: &str) -> Ud {
         if g(grammeme) {
             feats.insert(name, value);
         }
+    }
+    let verbal_pos = matches!(oc, "VERB" | "INFN" | "PRTF" | "PRTS" | "GRND");
+    let uninflected = matches!(pos, "ADV" | "PART" | "ADP" | "CCONJ" | "SCONJ" | "INTJ")
+        || (pos == "VERB" && !verbal_pos);
+    if oc == "PRED" || (exception && uninflected) {
+        // Признаки OpenCorpora другой части речи не переходят: «плохо» - ADV без времени, «мало» - без падежа
+        feats.clear();
     }
     if g("impr") && !feats.contains_key("Person") {
         feats.insert("Person", if g("incl") { "1" } else { "2" });
@@ -374,10 +387,6 @@ pub fn convert(tag: &str, lemma: &str) -> Ud {
         // SynTagRus: «будет», «будут» - Tense=Pres
         feats.insert("Tense", "Pres");
     }
-    if oc == "PRED" && pos == "VERB" {
-        // можно, надо, нельзя - VERB без признаков
-        feats.clear();
-    }
     if oc == "PRCL" && PARTICLE_PRONOUNS.contains(&lemma) {
         feats.extend([
             ("Animacy", "Inan"),
@@ -420,19 +429,22 @@ pub fn convert(tag: &str, lemma: &str) -> Ud {
         feats.insert("NumType", "Ord");
     }
 
-    let labels = grammemes
+    let mut labels: Vec<String> = grammemes
         .iter()
         .skip(1)
-        .filter(|g| !CONSUMED.contains(g))
+        .filter(|g| !CONSUMED.contains(g) && !OPENCORPORA_POS.contains(g))
         .map(|g| g.to_string())
         .collect();
+    labels.sort();
+    labels.dedup();
     Ud { pos, feats, labels }
 }
 
 /// Форма парадигмы, которая служит леммой разбора вместо формы 0
 #[derive(Debug, PartialEq, Eq)]
 pub enum LemmaForm {
-    /// Первая форма парадигмы со всеми этими граммемами
+    /// Форма парадигмы со всеми этими граммемами; из нескольких - ближайшая к словоформе по написанию
+    /// («лучшей» - «лучший», а не «наихороший» той же парадигмы)
     With(&'static [&'static str]),
     /// Сама словоформа: «об» - лемма «об», а не «о»
     Own,
@@ -449,6 +461,10 @@ pub fn lemma_form(tag: &str, lemma: &str, word: &str) -> Option<LemmaForm> {
         // Женские фамилии и отчества - в женском роде: Петрова, Васильевна
         Some("NOUN") if g("femn") && (g("Surn") || g("Patr")) => {
             Some(LemmaForm::With(&["NOUN", "femn", "sing", "nomn"]))
+        }
+        // У мужских отчеств форма 0 бывает вариантом написания: «василиевич» вместо «васильевич»
+        Some("NOUN") if g("masc") && g("Patr") => {
+            Some(LemmaForm::With(&["NOUN", "masc", "sing", "nomn"]))
         }
         // Превосходная степень остается превосходной: наибольший
         Some("ADJF") if g("Supr") => {
@@ -577,7 +593,7 @@ mod tests {
             (
                 "DET".into(),
                 "Case=Gen|Gender=Masc|Number=Sing|Poss=Yes".into(),
-                vec!["Fixd".into(), "Anph".into()]
+                vec!["Anph".into(), "Fixd".into()]
             )
         );
         assert_eq!(
@@ -617,6 +633,23 @@ mod tests {
             summary("PRED,pres", "можно"),
             ("VERB".into(), "".into(), vec![])
         );
+        assert_eq!(
+            summary("PRED,pres", "плохо"),
+            ("ADV".into(), "Degree=Pos".into(), vec![])
+        );
+        assert_eq!(
+            summary("PRED,pres", "пора"),
+            ("NOUN".into(), "".into(), vec![])
+        );
+        assert_eq!(
+            summary("PRED,pres", "нет"),
+            ("VERB".into(), "Polarity=Neg".into(), vec![])
+        );
+        assert_eq!(
+            summary("NUMR,gent", "мало"),
+            ("ADV".into(), "Degree=Pos".into(), vec![])
+        );
+        assert_eq!(summary("NUMR,nomn", "много").0, "NUM");
         assert_eq!(summary("CONJ", "чтобы").1, "Mood=Cnd");
         assert_eq!(
             summary("PRCL", "это"),
@@ -629,7 +662,6 @@ mod tests {
         assert_eq!(summary("ADVB", "более").1, "Degree=Cmp");
         assert_eq!(summary("ADVB", "наиболее").1, "Degree=Sup");
         assert_eq!(summary("PREP", "в").0, "ADP");
-        assert_eq!(summary("NUMR,nomn", "много").0, "ADV");
         assert_eq!(summary("NUMR,nomn", "пять").1, "Case=Nom|NumType=Card");
         assert_eq!(
             summary("NPRO,1per sing,nomn", "я").1,
@@ -664,7 +696,9 @@ mod tests {
         let (_, _, labels) = summary("NOUN,inan,masc,Slng sing,nomn", "комп");
         assert_eq!(labels, ["Slng"]);
         let (_, _, labels) = summary("ADVB,Prdx,Infr", "чуток");
-        assert_eq!(labels, ["Prdx", "Infr"]);
+        assert_eq!(labels, ["Infr", "Prdx"]);
+        let (_, _, labels) = summary("VERB,impf,intr,INFN sing,3per,pres,indc", "идти");
+        assert_eq!(labels, ["intr"]);
     }
 
     #[test]
@@ -688,6 +722,14 @@ mod tests {
             Some(LemmaForm::With(&["NOUN", "femn", "sing", "nomn"]))
         );
         assert!(lemma_form("NOUN,anim,masc,Sgtm,Surn sing,gent", "петров", "петрова").is_none());
+        assert_eq!(
+            lemma_form(
+                "NOUN,anim,masc,Patr sing,ablt",
+                "василиевич",
+                "васильевичем"
+            ),
+            Some(LemmaForm::With(&["NOUN", "masc", "sing", "nomn"]))
+        );
         assert_eq!(
             lemma_form("ADJF,Supr,Qual femn,sing,gent", "большой", "наибольшей"),
             Some(LemmaForm::With(&["ADJF", "Supr", "masc", "sing", "nomn"]))

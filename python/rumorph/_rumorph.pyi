@@ -1,4 +1,4 @@
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable
 from os import PathLike
 from pathlib import Path
 from typing import Literal, final
@@ -12,7 +12,7 @@ class Analysis:
     @property
     def pos(self) -> str: ...
     @property
-    def feats(self) -> Mapping[str, str]: ...
+    def feats(self) -> dict[str, str]: ...
     @property
     def labels(self) -> frozenset[str]: ...
     @property

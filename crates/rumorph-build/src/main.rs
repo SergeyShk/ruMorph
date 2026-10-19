@@ -85,7 +85,30 @@ fn build(export: &Path, output: &Path) -> Result<(), Box<dyn Error>> {
             let (prefix, suffix) = affixes(0);
             let lemma = [prefix, stem, suffix].concat();
             let tag = tag_of(form.into());
-            let class = ud::lemma_class(&lemma).to_owned();
+            let lemma_form = match ud::lemma_form(tag, &lemma, word) {
+                Some(ud::LemmaForm::Own) => usize::from(form),
+                Some(ud::LemmaForm::With(target)) => (0..count)
+                    .filter(|&candidate| {
+                        let grammemes: Vec<&str> = tag_of(candidate).split([',', ' ']).collect();
+                        target.iter().all(|grammeme| grammemes.contains(grammeme))
+                    })
+                    .max_by_key(|&candidate| {
+                        let (prefix, suffix) = affixes(candidate);
+                        let spelling = [prefix, stem, suffix].concat();
+                        let common = spelling
+                            .chars()
+                            .zip(word.chars())
+                            .take_while(|(a, b)| a == b)
+                            .count();
+                        (common, std::cmp::Reverse(candidate))
+                    })
+                    .unwrap_or(0),
+                None => 0,
+            };
+            // Перевод зависит от леммы UD: у «лучшей» это «лучший», а не «хороший» формы 0
+            let (prefix, suffix) = affixes(lemma_form);
+            let ud_lemma = [prefix, stem, suffix].concat();
+            let class = ud::lemma_class(&ud_lemma).to_owned();
             let key = (layout[count + usize::from(form)], class);
             let ud = match ud_numbers.get(&key) {
                 Some(&ud) => ud,
@@ -101,16 +124,7 @@ fn build(export: &Path, output: &Path) -> Result<(), Box<dyn Error>> {
                     ud
                 }
             };
-            let lemma_form = match ud::lemma_form(tag, &lemma, word) {
-                Some(ud::LemmaForm::Own) => usize::from(form),
-                Some(ud::LemmaForm::With(target)) => (0..count)
-                    .find(|&candidate| {
-                        let grammemes: Vec<&str> = tag_of(candidate).split([',', ' ']).collect();
-                        target.iter().all(|grammeme| grammemes.contains(grammeme))
-                    })
-                    .unwrap_or(0),
-                None => 0,
-            } as u16;
+            let lemma_form = lemma_form as u16;
             entries.push(Entry {
                 paradigm,
                 form,

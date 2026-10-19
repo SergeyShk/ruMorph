@@ -178,6 +178,11 @@ impl Dictionary {
     /// Разборы OpenCorpora, которые совпали в написании, лемме, части речи и признаках UD,
     /// сливаются в один с суммой вероятностей и пометами более вероятного
     pub fn analyze(&self, word: &str) -> Vec<Analysis> {
+        self.merge(self.candidates(word))
+    }
+
+    /// Разборы словаря до слияния с вероятностями P(тег | словоформа); без частот вероятности нулевые
+    fn candidates(&self, word: &str) -> Vec<Analysis> {
         let lower = word.to_lowercase();
         let mut analyses = Vec::new();
         for (spelling, offset) in self.lookup(&lower) {
@@ -204,24 +209,28 @@ impl Dictionary {
             }
         }
         self.assign_probabilities(&lower, &mut analyses);
-        self.merge(analyses)
+        analyses
     }
 
-    /// Разборы OpenCorpora до перевода в UD: написание, тег и начальная форма парадигмы
-    pub fn opencorpora(&self, word: &str) -> Vec<(String, &str, String)> {
-        let mut analyses = Vec::new();
-        for (spelling, offset) in self.lookup(&word.to_lowercase()) {
-            for &[position, _] in self.records_at(offset).unwrap_or_default() {
-                let (paradigm, form) = ((position >> 16) as u16, position as u16);
-                if let (Some(lemma), Some(tag)) = (
-                    self.lemma(paradigm, form, 0, &spelling),
-                    self.tag(paradigm, form),
-                ) {
-                    analyses.push((spelling.clone(), self.tags[tag as usize].as_str(), lemma));
-                }
-            }
-        }
+    /// Разборы OpenCorpora до перевода в UD и слияния: написание, тег, начальная форма парадигмы
+    /// и вероятность (без частот - равная доля)
+    pub fn opencorpora(&self, word: &str) -> Vec<(String, &str, String, f64)> {
+        let analyses = self.candidates(word);
+        let uniform = analyses.iter().all(|analysis| analysis.prob == 0.0);
+        let share = 1.0 / analyses.len() as f64;
         analyses
+            .into_iter()
+            .filter_map(|analysis| {
+                let lemma = self.lemma(analysis.paradigm, analysis.form, 0, &analysis.word)?;
+                let prob = if uniform { share } else { analysis.prob };
+                Some((
+                    analysis.word,
+                    self.tags[analysis.tag as usize].as_str(),
+                    lemma,
+                    prob,
+                ))
+            })
+            .collect()
     }
 
     /// Слияние разборов с одинаковыми написанием, леммой, частью речи и признаками; без частот
@@ -545,7 +554,12 @@ mod tests {
         assert_eq!(dict.analyze("петровой")[0].lemma, "петрова");
         assert_eq!(
             dict.opencorpora("петровой"),
-            [("петровой".to_string(), "NOUN,femn", "петров".to_string())]
+            [(
+                "петровой".to_string(),
+                "NOUN,femn",
+                "петров".to_string(),
+                1.0
+            )]
         );
     }
 
@@ -625,7 +639,8 @@ mod tests {
         assert_eq!(analyses.len(), 1);
         assert_eq!(dict.ud_tags()[analyses[0].ud as usize].labels, ["Dmns"]);
         assert!((analyses[0].prob - 1.0).abs() < 1e-12);
-        assert_eq!(dict.opencorpora("так").len(), 2);
+        let probs: Vec<f64> = dict.opencorpora("так").iter().map(|a| a.3).collect();
+        assert_eq!(probs, [0.75, 0.25]);
     }
 
     #[test]
@@ -652,6 +667,8 @@ mod tests {
         let dict = Dictionary::from_bytes(&builder.build().unwrap()).unwrap();
         let probs: Vec<f64> = dict.analyze("нем").iter().map(|a| a.prob).collect();
         assert_eq!(probs, [0.5, 0.5]);
+        let probs: Vec<f64> = dict.opencorpora("нем").iter().map(|a| a.3).collect();
+        assert_eq!(probs, [1.0 / 3.0; 3]);
     }
 
     #[test]

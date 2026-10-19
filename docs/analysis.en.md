@@ -27,7 +27,7 @@ The dictionary loads in a few milliseconds when the analyzer is created. One ana
 | `word` | the word form as spelled in the dictionary: with the letter «ё» if the dictionary has it |
 | `lemma` | the normal form |
 | `pos` | the UD part of speech: `NOUN`, `VERB`, `ADJ`, `DET`, `ADP` and so on |
-| `feats` | the UD features as a read-only mapping: `{"Case": "Gen", "Number": "Sing"}` |
+| `feats` | the UD features as a dict `{"Case": "Gen", "Number": "Sing"}`; a new one each time, changing it does not change the analysis |
 | `labels` | dictionary labels without a UD feature, as a `frozenset`: `{"Infr"}` (informal) |
 | `prob` | the probability of the analysis; it sums to 1 over all analyses of the word form |
 | `source` | where the analysis comes from: `"dictionary"` - the word form is in the dictionary |

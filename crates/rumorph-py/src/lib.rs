@@ -8,7 +8,7 @@ use std::sync::Arc;
 use pyo3::exceptions::{PyOSError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::sync::PyOnceLock;
-use pyo3::types::{PyDict, PyFloat, PyFrozenSet, PyMappingProxy, PyString, PyType};
+use pyo3::types::{PyDict, PyFloat, PyFrozenSet, PyString, PyType};
 
 /// Часть речи, признаки и пометы UD в текстовом виде: для сравнения, хэша, repr и pickle
 #[derive(PartialEq, Eq, Hash)]
@@ -21,7 +21,8 @@ struct UdText {
 /// Объекты Python тега UD, общие для всех разборов с этим тегом
 struct UdObjects {
     pos: Py<PyString>,
-    feats: Py<PyMappingProxy>,
+    /// Образец признаков: наружу отдается копия
+    feats: Py<PyDict>,
     labels: Py<PyFrozenSet>,
     text: Arc<UdText>,
 }
@@ -43,7 +44,7 @@ impl UdObjects {
         };
         Ok(UdObjects {
             pos: PyString::intern(py, pos).unbind(),
-            feats: PyMappingProxy::new(py, dict.as_mapping()).unbind(),
+            feats: dict.unbind(),
             labels: PyFrozenSet::new(py, labels.iter().map(|label| PyString::intern(py, label)))?
                 .unbind(),
             text: Arc::new(text),
@@ -71,7 +72,8 @@ impl UdObjects {
 ///     word (str): Словоформа в написании словаря: с буквой «ё», если она есть в словаре
 ///     lemma (str): Начальная форма
 ///     pos (str): Часть речи UD: NOUN, VERB, ADJ, DET, ADP и т. д.
-///     feats (Mapping[str, str]): Признаки UD: {"Case": "Gen", "Number": "Sing"}
+///     feats (dict[str, str]): Признаки UD: {"Case": "Gen", "Number": "Sing"}; каждый раз новый
+///         словарь, его изменение не меняет разбор
 ///     labels (frozenset[str]): Пометы словаря без аналога в UD: Infr (разговорное), Arch
 ///         (устаревшее), Qual (качественное) и т. д.
 ///     prob (float): Вероятность разбора; сумма по всем разборам словоформы равна 1
@@ -90,8 +92,7 @@ struct Analysis {
     lemma: String,
     #[pyo3(get)]
     pos: Py<PyString>,
-    #[pyo3(get)]
-    feats: Py<PyMappingProxy>,
+    feats: Py<PyDict>,
     #[pyo3(get)]
     labels: Py<PyFrozenSet>,
     #[pyo3(get)]
@@ -103,6 +104,11 @@ struct Analysis {
 
 #[pymethods]
 impl Analysis {
+    #[getter]
+    fn feats<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        self.feats.bind(py).copy()
+    }
+
     fn __repr__(&self, py: Python<'_>) -> PyResult<String> {
         Ok(format!(
             "Analysis(word={}, lemma={}, pos={}, feats={}, labels={}, prob={}, source={})",
@@ -376,22 +382,13 @@ impl Analyzer {
         self.dictionary.is_known(word)
     }
 
-    /// Теги OpenCorpora разборов словоформы в порядке analyze (для проверки словаря в тестах)
-    fn _tags(&self, word: &str) -> Vec<String> {
-        let tags = self.dictionary.tags();
-        self.dictionary
-            .analyze(word)
-            .iter()
-            .map(|analysis| tags[analysis.tag as usize].clone())
-            .collect()
-    }
-
-    /// Разборы OpenCorpora до перевода в UD: написание, тег, начальная форма (для проверки словаря)
-    fn _opencorpora(&self, word: &str) -> Vec<(String, String, String)> {
+    /// Разборы OpenCorpora до перевода в UD и слияния: написание, тег, начальная форма, вероятность
+    /// (для проверки словаря)
+    fn _opencorpora(&self, word: &str) -> Vec<(String, String, String, f64)> {
         self.dictionary
             .opencorpora(word)
             .into_iter()
-            .map(|(spelling, tag, lemma)| (spelling, tag.to_owned(), lemma))
+            .map(|(spelling, tag, lemma, prob)| (spelling, tag.to_owned(), lemma, prob))
             .collect()
     }
 
