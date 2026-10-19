@@ -38,6 +38,19 @@ def dictionary_parses(pymorphy, word):
     return None
 
 
+def expected_order(pymorphy, word, parses):
+    """Разборы pymorphy3 с вероятностями ruMorph: частоты написания из запроса, без них - написания разбора"""
+    table = pymorphy.prob_estimator.p_t_given_w
+    probs = [table.prob(word.lower(), parse.tag) for parse in parses]
+    if not any(probs):
+        probs = [table.prob(parse.word, parse.tag) for parse in parses]
+    if not any(probs):
+        return [(parse, 1 / len(parses)) for parse in parses]
+    total = sum(probs)
+    pairs = zip(parses, [prob / total for prob in probs], strict=True)
+    return sorted(pairs, key=lambda pair: -pair[1])
+
+
 def test_same_analyses(pymorphy, words):
     morph = Analyzer()
     checked = Counter()
@@ -51,10 +64,10 @@ def test_same_analyses(pymorphy, words):
         theirs = [(p.word, str(p.tag), p.normal_form) for p in parses]
         assert sorted(ours) == sorted(theirs), word
         if len(set(tags)) == len(tags):
-            total = sum(parse.score for parse in parses)
-            assert ours == theirs, word
-            for analysis, parse in zip(analyses, parses, strict=True):
-                assert math.isclose(analysis.prob, parse.score / total, rel_tol=1e-9), word
+            expected = expected_order(pymorphy, word, parses)
+            assert ours == [(p.word, str(p.tag), p.normal_form) for p, _ in expected], word
+            for analysis, (_, prob) in zip(analyses, expected, strict=True):
+                assert math.isclose(analysis.prob, prob, rel_tol=1e-9), word
             checked["same order"] += 1
         checked["same analyses"] += 1
     assert checked["same analyses"] > 40_000

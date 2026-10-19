@@ -9,7 +9,7 @@ The analyzer finds every analysis of a word form in the OpenCorpora dictionary a
 >>> morph = Analyzer()
 ```
 
-The dictionary loads in a few milliseconds when the analyzer is created. One analyzer is enough for the whole program, including several threads. By default the dictionary from the package is used; another dictionary file is passed as the `path` argument.
+The dictionary loads in a few milliseconds when the analyzer is created. One analyzer is enough for the whole program, including several threads. By default the dictionary from the package is used; another dictionary file is passed as the `path` argument. The analyzer and the analyses can be pickled, so they work with multiprocessing and joblib: another process loads the dictionary again.
 
 ## Analyses of a word form { #analyze }
 
@@ -44,4 +44,4 @@ Case does not matter, and the letter «е» may stand for «ё»: `analyze("ЕЖ
 
 ## Dictionary { #dictionary }
 
-`is_known` checks whether a word form is in the dictionary. The dictionary is OpenCorpora, about 3.1 million word forms; the probabilities of the analyses come from the OpenCorpora corpus, and the analyses of word forms missing from the corpus are equally probable. The dictionary is distributed under the [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/) license.
+`is_known` checks whether a word form is in the dictionary. The dictionary is OpenCorpora, about 3.1 million word forms; the probabilities of the analyses come from the OpenCorpora corpus: a word written with «е» instead of «ё» gets the frequencies of the spelling with «ё», and the analyses of word forms missing from the corpus are equally probable. The dictionary is distributed under the [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/) license.

@@ -63,9 +63,15 @@ impl Dictionary {
         let sections = format::read(data)?;
         check_paradigms(&sections)?;
         let fst_error = |err: fst::Error| Error::Format(err.to_string());
+        let words = Map::new(sections.words).map_err(fst_error)?;
+        let probabilities = Map::new(sections.probabilities).map_err(fst_error)?;
+        // Поврежденный автомат грузится без ошибок, но паникует при обходе
+        for map in [&words, &probabilities] {
+            map.as_fst().verify().map_err(fst_error)?;
+        }
         Ok(Dictionary {
-            words: Map::new(sections.words).map_err(fst_error)?,
-            probabilities: Map::new(sections.probabilities).map_err(fst_error)?,
+            words,
+            probabilities,
             meta: sections.meta,
             tags: sections.tags,
             prefixes: sections.prefixes,
@@ -168,25 +174,25 @@ impl Dictionary {
             .get(start + 1..start.checked_add(count)?.checked_add(1)?)
     }
 
-    fn probabilities_for(&self, word: &str) -> &[u32] {
-        let Some(offset) = self.probabilities.get(word) else {
-            return &[];
-        };
-        let start = offset as usize;
-        let count = self.probability_records.get(start).copied().unwrap_or(0) as usize;
-        self.probability_records
-            .get(start + 1..start + 1 + 2 * count)
-            .unwrap_or_default()
+    fn probabilities_for(&self, word: &str) -> Option<&[u32]> {
+        let start = usize::try_from(self.probabilities.get(word)?).ok()?;
+        let count = *self.probability_records.get(start)? as usize;
+        let end = count.checked_mul(2)?.checked_add(start)?.checked_add(1)?;
+        self.probability_records.get(start + 1..end)
     }
 
-    /// P(тег | словоформа) делится поровну между разборами с этим тегом и нормируется;
-    /// без частот у словоформы все разборы равновероятны и идут в порядке словаря
+    /// P(тег | словоформа) берется для написания из запроса, а без частот у него - для написания
+    /// разбора в словаре («еще» - частоты «ещё»); вероятность тега делится поровну между разборами
+    /// с этим тегом и нормируется. Без частот разборы равновероятны и идут в порядке словаря
     fn assign_probabilities(&self, word: &str, analyses: &mut [Analysis]) {
-        let table = self.probabilities_for(word);
+        let input = self.probabilities_for(word);
         let mut total = 0.0;
         for i in 0..analyses.len() {
             let tag = analyses[i].tag;
             let share = analyses.iter().filter(|other| other.tag == tag).count() as f64;
+            let table = input
+                .or_else(|| self.probabilities_for(&analyses[i].word))
+                .unwrap_or_default();
             let prob = table
                 .as_chunks::<2>()
                 .0
@@ -289,7 +295,9 @@ fn check_paradigms(sections: &Sections) -> Result<(), Error> {
         if end <= start || (end - start) % 3 != 0 {
             return invalid("парадигма неверной длины");
         }
-        let forms = &sections.paradigms[start..end];
+        let Some(forms) = sections.paradigms.get(start..end) else {
+            return invalid("парадигма за пределами таблицы парадигм");
+        };
         let count = forms.len() / 3;
         let tables = [
             sections.suffixes.len(),
@@ -320,7 +328,7 @@ mod tests {
     ];
 
     /// ёж (ежа), стать (стали), сталь (стали), большой (наибольший), все и всё
-    fn dictionary() -> Dictionary {
+    fn dictionary_bytes() -> Vec<u8> {
         let mut builder = Builder::new(
             TAGS.iter().map(|tag| tag.to_string()).collect(),
             vec![String::new(), "наи".into()],
@@ -348,7 +356,11 @@ mod tests {
         builder.add_probability("стали", 2, 970_000).unwrap();
         builder.add_probability("стали", 3, 20_000).unwrap();
         builder.add_probability("стали", 4, 10_000).unwrap();
-        Dictionary::from_bytes(&builder.build().unwrap()).unwrap()
+        builder.build().unwrap()
+    }
+
+    fn dictionary() -> Dictionary {
+        Dictionary::from_bytes(&dictionary_bytes()).unwrap()
     }
 
     fn summary(analyses: &[Analysis]) -> Vec<(&str, &str, u16)> {
@@ -454,11 +466,12 @@ mod tests {
             probability_records: vec![],
         };
         assert!(Dictionary::from_bytes(&format::write(&base())).is_ok());
-        let broken: [fn(&mut Sections); 4] = [
+        let broken: [fn(&mut Sections); 5] = [
             |s| s.paradigms = vec![0, 1, 0],
             |s| s.paradigms = vec![0, 0, 1],
             |s| s.paradigm_offsets = vec![0, 2],
             |s| s.paradigm_offsets = vec![1, 3],
+            |s| s.paradigm_offsets = vec![0, 9, 3],
         ];
         for breaker in broken {
             let mut sections = base();
@@ -477,5 +490,48 @@ mod tests {
         sections.records = vec![5, 0];
         let dict = Dictionary::from_bytes(&format::write(&sections)).unwrap();
         assert!(dict.analyze("кот").is_empty());
+    }
+    #[test]
+    fn rejects_corrupted_automaton() {
+        let data = dictionary_bytes();
+        let mut sections = format::read(&data).unwrap();
+        let middle = sections.words.len() / 2;
+        sections.words[middle] ^= 1;
+        let result = Dictionary::from_bytes(&format::write(&sections));
+        assert!(matches!(result, Err(Error::Format(_))));
+    }
+
+    #[test]
+    fn broken_probability_offset_gives_uniform_probabilities() {
+        let mut sections = format::read(&dictionary_bytes()).unwrap();
+        let mut probabilities = fst::MapBuilder::memory();
+        probabilities.insert("стали", u64::MAX).unwrap();
+        sections.probabilities = probabilities.into_inner().unwrap();
+        let dict = Dictionary::from_bytes(&format::write(&sections)).unwrap();
+        let probs: Vec<f64> = dict.analyze("стали").iter().map(|a| a.prob).collect();
+        assert_eq!(probs, [1.0 / 3.0; 3]);
+    }
+
+    #[test]
+    fn probabilities_of_dictionary_spelling() {
+        let mut builder = Builder::new(
+            vec!["ADVB".into(), "PRCL".into()],
+            vec![String::new()],
+            vec!["".into()],
+        );
+        let adverb = builder.add_paradigm(&[(0, 0, 0)]).unwrap();
+        let particle = builder.add_paradigm(&[(0, 1, 0)]).unwrap();
+        builder
+            .add_word("ещё", &[(adverb, 0), (particle, 0)])
+            .unwrap();
+        builder.add_probability("ещё", 1, 750_000).unwrap();
+        builder.add_probability("ещё", 0, 250_000).unwrap();
+        let dict = Dictionary::from_bytes(&builder.build().unwrap()).unwrap();
+        for word in ["ещё", "еще"] {
+            let analyses = dict.analyze(word);
+            let tags: Vec<u16> = analyses.iter().map(|a| a.tag).collect();
+            assert_eq!(tags, [1, 0], "{word}");
+            assert!((analyses[0].prob - 0.75).abs() < 1e-12, "{word}");
+        }
     }
 }

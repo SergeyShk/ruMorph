@@ -119,8 +119,12 @@ fn strings(bytes: &[u8]) -> Result<Vec<String>, Error> {
         data: bytes,
         pos: 0,
     };
-    let count = u32::from_le_bytes(reader.take(4)?.try_into().unwrap());
-    let mut values = Vec::with_capacity(count as usize);
+    let count = u32::from_le_bytes(reader.take(4)?.try_into().unwrap()) as usize;
+    // Каждая строка занимает хотя бы 4 байта длины: иначе число строк из файла задало бы любую аллокацию
+    if count > (bytes.len() - 4) / 4 {
+        return Err(Error::Format("число строк больше размера таблицы".into()));
+    }
+    let mut values = Vec::with_capacity(count);
     for _ in 0..count {
         let len = u32::from_le_bytes(reader.take(4)?.try_into().unwrap());
         values.push(utf8(reader.take(len as usize)?)?);
@@ -208,6 +212,14 @@ mod tests {
         data[MAGIC.len()..MAGIC.len() + 4].copy_from_slice(&2u32.to_le_bytes());
         let err = read(&data).err().unwrap();
         assert!(err.to_string().contains("версия формата 2"));
+    }
+
+    #[test]
+    fn rejects_string_count_beyond_table() {
+        let mut table = u32::MAX.to_le_bytes().to_vec();
+        table.extend_from_slice(&[0; 8]);
+        assert!(matches!(strings(&table), Err(Error::Format(_))));
+        assert_eq!(strings(&strings_bytes(&["а".into()])).unwrap(), ["а"]);
     }
 
     #[test]

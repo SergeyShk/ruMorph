@@ -8,7 +8,7 @@
     в миллионных долях (probabilities.tsv).
 
 Пример использования:
-    uv run python scripts/export_pymorphy.py build/opencorpora
+    uv run python scripts/export_pymorphy.py target/opencorpora
 """
 
 import argparse

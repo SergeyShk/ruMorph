@@ -1,5 +1,7 @@
+import errno
 import json
 import math
+import pickle
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -28,8 +30,16 @@ def test_path_argument(morph):
 
 def test_missing_dictionary(tmp_path):
     path = tmp_path / "нет.dict"
-    with pytest.raises(FileNotFoundError, match=r"нет\.dict"):
+    with pytest.raises(FileNotFoundError, match="Нет файла словаря") as error:
         Analyzer(path)
+    assert error.value.errno == errno.ENOENT
+    assert error.value.filename == str(path)
+
+
+def test_directory_instead_of_dictionary(tmp_path):
+    with pytest.raises((IsADirectoryError, PermissionError)) as error:
+        Analyzer(tmp_path)
+    assert error.value.filename == str(tmp_path)
 
 
 @pytest.mark.parametrize("content", [b"", b"not a dictionary", b"RUMORPH\x00\x01\x00\x00\x00"])
@@ -59,6 +69,16 @@ def test_yo_and_case(morph, word):
 def test_e_matches_both_spellings(morph):
     assert {analysis.word for analysis in morph.analyze("все")} == {"все", "всё"}
     assert {analysis.word for analysis in morph.analyze("всё")} == {"всё"}
+
+
+@pytest.mark.parametrize(
+    ("word", "spelling", "lemma"),
+    [("еще", "ещё", "ещё"), ("гнет", "гнёт", "гнуть"), ("замерзла", "замёрзла", "замёрзнуть")],
+)
+def test_frequencies_of_yo_spelling(morph, word, spelling, lemma):
+    probs = [analysis.prob for analysis in morph.analyze(spelling)]
+    assert [analysis.prob for analysis in morph.analyze(word)] == probs
+    assert morph.lemmatize([word]) == [lemma]
 
 
 def test_uniform_without_frequencies(morph):
@@ -94,8 +114,12 @@ def test_lemmatize(morph):
 def test_words_must_be_strings(morph, method):
     with pytest.raises(TypeError, match="не строка"):
         getattr(morph, method)("стали")
-    with pytest.raises(TypeError, match="должно быть строкой"):
+    with pytest.raises(TypeError, match="элемент 1 - int"):
         getattr(morph, method)(["стали", 5])
+    with pytest.raises(TypeError, match="элемент 0 - bytes"):
+        getattr(morph, method)([b"stali"])
+    with pytest.raises(UnicodeEncodeError):
+        getattr(morph, method)(["\udcff"])
 
 
 def test_threads(morph):
@@ -109,11 +133,25 @@ def test_analysis(morph):
     first, second = morph.analyze("ёж")[:2]
     assert first == morph.analyze("еж")[0]
     assert first != second
-    assert (
-        repr(first) == f"Analysis(word='ёж', lemma='ёж', prob={first.prob}, source='dictionary')"
+    assert hash(first) == hash(morph.analyze("еж")[0])
+    assert len(set(morph.analyze("стали"))) == 6
+    assert repr(first) == (
+        f"Analysis(word='ёж', lemma='ёж', prob={first.prob!r}, source='dictionary')"
     )
+    assert repr(morph.analyze("мама")[0]).endswith("prob=1.0, source='dictionary')")
     assert repr(morph) == f"Analyzer(path={str(morph.path)!r})"
     with pytest.raises(AttributeError):
         first.lemma = "еж"
     with pytest.raises(TypeError):
         Analysis()
+
+
+def test_pickle(morph):
+    analyses = morph.analyze("стали")
+    assert pickle.loads(pickle.dumps(analyses)) == analyses
+    restored = pickle.loads(pickle.dumps(morph))
+    assert restored.path == morph.path
+    assert restored.lemmatize(["стали"]) == ["стать"]
+    assert pickle.loads(pickle.dumps(Analyzer(str(morph.path)))).path == morph.path
+    with pytest.raises(ValueError, match="Неизвестный источник"):
+        rumorph._rumorph._analysis("ёж", "ёж", 1.0, "guess", 0)

@@ -1,11 +1,13 @@
 //! Модуль Python `rumorph._rumorph`
 
-use std::path::PathBuf;
+use std::hash::{DefaultHasher, Hash, Hasher};
+use std::io::ErrorKind;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use pyo3::exceptions::{PyFileNotFoundError, PyOSError, PyTypeError, PyValueError};
+use pyo3::exceptions::{PyOSError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::PyString;
+use pyo3::types::{PyFloat, PyString, PyType};
 
 /// Разбор словоформы
 ///
@@ -41,10 +43,60 @@ impl Analysis {
             "Analysis(word={}, lemma={}, prob={}, source={})",
             py_repr(py, &self.word)?,
             py_repr(py, &self.lemma)?,
-            self.prob,
+            PyFloat::new(py, self.prob).repr()?,
             py_repr(py, self.source)?
         ))
     }
+
+    fn __hash__(&self) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        (
+            &self.word,
+            &self.lemma,
+            self.prob.to_bits(),
+            self.source,
+            self.tag,
+        )
+            .hash(&mut hasher);
+        hasher.finish()
+    }
+
+    fn __reduce__<'py>(&self, py: Python<'py>) -> PyResult<(Bound<'py, PyAny>, AnalysisState)> {
+        let restore = py.import("rumorph._rumorph")?.getattr("_analysis")?;
+        Ok((
+            restore,
+            (
+                self.word.clone(),
+                self.lemma.clone(),
+                self.prob,
+                self.source,
+                self.tag,
+            ),
+        ))
+    }
+}
+
+/// Аргументы `_analysis`: поля разбора для pickle
+type AnalysisState = (String, String, f64, &'static str, u16);
+
+/// Восстановление разбора из pickle
+#[pyfunction]
+fn _analysis(word: String, lemma: String, prob: f64, source: &str, tag: u16) -> PyResult<Analysis> {
+    let source = match source {
+        "dictionary" => rumorph::Source::Dictionary.as_str(),
+        _ => {
+            return Err(PyValueError::new_err(format!(
+                "Неизвестный источник разбора: {source}"
+            )));
+        }
+    };
+    Ok(Analysis {
+        word,
+        lemma,
+        prob,
+        source,
+        tag,
+    })
 }
 
 impl From<rumorph::Analysis> for Analysis {
@@ -71,6 +123,7 @@ impl From<rumorph::Analysis> for Analysis {
 ///
 /// Исключения:
 ///     FileNotFoundError: Если файла словаря нет
+///     OSError: Если файл словаря не читается
 ///     ValueError: Если файл не является словарем ruMorph или поврежден
 ///
 /// Пример использования:
@@ -82,6 +135,8 @@ impl From<rumorph::Analysis> for Analysis {
 struct Analyzer {
     dictionary: Arc<rumorph::Dictionary>,
     path: PathBuf,
+    /// Путь задан явно: иначе pickle не сохраняет путь, и в другом окружении берется словарь его пакета
+    explicit: bool,
 }
 
 #[pymethods]
@@ -89,28 +144,25 @@ impl Analyzer {
     #[new]
     #[pyo3(signature = (path=None))]
     fn new(py: Python<'_>, path: Option<PathBuf>) -> PyResult<Self> {
+        let explicit = path.is_some();
         let path = match path {
             Some(path) => path,
             None => default_path(py)?,
         };
-        let dictionary =
-            py.detach(|| rumorph::Dictionary::open(&path))
-                .map_err(|err| match err {
-                    rumorph::Error::Io(err) if err.kind() == std::io::ErrorKind::NotFound => {
-                        PyFileNotFoundError::new_err(format!(
-                            "Нет файла словаря: {}",
-                            path.display()
-                        ))
-                    }
-                    rumorph::Error::Io(err) => {
-                        PyOSError::new_err(format!("{}: {err}", path.display()))
-                    }
-                    err => PyValueError::new_err(format!("{}: {err}", path.display())),
-                })?;
+        let dictionary = py
+            .detach(|| rumorph::Dictionary::open(&path))
+            .map_err(|err| load_error(&path, err))?;
         Ok(Analyzer {
             dictionary: Arc::new(dictionary),
             path,
+            explicit,
         })
+    }
+
+    fn __reduce__<'py>(slf: &Bound<'py, Self>) -> (Bound<'py, PyType>, (Option<PathBuf>,)) {
+        let analyzer = slf.get();
+        let path = analyzer.explicit.then(|| analyzer.path.clone());
+        (slf.get_type(), (path,))
     }
 
     /// Путь к файлу словаря
@@ -257,6 +309,28 @@ fn py_repr(py: Python<'_>, value: &str) -> PyResult<String> {
     Ok(PyString::new(py, value).repr()?.to_string())
 }
 
+/// Ошибка чтения файла - OSError с errno и именем файла (Python выбирает подкласс по errno),
+/// неверный формат - ValueError
+fn load_error(path: &Path, err: rumorph::Error) -> PyErr {
+    let rumorph::Error::Io(err) = err else {
+        return PyValueError::new_err(format!("{}: {err}", path.display()));
+    };
+    let message = match err.kind() {
+        ErrorKind::NotFound => "Нет файла словаря".to_owned(),
+        ErrorKind::PermissionDenied => "Нет доступа к файлу словаря".to_owned(),
+        ErrorKind::IsADirectory => "Путь к словарю указывает на каталог".to_owned(),
+        _ => err.to_string(),
+    };
+    let filename = path.display().to_string();
+    match err.raw_os_error() {
+        #[cfg(windows)]
+        Some(code) => PyOSError::new_err((0, message, filename, code)),
+        #[cfg(not(windows))]
+        Some(errno) => PyOSError::new_err((errno, message, filename)),
+        None => PyOSError::new_err(format!("{message}: {filename}")),
+    }
+}
+
 fn default_path(py: Python<'_>) -> PyResult<PathBuf> {
     let init: PathBuf = py.import("rumorph")?.getattr("__file__")?.extract()?;
     Ok(init.with_file_name("data").join("ru.dict"))
@@ -270,10 +344,16 @@ fn collect_words(words: &Bound<'_, PyAny>) -> PyResult<Vec<String>> {
     }
     words
         .try_iter()?
-        .map(|word| {
-            word?
-                .extract::<String>()
-                .map_err(|_| PyTypeError::new_err("Каждое слово должно быть строкой"))
+        .enumerate()
+        .map(|(number, word)| {
+            let word = word?;
+            let Ok(word) = word.cast::<PyString>() else {
+                return Err(PyTypeError::new_err(format!(
+                    "Каждое слово должно быть строкой: элемент {number} - {}",
+                    word.get_type().name()?
+                )));
+            };
+            Ok(word.to_str()?.to_owned())
         })
         .collect()
 }
@@ -282,5 +362,6 @@ fn collect_words(words: &Bound<'_, PyAny>) -> PyResult<Vec<String>> {
 fn _rumorph(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Analyzer>()?;
     m.add_class::<Analysis>()?;
+    m.add_function(wrap_pyfunction!(_analysis, m)?)?;
     Ok(())
 }

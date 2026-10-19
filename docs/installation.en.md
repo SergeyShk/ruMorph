@@ -13,7 +13,7 @@ PyPI hosts wheels for Linux (x86_64 and aarch64, manylinux), macOS (Intel and Ap
 Pre-release versions `0.1.0.devN` are published only on TestPyPI:
 
 ``` bash
-pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ rumorph==0.1.0.dev1
+pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ --pre rumorph
 ```
 
 ## Building from source

@@ -13,7 +13,7 @@ pip install rumorph
 Предварительные версии `0.1.0.devN` публикуются только на TestPyPI:
 
 ``` bash
-pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ rumorph==0.1.0.dev1
+pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ --pre rumorph
 ```
 
 ## Сборка из исходников
