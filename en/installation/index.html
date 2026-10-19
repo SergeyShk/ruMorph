@@ -243,6 +243,25 @@
   
 
       
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../analysis/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Word analysis
+
+      </a>
+    </li>
+  
+
+      
     </ul>
   </div>
 </nav>
@@ -503,6 +522,33 @@
   
 
     
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Word analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
   </ul>
 </nav>
                   </div>
@@ -576,9 +622,9 @@
 <div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span>rumorph
 </code></pre></div>
 <h2 id="prebuilt-wheels">Prebuilt wheels<a class="headerlink" href="#prebuilt-wheels" title="Permanent link">&para;</a></h2>
-<p>PyPI hosts wheels for Linux (x86_64 and aarch64, manylinux), macOS (Intel and Apple Silicon) and Windows (x64). One wheel serves every Python version starting with 3.11; Rust is not needed to install it. There are no prebuilt wheels for the free-threaded Python 3.14t yet: the package is built from source as described below; the free-threaded Python 3.13t is not supported.</p>
+<p>PyPI hosts wheels for Linux (x86_64 and aarch64, manylinux), macOS (Intel and Apple Silicon) and Windows (x64). One wheel serves every Python version starting with 3.11; Rust is not needed to install it. The dictionary is part of the package and needs no separate installation. There are no prebuilt wheels for the free-threaded Python 3.14t yet: the package is built from source as described below; the free-threaded Python 3.13t is not supported.</p>
 <p>Pre-release versions <code>0.1.0.devN</code> are published only on TestPyPI:</p>
-<div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span>--index-url<span class="w"> </span>https://test.pypi.org/simple/<span class="w"> </span>--extra-index-url<span class="w"> </span>https://pypi.org/simple/<span class="w"> </span><span class="nv">rumorph</span><span class="o">==</span><span class="m">0</span>.1.0.dev1
+<div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span>--index-url<span class="w"> </span>https://test.pypi.org/simple/<span class="w"> </span>--extra-index-url<span class="w"> </span>https://pypi.org/simple/<span class="w"> </span>--pre<span class="w"> </span>rumorph
 </code></pre></div>
 <h2 id="building-from-source">Building from source<a class="headerlink" href="#building-from-source" title="Permanent link">&para;</a></h2>
 <p>On other platforms and the free-threaded Python 3.14t pip builds the package from source, which requires <a href="https://www.rust-lang.org/tools/install">Rust</a> 1.88 or newer:</p>

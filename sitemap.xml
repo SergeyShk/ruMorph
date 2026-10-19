@@ -8,6 +8,13 @@
         <xhtml:link rel="alternate" hreflang="en" href="https://sergeyshk.github.io/ruMorph/en/"/>
     </url>
     <url>
+        <loc>https://sergeyshk.github.io/ruMorph/analysis/</loc>
+        <lastmod>2026-10-19</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="ru" href="https://sergeyshk.github.io/ruMorph/analysis/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://sergeyshk.github.io/ruMorph/en/analysis/"/>
+    </url>
+    <url>
         <loc>https://sergeyshk.github.io/ruMorph/authors/</loc>
         <lastmod>2026-10-19</lastmod>
         <changefreq>daily</changefreq>
@@ -27,6 +34,13 @@
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="en" href="https://sergeyshk.github.io/ruMorph/en/"/>
         <xhtml:link rel="alternate" hreflang="ru" href="https://sergeyshk.github.io/ruMorph/"/>
+    </url>
+    <url>
+        <loc>https://sergeyshk.github.io/ruMorph/en/analysis/</loc>
+        <lastmod>2026-10-19</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://sergeyshk.github.io/ruMorph/en/analysis/"/>
+        <xhtml:link rel="alternate" hreflang="ru" href="https://sergeyshk.github.io/ruMorph/analysis/"/>
     </url>
     <url>
         <loc>https://sergeyshk.github.io/ruMorph/en/authors/</loc>
