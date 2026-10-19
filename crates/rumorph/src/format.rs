@@ -3,12 +3,15 @@
 use crate::Error;
 
 const MAGIC: &[u8; 8] = b"RUMORPH\0";
-const VERSION: u32 = 1;
+const VERSION: u32 = 2;
 
 /// Содержимое словаря в том виде, в каком оно лежит в файле
 pub(crate) struct Sections {
     pub meta: String,
+    /// Теги OpenCorpora форм парадигм
     pub tags: Vec<String>,
+    /// Теги UD разборов: «часть речи\tпризнаки\tпометы через запятую»
+    pub ud_tags: Vec<String>,
     pub prefixes: Vec<String>,
     pub suffixes: Vec<String>,
     /// Начало каждой парадигмы в `paradigms` и общий конец
@@ -17,7 +20,7 @@ pub(crate) struct Sections {
     pub paradigms: Vec<u16>,
     /// Автомат «словоформа - начало списка разборов в `records`»
     pub words: Vec<u8>,
-    /// Списки разборов: длина, затем `(парадигма << 16) | форма`
+    /// Списки разборов: длина, затем пары `(парадигма << 16) | форма`, `(форма леммы << 16) | тег UD`
     pub records: Vec<u32>,
     /// Автомат «словоформа - начало списка частот в `probability_records`»
     pub probabilities: Vec<u8>,
@@ -34,6 +37,7 @@ pub(crate) fn write(sections: &Sections) -> Vec<u8> {
     };
     section(sections.meta.as_bytes());
     section(&strings_bytes(&sections.tags));
+    section(&strings_bytes(&sections.ud_tags));
     section(&strings_bytes(&sections.prefixes));
     section(&strings_bytes(&sections.suffixes));
     section(&u32_bytes(&sections.paradigm_offsets));
@@ -62,6 +66,7 @@ pub(crate) fn read(data: &[u8]) -> Result<Sections, Error> {
     let sections = Sections {
         meta: utf8(reader.section()?)?,
         tags: strings(reader.section()?)?,
+        ud_tags: strings(reader.section()?)?,
         prefixes: strings(reader.section()?)?,
         suffixes: strings(reader.section()?)?,
         paradigm_offsets: u32_vec(reader.section()?)?,
@@ -179,12 +184,13 @@ mod tests {
         Sections {
             meta: "{}".into(),
             tags: vec!["NOUN".into(), "VERB".into()],
+            ud_tags: vec!["NOUN\tCase=Nom\t".into()],
             prefixes: vec![String::new(), "по".into()],
             suffixes: vec![String::new(), "а".into()],
             paradigm_offsets: vec![0, 3],
             paradigms: vec![0, 0, 0],
             words: vec![1, 2, 3],
-            records: vec![1, 0],
+            records: vec![1, 0, 0],
             probabilities: vec![],
             probability_records: vec![],
         }
@@ -194,6 +200,7 @@ mod tests {
     fn roundtrip() {
         let read_back = read(&write(&sample())).unwrap();
         assert_eq!(read_back.tags, sample().tags);
+        assert_eq!(read_back.ud_tags, sample().ud_tags);
         assert_eq!(read_back.prefixes, sample().prefixes);
         assert_eq!(read_back.paradigms, sample().paradigms);
         assert_eq!(read_back.words, sample().words);
@@ -209,9 +216,9 @@ mod tests {
     #[test]
     fn rejects_other_version() {
         let mut data = write(&sample());
-        data[MAGIC.len()..MAGIC.len() + 4].copy_from_slice(&2u32.to_le_bytes());
+        data[MAGIC.len()..MAGIC.len() + 4].copy_from_slice(&1u32.to_le_bytes());
         let err = read(&data).err().unwrap();
-        assert!(err.to_string().contains("версия формата 2"));
+        assert!(err.to_string().contains("версия формата 1"));
     }
 
     #[test]

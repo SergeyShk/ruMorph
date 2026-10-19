@@ -5,13 +5,29 @@ use fst::MapBuilder;
 use crate::Error;
 use crate::format::{self, Sections};
 
+/// Разбор словоформы в словаре
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct Entry {
+    /// Номер парадигмы
+    pub paradigm: u16,
+    /// Номер формы словоформы в парадигме
+    pub form: u16,
+    /// Номер формы парадигмы, которая служит леммой разбора (обычно 0)
+    pub lemma_form: u16,
+    /// Номер тега UD, который вернул `Builder::add_ud_tag`
+    pub ud: u16,
+}
+
 /// Сборщик словаря из таблиц тегов, префиксов, суффиксов, парадигм, словоформ и частот
 ///
-/// Парадигма - список форм лексемы; форма задается номерами суффикса, тега и префикса,
-/// форма 0 - начальная (лемма). Словоформа ссылается на пары «парадигма, форма».
+/// Парадигма - список форм лексемы; форма задается номерами суффикса, тега OpenCorpora
+/// и префикса, форма 0 - начальная. Разбор словоформы ссылается на форму парадигмы,
+/// форму леммы и тег UD.
 pub struct Builder {
     meta: String,
     tags: Vec<String>,
+    ud_tags: Vec<String>,
+    ud_numbers: HashMap<String, u16>,
     prefixes: Vec<String>,
     suffixes: Vec<String>,
     paradigms: Vec<Vec<(u16, u16, u16)>>,
@@ -24,6 +40,8 @@ impl Builder {
         Builder {
             meta: String::new(),
             tags,
+            ud_tags: Vec::new(),
+            ud_numbers: HashMap::new(),
             prefixes,
             suffixes,
             paradigms: Vec::new(),
@@ -36,6 +54,28 @@ impl Builder {
     pub fn meta(&mut self, meta: impl Into<String>) -> &mut Self {
         self.meta = meta.into();
         self
+    }
+
+    /// Добавляет тег UD и возвращает его номер; одинаковые теги получают один номер
+    ///
+    /// `feats` - признаки в записи CoNLL-U («Case=Gen|Number=Sing», пустая строка - без признаков)
+    pub fn add_ud_tag(&mut self, pos: &str, feats: &str, labels: &[&str]) -> Result<u16, Error> {
+        let fields = [pos, feats, &labels.join(",")];
+        if pos.is_empty() || fields.iter().any(|field| field.contains(['\t', '\n'])) {
+            return Err(Error::Build(format!("неверный тег UD {fields:?}")));
+        }
+        if !feats.is_empty() && feats.split('|').any(|feat| feat.split_once('=').is_none()) {
+            return Err(Error::Build(format!("неверные признаки UD {feats:?}")));
+        }
+        let tag = fields.join("\t");
+        if let Some(&number) = self.ud_numbers.get(&tag) {
+            return Ok(number);
+        }
+        let number = u16::try_from(self.ud_tags.len())
+            .map_err(|_| Error::Build("больше 65 536 тегов UD".into()))?;
+        self.ud_tags.push(tag.clone());
+        self.ud_numbers.insert(tag, number);
+        Ok(number)
     }
 
     /// Добавляет парадигму из форм `(суффикс, тег, префикс)` и возвращает ее номер
@@ -54,18 +94,29 @@ impl Builder {
         Ok(id)
     }
 
-    /// Добавляет словоформу с разборами `(парадигма, форма)`; повторные разборы дописываются
-    pub fn add_word(&mut self, word: &str, analyses: &[(u16, u16)]) -> Result<(), Error> {
-        let mut packed = Vec::with_capacity(analyses.len());
-        for &(paradigm, form) in analyses {
-            let forms = self.paradigms.get(paradigm as usize).ok_or_else(|| {
-                Error::Build(format!("словоформа {word:?}: нет парадигмы {paradigm}"))
-            })?;
-            let &(suffix, _, prefix) = forms.get(form as usize).ok_or_else(|| {
+    /// Добавляет словоформу с разборами; повторные разборы дописываются
+    pub fn add_word(&mut self, word: &str, entries: &[Entry]) -> Result<(), Error> {
+        let mut packed = Vec::with_capacity(2 * entries.len());
+        for entry in entries {
+            let forms = self.paradigms.get(entry.paradigm as usize).ok_or_else(|| {
                 Error::Build(format!(
-                    "словоформа {word:?}: в парадигме {paradigm} нет формы {form}"
+                    "словоформа {word:?}: нет парадигмы {}",
+                    entry.paradigm
                 ))
             })?;
+            let missing = |form: u16| {
+                Error::Build(format!(
+                    "словоформа {word:?}: в парадигме {} нет формы {form}",
+                    entry.paradigm
+                ))
+            };
+            let &(suffix, _, prefix) = forms
+                .get(entry.form as usize)
+                .ok_or_else(|| missing(entry.form))?;
+            forms
+                .get(entry.lemma_form as usize)
+                .ok_or_else(|| missing(entry.lemma_form))?;
+            check_id("тег UD", entry.ud, self.ud_tags.len())?;
             let (prefix, suffix) = (
                 &self.prefixes[prefix as usize],
                 &self.suffixes[suffix as usize],
@@ -75,10 +126,12 @@ impl Builder {
                 || !word.ends_with(suffix.as_str())
             {
                 return Err(Error::Build(format!(
-                    "словоформа {word:?} не совпадает с формой {form} парадигмы {paradigm}"
+                    "словоформа {word:?} не совпадает с формой {} парадигмы {}",
+                    entry.form, entry.paradigm
                 )));
             }
-            packed.push(((paradigm as u32) << 16) | form as u32);
+            packed.push(((entry.paradigm as u32) << 16) | entry.form as u32);
+            packed.push(((entry.lemma_form as u32) << 16) | entry.ud as u32);
         }
         self.words
             .entry(word.to_owned())
@@ -116,7 +169,7 @@ impl Builder {
         for (word, packed) in &self.words {
             let offset = *offsets.entry(packed).or_insert_with(|| {
                 let offset = records.len() as u64;
-                records.push(packed.len() as u32);
+                records.push((packed.len() / 2) as u32);
                 records.extend_from_slice(packed);
                 offset
             });
@@ -138,6 +191,7 @@ impl Builder {
         Ok(format::write(&Sections {
             meta: self.meta.clone(),
             tags: self.tags.clone(),
+            ud_tags: self.ud_tags.clone(),
             prefixes: self.prefixes.clone(),
             suffixes: self.suffixes.clone(),
             paradigm_offsets,
@@ -167,11 +221,22 @@ mod tests {
     use super::*;
 
     fn builder() -> Builder {
-        Builder::new(
+        let mut builder = Builder::new(
             vec!["NOUN".into()],
             vec![String::new()],
             vec![String::new(), "а".into()],
-        )
+        );
+        builder.add_ud_tag("NOUN", "", &[]).unwrap();
+        builder
+    }
+
+    fn entry(paradigm: u16, form: u16) -> Entry {
+        Entry {
+            paradigm,
+            form,
+            lemma_form: 0,
+            ud: 0,
+        }
     }
 
     #[test]
@@ -188,10 +253,41 @@ mod tests {
     fn checks_word_forms() {
         let mut builder = builder();
         builder.add_paradigm(&[(0, 0, 0), (1, 0, 0)]).unwrap();
-        assert!(builder.add_word("ежа", &[(1, 0)]).is_err());
-        assert!(builder.add_word("ежа", &[(0, 2)]).is_err());
-        assert!(builder.add_word("еж", &[(0, 1)]).is_err());
-        builder.add_word("ежа", &[(0, 1)]).unwrap();
+        assert!(builder.add_word("ежа", &[entry(1, 0)]).is_err());
+        assert!(builder.add_word("ежа", &[entry(0, 2)]).is_err());
+        assert!(builder.add_word("еж", &[entry(0, 1)]).is_err());
+        let lemma_form = Entry {
+            lemma_form: 2,
+            ..entry(0, 1)
+        };
+        assert!(builder.add_word("ежа", &[lemma_form]).is_err());
+        let ud = Entry {
+            ud: 1,
+            ..entry(0, 1)
+        };
+        assert!(builder.add_word("ежа", &[ud]).is_err());
+        builder.add_word("ежа", &[entry(0, 1)]).unwrap();
+    }
+
+    #[test]
+    fn ud_tags_are_shared() {
+        let mut builder = builder();
+        assert_eq!(
+            builder
+                .add_ud_tag("VERB", "Aspect=Perf", &["intr"])
+                .unwrap(),
+            1
+        );
+        assert_eq!(
+            builder
+                .add_ud_tag("VERB", "Aspect=Perf", &["intr"])
+                .unwrap(),
+            1
+        );
+        assert_eq!(builder.add_ud_tag("VERB", "Aspect=Perf", &[]).unwrap(), 2);
+        assert!(builder.add_ud_tag("", "", &[]).is_err());
+        assert!(builder.add_ud_tag("VERB", "Aspect", &[]).is_err());
+        assert!(builder.add_ud_tag("VERB", "Aspect=Perf\t", &[]).is_err());
     }
 
     #[test]

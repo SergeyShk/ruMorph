@@ -1,4 +1,4 @@
-"""Словарь собран из pymorphy3-dicts-ru: на словарных словах разборы совпадают с pymorphy3"""
+"""Словарь собран из pymorphy3-dicts-ru: на словарных словах разборы OpenCorpora совпадают с pymorphy3"""
 
 import math
 from collections import Counter
@@ -39,36 +39,43 @@ def dictionary_parses(pymorphy, word):
 
 
 def expected_order(pymorphy, word, parses):
-    """Разборы pymorphy3 с вероятностями ruMorph: частоты написания из запроса, без них - написания разбора"""
+    """Порядок и вероятности ruMorph по таблице частот pymorphy3: частоты написания из запроса,
+    без них - написания разбора; вероятность тега делится между разборами с той же таблицей"""
     table = pymorphy.prob_estimator.p_t_given_w
-    probs = [table.prob(word.lower(), parse.tag) for parse in parses]
-    if not any(probs):
-        probs = [table.prob(parse.word, parse.tag) for parse in parses]
-    if not any(probs):
-        return [(parse, 1 / len(parses)) for parse in parses]
+    lower = word.lower()
+    probs = [table.prob(lower, parse.tag) for parse in parses]
+    own = any(probs)
+    if not own:
+        probs = [0 if p.word == lower else table.prob(p.word, p.tag) for p in parses]
+    shares = [sum(q.tag == p.tag and (own or q.word == p.word) for q in parses) for p in parses]
+    probs = [prob / share for prob, share in zip(probs, shares, strict=True)]
     total = sum(probs)
+    if total == 0:
+        return [(parse, 1 / len(parses)) for parse in parses]
     pairs = zip(parses, [prob / total for prob in probs], strict=True)
     return sorted(pairs, key=lambda pair: -pair[1])
 
 
 def test_same_analyses(pymorphy, words):
+    """Разборы OpenCorpora до перевода в UD: словоформа, тег, начальная форма и вероятность"""
     morph = Analyzer()
     checked = Counter()
-    for word, analyses in zip(words, morph.analyze_many(words), strict=True):
+    for word in words:
         parses = dictionary_parses(pymorphy, word)
         if parses is None:
             checked["not in dictionary"] += 1
             continue
-        tags = morph._tags(word)
-        ours = [(a.word, tag, a.lemma) for a, tag in zip(analyses, tags, strict=True)]
+        ours = morph._opencorpora(word)
         theirs = [(p.word, str(p.tag), p.normal_form) for p in parses]
-        assert sorted(ours) == sorted(theirs), word
-        if len(set(tags)) == len(tags):
-            expected = expected_order(pymorphy, word, parses)
-            assert ours == [(p.word, str(p.tag), p.normal_form) for p, _ in expected], word
-            for analysis, (_, prob) in zip(analyses, expected, strict=True):
-                assert math.isclose(analysis.prob, prob, rel_tol=1e-9), word
-            checked["same order"] += 1
+        assert sorted(item[:3] for item in ours) == sorted(theirs), word
         checked["same analyses"] += 1
+        if len({tag for _, tag, _, _ in ours}) == len(ours):
+            expected = expected_order(pymorphy, word, parses)
+            assert [item[:3] for item in ours] == [
+                (p.word, str(p.tag), p.normal_form) for p, _ in expected
+            ], word
+            for (*_, prob), (_, expected_prob) in zip(ours, expected, strict=True):
+                assert math.isclose(prob, expected_prob, rel_tol=1e-9), word
+            checked["same order"] += 1
     assert checked["same analyses"] > 40_000
     assert checked["same order"] > 0.95 * checked["same analyses"]

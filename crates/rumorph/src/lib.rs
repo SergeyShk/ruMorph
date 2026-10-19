@@ -6,6 +6,6 @@ mod dictionary;
 mod error;
 mod format;
 
-pub use builder::Builder;
-pub use dictionary::{Analysis, Dictionary, Source};
+pub use builder::{Builder, Entry};
+pub use dictionary::{Analysis, Dictionary, Source, UdTag};
 pub use error::Error;

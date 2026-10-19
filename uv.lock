@@ -1164,7 +1164,7 @@ wheels = [
 
 [[package]]
 name = "rumorph"
-version = "0.1.0.dev2"
+version = "0.1.0.dev3"
 source = { editable = "." }
 
 [package.dev-dependencies]
