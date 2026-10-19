@@ -535,6 +535,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#ud" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Части речи и признаки
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#lists" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -613,6 +624,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#ud" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Части речи и признаки
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#lists" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -655,7 +677,7 @@
 
 
 <h1 id="_1">Разбор словоформ<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h1>
-<p>Анализатор находит для словоформы все варианты разбора по словарю OpenCorpora и упорядочивает их по вероятности.</p>
+<p>Анализатор находит для словоформы все варианты разбора по словарю OpenCorpora - начальную форму, часть речи и признаки <a href="https://universaldependencies.org/">Universal Dependencies</a> - и упорядочивает их по вероятности.</p>
 <h2 id="analyzer">Анализатор<a class="headerlink" href="#analyzer" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">rumorph</span><span class="w"> </span><span class="kn">import</span> <span class="n">Analyzer</span>
 <span class="o">&gt;&gt;&gt;</span> <span class="n">morph</span> <span class="o">=</span> <span class="n">Analyzer</span><span class="p">()</span>
@@ -664,9 +686,9 @@
 <h2 id="analyze">Разборы словоформы<a class="headerlink" href="#analyze" title="Permanent link">&para;</a></h2>
 <p><code>analyze</code> возвращает разборы словоформы по убыванию вероятности:</p>
 <div class="highlight"><pre><span></span><code><span class="o">&gt;&gt;&gt;</span> <span class="k">for</span> <span class="n">analysis</span> <span class="ow">in</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"стали"</span><span class="p">)[:</span><span class="mi">2</span><span class="p">]:</span>
-<span class="o">...</span>     <span class="nb">print</span><span class="p">(</span><span class="n">analysis</span><span class="o">.</span><span class="n">word</span><span class="p">,</span> <span class="n">analysis</span><span class="o">.</span><span class="n">lemma</span><span class="p">,</span> <span class="nb">round</span><span class="p">(</span><span class="n">analysis</span><span class="o">.</span><span class="n">prob</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
-<span class="n">стали</span> <span class="n">стать</span> <span class="mf">0.975</span>
-<span class="n">стали</span> <span class="n">сталь</span> <span class="mf">0.011</span>
+<span class="o">...</span>     <span class="nb">print</span><span class="p">(</span><span class="n">analysis</span><span class="o">.</span><span class="n">lemma</span><span class="p">,</span> <span class="n">analysis</span><span class="o">.</span><span class="n">pos</span><span class="p">,</span> <span class="nb">dict</span><span class="p">(</span><span class="n">analysis</span><span class="o">.</span><span class="n">feats</span><span class="p">),</span> <span class="nb">round</span><span class="p">(</span><span class="n">analysis</span><span class="o">.</span><span class="n">prob</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+<span class="n">стать</span> <span class="n">VERB</span> <span class="p">{</span><span class="s1">'Aspect'</span><span class="p">:</span> <span class="s1">'Perf'</span><span class="p">,</span> <span class="s1">'Mood'</span><span class="p">:</span> <span class="s1">'Ind'</span><span class="p">,</span> <span class="s1">'Number'</span><span class="p">:</span> <span class="s1">'Plur'</span><span class="p">,</span> <span class="s1">'Tense'</span><span class="p">:</span> <span class="s1">'Past'</span><span class="p">,</span> <span class="s1">'VerbForm'</span><span class="p">:</span> <span class="s1">'Fin'</span><span class="p">,</span> <span class="s1">'Voice'</span><span class="p">:</span> <span class="s1">'Mid'</span><span class="p">}</span> <span class="mf">0.975</span>
+<span class="n">сталь</span> <span class="n">NOUN</span> <span class="p">{</span><span class="s1">'Animacy'</span><span class="p">:</span> <span class="s1">'Inan'</span><span class="p">,</span> <span class="s1">'Case'</span><span class="p">:</span> <span class="s1">'Gen'</span><span class="p">,</span> <span class="s1">'Gender'</span><span class="p">:</span> <span class="s1">'Fem'</span><span class="p">,</span> <span class="s1">'Number'</span><span class="p">:</span> <span class="s1">'Sing'</span><span class="p">}</span> <span class="mf">0.011</span>
 </code></pre></div>
 <table>
 <thead>
@@ -685,6 +707,18 @@
 <td>начальная форма</td>
 </tr>
 <tr>
+<td><code>pos</code></td>
+<td>часть речи UD: <code>NOUN</code>, <code>VERB</code>, <code>ADJ</code>, <code>DET</code>, <code>ADP</code> и т. д.</td>
+</tr>
+<tr>
+<td><code>feats</code></td>
+<td>признаки UD - словарь <code>{"Case": "Gen", "Number": "Sing"}</code>; каждый раз новый, его изменение не меняет разбор</td>
+</tr>
+<tr>
+<td><code>labels</code></td>
+<td>пометы словаря, у которых нет признака UD, - <code>frozenset</code>: <code>{"Infr"}</code> (разговорное)</td>
+</tr>
+<tr>
 <td><code>prob</code></td>
 <td>вероятность разбора; сумма по всем разборам словоформы равна 1</td>
 </tr>
@@ -695,6 +729,18 @@
 </tbody>
 </table>
 <p>Регистр не важен, а буква «е» может обозначать «ё»: <code>analyze("ЕЖ")</code> возвращает разборы словоформы «ёж». Для слова, которого нет в словаре, список пуст.</p>
+<h2 id="ud">Части речи и признаки<a class="headerlink" href="#ud" title="Permanent link">&para;</a></h2>
+<p>Части речи и признаки следуют <a href="https://universaldependencies.org/u/pos/">Universal Dependencies</a> в соглашениях крупнейшего русского трибанка <a href="https://github.com/UniversalDependencies/UD_Russian-SynTagRus">UD_Russian-SynTagRus</a>, поэтому результат можно сравнивать с разметкой spaCy, Stanza и других инструментов на UD. Отличия от частей речи OpenCorpora:</p>
+<ul>
+<li>«который», «этот», «свой», «весь», «такой» и другие местоименные прилагательные - <code>DET</code>;</li>
+<li>«быть» и «бы» - <code>AUX</code>;</li>
+<li>вводные слова «однако», «например», «конечно» - <code>ADV</code>;</li>
+<li>«можно», «надо», «нельзя» - <code>VERB</code> без признаков;</li>
+<li>предлоги - <code>ADP</code>, сочинительные союзы - <code>CCONJ</code>, подчинительные - <code>SCONJ</code>, частицы - <code>PART</code>.</li>
+</ul>
+<p>Признаки: падеж, число, род, одушевленность, лицо, время, вид, наклонение, залог, форма глагола, степень, краткая форма (<code>Variant=Short</code>), тип имени собственного (<code>NameType</code>), сокращение (<code>Abbr</code>), притяжательность (<code>Poss</code>), количественные числительные (<code>NumType=Card</code>), отрицание (<code>Polarity=Neg</code>).</p>
+<p>Леммы тоже следуют SynTagRus: у женских фамилий и отчеств лемма в женском роде («Ивановой» - «иванова»), превосходная степень остается превосходной («важнейшей» - «важнейший»), «денег» - «деньги». Если несколько разборов OpenCorpora в UD совпадают (союз и наречие «так»), они объединены в один, их вероятности сложены.</p>
+<p>Пометы <code>labels</code> - граммемы <a href="https://opencorpora.org/dict.php?act=gram">OpenCorpora</a>, для которых в UD нет признака: стиль (<code>Infr</code>, <code>Slng</code>, <code>Arch</code>), качественное прилагательное (<code>Qual</code>), вводное слово (<code>Prnt</code>), переходность (<code>tran</code>, <code>intr</code>) и другие.</p>
 <h2 id="lists">Списки слов<a class="headerlink" href="#lists" title="Permanent link">&para;</a></h2>
 <p><code>analyze_many</code> разбирает набор словоформ, <code>lemmatize</code> возвращает леммы их самых вероятных разборов:</p>
 <div class="highlight"><pre><span></span><code><span class="o">&gt;&gt;&gt;</span> <span class="n">morph</span><span class="o">.</span><span class="n">lemmatize</span><span class="p">([</span><span class="s2">"Мы"</span><span class="p">,</span> <span class="s2">"стали"</span><span class="p">,</span> <span class="s2">"друзьями"</span><span class="p">])</span>

@@ -535,6 +535,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#ud" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parts of speech and features
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#lists" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -613,6 +624,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#ud" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parts of speech and features
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#lists" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -655,7 +677,7 @@
 
 
 <h1 id="word-analysis">Word analysis<a class="headerlink" href="#word-analysis" title="Permanent link">&para;</a></h1>
-<p>The analyzer finds every analysis of a word form in the OpenCorpora dictionary and orders them by probability.</p>
+<p>The analyzer finds every analysis of a word form in the OpenCorpora dictionary - the normal form, the part of speech and the <a href="https://universaldependencies.org/">Universal Dependencies</a> features - and orders them by probability.</p>
 <h2 id="analyzer">Analyzer<a class="headerlink" href="#analyzer" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">rumorph</span><span class="w"> </span><span class="kn">import</span> <span class="n">Analyzer</span>
 <span class="o">&gt;&gt;&gt;</span> <span class="n">morph</span> <span class="o">=</span> <span class="n">Analyzer</span><span class="p">()</span>
@@ -664,9 +686,9 @@
 <h2 id="analyze">Analyses of a word form<a class="headerlink" href="#analyze" title="Permanent link">&para;</a></h2>
 <p><code>analyze</code> returns the analyses of a word form in order of decreasing probability:</p>
 <div class="highlight"><pre><span></span><code><span class="o">&gt;&gt;&gt;</span> <span class="k">for</span> <span class="n">analysis</span> <span class="ow">in</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"стали"</span><span class="p">)[:</span><span class="mi">2</span><span class="p">]:</span>
-<span class="o">...</span>     <span class="nb">print</span><span class="p">(</span><span class="n">analysis</span><span class="o">.</span><span class="n">word</span><span class="p">,</span> <span class="n">analysis</span><span class="o">.</span><span class="n">lemma</span><span class="p">,</span> <span class="nb">round</span><span class="p">(</span><span class="n">analysis</span><span class="o">.</span><span class="n">prob</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
-<span class="n">стали</span> <span class="n">стать</span> <span class="mf">0.975</span>
-<span class="n">стали</span> <span class="n">сталь</span> <span class="mf">0.011</span>
+<span class="o">...</span>     <span class="nb">print</span><span class="p">(</span><span class="n">analysis</span><span class="o">.</span><span class="n">lemma</span><span class="p">,</span> <span class="n">analysis</span><span class="o">.</span><span class="n">pos</span><span class="p">,</span> <span class="nb">dict</span><span class="p">(</span><span class="n">analysis</span><span class="o">.</span><span class="n">feats</span><span class="p">),</span> <span class="nb">round</span><span class="p">(</span><span class="n">analysis</span><span class="o">.</span><span class="n">prob</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
+<span class="n">стать</span> <span class="n">VERB</span> <span class="p">{</span><span class="s1">'Aspect'</span><span class="p">:</span> <span class="s1">'Perf'</span><span class="p">,</span> <span class="s1">'Mood'</span><span class="p">:</span> <span class="s1">'Ind'</span><span class="p">,</span> <span class="s1">'Number'</span><span class="p">:</span> <span class="s1">'Plur'</span><span class="p">,</span> <span class="s1">'Tense'</span><span class="p">:</span> <span class="s1">'Past'</span><span class="p">,</span> <span class="s1">'VerbForm'</span><span class="p">:</span> <span class="s1">'Fin'</span><span class="p">,</span> <span class="s1">'Voice'</span><span class="p">:</span> <span class="s1">'Mid'</span><span class="p">}</span> <span class="mf">0.975</span>
+<span class="n">сталь</span> <span class="n">NOUN</span> <span class="p">{</span><span class="s1">'Animacy'</span><span class="p">:</span> <span class="s1">'Inan'</span><span class="p">,</span> <span class="s1">'Case'</span><span class="p">:</span> <span class="s1">'Gen'</span><span class="p">,</span> <span class="s1">'Gender'</span><span class="p">:</span> <span class="s1">'Fem'</span><span class="p">,</span> <span class="s1">'Number'</span><span class="p">:</span> <span class="s1">'Sing'</span><span class="p">}</span> <span class="mf">0.011</span>
 </code></pre></div>
 <table>
 <thead>
@@ -685,6 +707,18 @@
 <td>the normal form</td>
 </tr>
 <tr>
+<td><code>pos</code></td>
+<td>the UD part of speech: <code>NOUN</code>, <code>VERB</code>, <code>ADJ</code>, <code>DET</code>, <code>ADP</code> and so on</td>
+</tr>
+<tr>
+<td><code>feats</code></td>
+<td>the UD features as a dict <code>{"Case": "Gen", "Number": "Sing"}</code>; a new one each time, changing it does not change the analysis</td>
+</tr>
+<tr>
+<td><code>labels</code></td>
+<td>dictionary labels without a UD feature, as a <code>frozenset</code>: <code>{"Infr"}</code> (informal)</td>
+</tr>
+<tr>
 <td><code>prob</code></td>
 <td>the probability of the analysis; it sums to 1 over all analyses of the word form</td>
 </tr>
@@ -695,6 +729,18 @@
 </tbody>
 </table>
 <p>Case does not matter, and the letter «е» may stand for «ё»: <code>analyze("ЕЖ")</code> returns the analyses of the word form «ёж». For a word that is not in the dictionary the list is empty.</p>
+<h2 id="ud">Parts of speech and features<a class="headerlink" href="#ud" title="Permanent link">&para;</a></h2>
+<p>Parts of speech and features follow <a href="https://universaldependencies.org/u/pos/">Universal Dependencies</a> as annotated in the largest Russian treebank, <a href="https://github.com/UniversalDependencies/UD_Russian-SynTagRus">UD_Russian-SynTagRus</a>, so the output can be compared with spaCy, Stanza and other UD tools. Differences from the OpenCorpora parts of speech:</p>
+<ul>
+<li>«который», «этот», «свой», «весь», «такой» and the other pronominal adjectives are <code>DET</code>;</li>
+<li>«быть» and «бы» are <code>AUX</code>;</li>
+<li>the parenthetical words «однако», «например», «конечно» are <code>ADV</code>;</li>
+<li>«можно», «надо», «нельзя» are <code>VERB</code> without features;</li>
+<li>prepositions are <code>ADP</code>, coordinating conjunctions <code>CCONJ</code>, subordinating ones <code>SCONJ</code>, particles <code>PART</code>.</li>
+</ul>
+<p>Features: case, number, gender, animacy, person, tense, aspect, mood, voice, verb form, degree, the short form (<code>Variant=Short</code>), the type of a proper name (<code>NameType</code>), abbreviation (<code>Abbr</code>), possessiveness (<code>Poss</code>), cardinal numerals (<code>NumType=Card</code>), negation (<code>Polarity=Neg</code>).</p>
+<p>Lemmas follow SynTagRus too: feminine surnames and patronymics keep the feminine lemma («Ивановой» - «иванова»), superlatives stay superlative («важнейшей» - «важнейший»), «денег» - «деньги». When several OpenCorpora analyses coincide in UD (the conjunction and the adverb «так»), they are merged into one with the sum of their probabilities.</p>
+<p>The <code>labels</code> are the <a href="https://opencorpora.org/dict.php?act=gram">OpenCorpora</a> grammemes that have no UD feature: style (<code>Infr</code>, <code>Slng</code>, <code>Arch</code>), qualitative adjective (<code>Qual</code>), parenthetical word (<code>Prnt</code>), transitivity (<code>tran</code>, <code>intr</code>) and others.</p>
 <h2 id="lists">Lists of words<a class="headerlink" href="#lists" title="Permanent link">&para;</a></h2>
 <p><code>analyze_many</code> analyzes a collection of word forms, and <code>lemmatize</code> returns the lemmas of their most probable analyses:</p>
 <div class="highlight"><pre><span></span><code><span class="o">&gt;&gt;&gt;</span> <span class="n">morph</span><span class="o">.</span><span class="n">lemmatize</span><span class="p">([</span><span class="s2">"Мы"</span><span class="p">,</span> <span class="s2">"стали"</span><span class="p">,</span> <span class="s2">"друзьями"</span><span class="p">])</span>
