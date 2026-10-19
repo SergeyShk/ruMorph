@@ -8,17 +8,17 @@ pip install rumorph
 
 ## Prebuilt wheels
 
-PyPI hosts wheels for Linux (x86_64 and aarch64, manylinux), macOS (Intel and Apple Silicon) and Windows (x64). One wheel serves every Python version starting with 3.11; Rust is not needed to install it.
+PyPI hosts wheels for Linux (x86_64 and aarch64, manylinux), macOS (Intel and Apple Silicon) and Windows (x64). One wheel serves every Python version starting with 3.11; Rust is not needed to install it. There are no prebuilt wheels for the free-threaded builds of Python (3.13t, 3.14t) yet: the package is built from source as described below.
 
 Pre-release versions `0.1.0.devN` are published only on TestPyPI:
 
 ``` bash
-pip install --index-url https://test.pypi.org/simple/ rumorph==0.1.0.dev1
+pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ rumorph==0.1.0.dev1
 ```
 
 ## Building from source
 
-On other platforms pip builds the package from source, which requires [Rust](https://www.rust-lang.org/tools/install) 1.88 or newer:
+On other platforms and free-threaded builds of Python pip builds the package from source, which requires [Rust](https://www.rust-lang.org/tools/install) 1.88 or newer:
 
 ``` bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh

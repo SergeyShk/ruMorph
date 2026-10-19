@@ -35,6 +35,8 @@ jobs:
         run: |
           uv run --no-sync ruff check python tests
           uv run --no-sync ruff format python tests --check
+      - name: Ruff format of the Python in Markdown
+        run: git ls-files -z '*.md' | xargs -0 uv run --no-sync ruff format --check
       - name: Mypy
         run: uv run --no-sync mypy
       - name: Rustfmt
@@ -51,6 +53,8 @@ jobs:
         os: [ubuntu-latest]
         python-version: ["3.11", "3.12", "3.13", "3.14"]
         include:
+          - os: ubuntu-latest
+            python-version: "3.14t"
           - os: windows-latest
             python-version: "3.12"
           - os: macos-latest
@@ -73,6 +77,20 @@ jobs:
         run: uv run --no-sync pytest --cov rumorph
       - name: Run Rust tests
         run: cargo test -p rumorph --locked
+
+  msrv:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.88"
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2.9.2
+      - name: Check
+        run: cargo check --workspace --all-targets --locked
 
   docs:
     runs-on: ubuntu-latest

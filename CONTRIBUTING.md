@@ -30,7 +30,7 @@ make test-cov    # pytest с примерами из докстрингов (doc
 make docs-build  # mkdocs build --strict, если менялась документация
 ```
 
-То же самое выполняет CI на Python 3.11-3.14 (Linux), а также на Windows и macOS для одной версии Python.
+То же самое выполняет CI на Python 3.11-3.14 и 3.14t без GIL (Linux), на Windows и macOS для одной версии Python, а также проверяет сборку на минимальной версии Rust 1.88. Повышая минимальную версию Rust, меняйте ее в `rust-version` в `Cargo.toml`, в задаче `msrv` в `ci.yml` и в документации.
 
 ## Что ожидается в пул-реквесте
 
@@ -52,4 +52,4 @@ make docs-build  # mkdocs build --strict, если менялась докуме
 - `docs/` - документация MkDocs (Material), `mkdocs.yml` - навигация и перевод ее на английский.
 - `.github/workflows/` - CI (`ci.yml`), публикация (`publish.yml`: колеса для Linux, macOS и Windows и исходники), документация (`docs.yml`).
 
-Версия хранится только в `pyproject.toml`; релизы выпускаются через GitHub Release, изменения описываются в его заметках, отдельного файла CHANGELOG нет.
+Версия пакета хранится в `pyproject.toml` и в `Cargo.toml` в записи semver (`0.1.0.dev1` - `0.1.0-dev.1`), их совпадение проверяет тест; релизы выпускаются через GitHub Release, изменения описываются в его заметках, отдельного файла CHANGELOG нет.

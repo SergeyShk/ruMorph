@@ -103,11 +103,11 @@ dependencies = [
 
 [[package]]
 name = "rumorph"
-version = "0.1.0"
+version = "0.1.0-dev.1"
 
 [[package]]
 name = "rumorph-py"
-version = "0.1.0"
+version = "0.1.0-dev.1"
 dependencies = [
  "pyo3",
  "rumorph",
