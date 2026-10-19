@@ -3,6 +3,8 @@ import importlib.metadata
 import re
 import shutil
 import subprocess
+import sys
+import sysconfig
 import tomllib
 import zipfile
 from pathlib import Path
@@ -58,11 +60,21 @@ def test_package_data():
 @pytest.mark.skipif(shutil.which("uv") is None, reason="колесо собирает uv")
 def test_wheel_contents(tmp_path):
     subprocess.run(
-        ["uv", "build", "--wheel", "--out-dir", str(tmp_path), str(ROOT)],
+        [
+            "uv",
+            "build",
+            "--wheel",
+            "--python",
+            sys.executable,
+            "--out-dir",
+            str(tmp_path),
+            str(ROOT),
+        ],
         capture_output=True,
         check=True,
     )
     (wheel,) = tmp_path.glob("*.whl")
+    assert ("-abi3-" in wheel.name) != bool(sysconfig.get_config_var("Py_GIL_DISABLED"))
     with zipfile.ZipFile(wheel) as archive:
         names = set(archive.namelist())
     assert "rumorph/py.typed" in names
