@@ -183,16 +183,22 @@ impl Dictionary {
 
     /// P(тег | словоформа) берется для написания из запроса, а без частот у него - для написания
     /// разбора в словаре («еще» - частоты «ещё»); вероятность тега делится поровну между разборами
-    /// с этим тегом и нормируется. Без частот разборы равновероятны и идут в порядке словаря
+    /// с этим тегом и той же таблицей частот и нормируется. Без частот разборы равновероятны
+    /// и идут в порядке словаря
     fn assign_probabilities(&self, word: &str, analyses: &mut [Analysis]) {
         let input = self.probabilities_for(word);
         let mut total = 0.0;
         for i in 0..analyses.len() {
-            let tag = analyses[i].tag;
-            let share = analyses.iter().filter(|other| other.tag == tag).count() as f64;
-            let table = input
-                .or_else(|| self.probabilities_for(&analyses[i].word))
-                .unwrap_or_default();
+            let (tag, spelling) = (analyses[i].tag, analyses[i].word.as_str());
+            let table = match input {
+                Some(table) => table,
+                None if spelling == word => &[],
+                None => self.probabilities_for(spelling).unwrap_or_default(),
+            };
+            let share = analyses
+                .iter()
+                .filter(|other| other.tag == tag && (input.is_some() || other.word == spelling))
+                .count() as f64;
             let prob = table
                 .as_chunks::<2>()
                 .0
@@ -510,6 +516,37 @@ mod tests {
         let dict = Dictionary::from_bytes(&format::write(&sections)).unwrap();
         let probs: Vec<f64> = dict.analyze("стали").iter().map(|a| a.prob).collect();
         assert_eq!(probs, [1.0 / 3.0; 3]);
+    }
+
+    #[test]
+    fn tag_probability_shared_within_spelling() {
+        let mut builder = Builder::new(
+            vec!["NOUN,datv".into(), "NOUN,loct".into()],
+            vec![String::new()],
+            vec!["".into()],
+        );
+        let dative = builder.add_paradigm(&[(0, 0, 0)]).unwrap();
+        let locative = builder.add_paradigm(&[(0, 1, 0)]).unwrap();
+        builder.add_word("алеше", &[(dative, 0)]).unwrap();
+        builder
+            .add_word("алёше", &[(dative, 0), (locative, 0)])
+            .unwrap();
+        builder.add_probability("алёше", 0, 666_667).unwrap();
+        builder.add_probability("алёше", 1, 333_333).unwrap();
+        let dict = Dictionary::from_bytes(&builder.build().unwrap()).unwrap();
+        let summary: Vec<(String, u16, f64)> = dict
+            .analyze("алеше")
+            .into_iter()
+            .map(|a| (a.word, a.tag, (a.prob * 1000.0).round() / 1000.0))
+            .collect();
+        assert_eq!(
+            summary,
+            [
+                ("алёше".to_string(), 0, 0.667),
+                ("алёше".to_string(), 1, 0.333),
+                ("алеше".to_string(), 0, 0.0),
+            ]
+        );
     }
 
     #[test]
