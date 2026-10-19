@@ -1,0 +1,108 @@
+name: publish
+
+on:
+  push:
+    tags:
+      - "*"
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v10.3.0
+        with:
+          enable-cache: false
+      - name: Check version matches tag
+        run: |
+          version="$(uv version --short)"
+          if [ "$version" != "$GITHUB_REF_NAME" ]; then
+            echo "Version in pyproject.toml ($version) does not match the tag ($GITHUB_REF_NAME)"
+            exit 1
+          fi
+
+  wheels:
+    name: wheels (${{ matrix.os }}, ${{ matrix.target }})
+    needs: check
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64
+          - os: ubuntu-latest
+            target: aarch64
+          - os: macos-latest
+            target: x86_64
+          - os: macos-latest
+            target: aarch64
+          - os: windows-latest
+            target: x64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Build wheel
+        uses: PyO3/maturin-action@v1.51.0
+        with:
+          target: ${{ matrix.target }}
+          args: --release --locked --out dist
+          manylinux: auto
+      - name: Upload wheel
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: wheels-${{ matrix.os }}-${{ matrix.target }}
+          path: dist
+
+  sdist:
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Build sdist
+        uses: PyO3/maturin-action@v1.51.0
+        with:
+          command: sdist
+          args: --out dist
+      - name: Upload sdist
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: sdist
+          path: dist
+
+  publish:
+    needs: [wheels, sdist]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Download distribution
+        uses: actions/download-artifact@v8.0.2
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v10.3.0
+        with:
+          enable-cache: false
+          python-version: "3.13"
+      - name: Check distribution
+        run: |
+          uv tool run twine check dist/*
+          ls -l dist
+      - name: Publish distribution (test)
+        if: github.event_name == 'push'
+        run: uv publish --index testpypi --trusted-publishing always
+      - name: Publish distribution
+        if: github.event_name == 'release'
+        run: uv publish --trusted-publishing always

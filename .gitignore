@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Rust и модуль расширения
+target/
+python/rumorph/*.so
+python/rumorph/*.pyd
+
+# Окружения
+.venv/
+venv/
+.env
+
+# Инструменты
+.coverage
+coverage.xml
+.mypy_cache
+.pytest_cache
+.ruff_cache
+*.log
+
+# Документация
+site/
+
+# Редакторы и ОС
+.vscode
+.idea
+.DS_Store

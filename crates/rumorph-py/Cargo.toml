@@ -1,0 +1,18 @@
+[package]
+name = "rumorph-py"
+description = "Модуль Python для морфологического анализатора ruMorph"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+name = "_rumorph"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.30.1", features = ["abi3-py311"] }
+rumorph = { path = "../rumorph" }

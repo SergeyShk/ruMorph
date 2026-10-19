@@ -1,0 +1,15 @@
+[workspace]
+members = ["crates/rumorph", "crates/rumorph-py"]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "MIT"
+authors = ["Шкарин Сергей <kouki.sergey@gmail.com>"]
+repository = "https://github.com/SergeyShk/ruMorph"
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
