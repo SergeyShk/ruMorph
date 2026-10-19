@@ -136,7 +136,9 @@ def test_analysis(morph):
     assert hash(first) == hash(morph.analyze("еж")[0])
     assert len(set(morph.analyze("стали"))) == 6
     assert repr(first) == (
-        f"Analysis(word='ёж', lemma='ёж', prob={first.prob!r}, source='dictionary')"
+        "Analysis(word='ёж', lemma='ёж', pos='NOUN', "
+        "feats='Animacy=Anim|Case=Nom|Gender=Masc|Number=Sing', labels='', "
+        f"prob={first.prob!r}, source='dictionary')"
     )
     assert repr(morph.analyze("мама")[0]).endswith("prob=1.0, source='dictionary')")
     assert repr(morph) == f"Analyzer(path={str(morph.path)!r})"
@@ -146,12 +148,68 @@ def test_analysis(morph):
         Analysis()
 
 
+def test_ud_fields(morph):
+    analysis = morph.analyze("стали")[0]
+    assert analysis.pos == "VERB"
+    assert analysis.feats == {
+        "Aspect": "Perf",
+        "Mood": "Ind",
+        "Number": "Plur",
+        "Tense": "Past",
+        "VerbForm": "Fin",
+        "Voice": "Mid",
+    }
+    assert analysis.labels == frozenset({"intr"})
+    assert list(analysis.feats) == sorted(analysis.feats)
+    with pytest.raises(TypeError):
+        analysis.feats["Tense"] = "Pres"
+    assert analysis.feats is morph.analyze("стали")[0].feats
+
+
+@pytest.mark.parametrize(
+    ("word", "lemma", "pos", "feats"),
+    [
+        ("который", "который", "DET", {"Case": "Nom"}),
+        ("бы", "бы", "AUX", {"Mood": "Cnd"}),
+        ("будет", "быть", "AUX", {"Tense": "Pres"}),
+        ("однако", "однако", "ADV", {"Degree": "Pos"}),
+        ("можно", "можно", "VERB", {}),
+        ("кто", "кто", "PRON", {"Animacy": "Anim"}),
+        ("это", "это", "PRON", {"Animacy": "Inan", "Case": "Nom"}),
+        ("Ивановой", "иванова", "PROPN", {"NameType": "Sur", "Gender": "Fem"}),
+        ("важнейшей", "важнейший", "ADJ", {"Degree": "Sup"}),
+        ("об", "об", "ADP", {}),
+        ("денег", "деньги", "NOUN", {"Number": "Plur"}),
+        ("РФ", "рф", "PROPN", {"Abbr": "Yes", "NameType": "Geo"}),
+    ],
+)
+def test_syntagrus_conventions(morph, word, lemma, pos, feats):
+    analysis = morph.analyze(word)[0]
+    assert (analysis.lemma, analysis.pos) == (lemma, pos)
+    assert feats.items() <= analysis.feats.items()
+
+
+def test_merged_analyses(morph):
+    analyses = morph.analyze("так")
+    keys = [(a.word, a.lemma, a.pos, dict(a.feats)) for a in analyses]
+    assert len(keys) == len({repr(key) for key in keys})
+    assert analyses[0].pos == "ADV"
+    assert math.isclose(sum(a.prob for a in analyses), 1.0)
+
+
 def test_pickle(morph):
     analyses = morph.analyze("стали")
-    assert pickle.loads(pickle.dumps(analyses)) == analyses
+    restored_analyses = pickle.loads(pickle.dumps(analyses))
+    assert restored_analyses == analyses
+    assert [a.feats for a in restored_analyses] == [a.feats for a in analyses]
+    assert [a.labels for a in restored_analyses] == [a.labels for a in analyses]
     restored = pickle.loads(pickle.dumps(morph))
     assert restored.path == morph.path
     assert restored.lemmatize(["стали"]) == ["стать"]
     assert pickle.loads(pickle.dumps(Analyzer(str(morph.path)))).path == morph.path
+    state = ("ёж", "ёж", "NOUN", "Case=Nom", "", 1.0, "dictionary")
+    assert rumorph._rumorph._analysis(state).feats == {"Case": "Nom"}
     with pytest.raises(ValueError, match="Неизвестный источник"):
-        rumorph._rumorph._analysis("ёж", "ёж", 1.0, "guess", 0)
+        rumorph._rumorph._analysis((*state[:-1], "guess"))
+    with pytest.raises(ValueError, match="Неверные признаки"):
+        rumorph._rumorph._analysis(("ёж", "ёж", "NOUN", "Case", "", 1.0, "dictionary"))

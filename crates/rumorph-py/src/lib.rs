@@ -7,45 +7,122 @@ use std::sync::Arc;
 
 use pyo3::exceptions::{PyOSError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::{PyFloat, PyString, PyType};
+use pyo3::sync::PyOnceLock;
+use pyo3::types::{PyDict, PyFloat, PyFrozenSet, PyMappingProxy, PyString, PyType};
+
+/// Часть речи, признаки и пометы UD в текстовом виде: для сравнения, хэша, repr и pickle
+#[derive(PartialEq, Eq, Hash)]
+struct UdText {
+    pos: String,
+    feats: String,
+    labels: String,
+}
+
+/// Объекты Python тега UD, общие для всех разборов с этим тегом
+struct UdObjects {
+    pos: Py<PyString>,
+    feats: Py<PyMappingProxy>,
+    labels: Py<PyFrozenSet>,
+    text: Arc<UdText>,
+}
+
+impl UdObjects {
+    fn new(py: Python<'_>, pos: &str, feats: &[(&str, &str)], labels: &[&str]) -> PyResult<Self> {
+        let dict = PyDict::new(py);
+        for (name, value) in feats {
+            dict.set_item(PyString::intern(py, name), PyString::intern(py, value))?;
+        }
+        let text = UdText {
+            pos: pos.to_owned(),
+            feats: feats
+                .iter()
+                .map(|(name, value)| format!("{name}={value}"))
+                .collect::<Vec<_>>()
+                .join("|"),
+            labels: labels.join(","),
+        };
+        Ok(UdObjects {
+            pos: PyString::intern(py, pos).unbind(),
+            feats: PyMappingProxy::new(py, dict.as_mapping()).unbind(),
+            labels: PyFrozenSet::new(py, labels.iter().map(|label| PyString::intern(py, label)))?
+                .unbind(),
+            text: Arc::new(text),
+        })
+    }
+
+    fn from_tag(py: Python<'_>, tag: &rumorph::UdTag) -> PyResult<Self> {
+        let feats: Vec<(&str, &str)> = tag
+            .feats
+            .iter()
+            .map(|(name, value)| (name.as_str(), value.as_str()))
+            .collect();
+        let labels: Vec<&str> = tag.labels.iter().map(String::as_str).collect();
+        Self::new(py, &tag.pos, &feats, &labels)
+    }
+}
 
 /// Разбор словоформы
+///
+/// Описание:
+///     Часть речи и признаки - по Universal Dependencies в соглашениях UD_Russian-SynTagRus.
+///     Разборы неизменяемы; их можно сравнивать, класть в множества и сохранять через pickle
 ///
 /// Атрибуты:
 ///     word (str): Словоформа в написании словаря: с буквой «ё», если она есть в словаре
 ///     lemma (str): Начальная форма
+///     pos (str): Часть речи UD: NOUN, VERB, ADJ, DET, ADP и т. д.
+///     feats (Mapping[str, str]): Признаки UD: {"Case": "Gen", "Number": "Sing"}
+///     labels (frozenset[str]): Пометы словаря без аналога в UD: Infr (разговорное), Arch
+///         (устаревшее), Qual (качественное) и т. д.
 ///     prob (float): Вероятность разбора; сумма по всем разборам словоформы равна 1
 ///     source (str): Откуда взят разбор: "dictionary" - словоформа есть в словаре
 ///
 /// Пример использования:
 ///     >>> from rumorph import Analyzer
-///     >>> analysis = Analyzer().analyze("еж")[0]
-///     >>> analysis.word, analysis.lemma, analysis.source
-///     ('ёж', 'ёж', 'dictionary')
-#[pyclass(frozen, eq, module = "rumorph")]
-#[derive(PartialEq)]
+///     >>> analysis = Analyzer().analyze("стали")[0]
+///     >>> analysis.lemma, analysis.pos, analysis.feats["Tense"], sorted(analysis.labels)
+///     ('стать', 'VERB', 'Past', ['intr'])
+#[pyclass(frozen, module = "rumorph")]
 struct Analysis {
     #[pyo3(get)]
     word: String,
     #[pyo3(get)]
     lemma: String,
     #[pyo3(get)]
+    pos: Py<PyString>,
+    #[pyo3(get)]
+    feats: Py<PyMappingProxy>,
+    #[pyo3(get)]
+    labels: Py<PyFrozenSet>,
+    #[pyo3(get)]
     prob: f64,
     #[pyo3(get)]
     source: &'static str,
-    tag: u16,
+    ud: Arc<UdText>,
 }
 
 #[pymethods]
 impl Analysis {
     fn __repr__(&self, py: Python<'_>) -> PyResult<String> {
         Ok(format!(
-            "Analysis(word={}, lemma={}, prob={}, source={})",
+            "Analysis(word={}, lemma={}, pos={}, feats={}, labels={}, prob={}, source={})",
             py_repr(py, &self.word)?,
             py_repr(py, &self.lemma)?,
+            py_repr(py, &self.ud.pos)?,
+            py_repr(py, &self.ud.feats)?,
+            py_repr(py, &self.ud.labels)?,
             PyFloat::new(py, self.prob).repr()?,
             py_repr(py, self.source)?
         ))
+    }
+
+    fn __eq__(&self, other: &Bound<'_, Self>) -> bool {
+        let other = other.get();
+        self.word == other.word
+            && self.lemma == other.lemma
+            && self.prob == other.prob
+            && self.source == other.source
+            && self.ud == other.ud
     }
 
     fn __hash__(&self) -> u64 {
@@ -55,34 +132,35 @@ impl Analysis {
             &self.lemma,
             self.prob.to_bits(),
             self.source,
-            self.tag,
+            &self.ud,
         )
             .hash(&mut hasher);
         hasher.finish()
     }
 
-    fn __reduce__<'py>(&self, py: Python<'py>) -> PyResult<(Bound<'py, PyAny>, AnalysisState)> {
+    fn __reduce__<'py>(&self, py: Python<'py>) -> PyResult<(Bound<'py, PyAny>, (AnalysisState,))> {
         let restore = py.import("rumorph._rumorph")?.getattr("_analysis")?;
-        Ok((
-            restore,
-            (
-                self.word.clone(),
-                self.lemma.clone(),
-                self.prob,
-                self.source,
-                self.tag,
-            ),
-        ))
+        let state = (
+            self.word.clone(),
+            self.lemma.clone(),
+            self.ud.pos.clone(),
+            self.ud.feats.clone(),
+            self.ud.labels.clone(),
+            self.prob,
+            self.source.to_owned(),
+        );
+        Ok((restore, (state,)))
     }
 }
 
-/// Аргументы `_analysis`: поля разбора для pickle
-type AnalysisState = (String, String, f64, &'static str, u16);
+/// Поля разбора для pickle: слово, лемма, часть речи, признаки, пометы, вероятность, источник
+type AnalysisState = (String, String, String, String, String, f64, String);
 
 /// Восстановление разбора из pickle
 #[pyfunction]
-fn _analysis(word: String, lemma: String, prob: f64, source: &str, tag: u16) -> PyResult<Analysis> {
-    let source = match source {
+fn _analysis(py: Python<'_>, state: AnalysisState) -> PyResult<Analysis> {
+    let (word, lemma, pos, feats, labels, prob, source) = state;
+    let source = match source.as_str() {
         "dictionary" => rumorph::Source::Dictionary.as_str(),
         _ => {
             return Err(PyValueError::new_err(format!(
@@ -90,33 +168,36 @@ fn _analysis(word: String, lemma: String, prob: f64, source: &str, tag: u16) -> 
             )));
         }
     };
+    let feats = feats
+        .split('|')
+        .filter(|feat| !feat.is_empty())
+        .map(|feat| feat.split_once('='))
+        .collect::<Option<Vec<_>>>()
+        .ok_or_else(|| PyValueError::new_err(format!("Неверные признаки UD: {feats}")))?;
+    let labels: Vec<&str> = labels
+        .split(',')
+        .filter(|label| !label.is_empty())
+        .collect();
+    let ud = UdObjects::new(py, &pos, &feats, &labels)?;
     Ok(Analysis {
         word,
         lemma,
+        pos: ud.pos,
+        feats: ud.feats,
+        labels: ud.labels,
         prob,
         source,
-        tag,
+        ud: ud.text,
     })
-}
-
-impl From<rumorph::Analysis> for Analysis {
-    fn from(analysis: rumorph::Analysis) -> Self {
-        Analysis {
-            word: analysis.word,
-            lemma: analysis.lemma,
-            prob: analysis.prob,
-            source: analysis.source.as_str(),
-            tag: analysis.tag,
-        }
-    }
 }
 
 /// Морфологический анализатор
 ///
 /// Описание:
-///     Разбирает словоформы по словарю OpenCorpora. Регистр не важен, буква «е» в слове
-///     может обозначать «ё». Словарь загружается один раз при создании анализатора;
-///     анализатор можно использовать из нескольких потоков
+///     Разбирает словоформы по словарю OpenCorpora: лемма, часть речи и признаки UD,
+///     вероятность. Регистр не важен, буква «е» в слове может обозначать «ё». Словарь
+///     загружается один раз при создании анализатора; анализатор можно использовать
+///     из нескольких потоков
 ///
 /// Аргументы:
 ///     path (str | os.PathLike | None): Путь к файлу словаря; по умолчанию - словарь из пакета
@@ -134,6 +215,8 @@ impl From<rumorph::Analysis> for Analysis {
 #[pyclass(frozen, module = "rumorph")]
 struct Analyzer {
     dictionary: Arc<rumorph::Dictionary>,
+    /// Объекты тегов UD создаются при первом разборе с тегом: в тексте встречается малая доля тегов
+    ud: Vec<PyOnceLock<UdObjects>>,
     path: PathBuf,
     /// Путь задан явно: иначе pickle не сохраняет путь, и в другом окружении берется словарь его пакета
     explicit: bool,
@@ -152,8 +235,14 @@ impl Analyzer {
         let dictionary = py
             .detach(|| rumorph::Dictionary::open(&path))
             .map_err(|err| load_error(&path, err))?;
+        let ud = dictionary
+            .ud_tags()
+            .iter()
+            .map(|_| PyOnceLock::new())
+            .collect();
         Ok(Analyzer {
             dictionary: Arc::new(dictionary),
+            ud,
             path,
             explicit,
         })
@@ -184,13 +273,13 @@ impl Analyzer {
     ///
     /// Пример использования:
     ///     >>> from rumorph import Analyzer
-    ///     >>> [analysis.lemma for analysis in Analyzer().analyze("Стали")]
-    ///     ['стать', 'сталь', 'сталь', 'сталь', 'сталь', 'сталь']
-    fn analyze(&self, word: &str) -> Vec<Analysis> {
+    ///     >>> [(analysis.lemma, analysis.pos, analysis.feats.get("Case")) for analysis in Analyzer().analyze("Стали")][:3]
+    ///     [('стать', 'VERB', None), ('сталь', 'NOUN', 'Gen'), ('сталь', 'NOUN', 'Nom')]
+    fn analyze(&self, py: Python<'_>, word: &str) -> PyResult<Vec<Analysis>> {
         self.dictionary
             .analyze(word)
             .into_iter()
-            .map(Analysis::from)
+            .map(|analysis| self.to_py(py, analysis))
             .collect()
     }
 
@@ -226,10 +315,15 @@ impl Analyzer {
                 .map(|word| dictionary.analyze(word))
                 .collect::<Vec<_>>()
         });
-        Ok(analyses
+        analyses
             .into_iter()
-            .map(|analyses| analyses.into_iter().map(Analysis::from).collect())
-            .collect())
+            .map(|analyses| {
+                analyses
+                    .into_iter()
+                    .map(|analysis| self.to_py(py, analysis))
+                    .collect()
+            })
+            .collect()
     }
 
     /// Леммы списка словоформ
@@ -292,6 +386,15 @@ impl Analyzer {
             .collect()
     }
 
+    /// Разборы OpenCorpora до перевода в UD: написание, тег, начальная форма (для проверки словаря)
+    fn _opencorpora(&self, word: &str) -> Vec<(String, String, String)> {
+        self.dictionary
+            .opencorpora(word)
+            .into_iter()
+            .map(|(spelling, tag, lemma)| (spelling, tag.to_owned(), lemma))
+            .collect()
+    }
+
     /// Описание источника словаря в JSON (для проверки словаря в тестах)
     fn _meta(&self) -> &str {
         self.dictionary.meta()
@@ -302,6 +405,25 @@ impl Analyzer {
             "Analyzer(path={})",
             py_repr(py, &self.path.display().to_string())?
         ))
+    }
+}
+
+impl Analyzer {
+    fn to_py(&self, py: Python<'_>, analysis: rumorph::Analysis) -> PyResult<Analysis> {
+        let number = usize::from(analysis.ud);
+        let ud = self.ud[number].get_or_try_init(py, || {
+            UdObjects::from_tag(py, &self.dictionary.ud_tags()[number])
+        })?;
+        Ok(Analysis {
+            word: analysis.word,
+            lemma: analysis.lemma,
+            pos: ud.pos.clone_ref(py),
+            feats: ud.feats.clone_ref(py),
+            labels: ud.labels.clone_ref(py),
+            prob: analysis.prob,
+            source: analysis.source.as_str(),
+            ud: Arc::clone(&ud.text),
+        })
     }
 }
 

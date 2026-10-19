@@ -20,7 +20,7 @@
 **ruMorph** is a morphological analyzer of Russian: a Rust core with a Python API. For a word form the analyzer finds its analyses in the OpenCorpora dictionary - the normal form (lemma), the part of speech and the grammatical features - and orders them by probability.
 
 > [!WARNING]
-> Work in progress: so far the analyzer analyzes the word forms of the dictionary and finds their lemmas; part of speech and feature tags, inflection and the analysis of unknown words come in the next versions. Versions `0.1.0.devN` are published on TestPyPI.
+> Work in progress: so far the analyzer analyzes the word forms of the dictionary: the lemma, the UD part of speech and features, the probability; inflection and the analysis of unknown words come in the next versions. Versions `0.1.0.devN` are published on TestPyPI.
 
 ## Installation
 
@@ -40,8 +40,8 @@ Wheels are built for Linux, macOS and Windows; on other platforms building from 
 >>> morph = Analyzer()
 >>> morph.lemmatize(["Мы", "стали", "друзьями"])
 ['мы', 'стать', 'друг']
->>> [(analysis.lemma, round(analysis.prob, 3)) for analysis in morph.analyze("стали")][:2]
-[('стать', 0.975), ('сталь', 0.011)]
+>>> [(a.lemma, a.pos, a.feats.get("Case"), round(a.prob, 3)) for a in morph.analyze("стали")][:2]
+[('стать', 'VERB', None, 0.975), ('сталь', 'NOUN', 'Gen', 0.011)]
 ```
 
 See the [Word analysis](https://sergeyshk.github.io/ruMorph/en/analysis/) page for more.
@@ -78,7 +78,7 @@ Bug reports, ideas and pull requests are welcome - the [issues](https://github.c
 <br>
 
 *   **crates/rumorph** - the analyzer core in Rust: the dictionary format, building and analysis
-*   **crates/rumorph-build** - building the dictionary from an export of pymorphy3-dicts-ru
+*   **crates/rumorph-build** - building the dictionary from an export of pymorphy3-dicts-ru and converting the OpenCorpora tags to UD
 *   **crates/rumorph-py** - the Python module `rumorph._rumorph` built with PyO3
 *   **python/rumorph** - the Python package
 *   **scripts** - exporting the pymorphy3-dicts-ru dictionary
