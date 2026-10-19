@@ -4,12 +4,12 @@ build-backend = "maturin"
 
 [project]
 name = "rumorph"
-version = "0.1.0.dev1"
+version = "0.1.0.dev2"
 description = "Fast Russian morphological analyzer written in Rust with a Python API"
 readme = "README.md"
 requires-python = ">=3.11"
-license = "MIT"
-license-files = ["LICENSE.txt"]
+license = "MIT AND CC-BY-SA-3.0"
+license-files = ["LICENSE.txt", "LICENSE-DICTIONARY.txt"]
 authors = [{ name = "Шкарин Сергей", email = "kouki.sergey@gmail.com" }]
 maintainers = [{ name = "Шкарин Сергей", email = "kouki.sergey@gmail.com" }]
 keywords = [
@@ -49,6 +49,7 @@ Issues = "https://github.com/SergeyShk/ruMorph/issues"
 manifest-path = "crates/rumorph-py/Cargo.toml"
 module-name = "rumorph._rumorph"
 python-source = "python"
+include = [{ path = "python/rumorph/data/ru.dict", format = ["sdist", "wheel"] }]
 
 [tool.uv]
 cache-keys = [
@@ -66,7 +67,8 @@ publish-url = "https://test.pypi.org/legacy/"
 explicit = true
 
 [dependency-groups]
-test = ["pytest>=8.3", "pytest-cov>=6.0"]
+dictionary = ["pymorphy3==2.0.6", "pymorphy3-dicts-ru==2.4.417150.4580142"]
+test = ["pytest>=8.3", "pytest-cov>=6.0", { include-group = "dictionary" }]
 lint = ["mypy>=1.14", "pre-commit>=4.0", "ruff>=0.9"]
 docs = [
     "mkdocs>=1.6",
@@ -83,7 +85,7 @@ dev = [
 [tool.ruff]
 target-version = "py311"
 line-length = 99
-src = ["python", "tests"]
+src = ["python", "scripts", "tests"]
 
 [tool.ruff.lint]
 select = [

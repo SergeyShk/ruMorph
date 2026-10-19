@@ -9,6 +9,7 @@ build/
 target/
 python/rumorph/*.so
 python/rumorph/*.pyd
+python/rumorph/data/*.dict
 
 # Окружения
 .venv/

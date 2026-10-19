@@ -33,8 +33,8 @@ jobs:
         run: uv sync --locked --no-default-groups --group lint --no-install-project
       - name: Ruff
         run: |
-          uv run --no-sync ruff check python tests
-          uv run --no-sync ruff format python tests --check
+          uv run --no-sync ruff check python scripts tests
+          uv run --no-sync ruff format python scripts tests --check
       - name: Ruff format of the Python in Markdown
         run: git ls-files -z '*.md' | xargs -0 uv run --no-sync ruff format --check
       - name: Mypy
@@ -73,6 +73,11 @@ jobs:
         uses: Swatinem/rust-cache@v2.9.2
       - name: Install dependencies
         run: uv sync --locked --no-default-groups --group test
+      - name: Build dictionary
+        shell: bash
+        run: |
+          uv run --no-sync python scripts/export_pymorphy.py build/opencorpora
+          cargo run --locked -p rumorph-build -- build/opencorpora python/rumorph/data/ru.dict
       - name: Run tests
         run: uv run --no-sync pytest --cov rumorph
       - name: Run Rust tests

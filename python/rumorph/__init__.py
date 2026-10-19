@@ -6,6 +6,8 @@
 
 from importlib.metadata import PackageNotFoundError, version
 
+from ._rumorph import Analysis, Analyzer
+
 try:
     __version__ = version("rumorph")
 except PackageNotFoundError:
@@ -15,4 +17,4 @@ __description__ = """Быстрый морфологический анализ�
 __author__ = "Шкарин Сергей"
 __author_email__ = "kouki.sergey@gmail.com"
 
-__all__ = ["__version__"]
+__all__ = ["Analysis", "Analyzer", "__version__"]

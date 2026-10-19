@@ -8,6 +8,7 @@ nav:
       - О проекте: index.md
       - Установка: installation.md
       - Авторы: authors.md
+    - Разбор словоформ: analysis.md
 
 theme:
   name: material
@@ -44,6 +45,7 @@ plugins:
             О проекте: About
             Установка: Installation
             Авторы: Authors
+            Разбор словоформ: Word analysis
 
 extra:
   social:
