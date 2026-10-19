@@ -1,0 +1,12 @@
+The dictionary bundled with ruMorph (rumorph/data/ru.dict) is built from the
+OpenCorpora dictionary (https://opencorpora.org), revision 417150, as compiled
+in the pymorphy3-dicts-ru package version 2.4.417150.4580142, including its
+P(tag | word) estimates from the OpenCorpora corpus.
+
+The OpenCorpora data is licensed under the Creative Commons
+Attribution-ShareAlike 3.0 Unported License (CC BY-SA 3.0):
+https://creativecommons.org/licenses/by-sa/3.0/
+
+The ruMorph dictionary is a converted version of that data and is distributed
+under the same license. The ruMorph code is distributed under the MIT License
+(LICENSE.txt).

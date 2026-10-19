@@ -20,7 +20,7 @@
 **ruMorph** is a morphological analyzer of Russian: a Rust core with a Python API. For a word form the analyzer finds its analyses in the OpenCorpora dictionary - the normal form (lemma), the part of speech and the grammatical features - and orders them by probability.
 
 > [!WARNING]
-> Work in progress: so far the package contains only the scaffolding; the analyzer comes in the next versions. Versions `0.1.0.devN` are published on TestPyPI.
+> Work in progress: so far the analyzer analyzes the word forms of the dictionary and finds their lemmas; part of speech and feature tags, inflection and the analysis of unknown words come in the next versions. Versions `0.1.0.devN` are published on TestPyPI.
 
 ## Installation
 
@@ -30,7 +30,21 @@ Python 3.11 or newer is required.
 pip install rumorph
 ```
 
-Wheels are built for Linux, macOS and Windows; on other platforms building from source requires [Rust](https://www.rust-lang.org/tools/install). See the [Installation](https://sergeyshk.github.io/ruMorph/en/installation/) page.
+Wheels are built for Linux, macOS and Windows; on other platforms building from source requires [Rust](https://www.rust-lang.org/tools/install). The dictionary is part of the package. See the [Installation](https://sergeyshk.github.io/ruMorph/en/installation/) page.
+
+## Quick start
+
+```python
+>>> from rumorph import Analyzer
+
+>>> morph = Analyzer()
+>>> morph.lemmatize(["Мы", "стали", "друзьями"])
+['мы', 'стать', 'друг']
+>>> [(analysis.lemma, round(analysis.prob, 3)) for analysis in morph.analyze("стали")][:2]
+[('стать', 0.975), ('сталь', 0.011)]
+```
+
+See the [Word analysis](https://sergeyshk.github.io/ruMorph/en/analysis/) page for more.
 
 ## Development
 
@@ -41,6 +55,7 @@ git clone https://github.com/SergeyShk/ruMorph.git
 cd ruMorph
 
 make deps        # create the environment, install the dependencies and build the Rust module
+make dictionary  # build the dictionary from pymorphy3-dicts-ru
 make test        # run the Python tests, the docstring examples (doctest) and the Rust tests
 make lint        # ruff, mypy, rustfmt and clippy
 ```
@@ -62,9 +77,11 @@ Bug reports, ideas and pull requests are welcome - the [issues](https://github.c
 
 <br>
 
-*   **crates/rumorph** - the analyzer core in Rust
+*   **crates/rumorph** - the analyzer core in Rust: the dictionary format, building and analysis
+*   **crates/rumorph-build** - building the dictionary from an export of pymorphy3-dicts-ru
 *   **crates/rumorph-py** - the Python module `rumorph._rumorph` built with PyO3
 *   **python/rumorph** - the Python package
+*   **scripts** - exporting the pymorphy3-dicts-ru dictionary
 *   **docs** - MkDocs documentation in Russian and English
 *   **tests** - tests of the Python package
 
@@ -76,4 +93,4 @@ Bug reports, ideas and pull requests are welcome - the [issues](https://github.c
 
 ## License
 
-The code is distributed under the [MIT](https://github.com/SergeyShk/ruMorph/blob/master/LICENSE.txt) license.
+The code is distributed under the [MIT](https://github.com/SergeyShk/ruMorph/blob/master/LICENSE.txt) license. The dictionary in the package is built from the [OpenCorpora](https://opencorpora.org) dictionary and is distributed under the CC BY-SA 3.0 license ([LICENSE-DICTIONARY.txt](https://github.com/SergeyShk/ruMorph/blob/master/LICENSE-DICTIONARY.txt)).

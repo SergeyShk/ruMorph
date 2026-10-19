@@ -8,12 +8,12 @@ pip install rumorph
 
 ## Готовые колеса
 
-На PyPI публикуются колеса для Linux (x86_64 и aarch64, manylinux), macOS (Intel и Apple Silicon) и Windows (x64). Одно колесо подходит для всех версий Python начиная с 3.11, Rust для установки не нужен. Для Python 3.14t без GIL готовых колес пока нет: пакет собирается из исходников, как описано ниже; Python 3.13t без GIL не поддерживается.
+На PyPI публикуются колеса для Linux (x86_64 и aarch64, manylinux), macOS (Intel и Apple Silicon) и Windows (x64). Одно колесо подходит для всех версий Python начиная с 3.11, Rust для установки не нужен. Словарь входит в пакет, отдельно его устанавливать не нужно. Для Python 3.14t без GIL готовых колес пока нет: пакет собирается из исходников, как описано ниже; Python 3.13t без GIL не поддерживается.
 
 Предварительные версии `0.1.0.devN` публикуются только на TestPyPI:
 
 ``` bash
-pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ rumorph==0.1.0.dev1
+pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ --pre rumorph
 ```
 
 ## Сборка из исходников

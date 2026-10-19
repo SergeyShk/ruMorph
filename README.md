@@ -20,7 +20,7 @@
 **ruMorph** - морфологический анализатор русского языка: ядро на Rust и API для Python. Для словоформы анализатор находит по словарю OpenCorpora варианты разбора - начальную форму (лемму), часть речи и грамматические признаки - и упорядочивает их по вероятности.
 
 > [!WARNING]
-> Проект в разработке: пакет пока содержит только каркас, анализатор появится в следующих версиях. Версии `0.1.0.devN` публикуются на TestPyPI.
+> Проект в разработке: сейчас анализатор разбирает словоформы из словаря и находит их леммы; теги частей речи и признаков, словоизменение и разбор незнакомых слов появятся в следующих версиях. Версии `0.1.0.devN` публикуются на TestPyPI.
 
 ## Установка
 
@@ -30,7 +30,21 @@
 pip install rumorph
 ```
 
-Колеса собираются для Linux, macOS и Windows; на других платформах для сборки из исходников нужен [Rust](https://www.rust-lang.org/tools/install). Подробнее - на странице [Установка](https://sergeyshk.github.io/ruMorph/installation/).
+Колеса собираются для Linux, macOS и Windows; на других платформах для сборки из исходников нужен [Rust](https://www.rust-lang.org/tools/install). Словарь входит в пакет. Подробнее - на странице [Установка](https://sergeyshk.github.io/ruMorph/installation/).
+
+## Быстрый старт
+
+```python
+>>> from rumorph import Analyzer
+
+>>> morph = Analyzer()
+>>> morph.lemmatize(["Мы", "стали", "друзьями"])
+['мы', 'стать', 'друг']
+>>> [(analysis.lemma, round(analysis.prob, 3)) for analysis in morph.analyze("стали")][:2]
+[('стать', 0.975), ('сталь', 0.011)]
+```
+
+Подробнее - на странице [Разбор словоформ](https://sergeyshk.github.io/ruMorph/analysis/).
 
 ## Разработка
 
@@ -41,6 +55,7 @@ git clone https://github.com/SergeyShk/ruMorph.git
 cd ruMorph
 
 make deps        # создать окружение, установить зависимости и собрать модуль на Rust
+make dictionary  # собрать словарь из pymorphy3-dicts-ru
 make test        # запустить тесты Python, примеры из докстрингов (doctest) и тесты Rust
 make lint        # ruff, mypy, rustfmt и clippy
 ```
@@ -62,9 +77,11 @@ uv run pre-commit install
 
 <br>
 
-*   **crates/rumorph** - ядро анализатора на Rust
+*   **crates/rumorph** - ядро анализатора на Rust: формат словаря, сборка и разбор
+*   **crates/rumorph-build** - сборка словаря из выгрузки pymorphy3-dicts-ru
 *   **crates/rumorph-py** - модуль Python `rumorph._rumorph` на PyO3
 *   **python/rumorph** - пакет Python
+*   **scripts** - выгрузка словаря pymorphy3-dicts-ru
 *   **docs** - документация MkDocs на русском и английском
 *   **tests** - тесты пакета Python
 
@@ -76,4 +93,4 @@ uv run pre-commit install
 
 ## Лицензия
 
-Код распространяется под лицензией [MIT](https://github.com/SergeyShk/ruMorph/blob/master/LICENSE.txt).
+Код распространяется под лицензией [MIT](https://github.com/SergeyShk/ruMorph/blob/master/LICENSE.txt). Словарь в пакете собран из словаря [OpenCorpora](https://opencorpora.org) и распространяется по лицензии CC BY-SA 3.0 ([LICENSE-DICTIONARY.txt](https://github.com/SergeyShk/ruMorph/blob/master/LICENSE-DICTIONARY.txt)).

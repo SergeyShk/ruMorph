@@ -1,8 +1,12 @@
-.PHONY: help uv deps lock lint ruff format mypy rust-lint test test-cov clean clean-build clean-pyc clean-test clean-rust build docs-build docs-serve docs-deploy
+.PHONY: help uv deps dictionary lock lint ruff format mypy rust-lint test test-cov clean clean-build clean-pyc clean-test clean-rust build docs-build docs-serve docs-deploy
 .DEFAULT_GOAL := help
 SRC_PATH := python
 TESTS_PATH := tests
+SCRIPTS_PATH := scripts
 PACKAGE := rumorph
+DICTIONARY := $(SRC_PATH)/$(PACKAGE)/data/ru.dict
+EXPORT_PATH := target/opencorpora
+EXPORT_STAMP := $(EXPORT_PATH)/.exported
 
 help: ## Показать список команд
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "%-20s %s\n", $$1, $$2}'
@@ -24,6 +28,15 @@ else
 	uv sync --all-groups
 endif
 
+dictionary: $(DICTIONARY) ## Собрать словарь из pymorphy3-dicts-ru
+
+$(EXPORT_STAMP): $(SCRIPTS_PATH)/export_pymorphy.py uv.lock | deps
+	uv run python $(SCRIPTS_PATH)/export_pymorphy.py $(EXPORT_PATH)
+	touch $@
+
+$(DICTIONARY): $(EXPORT_STAMP) crates/rumorph/src/format.rs crates/rumorph/src/builder.rs $(wildcard crates/rumorph-build/src/*.rs)
+	cargo run --release --locked -p rumorph-build -- $(EXPORT_PATH) $(DICTIONARY)
+
 lock: uv ## Обновить lock-файлы до последних версий зависимостей
 	uv lock --upgrade
 	cargo update
@@ -32,15 +45,15 @@ lint: ruff mypy rust-lint ## Запустить все проверки кода
 
 ruff: deps ## Проверить и отформатировать код Python с помощью ruff
 ifeq ($(MODE), ci)
-	uv run ruff check $(SRC_PATH) $(TESTS_PATH)
-	uv run ruff format $(SRC_PATH) $(TESTS_PATH) --check
+	uv run ruff check $(SRC_PATH) $(SCRIPTS_PATH) $(TESTS_PATH)
+	uv run ruff format $(SRC_PATH) $(SCRIPTS_PATH) $(TESTS_PATH) --check
 else
-	uv run ruff check $(SRC_PATH) $(TESTS_PATH) --fix
-	uv run ruff format $(SRC_PATH) $(TESTS_PATH)
+	uv run ruff check $(SRC_PATH) $(SCRIPTS_PATH) $(TESTS_PATH) --fix
+	uv run ruff format $(SRC_PATH) $(SCRIPTS_PATH) $(TESTS_PATH)
 endif
 
 format: deps ## Отформатировать код
-	uv run ruff format $(SRC_PATH) $(TESTS_PATH)
+	uv run ruff format $(SRC_PATH) $(SCRIPTS_PATH) $(TESTS_PATH)
 	cargo fmt --all
 
 mypy: deps ## Проверить типы с помощью mypy
@@ -54,11 +67,11 @@ else
 endif
 	cargo clippy --workspace --all-targets -- -D warnings
 
-test: deps ## Запустить тесты
+test: deps dictionary ## Запустить тесты
 	uv run pytest
 	cargo test -p $(PACKAGE)
 
-test-cov: deps ## Запустить тесты с проверкой покрытия
+test-cov: deps dictionary ## Запустить тесты с проверкой покрытия
 	uv run pytest --cov $(PACKAGE)
 	cargo test -p $(PACKAGE)
 
@@ -80,7 +93,7 @@ clean-test: ## Удалить артефакты тестирования и л�
 clean-rust: ## Удалить сборку Rust
 	cargo clean
 
-build: clean uv ## Собрать дистрибутив для текущей платформы
+build: clean uv dictionary ## Собрать дистрибутив для текущей платформы
 	uv build
 	ls -l dist
 

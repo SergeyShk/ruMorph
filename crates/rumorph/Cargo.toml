@@ -9,3 +9,4 @@ authors.workspace = true
 repository.workspace = true
 
 [dependencies]
+fst = "0.4.7"

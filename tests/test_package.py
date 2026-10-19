@@ -77,7 +77,7 @@ def test_wheel_contents(tmp_path):
     assert ("-abi3-" in wheel.name) != bool(sysconfig.get_config_var("Py_GIL_DISABLED"))
     with zipfile.ZipFile(wheel) as archive:
         names = set(archive.namelist())
-    assert "rumorph/py.typed" in names
+    assert {"rumorph/py.typed", "rumorph/data/ru.dict"} <= names
     modules = [
         name for name in names if re.fullmatch(r"rumorph/_rumorph(\.[\w-]+)?\.(so|pyd)", name)
     ]
