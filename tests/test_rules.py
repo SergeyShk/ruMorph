@@ -30,6 +30,7 @@ def summary(morph, word):
         ("♥", "SYM"),
         ("😀", "SYM"),
         ("❤\ufe0f", "SYM"),
+        ("🏴\U000e0067\U000e0062\U000e0073\U000e0063\U000e0074\U000e007f", "SYM"),
     ],
 )
 def test_punctuation_and_symbols(morph, word, pos):
@@ -98,16 +99,18 @@ def test_numeral_with_ending(morph):
     assert "Gen" in {a.feats["Case"] for a in analyses}
     assert [form.word for form in analyses[0].forms()][:3] == ["2005-й", "2005-го", "2005-му"]
     assert analyses[0].inflect(Case="Loc", Gender="Masc") == "2005-м"
-    # Окончание заглавными: формы строятся по словоформе в нижнем регистре
+    # Окончание заглавными: формы строятся в нижнем регистре и пишутся капсом, как слово
     upper = morph.analyze("2005-ГО")[0]
-    assert [form.word for form in upper.forms()][:2] == ["2005-й", "2005-го"]
-    assert (upper.inflect(Case="Dat"), upper.inflect()) == ("2005-му", "2005-го")
+    assert [form.word for form in upper.forms()][:2] == ["2005-Й", "2005-ГО"]
+    assert (upper.inflect(Case="Dat"), upper.inflect()) == ("2005-МУ", "2005-ГО")
     assert {a.lemma for a in morph.analyze("1990-х")} == {"1990-й"}
     # Короткое окончание без образца - количественное
     assert summary(morph, "5-ти") == [
         ("5-ти", "5", "NUM", {"NumForm": "Digit", "NumType": "Card"})
     ]
-    assert morph.analyze("10-летний") == []
+    assert summary(morph, "5-ТИ") == [
+        ("5-ТИ", "5", "NUM", {"NumForm": "Digit", "NumType": "Card"})
+    ]
 
 
 def test_roman_numerals(morph):
