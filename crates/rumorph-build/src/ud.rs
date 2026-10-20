@@ -354,12 +354,13 @@ const RARE_PRONOUN_TYPES: &[(&str, &str)] = &[
     ("сие", "Dem"),
     ("сякой", "Dem"),
     ("таковский", "Dem"),
+    ("тот-то", "Dem"),
     ("эдакий", "Dem"),
     ("экий", "Dem"),
     ("энный", "Ind"),
 ];
 
-/// Тип местоимения по серии, если лемма не в таблице: «когда-либо», «кое-где» - Ind, «ниоткуда» - Neg
+/// Тип местоимения по серии от вопросительной основы: «когда-либо», «кое-где» - Ind, «ниоткуда» - Neg
 pub fn pronoun_series(lemma: &str) -> Option<&'static str> {
     const INTERROGATIVE: &[&str] = &[
         "где",
@@ -368,26 +369,30 @@ pub fn pronoun_series(lemma: &str) -> Option<&'static str> {
         "каков",
         "какой",
         "когда",
+        "который",
         "кто",
         "куда",
         "насколько",
+        "отчего",
         "откуда",
         "почему",
         "сколько",
+        "чего",
         "что",
         "чей",
     ];
-    if ["-то", "-нибудь", "-либо"]
+    let interrogative = |stem: &str| INTERROGATIVE.contains(&stem);
+    let indefinite = ["-то", "-нибудь", "-либо"]
         .iter()
-        .any(|suffix| lemma.ends_with(suffix))
-        || lemma.starts_with("кое-")
-        || lemma.starts_with("кой-")
-    {
+        .find_map(|suffix| lemma.strip_suffix(suffix))
+        .or_else(|| lemma.strip_prefix("кое-"))
+        .or_else(|| lemma.strip_prefix("кой-"));
+    if indefinite.is_some_and(interrogative) {
         return Some("Ind");
     }
     lemma
         .strip_prefix("ни")
-        .filter(|stem| INTERROGATIVE.contains(stem))
+        .filter(|stem| interrogative(stem))
         .map(|_| "Neg")
 }
 
@@ -1012,6 +1017,14 @@ mod tests {
         assert_eq!(summary("ADVB,Dmns", "там").2, Vec::<String>::new());
         assert_eq!(summary("ADVB,Ques", "почему").2, Vec::<String>::new());
         assert_eq!(pronoun_series("ниже"), None);
+        for emphatic in ["тут-то", "тогда-то", "так-то", "всего-то"] {
+            assert_eq!(pronoun_series(emphatic), None, "{emphatic}");
+        }
+        assert_eq!(pronoun_series("кое-как"), Some("Ind"));
+        assert_eq!(
+            feats("ADJF,Apro masc,sing,nomn", "тот-то"),
+            "Case=Nom|Gender=Masc|Number=Sing|PronType=Dem"
+        );
         assert_eq!(
             summary("VERB,perf,intr plur,impr,incl", "пойти"),
             (
