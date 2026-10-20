@@ -207,12 +207,118 @@ def test_ud_fields(morph):
         ("два", "два", "NUM", {"NumForm": "Word", "NumType": "Card"}),
         ("90-х", "90-й", "ADJ", {"NumForm": "Combi", "NumType": "Ord"}),
         ("кино", "кино", "NOUN", {"InflClass": "Ind"}),
+        ("кстати", "кстати", "ADV", {"Degree": "Pos"}),
+        ("в-четвёртых", "в-четвёртых", "ADV", {"Degree": "Pos"}),
+        ("скажем", "сказать", "VERB", {}),
+        ("значит", "значит", "ADV", {}),
+        ("нужно", "нужный", "ADJ", {"Variant": "Short", "Gender": "Neut"}),
+        ("несколько", "несколько", "NUM", {"Case": "Acc", "Animacy": "Inan"}),
+        ("что-то", "что-то", "PRON", {"Case": "Nom", "PronType": "Ind"}),
+        ("вуз", "вуз", "NOUN", {"Case": "Nom", "Number": "Sing"}),
+        ("нечем", "нечего", "VERB", {"Case": "Ins", "Polarity": "Neg"}),
+        ("никто", "никто", "PRON", {"Gender": "Masc", "PronType": "Neg"}),
+        ("многие", "многие", "PRON", {"Animacy": "Anim"}),
+        ("нельзя", "нельзя", "VERB", {"Polarity": "Neg"}),
+        ("использовать", "использовать", "VERB", {"Aspect": "Imp"}),
+        ("счастье", "счастье", "NOUN", {"Case": "Nom"}),
+        ("б", "бы", "AUX", {"Mood": "Cnd"}),
+        ("ж", "же", "PART", {}),
+        ("чтоб", "чтобы", "SCONJ", {"Mood": "Cnd"}),
+        ("дальнейший", "дальнейший", "ADJ", {"Degree": "Sup"}),
+        ("наилучший", "наилучший", "ADJ", {"Degree": "Pos"}),
     ],
 )
 def test_syntagrus_conventions(morph, word, lemma, pos, feats):
     analysis = morph.analyze(word)[0]
     assert (analysis.lemma, analysis.pos) == (lemma, pos)
     assert feats.items() <= analysis.feats.items()
+
+
+def test_possessive_determiners(morph):
+    # «его», «её», «их» в SynTagRus - Poss=Yes|PronType=Prs без падежа: один разбор DET
+    for word in ["его", "её", "их"]:
+        determiners = [a for a in morph.analyze(word) if a.pos == "DET"]
+        assert len(determiners) == 1, word
+        assert dict(determiners[0].feats) == {"Poss": "Yes", "PronType": "Prs"}
+
+
+@pytest.mark.parametrize(
+    ("word", "lemma", "feats"),
+    [
+        ("того", "то", {"Case": "Gen", "Gender": "Neut", "PronType": "Dem"}),
+        ("всего", "всё", {"Case": "Gen", "Animacy": "Inan", "PronType": "Tot"}),
+        ("всех", "все", {"Case": "Acc", "Animacy": "Anim", "Number": "Plur"}),
+    ],
+)
+def test_substantive_pronouns(morph, word, lemma, feats):
+    pronouns = [a for a in morph.analyze(word) if a.pos == "PRON" and a.lemma == lemma]
+    assert any(feats.items() <= a.feats.items() for a in pronouns), word
+    assert all(form.lemma == lemma for form in pronouns[0].forms())
+
+
+def test_comparative_degree(morph):
+    assert {a.pos: a.feats["Degree"] for a in morph.analyze("больше")} == {
+        "ADJ": "Cmp",
+        "ADV": "Cmp",
+    }
+    # «выше» в лексеме наречия «высоко» - наречие, а не прилагательное
+    assert all(a.pos != "ADJ" for a in morph.analyze("выше"))
+
+
+def test_adjective_proper_names_are_labels(morph):
+    analysis = morph.analyze("украинского")[0]
+    assert "NameType" not in analysis.feats
+    assert "Geox" in analysis.labels
+
+
+def test_abbreviated_word_without_case(morph):
+    # Сокращение «им.» - форма лексемы «имя»: без падежа, как в SynTagRus
+    assert dict(morph.analyze("им.")[0].feats) == {"Abbr": "Yes"}
+
+
+def test_female_surname_plural_forms(morph):
+    female = next(a for a in morph.analyze("Иванова") if a.feats.get("Gender") == "Fem")
+    words = [form.word for form in female.forms()]
+    assert {"иванова", "ивановой", "ивановы", "ивановых"} <= set(words)
+    # Копии форм множественного числа не меняют разбор «Ивановых»
+    assert {a.lemma for a in morph.analyze("Ивановых") if a.pos == "PROPN"} == {"иванов"}
+
+
+def test_female_surname_plural_pickles(morph):
+    # Копии форм множественного числа в женской лексеме восстанавливаются из pickle
+    female = next(a for a in morph.analyze("Иванова") if a.feats.get("Gender") == "Fem")
+    plural = [form for form in female.forms() if form.feats.get("Number") == "Plur"]
+    assert plural
+    assert all(pickle.loads(pickle.dumps(form)) == form for form in plural)
+
+
+def test_lemma_order_kept(morph):
+    # Несовершенный вид раньше совершенного только внутри глагола: другие леммы не сдвигаются
+    assert morph.lemmatize(["ум", "провожу", "заводил", "нагоняем"]) == [
+        "ум",
+        "проводить",
+        "заводить",
+        "нагонять",
+    ]
+
+
+def test_declinable_abbreviation_label(morph):
+    analysis = morph.analyze("вузов")[0]
+    assert "Abbr" not in analysis.feats
+    assert "Abbr" in analysis.labels
+    assert morph.analyze("РФ")[0].feats["Abbr"] == "Yes"
+
+
+def test_yo_spellings_merged(morph):
+    adjectives = [a for a in morph.analyze("недалеко") if a.pos == "ADJ"]
+    assert [a.word for a in adjectives] == ["недалеко"]
+
+
+def test_spelling_without_frequencies(morph):
+    # Частоты есть только у «совершённого»: разборы «совершенного» получают среднюю долю
+    analyses = morph.analyze("совершенного")
+    assert all(a.prob > 0 for a in analyses)
+    assert math.isclose(sum(a.prob for a in analyses), 1.0)
 
 
 def test_clusivity_label(morph):

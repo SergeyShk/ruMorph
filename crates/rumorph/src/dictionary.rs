@@ -348,18 +348,27 @@ impl Dictionary {
             .collect()
     }
 
-    /// Слияние разборов с одинаковыми написанием, леммой, частью речи и признаками; без частот
-    /// каждый слитый разбор получает равную долю, и порядок словаря сохраняется
+    /// Слияние разборов с одинаковыми написанием (с точностью до «е» на месте «ё»), леммой,
+    /// частью речи и признаками; у слитого разбора написание с меньшим числом «ё» - точное
+    /// написание запроса («недалеко», а не «недалёко»). Без частот каждый слитый разбор получает
+    /// равную долю, и порядок словаря сохраняется
     fn merge(&self, analyses: Vec<Analysis>) -> Vec<Analysis> {
+        let yo_count = |word: &str| word.chars().filter(|&ch| ch == 'ё').count();
         let mut merged: Vec<Analysis> = Vec::with_capacity(analyses.len());
         for analysis in analyses {
             let core = self.ud_core[usize::from(analysis.ud)];
             match merged.iter_mut().find(|known| {
                 self.ud_core[usize::from(known.ud)] == core
                     && known.lemma == analysis.lemma
-                    && known.word == analysis.word
+                    && same_up_to_yo(&known.word, &analysis.word)
             }) {
-                Some(known) => known.prob += analysis.prob,
+                Some(known) => {
+                    let prob = known.prob + analysis.prob;
+                    if yo_count(&analysis.word) < yo_count(&known.word) {
+                        *known = analysis;
+                    }
+                    known.prob = prob;
+                }
                 None => merged.push(analysis),
             }
         }
@@ -379,19 +388,27 @@ impl Dictionary {
     /// в словаре, у угаданного или разобранного по правилу проверяется только, что словоформа
     /// подходит к форме таблицы
     pub fn analysis(&self, word: &str, entry: Entry, source: Source) -> Option<Analysis> {
-        let packed = (u32::from(entry.table) << 16) | u32::from(entry.form);
-        if source == Source::Dictionary
-            && !self
-                .words
-                .get(word)
-                .and_then(|offset| self.records_at(offset))?
-                .contains(&packed)
-        {
-            return None;
-        }
         // Лемма - в нижнем регистре, как у угадывания; словоформа - как сохранена
         let lower = word.to_lowercase();
         let lexeme = self.lexeme(entry.table, entry.form, &lower)?;
+        if source == Source::Dictionary {
+            // Запись словоформы ссылается на эту форму или на форму той же таблицы с тем же
+            // написанием и тегом: копии форм («ивановы» в женской лексеме) записей не имеют
+            let same = |packed: u32| {
+                let form = packed as u16;
+                (packed >> 16) as u16 == entry.table
+                    && (form == entry.form
+                        || (lexeme.affixes(form) == lexeme.affixes(entry.form)
+                            && lexeme.tag(form) == lexeme.tag(entry.form)))
+            };
+            let records = self
+                .words
+                .get(word)
+                .and_then(|offset| self.records_at(offset))?;
+            if !records.iter().any(|&packed| same(packed)) {
+                return None;
+            }
+        }
         Some(Analysis {
             word: word.to_owned(),
             lemma: self.spell(&lexeme, lexeme.lemma_form(entry.form)),
@@ -757,22 +774,39 @@ impl Dictionary {
     /// P(тег | словоформа) берется для написания из запроса, а без частот у него - для написания
     /// разбора в словаре («еще» - частоты «ещё»); вероятность тега делится поровну между разборами
     /// с этим тегом и той же таблицей частот и нормируется. Без частот вероятности остаются
-    /// нулевыми: равные доли раздает `merge` после слияния
+    /// нулевыми: равные доли раздает `merge` после слияния. Если частоты есть только у части
+    /// написаний («совершённого», но не «совершенного»), разбор написания без частот получает
+    /// среднюю долю разборов с частотами
     fn assign_probabilities(&self, word: &str, analyses: &mut [Analysis]) {
         let input = self.probabilities_for(word);
-        let mut total = 0.0;
+        let mut tables: Vec<Option<&[u32]>> = Vec::with_capacity(analyses.len());
         for i in 0..analyses.len() {
+            let spelling = analyses[i].word.as_str();
+            tables.push(match input {
+                Some(table) => Some(table),
+                None if spelling == word => None,
+                None => match (0..i).find(|&j| analyses[j].word == spelling) {
+                    Some(j) => tables[j],
+                    None => self.probabilities_for(spelling),
+                },
+            });
+        }
+        if tables.iter().all(Option::is_none) {
+            return;
+        }
+        let mut total = 0.0;
+        let (mut known_total, mut known_count) = (0.0, 0);
+        for i in 0..analyses.len() {
+            if tables[i].is_none() {
+                continue;
+            }
             let (tag, spelling) = (analyses[i].tag, analyses[i].word.as_str());
-            let table = match input {
-                Some(table) => table,
-                None if spelling == word => &[],
-                None => self.probabilities_for(spelling).unwrap_or_default(),
-            };
             let share = analyses
                 .iter()
                 .filter(|other| other.tag == tag && (input.is_some() || other.word == spelling))
                 .count() as f64;
-            let prob = table
+            let prob = tables[i]
+                .unwrap_or_default()
                 .as_chunks::<2>()
                 .0
                 .iter()
@@ -780,6 +814,16 @@ impl Dictionary {
                 .map_or(0.0, |[_, millionths]| f64::from(*millionths));
             analyses[i].prob = prob / share;
             total += analyses[i].prob;
+            known_total += analyses[i].prob;
+            known_count += 1;
+        }
+        // Разбор написания без частот получает среднюю долю разборов с частотами
+        let mean = known_total / f64::from(known_count);
+        for (analysis, table) in analyses.iter_mut().zip(&tables) {
+            if table.is_none() {
+                analysis.prob = mean;
+                total += mean;
+            }
         }
         if total > 0.0 {
             for analysis in analyses.iter_mut() {
@@ -836,6 +880,15 @@ fn lookup_from<'f>(
         found.insert(0, (prefix + &key[start..], value));
     }
     found
+}
+
+/// Совпадают ли написания с точностью до «е» на месте «ё»
+fn same_up_to_yo(a: &str, b: &str) -> bool {
+    a == b
+        || (a.len() == b.len()
+            && a.chars()
+                .zip(b.chars())
+                .all(|(x, y)| x == y || matches!((x, y), ('е', 'ё') | ('ё', 'е'))))
 }
 
 fn follow<'f>(
@@ -1798,12 +1851,13 @@ mod tests {
             .into_iter()
             .map(|a| (a.word, a.tag.unwrap(), (a.prob * 1000.0).round() / 1000.0))
             .collect();
+        // У написания из запроса частот нет: его разбор получает среднюю долю разборов «алёше»
         assert_eq!(
             summary,
             [
-                ("алёше".to_string(), 0, 0.667),
-                ("алёше".to_string(), 1, 0.333),
-                ("алеше".to_string(), 0, 0.0),
+                ("алёше".to_string(), 0, 0.444),
+                ("алеше".to_string(), 0, 0.333),
+                ("алёше".to_string(), 1, 0.222),
             ]
         );
     }

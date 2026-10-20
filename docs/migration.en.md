@@ -106,12 +106,12 @@ Some words get their part of speech by the SynTagRus conventions: the parentheti
 | `perf`, `impf` | `Aspect`: `Perf`, `Imp` |
 | `indc`, `impr` | `Mood`: `Ind`, `Imp` |
 | `actv`, `pssv` | `Voice`: `Act`, `Pass`; reflexive verbs - `Mid` |
-| `Name`, `Surn`, `Patr`, `Geox`, `Orgn`, `Trad` | `NameType`: `Giv`, `Sur`, `Pat`, `Geo`, `Com`, `Pro` |
+| `Name`, `Surn`, `Patr`, `Geox`, `Orgn`, `Trad` | `NameType`: `Giv`, `Sur`, `Pat`, `Geo`, `Com`, `Pro`; `labels` for adjectives |
 | `Supr` | `Degree=Sup` |
-| `Abbr` | `Abbr=Yes` |
+| `Abbr` | `Abbr=Yes`; a label in `labels` for declinable abbreviations («вуз») |
 | `Abbr` and `Anum` together («1-го», «90-х») | `NumType=Ord`, `NumForm=Combi`, without `Abbr` |
-| `Poss` | `Poss=Yes` |
-| `Fixd` | `InflClass=Ind` |
+| `Poss` | `Poss=Yes`; a label in `labels` for adjectives |
+| `Fixd` | `InflClass=Ind` for nouns except abbreviations, a label in `labels` for other words |
 | `Apro` | the `DET` part of speech |
 | `Dmns`, `Ques` («там», «где») | `PronType`: `Dem`, `Rel`, `Int` |
 | `Anum` on words («первый»), `GNdr` | none |
