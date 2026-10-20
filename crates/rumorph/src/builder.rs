@@ -5,6 +5,29 @@ use fst::MapBuilder;
 use crate::Error;
 use crate::format::{self, Sections};
 
+/// Индекс угадывания незнакомых слов по окончанию
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum GuessIndex {
+    /// Нарицательные слова
+    Common,
+    /// Имена собственные: для слов с заглавной буквы
+    Proper,
+}
+
+impl GuessIndex {
+    /// Наибольшая длина окончания в буквах
+    pub const MAX_ENDING: usize = 5;
+
+    /// Ключ окончания в автомате угадывания
+    pub(crate) fn key(self, ending: &str) -> String {
+        let index = match self {
+            GuessIndex::Common => '0',
+            GuessIndex::Proper => '1',
+        };
+        format!("{index}{ending}")
+    }
+}
+
 /// Разбор словоформы в словаре: форма таблицы словоизменения
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Entry {
@@ -33,6 +56,7 @@ pub struct Builder {
     table_numbers: HashMap<(u16, Vec<u32>), u16>,
     words: BTreeMap<String, Vec<u32>>,
     probabilities: BTreeMap<String, Vec<(u16, u32)>>,
+    guesses: BTreeMap<String, Vec<(u32, u32)>>,
 }
 
 impl Builder {
@@ -56,6 +80,7 @@ impl Builder {
             table_numbers: HashMap::new(),
             words: BTreeMap::new(),
             probabilities: BTreeMap::new(),
+            guesses: BTreeMap::new(),
         }
     }
 
@@ -195,6 +220,29 @@ impl Builder {
         Ok(())
     }
 
+    /// Добавляет формы для угадывания незнакомых слов с окончанием `ending`: форма таблицы
+    /// и число словоформ словаря с этим окончанием и этой формой
+    pub fn add_guesses(
+        &mut self,
+        index: GuessIndex,
+        ending: &str,
+        forms: &[(Entry, u32)],
+    ) -> Result<(), Error> {
+        let mut packed = Vec::with_capacity(forms.len());
+        for &(entry, count) in forms {
+            let &(paradigm, _) = self.tables.get(entry.table as usize).ok_or_else(|| {
+                Error::Build(format!("окончание {ending:?}: нет таблицы {}", entry.table))
+            })?;
+            check_id("форма", entry.form, self.paradigms[paradigm as usize].len())?;
+            packed.push((
+                (u32::from(entry.table) << 16) | u32::from(entry.form),
+                count,
+            ));
+        }
+        self.guesses.insert(index.key(ending), packed);
+        Ok(())
+    }
+
     /// Собирает словарь в бинарном формате
     pub fn build(&self) -> Result<Vec<u8>, Error> {
         let mut paradigm_offsets = vec![0u32];
@@ -239,6 +287,21 @@ impl Builder {
             }
         }
 
+        let mut guess_records = Vec::new();
+        let mut guess_offsets: HashMap<&[(u32, u32)], u64> = HashMap::new();
+        let mut guesses = MapBuilder::memory();
+        for (key, forms) in &self.guesses {
+            let offset = *guess_offsets.entry(forms).or_insert_with(|| {
+                let offset = guess_records.len() as u64;
+                guess_records.push(forms.len() as u32);
+                for &(entry, count) in forms {
+                    guess_records.extend([entry, count]);
+                }
+                offset
+            });
+            guesses.insert(key, offset).map_err(build_error)?;
+        }
+
         Ok(format::write(&Sections {
             meta: self.meta.clone(),
             tags: self.tags.clone(),
@@ -252,6 +315,8 @@ impl Builder {
             records,
             probabilities: probabilities.into_inner().map_err(build_error)?,
             probability_records,
+            guesses: guesses.into_inner().map_err(build_error)?,
+            guess_records,
         }))
     }
 }
@@ -316,6 +381,26 @@ mod tests {
         assert_eq!(builder.add_table(0, &[(0, 0), (0, 0)]).unwrap(), 0);
         assert_eq!(builder.add_table(0, &[(0, 0), (1, 0)]).unwrap(), 1);
         assert_eq!(builder.add_table(0, &[(0, 0), (0, 0)]).unwrap(), 0);
+    }
+
+    #[test]
+    fn checks_guesses() {
+        let mut builder = builder();
+        builder.add_paradigm(&[(0, 0, 0), (1, 0, 0)]).unwrap();
+        builder.add_table(0, &[(0, 0), (0, 0)]).unwrap();
+        assert!(
+            builder
+                .add_guesses(GuessIndex::Common, "а", &[(entry(1, 0), 1)])
+                .is_err()
+        );
+        assert!(
+            builder
+                .add_guesses(GuessIndex::Common, "а", &[(entry(0, 2), 1)])
+                .is_err()
+        );
+        builder
+            .add_guesses(GuessIndex::Proper, "а", &[(entry(0, 1), 1)])
+            .unwrap();
     }
 
     #[test]

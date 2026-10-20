@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Instant;
 
-use rumorph::{Builder, Dictionary, Entry};
+use rumorph::{Builder, Dictionary, Entry, GuessIndex};
 
 fn main() -> ExitCode {
     let args: Vec<PathBuf> = std::env::args_os().skip(1).map(PathBuf::from).collect();
@@ -111,6 +111,9 @@ fn build(export: &Path, output: &Path) -> Result<(), Box<dyn Error>> {
     let mut ud_numbers: HashMap<(u16, String, bool), (u16, bool)> = HashMap::new();
     // Номер пары «часть речи, признаки» тега UD: разборы с одинаковыми ею и леммой сливаются
     let (mut ud_cores, mut core_numbers): (Vec<usize>, HashMap<String, usize>) = Default::default();
+    // Индекс угадывания по тегу UD: имена собственные, нарицательные слова открытых классов
+    // или никакого (служебные слова, аббревиатуры)
+    let mut ud_guesses: Vec<Option<GuessIndex>> = Vec::new();
     let mut lexeme_numbers: HashMap<(u16, String), usize> = HashMap::new();
     let mut lexemes: Vec<SourceLexeme> = Vec::new();
     let mut untyped_pronouns = BTreeSet::new();
@@ -171,6 +174,12 @@ fn build(export: &Path, output: &Path) -> Result<(), Box<dyn Error>> {
                                     let next = core_numbers.len();
                                     let core = format!("{}\t{feats}", converted.pos);
                                     ud_cores.push(*core_numbers.entry(core).or_insert(next));
+                                    ud_guesses.push(match converted.pos {
+                                        _ if converted.feats.contains_key("Abbr") => None,
+                                        "PROPN" => Some(GuessIndex::Proper),
+                                        "NOUN" | "ADJ" | "VERB" | "ADV" => Some(GuessIndex::Common),
+                                        _ => None,
+                                    });
                                 }
                                 let untyped = matches!(converted.pos, "PRON" | "DET")
                                     && !converted.feats.contains_key("PronType");
@@ -264,19 +273,66 @@ fn build(export: &Path, output: &Path) -> Result<(), Box<dyn Error>> {
         }
     }
 
+    // Угадывание незнакомых слов: число словоформ с каждым окончанием у каждой формы таблицы;
+    // редкие таблицы (меньше трех лексем) - чаще исключения, чем образец
+    let mut popularity: HashMap<u16, usize> = HashMap::new();
+    for (table, _) in &placed {
+        *popularity.entry(*table).or_default() += 1;
+    }
+    let mut guesses: HashMap<(GuessIndex, &str), HashMap<Entry, u32>> = HashMap::new();
     for (number, line) in text.lines().enumerate() {
-        let (word, entries) = parse(number, line)?;
-        let entries: Vec<Entry> = entries
-            .into_iter()
-            .map(|(paradigm, form, stem)| {
-                let (table, mapped) = &placed[lexeme_numbers[&(paradigm, stem)]];
-                Entry {
-                    table: *table,
-                    form: mapped.get(usize::from(form)).copied().unwrap_or(form),
-                }
-            })
-            .collect();
+        let (word, records) = parse(number, line)?;
+        let mut entries = Vec::with_capacity(records.len());
+        for (paradigm, form, stem) in records {
+            let lexeme = lexeme_numbers[&(paradigm, stem)];
+            let (table, mapped) = &placed[lexeme];
+            let entry = Entry {
+                table: *table,
+                form: mapped.get(usize::from(form)).copied().unwrap_or(form),
+            };
+            entries.push(entry);
+            let ud = lexemes[lexeme].2[usize::from(form)].1;
+            let Some(index) = ud_guesses[usize::from(ud)] else {
+                continue;
+            };
+            if popularity[table] < 3 {
+                continue;
+            }
+            let spelling = line.split_once('\t').map_or(line, |(spelling, _)| spelling);
+            let starts: Vec<usize> = spelling.char_indices().map(|(at, _)| at).collect();
+            for length in 1..=GuessIndex::MAX_ENDING.min(starts.len().saturating_sub(1)) {
+                let ending = &spelling[starts[starts.len() - length]..];
+                *guesses
+                    .entry((index, ending))
+                    .or_default()
+                    .entry(entry)
+                    .or_default() += 1;
+            }
+        }
         builder.add_word(&word, &entries)?;
+    }
+    // Окончание, которое встретилось меньше трех раз, - скорее примета одного слова, чем образец
+    let lists: HashMap<(GuessIndex, &str), Vec<(Entry, u32)>> = guesses
+        .into_iter()
+        .filter(|(_, counts)| counts.values().sum::<u32>() >= lexemes::MIN_ENDING_COUNT)
+        .map(|(key, counts)| {
+            let mut forms: Vec<(Entry, u32)> = counts.into_iter().collect();
+            forms
+                .sort_by_key(|&(entry, count)| (std::cmp::Reverse(count), entry.table, entry.form));
+            forms.truncate(lexemes::MAX_GUESSES);
+            (key, forms)
+        })
+        .collect();
+    let mut guess_endings = 0;
+    for (&(index, ending), forms) in &lists {
+        // Окончание, у которого список тот же, что у окончания на букву короче, ничего не меняет:
+        // угадывание по нему перейдет к более короткому
+        let shorter = ending.char_indices().nth(1).map(|(at, _)| &ending[at..]);
+        if shorter.is_some_and(|shorter| lists.get(&(index, shorter)) == Some(forms)) {
+            continue;
+        }
+        builder.add_guesses(index, ending, forms)?;
+        guess_endings += 1;
     }
 
     for (number, line) in read("probabilities.tsv")?.lines().enumerate() {
@@ -304,7 +360,7 @@ fn build(export: &Path, output: &Path) -> Result<(), Box<dyn Error>> {
     fs::write(output, &data).map_err(|err| format!("{}: {err}", output.display()))?;
     eprintln!(
         "{}: {} словоформ, {} тегов UD, {} таблиц словоизменения, {combined_count} лексем \
-         объединено, {:.1} МБ, {:.1} с",
+         объединено, {guess_endings} окончаний для угадывания, {:.1} МБ, {:.1} с",
         output.display(),
         dictionary.word_count(),
         dictionary.ud_tags().len(),

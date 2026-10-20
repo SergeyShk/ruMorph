@@ -78,7 +78,7 @@ impl UdObjects {
 ///
 /// Атрибуты:
 ///     word (str): Словоформа в написании словаря: с буквой «ё», если она есть в словаре; у разборов
-///         по правилам - как в тексте
+///         по правилам и угаданных - как в тексте
 ///     lemma (str): Начальная форма
 ///     pos (str): Часть речи UD: NOUN, VERB, ADJ, DET, ADP и т. д.
 ///     feats (dict[str, str]): Признаки UD: {"Case": "Gen", "Number": "Sing"}; каждый раз новый
@@ -88,7 +88,8 @@ impl UdObjects {
 ///     prob (float): Вероятность разбора; сумма по всем разборам словоформы равна 1
 ///     source (str): Откуда взят разбор: "dictionary" - словоформа есть в словаре, "rule" - токена
 ///         нет в словаре, разбор по правилу (число, знак, латиница, римское число, инициал,
-///         аббревиатура, сокращение с точкой)
+///         аббревиатура, сокращение с точкой), "guess" - незнакомое слово, разбор угадан
+///         по окончанию
 ///
 /// Пример использования:
 ///     >>> from rumorph import Analyzer
@@ -350,26 +351,31 @@ type AnalysisState = (
 #[pyfunction]
 fn _analysis(py: Python<'_>, analyzer: Py<Analyzer>, state: AnalysisState) -> PyResult<Analysis> {
     let (word, lemma, pos, feats, labels, prob, source, entry) = state;
-    if ![rumorph::Source::Dictionary, rumorph::Source::Rule]
-        .iter()
-        .any(|known| known.as_str() == source)
-    {
+    let Some(source) = [
+        rumorph::Source::Dictionary,
+        rumorph::Source::Rule,
+        rumorph::Source::Guess,
+    ]
+    .into_iter()
+    .find(|known| known.as_str() == source) else {
         return Err(PyValueError::new_err(format!(
             "Неизвестный источник разбора: {source}"
         )));
-    }
+    };
     let dictionary = &analyzer.get().dictionary;
     let same = |analysis: &rumorph::Analysis| {
         let tag = &dictionary.ud_tags()[usize::from(analysis.ud)];
         analysis.word == word
-            && analysis.source.as_str() == source
+            && analysis.source == source
             && analysis.lemma == lemma
             && tag.pos == pos
             && tag.feats_string() == feats
             && tag.labels.join(",") == labels
     };
     let found = entry
-        .and_then(|(table, form)| dictionary.analysis(&word, table, form))
+        .and_then(|(table, form)| {
+            dictionary.analysis(&word, rumorph::Entry { table, form }, source)
+        })
         .filter(|analysis| same(analysis))
         .or_else(|| {
             dictionary
@@ -478,8 +484,8 @@ impl Analyzer {
     ///
     /// Описание:
     ///     Разборы идут по убыванию вероятности. Токен, которого нет в словаре, разбирается
-    ///     по правилам (числа, знаки, латиница, сокращения); незнакомое слово кириллицей
-    ///     дает пустой список
+    ///     по правилам (числа, знаки, латиница, сокращения), а разборы незнакомого слова
+    ///     кириллицей угадываются по окончанию
     ///
     /// Аргументы:
     ///     word (str): Словоформа
@@ -519,7 +525,7 @@ impl Analyzer {
     /// Пример использования:
     ///     >>> from rumorph import Analyzer
     ///     >>> [len(analyses) for analyses in Analyzer().analyze_many(["мама", "мыла", "раму", "вайб"])]
-    ///     [1, 4, 2, 0]
+    ///     [1, 4, 2, 1]
     fn analyze_many(
         slf: &Bound<'_, Self>,
         words: &Bound<'_, PyAny>,
@@ -562,7 +568,7 @@ impl Analyzer {
     /// Пример использования:
     ///     >>> from rumorph import Analyzer
     ///     >>> Analyzer().lemmatize("Мы стали друзьями в ковиде".split())
-    ///     ['мы', 'стать', 'друг', 'в', 'ковиде']
+    ///     ['мы', 'стать', 'друг', 'в', 'ковид']
     fn lemmatize(&self, py: Python<'_>, words: &Bound<'_, PyAny>) -> PyResult<Vec<String>> {
         let words = collect_words(words)?;
         let dictionary = Arc::clone(&self.dictionary);
