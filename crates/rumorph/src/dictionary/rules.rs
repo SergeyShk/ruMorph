@@ -535,6 +535,117 @@ fn roman(word: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dictionary::tests::dictionary_of;
+
+    /// Образец порядковых из цифр «1-й», «1-го» и сокращение «им»
+    fn dictionary() -> Dictionary {
+        let ordinal =
+            |case| format!("Case={case}|Gender=Masc|NumForm=Combi|NumType=Ord|Number=Sing");
+        dictionary_of(
+            &[
+                (
+                    "ADJ",
+                    "1-",
+                    vec![("й", ordinal("Nom")), ("го", ordinal("Gen"))],
+                ),
+                (
+                    "NOUN",
+                    "им",
+                    vec![("", "Abbr=Yes|Case=Gen|Number=Sing".to_owned())],
+                ),
+            ],
+            &[],
+        )
+    }
+
+    /// Лемма, часть речи и признаки разборов по правилам
+    fn rules(dict: &Dictionary, word: &str) -> Vec<(String, String, String)> {
+        dict.rules(word)
+            .into_iter()
+            .map(|analysis| {
+                assert_eq!(
+                    (analysis.word.as_str(), analysis.source),
+                    (word, Source::Rule)
+                );
+                let tag = &dict.ud_tags[usize::from(analysis.ud)];
+                (analysis.lemma, tag.pos.clone(), tag.feats_string())
+            })
+            .collect()
+    }
+
+    fn parts_of_speech(dict: &Dictionary, word: &str) -> Vec<String> {
+        rules(dict, word)
+            .into_iter()
+            .map(|(_, pos, _)| pos)
+            .collect()
+    }
+
+    fn analysis(lemma: &str, pos: &str, feats: &str) -> (String, String, String) {
+        (lemma.to_owned(), pos.to_owned(), feats.to_owned())
+    }
+
+    #[test]
+    fn numerals_by_template() {
+        let dict = dictionary();
+        let genitive = "Case=Gen|Gender=Masc|NumForm=Combi|NumType=Ord|Number=Sing";
+        assert_eq!(
+            rules(&dict, "2005-го"),
+            [analysis("2005-й", "ADJ", genitive)]
+        );
+        assert_eq!(
+            rules(&dict, "10-15-го"),
+            [analysis("10-15-й", "ADJ", genitive)]
+        );
+        // Короткое окончание без образца - количественное с леммой из цифр
+        let cardinal = "NumForm=Digit|NumType=Card";
+        assert_eq!(rules(&dict, "5-ти"), [analysis("5", "NUM", cardinal)]);
+        assert_eq!(rules(&dict, "3,14"), [analysis("3,14", "NUM", cardinal)]);
+        // Год - чаще порядковое
+        assert_eq!(parts_of_speech(&dict, "2008"), ["ADJ", "NUM"]);
+        assert_eq!(parts_of_speech(&dict, "2050-летний"), Vec::<String>::new());
+    }
+
+    #[test]
+    fn roman_and_latin() {
+        let dict = dictionary();
+        let roman = "NumForm=Roman|NumType=Ord";
+        assert_eq!(rules(&dict, "XIX-го"), [analysis("XIX", "ADJ", roman)]);
+        // Буква со словом - не римское порядковое
+        assert!(rules(&dict, "X-хромосома").is_empty());
+        assert_eq!(parts_of_speech(&dict, "xix"), ["ADJ", "X"]);
+        assert_eq!(parts_of_speech(&dict, "CV"), ["X", "ADJ"]);
+        assert_eq!(rules(&dict, "ci"), [analysis("ci", "X", "Foreign=Yes")]);
+        assert_eq!(parts_of_speech(&dict, "II-III"), ["ADJ"]);
+    }
+
+    #[test]
+    fn initials_abbreviations_and_symbols() {
+        let dict = dictionary();
+        let initials: Vec<_> = rules(&dict, "Х")
+            .into_iter()
+            .map(|(lemma, _, feats)| (lemma, feats))
+            .collect();
+        assert_eq!(
+            initials,
+            ["Giv", "Pat", "Sur"].map(|name| ("х".to_owned(), format!("Abbr=Yes|NameType={name}")))
+        );
+        assert_eq!(
+            rules(&dict, "им."),
+            [analysis("им", "NOUN", "Abbr=Yes|Case=Gen|Number=Sing")]
+        );
+        assert_eq!(parts_of_speech(&dict, "ГОСТ"), ["PROPN", "NOUN"]);
+        assert_eq!(
+            rules(&dict, "по-бурятски"),
+            [analysis("по-бурятски", "ADV", "Degree=Pos")]
+        );
+        assert_eq!(parts_of_speech(&dict, "%"), ["SYM"]);
+        assert_eq!(parts_of_speech(&dict, "«"), ["PUNCT"]);
+        // Не подошло ни одно правило - запасной X; токен с пробелом разборов не получает
+        assert!(rules(&dict, "км/ч").is_empty());
+        let fallback = dict.fallback("км/ч").remove(0);
+        assert_eq!((fallback.lemma.as_str(), fallback.prob), ("км/ч", 1.0));
+        assert!(dict.fallback("км ч").is_empty());
+    }
 
     #[test]
     fn numbers() {
