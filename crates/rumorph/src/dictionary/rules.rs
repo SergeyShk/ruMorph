@@ -34,6 +34,11 @@ const NUMERAL_FEATS: &[(&str, &str, &str, &str, f64)] = &[
     ("Ins", "Neut", "Sing", "", 2.0),
 ];
 
+/// Падежные окончания количественных числительных из цифр: «5-ти», «2-х», «3-мя», «4-м»
+const CARDINAL_ENDINGS: &[&str] = &[
+    "ти", "ть", "х", "ух", "ех", "ми", "мя", "м", "ем", "ём", "у",
+];
+
 /// Одиночные буквы, которые могут быть римским числом: доли римского числа и латиницы
 /// по обучающей части SynTagRus плюс один («C» и «L» там - только латиница)
 const ROMAN_LETTERS: &[(&str, f64, f64)] = &[
@@ -260,9 +265,12 @@ impl Dictionary {
             analyses.sort_by(|a, b| b.prob.total_cmp(&a.prob));
             return Some(analyses);
         }
-        // Окончание заглавными без образца («5-Б») - не падежное
-        (ending.chars().count() <= 3 && ending.chars().all(char::is_lowercase))
-            .then(|| self.shares(word, &[(digits, self.rule_tags.cardinal, 1.0)]))
+        // Падежные окончания количественных - в любом регистре («5-ТИ»), а прочие короткие -
+        // только строчными: заглавные без образца («5-Б») - литеры, а не окончания
+        let ending_lower = ending.to_lowercase();
+        let cardinal = CARDINAL_ENDINGS.contains(&ending_lower.as_str())
+            || (ending.chars().count() <= 3 && ending.chars().all(char::is_lowercase));
+        cardinal.then(|| self.shares(word, &[(digits, self.rule_tags.cardinal, 1.0)]))
     }
 
     /// Словарные порядковые из цифр («90-е») получают те же доли по SynTagRus, что и разобранные
@@ -360,7 +368,7 @@ fn symbol(c: char) -> bool {
 }
 
 /// Символ форматирования (категория Unicode Cf): мягкий перенос, нулевые пробелы и соединители,
-/// метки направления текста, BOM; кроме соединителя ZWJ, который бывает внутри эмодзи
+/// метки направления текста, BOM; кроме ZWJ и тегов, которые бывают внутри эмодзи
 fn invisible(c: char) -> bool {
     matches!(
         c,
@@ -369,6 +377,7 @@ fn invisible(c: char) -> bool {
             | '\u{061C}'
             | '\u{06DD}'
             | '\u{070F}'
+            | '\u{0890}'..='\u{0891}'
             | '\u{08E2}'
             | '\u{180E}'
             | '\u{200B}'..='\u{200C}'
@@ -384,13 +393,15 @@ fn invisible(c: char) -> bool {
             | '\u{1BCA0}'..='\u{1BCA3}'
             | '\u{1D173}'..='\u{1D17A}'
             | '\u{E0001}'
-            | '\u{E0020}'..='\u{E007F}'
     )
 }
 
-/// Невидимая часть составного эмодзи: соединитель и селекторы вариантов
+/// Невидимая часть составного эмодзи: соединитель, селекторы вариантов и теги флагов регионов
 fn joiner(c: char) -> bool {
-    matches!(c, '\u{200D}' | '\u{FE00}'..='\u{FE0F}')
+    matches!(
+        c,
+        '\u{200D}' | '\u{FE00}'..='\u{FE0F}' | '\u{E0020}'..='\u{E007F}'
+    )
 }
 
 /// Число цифрами: `Some(true)` - только цифры, `Some(false)` - со знаком, дробной частью или

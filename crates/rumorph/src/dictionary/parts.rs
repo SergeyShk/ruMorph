@@ -126,8 +126,6 @@ impl Dictionary {
                 let lemma = match analysis.entry {
                     Some(entry) => {
                         let lexeme = self.lexeme(entry.table, entry.form, &lower)?;
-                        // Основа как в тексте нужна, чтобы формы сохраняли заглавные буквы
-                        self.lexeme(entry.table, entry.form, word)?;
                         self.spell(&lexeme, lexeme.lemma_form(entry.form))
                     }
                     None => format!("{left_lower}-{}", analysis.lemma),

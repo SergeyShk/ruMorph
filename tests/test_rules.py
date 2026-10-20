@@ -30,6 +30,7 @@ def summary(morph, word):
         ("♥", "SYM"),
         ("😀", "SYM"),
         ("❤\ufe0f", "SYM"),
+        ("🏴\U000e0067\U000e0062\U000e0073\U000e0063\U000e0074\U000e007f", "SYM"),
     ],
 )
 def test_punctuation_and_symbols(morph, word, pos):
@@ -106,6 +107,9 @@ def test_numeral_with_ending(morph):
     # Короткое окончание без образца - количественное
     assert summary(morph, "5-ти") == [
         ("5-ти", "5", "NUM", {"NumForm": "Digit", "NumType": "Card"})
+    ]
+    assert summary(morph, "5-ТИ") == [
+        ("5-ТИ", "5", "NUM", {"NumForm": "Digit", "NumType": "Card"})
     ]
 
 
