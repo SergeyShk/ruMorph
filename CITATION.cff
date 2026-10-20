@@ -1,5 +1,5 @@
 cff-version: 1.2.0
-message: "If you use ruMorph in research or software, please cite it."
+message: "Если вы используете ruMorph в исследованиях или программах, пожалуйста, сошлитесь на библиотеку."
 title: "ruMorph, a fast morphological analyzer for Russian"
 type: software
 authors:

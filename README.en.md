@@ -26,7 +26,7 @@
 
 **ruMorph** is a morphological analyzer of Russian: a Rust core with a Python API. For a word form the analyzer finds its analyses in the [OpenCorpora](https://opencorpora.org) dictionary - the initial form (lemma), the part of speech and the [Universal Dependencies](https://universaldependencies.org/) features - orders them by probability and builds the forms of the word.
 
-Analysis and lemmatization are about 5 times faster than in pymorphy3 with the `pymorphy3[fast]` speedup, inflection is 15-18 times faster; lists of words are analyzed without the GIL. Parts of speech, features and lemmas follow the conventions of the SynTagRus treebank, so the results can be compared with the annotation of spaCy, Stanza and other tools built on UD.
+Analysis and lemmatization are about 5 times faster than in pymorphy3 with the `pymorphy3[fast]` speedup, the form by features and agreement with a number are 15-18 times faster; lists of words are analyzed without the GIL. Parts of speech, features and lemmas follow the conventions of the SynTagRus treebank, so the results can be compared with the annotation of spaCy, Stanza and other tools built on UD.
 
 * **[Analyzer](https://sergeyshk.github.io/ruMorph/en/analyzer/)** - analyses of a word form by descending probability, analysis of word lists and lemmatization without the GIL, a dictionary lookup of a word form
 * **[UD parts of speech and features](https://sergeyshk.github.io/ruMorph/en/analysis/#ud)** - parts of speech, features and lemmas in the SynTagRus conventions; OpenCorpora labels that have no UD feature
@@ -256,9 +256,9 @@ Thousands of words or analyses per second, higher is better:
 | :-------- | :------ | :-------- | :-------------- |
 | Word analysis | 483 | 20 | 106 |
 | Lemmatization | 889 | 21 | 172 |
-| Lemmatization in 4 threads | 2 229 | - | - |
-| Form by features | 1 354 | 76 | 76 |
-| Agreement with a number | 1 270 | 85 | 86 |
+| Lemmatization in 4 threads | 2,229 | - | - |
+| Form by features | 1,354 | 76 | 76 |
+| Agreement with a number | 1,270 | 85 | 86 |
 
 Importing and loading the dictionary takes 24 ms against 31 ms for pymorphy3, the process memory grows by 26 MB, as with `pymorphy3[fast]`. Measured on the 128,251 word forms of the UD_Russian-SynTagRus test set, Apple M3 Pro, Python 3.11.
 
@@ -317,7 +317,7 @@ The code is distributed under the [MIT](https://github.com/SergeyShk/ruMorph/blo
 
 ## Citation
 
-If you use **ruMorph** in research or software, please cite it with the following BibTeX entry - citations help the development and support of the project. The same metadata is in [CITATION.cff](https://github.com/SergeyShk/ruMorph/blob/master/CITATION.cff), which GitHub shows under the «Cite this repository» button.
+If you use **ruMorph** in research or software, please cite it with the following BibTeX entry - citations help the development and support of the project. The same metadata is in [CITATION.cff](https://github.com/SergeyShk/ruMorph/blob/master/CITATION.cff), which GitHub shows under the "Cite this repository" button.
 
 ```bibtex
 @software{ruMorph,
