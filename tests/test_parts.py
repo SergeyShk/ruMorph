@@ -60,9 +60,14 @@ def test_aspect_prefixes(morph):
         assert morph.analyze(word)[0].feats["Aspect"] == "Perf"
 
 
-@pytest.mark.parametrize("word", ["5-Б", "10-А", "9-В", "кто-то-то", "кто" + "-то" * 12000])
+@pytest.mark.parametrize("word", ["5-Б", "10-А", "9-В", "кто-то-то"])
 def test_no_parts(morph, word):
     assert morph.analyze(word) == []
+
+
+def test_particle_chain(morph):
+    # Длинная цепочка частиц не разбирается и не уводит в глубокую рекурсию
+    assert morph.analyze("кто" + "-то" * 12000) == []
 
 
 def test_capitalized_forms(morph):
