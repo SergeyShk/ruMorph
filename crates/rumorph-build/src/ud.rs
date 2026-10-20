@@ -112,6 +112,8 @@ const POS_EXCEPTIONS: &[(&str, &str, &str)] = &[
     ("CONJ", "только", "PART"),
     ("CONJ", "фактически", "ADV"),
     ("CONJ", "якобы", "ADV"),
+    // «выше», «повыше» в лексеме наречия «высоко» - наречия, а не прилагательные
+    ("COMP", "высоко", "ADV"),
     ("INTJ", "есть", "VERB"),
     ("INTJ", "неужели", "PART"),
     ("INTJ", "ну", "PART"),
@@ -163,6 +165,25 @@ const POS_EXCEPTIONS: &[(&str, &str, &str)] = &[
     ("PREP", "сверху", "ADV"),
     ("PREP", "снизу", "ADV"),
     ("PREP", "соответственно", "ADV"),
+];
+
+/// Признак UD и его значение
+type Feature = (&'static str, &'static str);
+
+/// Признаки слова из `POS_EXCEPTIONS`, с которыми его разбор совпадает с разбором другой части речи
+/// OpenCorpora и сливается с ним: «несколько» (ADVB) - как числительное в винительном падеже
+const EXCEPTION_FEATS: &[(&str, &str, &[Feature])] = &[
+    ("ADVB", "несколько", &[("Animacy", "Inan"), ("Case", "Acc")]),
+    (
+        "ADVB",
+        "что-то",
+        &[
+            ("Animacy", "Inan"),
+            ("Case", "Nom"),
+            ("Gender", "Neut"),
+            ("Number", "Sing"),
+        ],
+    ),
 ];
 
 /// Глаголы с Voice=Mid без -ся
@@ -415,6 +436,11 @@ const POSSESSIVE: &[&str] = &[
 /// Отрицательные слова (Polarity=Neg)
 const NEGATIVE: &[&str] = &["не", "нет", "ни"];
 
+/// Отрицательные предикативы: Polarity=Neg у разбора VERB («нельзя», «нечего»), но не у наречия
+/// («некогда» - «когда-то»)
+const NEGATIVE_PREDICATIVES: &[&str] =
+    &["негде", "некогда", "некого", "некуда", "нельзя", "нечего"];
+
 /// Наречия в сравнительной и превосходной степени, которые OpenCorpora не отмечает
 const ADVERB_DEGREES: &[(&str, &str)] = &[
     ("более", "Cmp"),
@@ -427,6 +453,7 @@ const ADVERB_DEGREES: &[(&str, &str)] = &[
     ("позднее", "Cmp"),
     ("ранее", "Cmp"),
     ("скорее", "Cmp"),
+    ("больше", "Cmp"),
 ];
 
 /// Супплетивные превосходные прилагательные: в SynTagRus Degree=Pos, а не Sup
@@ -434,19 +461,46 @@ const SUPPLETIVE_SUPERLATIVES: &[&str] = &[
     "высший",
     "худший",
     "лучший",
+    "меньший",
     "наибольший",
+    "наилучший",
     "наименьший",
     "низший",
 ];
+
+/// Прилагательные без пометы Supr, которые в SynTagRus в превосходной степени
+const SUPERLATIVES: &[&str] = &["дальнейший"];
 
 /// Частицы, которые в UD - местоимения среднего рода: «это», «всё»
 const PARTICLE_PRONOUNS: &[&str] = &["всё", "это"];
 
 /// Неодушевленные местоимения без «что» в лемме
-const INANIMATE_PRONOUNS: &[&str] = &["всё", "сие", "то", "это"];
+const INANIMATE_PRONOUNS: &[&str] = &["всё", "многое", "прочее", "сие", "то", "это"];
+
+/// Одушевленные местоимения без «кто» в лемме
+const ANIMATE_PRONOUNS: &[&str] = &["все", "многие"];
+
+/// Имена собственные и притяжательность OpenCorpora: у прилагательных в SynTagRus таких
+/// признаков нет, граммемы остаются пометами
+const ADJECTIVE_LABELS: &[(&str, &str)] = &[
+    ("Geox", "NameType"),
+    ("Name", "NameType"),
+    ("Orgn", "NameType"),
+    ("Patr", "NameType"),
+    ("Poss", "Poss"),
+    ("Surn", "NameType"),
+    ("Trad", "NameType"),
+];
 
 fn has(grammemes: &[&str], grammeme: &str) -> bool {
     grammemes.contains(&grammeme)
+}
+
+/// Есть ли у слова с частью речи OpenCorpora `oc` своя часть речи UD в `POS_EXCEPTIONS`
+pub fn has_pos_exception(oc: &str, lemma: &str) -> bool {
+    POS_EXCEPTIONS
+        .iter()
+        .any(|&(oc_pos, word, _)| oc_pos == oc && word == lemma)
 }
 
 /// Часть речи UD по части речи OpenCorpora, граммемам и лемме; `true` - часть речи из `POS_EXCEPTIONS`
@@ -475,6 +529,8 @@ fn pos(oc: &str, grammemes: &[&str], lemma: &str) -> (&'static str, bool) {
         "NPRO" => "PRON",
         "PRED" => "VERB",
         "PREP" => "ADP",
+        // Вводные слова, у которых нет другого разбора («в-четвёртых»), - наречия, как в SynTagRus
+        "CONJ" if has(grammemes, "Prnt") => "ADV",
         "CONJ" if SCONJ.contains(&lemma) => "SCONJ",
         "CONJ" => "CCONJ",
         "PRCL" => "PART",
@@ -565,6 +621,13 @@ pub fn convert(tag: &str, lemma: &str) -> Ud {
         // Признаки OpenCorpora другой части речи не переходят: «плохо» - ADV без времени, «мало» - без падежа
         feats.clear();
     }
+    if exception
+        && let Some(&(_, _, extra)) = EXCEPTION_FEATS
+            .iter()
+            .find(|&&(oc_pos, word, _)| oc_pos == oc && word == lemma)
+    {
+        feats.extend(extra.iter().copied());
+    }
     if g("impr") && !feats.contains_key("Person") {
         feats.insert("Person", if g("incl") { "1" } else { "2" });
     }
@@ -596,7 +659,7 @@ pub fn convert(tag: &str, lemma: &str) -> Ud {
         ("COMP", _) => {
             feats.insert("Degree", "Cmp");
         }
-        (_, "ADJ") if g("Supr") => {
+        (_, "ADJ") if g("Supr") || SUPERLATIVES.contains(&lemma) => {
             feats.insert("Degree", "Sup");
         }
         (_, "ADJ" | "ADV") => {
@@ -610,7 +673,7 @@ pub fn convert(tag: &str, lemma: &str) -> Ud {
     if POSSESSIVE.contains(&lemma) && pos == "DET" {
         feats.insert("Poss", "Yes");
     }
-    if NEGATIVE.contains(&lemma) {
+    if NEGATIVE.contains(&lemma) || (pos == "VERB" && NEGATIVE_PREDICATIVES.contains(&lemma)) {
         feats.insert("Polarity", "Neg");
     }
     if pos == "AUX" && lemma == "бы" {
@@ -637,8 +700,11 @@ pub fn convert(tag: &str, lemma: &str) -> Ud {
             if lemma.contains('-') || lemma == "нечто" {
                 feats.extend([("Gender", "Neut"), ("Number", "Sing")]);
             }
-        } else if lemma.contains("кто") {
+        } else if lemma.contains("кто") || ANIMATE_PRONOUNS.contains(&lemma) {
             feats.insert("Animacy", "Anim");
+            if lemma.contains("кто") && pos == "PRON" {
+                feats.entry("Gender").or_insert("Masc");
+            }
         }
         if lemma == "себя" {
             feats.remove("Number");
@@ -653,9 +719,10 @@ pub fn convert(tag: &str, lemma: &str) -> Ud {
     if feats.get("Degree") == Some(&"Sup") && SUPPLETIVE_SUPERLATIVES.contains(&lemma) {
         feats.insert("Degree", "Pos");
     }
-    if g("Abbr") && oc == "NOUN" {
-        // Аббревиатуры (РФ, СССР) в SynTagRus без падежа, числа, рода и одушевленности
-        for name in ["Case", "Number", "Gender", "Animacy"] {
+    if g("Abbr") && g("Fixd") && oc == "NOUN" {
+        // Несклоняемые аббревиатуры (РФ, СССР) в SynTagRus без падежа, числа, рода и одушевленности;
+        // у склоняемых («вуз», «МИД») признаки полные
+        for name in UNINFLECTED_ABBREVIATION {
             feats.remove(name);
         }
     }
@@ -685,6 +752,20 @@ pub fn convert(tag: &str, lemma: &str) -> Ud {
             feats.insert("PronType", kind);
         }
     }
+    if pos == "DET" && g("Fixd") && POSSESSIVE.contains(&lemma) {
+        // «его», «её», «их» в SynTagRus - Poss=Yes|PronType=Prs без падежа, рода и числа
+        for name in ["Animacy", "Case", "Gender", "Number"] {
+            feats.remove(name);
+        }
+    }
+    let mut extra_labels = Vec::new();
+    if pos == "ADJ" {
+        for &(grammeme, name) in ADJECTIVE_LABELS {
+            if g(grammeme) && feats.remove(name).is_some() {
+                extra_labels.push(grammeme.to_string());
+            }
+        }
+    }
     if REFLEXIVE.contains(&lemma) && matches!(pos, "PRON" | "DET") {
         feats.insert("Reflex", "Yes");
     }
@@ -699,10 +780,53 @@ pub fn convert(tag: &str, lemma: &str) -> Ud {
         .filter(|g| **g != "Fixd" || !feats.contains_key("InflClass"))
         .filter(|g| !matches!(**g, "Dmns" | "Ques") || !feats.contains_key("PronType"))
         .map(|g| g.to_string())
+        .chain(extra_labels)
         .collect();
     labels.sort();
     labels.dedup();
     Ud { pos, feats, labels }
+}
+
+/// Местоимения-существительные, которых нет в OpenCorpora: «то», «всё» - формы среднего рода
+/// единственного числа местоименных прилагательных «тот», «весь», «все» - формы множественного
+/// числа «весь», кроме неодушевленного винительного. Вывод - лемма и разбор PRON формы с тегом
+/// `tag` лексемы `base`, как в SynTagRus
+pub fn substantive_pronoun(base: &str, tag: &str) -> Option<(&'static str, Ud)> {
+    let grammemes: Vec<&str> = tag.split([',', ' ']).collect();
+    let g = |name: &str| grammemes.contains(&name);
+    if grammemes.first() != Some(&"ADJF") || !g("Apro") {
+        return None;
+    }
+    let (lemma, kind) = match base {
+        "тот" if g("neut") && g("sing") => ("то", "Dem"),
+        "весь" if g("neut") && g("sing") => ("всё", "Tot"),
+        "весь" if g("plur") && !g("inan") => ("все", "Tot"),
+        _ => return None,
+    };
+    let mut ud = convert(tag, base);
+    ud.pos = "PRON";
+    ud.feats.insert("PronType", kind);
+    if lemma == "все" {
+        ud.feats.remove("Gender");
+        ud.feats.extend([("Animacy", "Anim"), ("Number", "Plur")]);
+    } else {
+        ud.feats
+            .extend([("Animacy", "Inan"), ("Gender", "Neut"), ("Number", "Sing")]);
+    }
+    Some((lemma, ud))
+}
+
+/// Признаки, которых нет у несклоняемых аббревиатур и сокращений слов
+const UNINFLECTED_ABBREVIATION: [&str; 4] = ["Animacy", "Case", "Gender", "Number"];
+
+/// Сокращение слова - форма с пометой Abbr в лексеме несокращенного слова («им» в лексеме «имя»):
+/// в SynTagRus, как несклоняемые аббревиатуры, без падежа, числа, рода и одушевленности
+pub fn strip_abbreviation(ud: &mut Ud) {
+    if ud.feats.contains_key("Abbr") {
+        for name in UNINFLECTED_ABBREVIATION {
+            ud.feats.remove(name);
+        }
+    }
 }
 
 /// Форма парадигмы, которая служит леммой разбора вместо формы 0
@@ -768,7 +892,10 @@ pub fn lemma_class(lemma: &str) -> &str {
             MIDDLE_VERBS,
             POSSESSIVE,
             NEGATIVE,
+            NEGATIVE_PREDICATIVES,
             SUPPLETIVE_SUPERLATIVES,
+            SUPERLATIVES,
+            ANIMATE_PRONOUNS,
             PARTICLE_PRONOUNS,
             INANIMATE_PRONOUNS,
             REFLEXIVE,
@@ -870,13 +997,35 @@ mod tests {
             summary("ADJF,Apro,Anum masc,sing,nomn", "один").1,
             "Case=Nom|Gender=Masc|NumForm=Word|NumType=Card|Number=Sing"
         );
+        // «его» в SynTagRus без падежа, рода и числа: 24 разбора OpenCorpora сливаются в один
         assert_eq!(
             summary("ADJF,Apro,Fixd,Anph masc,sing,gent", "его"),
             (
                 "DET".into(),
-                "Case=Gen|Gender=Masc|Number=Sing|Poss=Yes|PronType=Prs".into(),
+                "Poss=Yes|PronType=Prs".into(),
                 vec!["Anph".into(), "Fixd".into()]
             )
+        );
+        assert_eq!(
+            summary("ADJF,Apro,Fixd,Anph plur,datv", "их"),
+            summary("ADJF,Apro,Fixd,Anph femn,sing,gent", "их")
+        );
+        assert_eq!(
+            summary("ADJF,Geox,Qual masc,sing,gent", "украинский"),
+            (
+                "ADJ".into(),
+                "Case=Gen|Degree=Pos|Gender=Masc|Number=Sing".into(),
+                vec!["Geox".into(), "Qual".into()]
+            )
+        );
+        assert_eq!(summary("ADJF,Poss plur,nomn", "казачий").2, ["Poss"]);
+        assert_eq!(
+            summary("ADJF masc,sing,nomn", "дальнейший").1,
+            "Case=Nom|Degree=Sup|Gender=Masc|Number=Sing"
+        );
+        assert_eq!(
+            summary("ADJF,Supr masc,sing,nomn", "наилучший").1,
+            "Case=Nom|Degree=Pos|Gender=Masc|Number=Sing"
         );
         assert_eq!(
             summary("ADJF,Supr,Qual masc,sing,nomn", "важный").1,
@@ -902,6 +1051,17 @@ mod tests {
         assert_eq!(summary("CONJ", "что").0, "SCONJ");
         assert_eq!(summary("CONJ", "и").0, "CCONJ");
         assert_eq!(summary("CONJ,Prnt", "однако").0, "ADV");
+        assert_eq!(
+            summary("CONJ,Prnt", "в-четвёртых"),
+            ("ADV".into(), "Degree=Pos".into(), vec!["Prnt".into()])
+        );
+        assert_eq!(
+            summary("COMP,Qual", "высоко"),
+            ("ADV".into(), "Degree=Cmp".into(), vec!["Qual".into()])
+        );
+        assert_eq!(summary("ADVB", "больше").1, "Degree=Cmp|PronType=Tot");
+        assert!(has_pos_exception("CONJ", "значит"));
+        assert!(!has_pos_exception("CONJ", "кстати"));
         assert_eq!(summary("CONJ", "однако").1, "Degree=Pos");
         assert_eq!(
             summary("PRCL", "бы"),
@@ -1047,6 +1207,88 @@ mod tests {
                 vec!["incl".into(), "intr".into()]
             )
         );
+    }
+
+    #[test]
+    fn exceptions_merge_with_other_part_of_speech() {
+        // «несколько» (ADVB) сливается с числительным в винительном, «что-то» - с местоимением
+        assert_eq!(
+            summary("ADVB", "несколько").1,
+            summary("NUMR,inan accs", "несколько").1
+        );
+        assert_eq!(
+            summary("ADVB", "что-то").1,
+            summary("NPRO,neut sing,nomn", "что-то").1
+        );
+    }
+
+    #[test]
+    fn pronoun_features() {
+        let feats = |tag: &str, lemma: &str| summary(tag, lemma).1;
+        assert_eq!(
+            feats("NPRO sing,nomn", "никто"),
+            "Animacy=Anim|Case=Nom|Gender=Masc|Number=Sing|PronType=Neg"
+        );
+        assert_eq!(
+            feats("NPRO plur,nomn", "многие"),
+            "Animacy=Anim|Case=Nom|Number=Plur|PronType=Tot"
+        );
+        assert!(feats("NPRO,neut sing,nomn", "многое").starts_with("Animacy=Inan"));
+        assert_eq!(feats("PRED,pres", "нельзя"), "Polarity=Neg");
+        assert_eq!(feats("NPRO,neut sing,gent", "нечего"), "Polarity=Neg");
+        // «некогда» - наречие «когда-то» без отрицания, предикатив - с отрицанием
+        assert_eq!(feats("ADVB", "некогда"), "Degree=Pos|PronType=Ind");
+        assert_eq!(feats("PRED,pres", "некогда"), "Polarity=Neg");
+    }
+
+    #[test]
+    fn abbreviations() {
+        // Склоняемая аббревиатура сохраняет признаки, несклоняемая и сокращение слова - нет
+        assert_eq!(
+            summary("NOUN,inan,masc,Abbr sing,gent", "вуз").1,
+            "Abbr=Yes|Animacy=Inan|Case=Gen|Gender=Masc|Number=Sing"
+        );
+        let mut abbreviated = convert("NOUN,inan,neut sing,gent,Abbr", "");
+        strip_abbreviation(&mut abbreviated);
+        assert_eq!(feats_string(&abbreviated.feats), "Abbr=Yes");
+        let mut word = convert("NOUN,inan,neut sing,gent", "");
+        strip_abbreviation(&mut word);
+        assert!(word.feats.contains_key("Case"));
+    }
+
+    #[test]
+    fn substantive_pronouns() {
+        let pronoun = |base: &str, tag: &str| {
+            substantive_pronoun(base, tag)
+                .map(|(lemma, ud)| (lemma, ud.pos, feats_string(&ud.feats)))
+        };
+        assert_eq!(
+            pronoun("тот", "ADJF,Subx,Apro,Anph neut,sing,gent"),
+            Some((
+                "то",
+                "PRON",
+                "Animacy=Inan|Case=Gen|Gender=Neut|Number=Sing|PronType=Dem".into()
+            ))
+        );
+        assert_eq!(
+            pronoun("весь", "ADJF,Subx,Apro neut,sing,datv"),
+            Some((
+                "всё",
+                "PRON",
+                "Animacy=Inan|Case=Dat|Gender=Neut|Number=Sing|PronType=Tot".into()
+            ))
+        );
+        assert_eq!(
+            pronoun("весь", "ADJF,Subx,Apro anim,plur,accs"),
+            Some((
+                "все",
+                "PRON",
+                "Animacy=Anim|Case=Acc|Number=Plur|PronType=Tot".into()
+            ))
+        );
+        assert_eq!(pronoun("весь", "ADJF,Subx,Apro inan,plur,accs"), None);
+        assert_eq!(pronoun("тот", "ADJF,Subx,Apro masc,sing,gent"), None);
+        assert_eq!(pronoun("этот", "ADJF,Apro neut,sing,gent"), None);
     }
 
     #[test]

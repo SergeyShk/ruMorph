@@ -106,12 +106,12 @@ pip install rumorph
 | `perf`, `impf` | `Aspect`: `Perf`, `Imp` |
 | `indc`, `impr` | `Mood`: `Ind`, `Imp` |
 | `actv`, `pssv` | `Voice`: `Act`, `Pass`; у возвратных глаголов - `Mid` |
-| `Name`, `Surn`, `Patr`, `Geox`, `Orgn`, `Trad` | `NameType`: `Giv`, `Sur`, `Pat`, `Geo`, `Com`, `Pro` |
+| `Name`, `Surn`, `Patr`, `Geox`, `Orgn`, `Trad` | `NameType`: `Giv`, `Sur`, `Pat`, `Geo`, `Com`, `Pro`; у прилагательных - пометы `labels` |
 | `Supr` | `Degree=Sup` |
 | `Abbr` | `Abbr=Yes` |
 | `Abbr` и `Anum` вместе («1-го», «90-х») | `NumType=Ord`, `NumForm=Combi`, без `Abbr` |
-| `Poss` | `Poss=Yes` |
-| `Fixd` | `InflClass=Ind` |
+| `Poss` | `Poss=Yes`; у прилагательных - помета `labels` |
+| `Fixd` | у существительных - `InflClass=Ind`, у остальных слов - помета `labels` |
 | `Apro` | часть речи `DET` |
 | `Dmns`, `Ques` («там», «где») | `PronType`: `Dem`, `Rel`, `Int` |
 | `Anum` у слов («первый»), `GNdr` | нет |
