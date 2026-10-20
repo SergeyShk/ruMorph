@@ -578,6 +578,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#guess" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unknown words
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#lists" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -705,6 +716,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#guess" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unknown words
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#lists" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -770,7 +792,7 @@
 <tbody>
 <tr>
 <td><code>word</code></td>
-<td>the word form as spelled in the dictionary: with the letter «ё» if the dictionary has it; for rule analyses - as in the text</td>
+<td>the word form as spelled in the dictionary: with the letter «ё» if the dictionary has it; for rule and guessed analyses - as in the text, but a guessed one takes «ё» from the ending of the dictionary form («пингвиненка» → «пингвинёнка»)</td>
 </tr>
 <tr>
 <td><code>lemma</code></td>
@@ -794,7 +816,7 @@
 </tr>
 <tr>
 <td><code>source</code></td>
-<td>where the analysis comes from: <code>"dictionary"</code> - the word form is in the dictionary, <code>"rule"</code> - the token is not in the dictionary and is analyzed by a rule (see <a href="#rules">below</a>)</td>
+<td>where the analysis comes from: <code>"dictionary"</code> - the word form is in the dictionary, <code>"rule"</code> - the token is not in the dictionary and is analyzed by a rule (see <a href="#rules">below</a>), <code>"guess"</code> - the analysis of an unknown word is guessed (see <a href="#guess">below</a>)</td>
 </tr>
 </tbody>
 </table>
@@ -860,7 +882,16 @@
 </tr>
 </tbody>
 </table>
-<p>The shares of ambiguous analyses come from the frequencies in SynTagRus. A token with whitespace (except a number), a control or an invisible character gets no analyses. Unknown Cyrillic words are not analyzed yet: their list of analyses is empty.</p>
+<p>The shares of ambiguous analyses come from the frequencies in SynTagRus. A token with whitespace (except a number), a control or an invisible character gets no analyses.</p>
+<h2 id="guess">Unknown words<a class="headerlink" href="#guess" title="Permanent link">&para;</a></h2>
+<p>The analyses of a Cyrillic word that is not in the dictionary are guessed by its ending: the analyzer takes the forms of dictionary words with the same ending - their part of speech, features and inflection. Their <code>source</code> is <code>"guess"</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="o">&gt;&gt;&gt;</span> <span class="p">[(</span><span class="n">a</span><span class="o">.</span><span class="n">lemma</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">pos</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">feats</span><span class="p">[</span><span class="s2">"Case"</span><span class="p">],</span> <span class="nb">round</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">prob</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"чатботу"</span><span class="p">)][:</span><span class="mi">2</span><span class="p">]</span>
+<span class="p">[(</span><span class="s1">'чатбот'</span><span class="p">,</span> <span class="s1">'NOUN'</span><span class="p">,</span> <span class="s1">'Dat'</span><span class="p">,</span> <span class="mf">0.44</span><span class="p">),</span> <span class="p">(</span><span class="s1">'чатбота'</span><span class="p">,</span> <span class="s1">'NOUN'</span><span class="p">,</span> <span class="s1">'Acc'</span><span class="p">,</span> <span class="mf">0.4</span><span class="p">)]</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">guess</span> <span class="o">=</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"Мартова"</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">guess</span><span class="o">.</span><span class="n">lemma</span><span class="p">,</span> <span class="n">guess</span><span class="o">.</span><span class="n">pos</span><span class="p">,</span> <span class="n">guess</span><span class="o">.</span><span class="n">feats</span><span class="p">[</span><span class="s2">"NameType"</span><span class="p">],</span> <span class="n">guess</span><span class="o">.</span><span class="n">inflect</span><span class="p">(</span><span class="n">Case</span><span class="o">=</span><span class="s2">"Dat"</span><span class="p">)</span>
+<span class="p">(</span><span class="s1">'мартов'</span><span class="p">,</span> <span class="s1">'PROPN'</span><span class="p">,</span> <span class="s1">'Sur'</span><span class="p">,</span> <span class="s1">'Мартову'</span><span class="p">)</span>
+</code></pre></div>
+<p>A lowercase word is guessed as a common word, a capitalized word mostly as a proper noun: a surname, a given name, a place. A guessed analysis has forms, and <code>forms</code>, <code>inflect</code> and <code>agree</code> work with it; the forms keep the capital letter. Hyphenated words and words in mixed case («ЗуМер») are not guessed yet.</p>
 <h2 id="lists">Lists of words<a class="headerlink" href="#lists" title="Permanent link">&para;</a></h2>
 <p><code>analyze_many</code> analyzes a collection of word forms, and <code>lemmatize</code> returns the lemmas of their most probable analyses:</p>
 <div class="highlight"><pre><span></span><code><span class="o">&gt;&gt;&gt;</span> <span class="n">morph</span><span class="o">.</span><span class="n">lemmatize</span><span class="p">([</span><span class="s2">"Мы"</span><span class="p">,</span> <span class="s2">"стали"</span><span class="p">,</span> <span class="s2">"друзьями"</span><span class="p">])</span>

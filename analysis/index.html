@@ -578,6 +578,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#guess" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Незнакомые слова
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#lists" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -705,6 +716,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#guess" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Незнакомые слова
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#lists" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -770,7 +792,7 @@
 <tbody>
 <tr>
 <td><code>word</code></td>
-<td>словоформа в написании словаря: с буквой «ё», если она есть в словаре; у разборов по правилам - как в тексте</td>
+<td>словоформа в написании словаря: с буквой «ё», если она есть в словаре; у разборов по правилам и угаданных - как в тексте, но у угаданных с «ё» из окончания словарной формы («пингвиненка» → «пингвинёнка»)</td>
 </tr>
 <tr>
 <td><code>lemma</code></td>
@@ -794,7 +816,7 @@
 </tr>
 <tr>
 <td><code>source</code></td>
-<td>откуда взят разбор: <code>"dictionary"</code> - словоформа есть в словаре, <code>"rule"</code> - токена нет в словаре, разбор по правилу (см. <a href="#rules">ниже</a>)</td>
+<td>откуда взят разбор: <code>"dictionary"</code> - словоформа есть в словаре, <code>"rule"</code> - токена нет в словаре, разбор по правилу (см. <a href="#rules">ниже</a>), <code>"guess"</code> - разбор незнакомого слова угадан (см. <a href="#guess">ниже</a>)</td>
 </tr>
 </tbody>
 </table>
@@ -860,7 +882,16 @@
 </tr>
 </tbody>
 </table>
-<p>Доли неоднозначных разборов взяты из частот в SynTagRus. Токен с пробелом (кроме числа), управляющим или невидимым символом разборов не получает. Незнакомые слова кириллицей пока не разбираются: для них список разборов пуст.</p>
+<p>Доли неоднозначных разборов взяты из частот в SynTagRus. Токен с пробелом (кроме числа), управляющим или невидимым символом разборов не получает.</p>
+<h2 id="guess">Незнакомые слова<a class="headerlink" href="#guess" title="Permanent link">&para;</a></h2>
+<p>Разборы слова кириллицей, которого нет в словаре, анализатор угадывает по окончанию: берет формы словарных слов с тем же окончанием - их часть речи, признаки и словоизменение. <code>source</code> у таких разборов - <code>"guess"</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="o">&gt;&gt;&gt;</span> <span class="p">[(</span><span class="n">a</span><span class="o">.</span><span class="n">lemma</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">pos</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">feats</span><span class="p">[</span><span class="s2">"Case"</span><span class="p">],</span> <span class="nb">round</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">prob</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"чатботу"</span><span class="p">)][:</span><span class="mi">2</span><span class="p">]</span>
+<span class="p">[(</span><span class="s1">'чатбот'</span><span class="p">,</span> <span class="s1">'NOUN'</span><span class="p">,</span> <span class="s1">'Dat'</span><span class="p">,</span> <span class="mf">0.44</span><span class="p">),</span> <span class="p">(</span><span class="s1">'чатбота'</span><span class="p">,</span> <span class="s1">'NOUN'</span><span class="p">,</span> <span class="s1">'Acc'</span><span class="p">,</span> <span class="mf">0.4</span><span class="p">)]</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">guess</span> <span class="o">=</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"Мартова"</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">guess</span><span class="o">.</span><span class="n">lemma</span><span class="p">,</span> <span class="n">guess</span><span class="o">.</span><span class="n">pos</span><span class="p">,</span> <span class="n">guess</span><span class="o">.</span><span class="n">feats</span><span class="p">[</span><span class="s2">"NameType"</span><span class="p">],</span> <span class="n">guess</span><span class="o">.</span><span class="n">inflect</span><span class="p">(</span><span class="n">Case</span><span class="o">=</span><span class="s2">"Dat"</span><span class="p">)</span>
+<span class="p">(</span><span class="s1">'мартов'</span><span class="p">,</span> <span class="s1">'PROPN'</span><span class="p">,</span> <span class="s1">'Sur'</span><span class="p">,</span> <span class="s1">'Мартову'</span><span class="p">)</span>
+</code></pre></div>
+<p>Слово в нижнем регистре угадывается как нарицательное, слово с заглавной буквы - в основном как имя собственное: фамилия, имя, топоним. У угаданного разбора есть формы, с ним работают <code>forms</code>, <code>inflect</code> и <code>agree</code>; формы сохраняют заглавную букву. Слова через дефис и в смешанном регистре («ЗуМер») пока не угадываются.</p>
 <h2 id="lists">Списки слов<a class="headerlink" href="#lists" title="Permanent link">&para;</a></h2>
 <p><code>analyze_many</code> разбирает набор словоформ, <code>lemmatize</code> возвращает леммы их самых вероятных разборов:</p>
 <div class="highlight"><pre><span></span><code><span class="o">&gt;&gt;&gt;</span> <span class="n">morph</span><span class="o">.</span><span class="n">lemmatize</span><span class="p">([</span><span class="s2">"Мы"</span><span class="p">,</span> <span class="s2">"стали"</span><span class="p">,</span> <span class="s2">"друзьями"</span><span class="p">])</span>
