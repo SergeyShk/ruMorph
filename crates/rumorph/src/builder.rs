@@ -27,6 +27,7 @@ pub struct Builder {
     ud_numbers: HashMap<String, u16>,
     prefixes: Vec<String>,
     suffixes: Vec<String>,
+    suffix_numbers: HashMap<String, u16>,
     paradigms: Vec<Vec<(u16, u16, u16)>>,
     tables: Vec<(u16, Vec<u32>)>,
     table_numbers: HashMap<(u16, Vec<u32>), u16>,
@@ -36,7 +37,14 @@ pub struct Builder {
 
 impl Builder {
     pub fn new(tags: Vec<String>, prefixes: Vec<String>, suffixes: Vec<String>) -> Self {
+        let mut suffix_numbers = HashMap::new();
+        for (number, suffix) in suffixes.iter().enumerate() {
+            suffix_numbers
+                .entry(suffix.clone())
+                .or_insert(number as u16);
+        }
         Builder {
+            suffix_numbers,
             meta: String::new(),
             tags,
             ud_tags: Vec::new(),
@@ -76,6 +84,18 @@ impl Builder {
             .map_err(|_| Error::Build("больше 65 536 тегов UD".into()))?;
         self.ud_tags.push(tag.clone());
         self.ud_numbers.insert(tag, number);
+        Ok(number)
+    }
+
+    /// Добавляет суффикс и возвращает его номер; известный суффикс сохраняет свой номер
+    pub fn add_suffix(&mut self, suffix: &str) -> Result<u16, Error> {
+        if let Some(&number) = self.suffix_numbers.get(suffix) {
+            return Ok(number);
+        }
+        let number = u16::try_from(self.suffixes.len())
+            .map_err(|_| Error::Build("больше 65 536 суффиксов".into()))?;
+        self.suffixes.push(suffix.to_owned());
+        self.suffix_numbers.insert(suffix.to_owned(), number);
         Ok(number)
     }
 
@@ -274,6 +294,15 @@ mod tests {
         assert!(builder.add_paradigm(&[(0, 1, 0)]).is_err());
         assert!(builder.add_paradigm(&[(0, 0, 1)]).is_err());
         assert_eq!(builder.add_paradigm(&[(0, 0, 0), (1, 0, 0)]).unwrap(), 0);
+    }
+
+    #[test]
+    fn adds_suffixes() {
+        let mut builder = builder();
+        assert_eq!(builder.add_suffix("а").unwrap(), 1);
+        assert_eq!(builder.add_suffix("ой").unwrap(), 2);
+        assert_eq!(builder.add_suffix("ой").unwrap(), 2);
+        assert_eq!(builder.add_paradigm(&[(2, 0, 0)]).unwrap(), 0);
     }
 
     #[test]

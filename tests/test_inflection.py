@@ -28,10 +28,13 @@ def test_forms(morph):
     }
     assert forms[5].labels == {"V-oy"}
     assert len(analysis(morph, "читать").forms()) == 132
-    # Слитый разбор: формы переходного и непереходного «мешать»
-    assert (
-        len(analysis(morph, "мешать").forms()) == len(analysis(morph, "мешаемый").forms()) == 132
-    )
+    # Лексемы OpenCorpora одного слова объединены: переходный и непереходный «мешать»,
+    # «брызгаю» и «брызжу» - одна лексема, с какой формы ни начать
+    for words in (["мешать", "мешаемый", "мешал"], ["брызгать", "брызгаю", "брызжет"]):
+        lexemes = {
+            frozenset(form.word for form in analysis(morph, word).forms()) for word in words
+        }
+        assert len(lexemes) == 1
 
 
 @pytest.mark.parametrize(
@@ -81,8 +84,9 @@ def test_forms_round_trip(morph, word):
         ("читал", {"VerbForm": "Fin"}, {"VerbForm": "Inf"}, "читать"),
         ("читал", {"VerbForm": "Fin"}, {"VerbForm": "Conv"}, "читав"),
         ("читать", {}, {"VerbForm": "Part", "Tense": "Pres", "Case": "Dat"}, "читающему"),
-        # Слитые переходный и непереходный «мешать»: причастие есть только у переходного
+        # Переходный и непереходный «мешать» - одна лексема: причастие есть только у переходного
         ("мешать", {}, {"VerbForm": "Part", "Voice": "Pass", "Tense": "Pres"}, "мешаемый"),
+        ("брызжет", {}, {"VerbForm": "Part", "Voice": "Pass", "Tense": "Pres"}, "брызгаемый"),
         (
             "мешать",
             {},
@@ -376,7 +380,7 @@ def test_agree_errors(morph, word, number):
         morph.analyze(word)[0].agree(2.5)
 
 
-@pytest.mark.parametrize("word", ["мешаемый", "передох", "кошкою", "лесу"])
+@pytest.mark.parametrize("word", ["мешаемый", "передох", "брызжет", "кошкою", "лесу"])
 def test_pickled_forms(morph, word):
     forms = morph.analyze(word)[0].forms()
     restored = pickle.loads(pickle.dumps(forms))
