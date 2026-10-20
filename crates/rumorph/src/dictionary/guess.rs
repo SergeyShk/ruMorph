@@ -7,31 +7,72 @@ use crate::{Entry, GuessIndex};
 /// Доля имен собственных среди незнакомых словарю слов с заглавной буквы в SynTagRus
 const PROPER_SHARE: f64 = 0.89;
 
+/// Доля имен собственных среди незнакомых слов с заглавной буквы на -ский, -цкий и их формы
+/// («Тильзитского», «Стэнфордская»): в SynTagRus это чаще прилагательные (0,43 - имена), а доля
+/// прилагательных делится между несколькими их разборами, поэтому здесь она ниже
+const ADJECTIVAL_PROPER_SHARE: f64 = 0.25;
+
+/// Число имен собственных (не аббревиатур) в обучающей части SynTagRus: у имени в словаре полная
+/// парадигма множественного числа, а в текстах оно редкость, поэтому угаданная форма весит
+/// по частоте своего числа («Шатов» - фамилия, а не «Шат» во множественном числе). Падеж
+/// остается за частотами словаря: «Копытова» - чаще родительный, чем женская фамилия
+const PROPER_NUMBER: &[(&str, f64)] = &[("Sing", 34328.0), ("Plur", 815.0)];
+
+/// Слова длиннее не угадываются: окончание у них ничего не говорит, а копии слова в разборах
+/// дорого стоят
+const MAX_GUESSED_LENGTH: usize = 100;
+
 impl Dictionary {
     /// Угаданные разборы незнакомого слова кириллицей в нижнем регистре или с заглавной буквы
     pub(super) fn guess(&self, word: &str) -> Vec<Analysis> {
         let chars: Vec<char> = word.chars().collect();
-        if chars.is_empty() || !chars.iter().all(|&c| super::rules::cyrillic(c)) {
+        if chars.is_empty()
+            || chars.len() > MAX_GUESSED_LENGTH
+            || !chars.iter().all(|&c| super::rules::cyrillic(c))
+        {
             return Vec::new();
         }
+        let lower = word.to_lowercase();
+        // Аббревиатура с падежным окончанием («МЭРТа», «ЦУПе») угадывается, как слово с заглавной
+        let capitals = chars.iter().take_while(|c| c.is_uppercase()).count();
+        let abbreviation_with_ending = capitals >= 2
+            && (1..=3).contains(&(chars.len() - capitals))
+            && chars[capitals..].iter().all(|c| c.is_lowercase());
+        // Лемма такой аббревиатуры - ее заглавная часть («КВНу» - «квн», а не «квна»)
+        let stem: Option<String> =
+            abbreviation_with_ending.then(|| lower.chars().take(capitals).collect());
+        let proper = if adjectival(&lower) {
+            ADJECTIVAL_PROPER_SHARE
+        } else {
+            PROPER_SHARE
+        };
         let indexes: &[(GuessIndex, f64)] = if chars.iter().all(|c| c.is_lowercase()) {
             &[(GuessIndex::Common, 1.0)]
-        } else if chars[1..].iter().all(|c| c.is_lowercase()) {
+        } else if chars[1..].iter().all(|c| c.is_lowercase()) || abbreviation_with_ending {
             &[
-                (GuessIndex::Proper, PROPER_SHARE),
-                (GuessIndex::Common, 1.0 - PROPER_SHARE),
+                (GuessIndex::Proper, proper),
+                (GuessIndex::Common, 1.0 - proper),
             ]
         } else {
             return Vec::new();
         };
-        let lower = word.to_lowercase();
         let mut analyses = Vec::new();
         for &(index, share) in indexes {
-            let found = self.guess_in(index, word, &lower);
+            let found: Vec<(Analysis, f64)> = self
+                .guess_in(index, word, &lower, stem.as_deref())
+                .into_iter()
+                .map(|(analysis, count)| {
+                    let weight = match index {
+                        GuessIndex::Proper => self.proper_weight(analysis.ud),
+                        GuessIndex::Common => 1.0,
+                    };
+                    (analysis, f64::from(count) * weight)
+                })
+                .collect();
             // Формы с нулевым числом словоформ отброшены, поэтому сумма больше нуля
-            let total: f64 = found.iter().map(|(_, count)| f64::from(*count)).sum();
-            analyses.extend(found.into_iter().map(|(analysis, count)| Analysis {
-                prob: share * f64::from(count) / total,
+            let total: f64 = found.iter().map(|(_, weight)| weight).sum();
+            analyses.extend(found.into_iter().map(|(analysis, weight)| Analysis {
+                prob: share * weight / total,
                 ..analysis
             }));
         }
@@ -44,8 +85,15 @@ impl Dictionary {
 
     /// Разборы по самому длинному окончанию слова, для которого в индексе есть подходящие формы,
     /// с числом словоформ словаря; словоформа разбора - как в тексте, лемма - в нижнем регистре.
-    /// Окончание через «е» находит и формы с «ё»: «ё» суффикса формы подставляется в словоформу
-    fn guess_in(&self, index: GuessIndex, word: &str, lower: &str) -> Vec<(Analysis, u32)> {
+    /// Окончание через «е» находит и формы с «ё»: «ё» суффикса формы подставляется в словоформу.
+    /// С основой `stem` берутся только разборы с леммой, равной ей
+    fn guess_in(
+        &self,
+        index: GuessIndex,
+        word: &str,
+        lower: &str,
+        stem: Option<&str>,
+    ) -> Vec<(Analysis, u32)> {
         let bounds: Vec<usize> = lower.char_indices().map(|(at, _)| at).collect();
         for length in (1..=GuessIndex::MAX_ENDING.min(bounds.len().saturating_sub(1))).rev() {
             let ending = &lower[bounds[bounds.len() - length]..];
@@ -63,9 +111,16 @@ impl Dictionary {
                     let (table, form) = ((packed >> 16) as u16, packed as u16);
                     let (word, lower) = self.with_suffix(table, form, word, lower)?;
                     let lexeme = self.lexeme(table, form, &lower)?;
+                    let lemma = self.spell(&lexeme, lexeme.lemma_form(form));
+                    // Основа без гласной («тов» - «т», «Лем» - «лй») - не образец, а совпадение
+                    match stem {
+                        Some(stem) if lemma != stem => return None,
+                        None if !lemma.chars().any(vowel) => return None,
+                        _ => {}
+                    }
                     let analysis = Analysis {
                         word,
-                        lemma: self.spell(&lexeme, lexeme.lemma_form(form)),
+                        lemma,
                         ud: lexeme.ud(form),
                         tag: Some(lexeme.tag(form)),
                         prob: 0.0,
@@ -121,6 +176,19 @@ impl Dictionary {
         Some((replace(word), replace(lower)))
     }
 
+    /// Вес угаданного имени собственного по частоте его числа в SynTagRus
+    fn proper_weight(&self, ud: u16) -> f64 {
+        let number = self.ud_tags[usize::from(ud)]
+            .feats
+            .iter()
+            .find(|(name, _)| name == "Number")
+            .map(|(_, value)| value.as_str());
+        PROPER_NUMBER
+            .iter()
+            .find(|&&(known, _)| Some(known) == number)
+            .map_or(1.0, |&(_, count)| count)
+    }
+
     /// Список форм для угадывания: пары `(таблица << 16) | форма`, число словоформ
     fn guess_records_at(&self, offset: u64) -> Option<&[[u32; 2]]> {
         let start = usize::try_from(offset).ok()?;
@@ -128,5 +196,37 @@ impl Dictionary {
         let end = count.checked_mul(2)?.checked_add(start)?.checked_add(1)?;
         let (pairs, rest) = self.guess_records.get(start + 1..end)?.as_chunks::<2>();
         rest.is_empty().then_some(pairs)
+    }
+}
+
+fn vowel(c: char) -> bool {
+    "аеёиоуыэюя".contains(c)
+}
+
+/// Слово на -ский, -цкий или их форму: у слова с заглавной буквы это чаще прилагательное
+fn adjectival(lower: &str) -> bool {
+    const ENDINGS: &[&str] = &[
+        "ий", "ая", "ое", "ие", "ого", "ому", "им", "ом", "ой", "ую", "их", "ими", "ей", "ою",
+    ];
+    ENDINGS.iter().any(|ending| {
+        lower
+            .strip_suffix(ending)
+            .is_some_and(|stem| stem.ends_with("ск") || stem.ends_with("цк"))
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn adjectival_endings() {
+        for word in ["тильзитского", "стэнфордская", "бельгийские"]
+        {
+            assert!(adjectival(word), "{word}");
+        }
+        for word in ["шатов", "москва", "киска"] {
+            assert!(!adjectival(word), "{word}");
+        }
     }
 }

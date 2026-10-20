@@ -1,6 +1,5 @@
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
-use std::io::Read;
 use std::path::Path;
 
 use fst::Map;
@@ -12,6 +11,8 @@ use crate::{Entry, Error};
 mod guess;
 mod parts;
 mod rules;
+
+use parts::with_particle;
 
 /// Откуда взят разбор
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -154,6 +155,8 @@ pub struct Dictionary {
     rule_tags: rules::Tags,
     /// Номера частей речи и помет в `ud_codes`
     code_ids: HashMap<String, u16>,
+    /// Коды признаков и помет, которые `closest` проверяет у каждой формы
+    preferences: Preferences,
     features: BTreeMap<String, BTreeSet<String>>,
     prefixes: Vec<String>,
     suffixes: Vec<String>,
@@ -173,18 +176,11 @@ pub struct Dictionary {
 impl Dictionary {
     /// Читает словарь из файла
     pub fn open(path: impl AsRef<Path>) -> Result<Self, Error> {
-        let mut file = std::fs::File::open(path)?;
+        let file = std::fs::File::open(path)?;
         let metadata = file.metadata()?;
-        if !metadata.is_file() {
-            // У канала, устройства или каталога размер в метаданных - не длина потока
-            let mut data = Vec::new();
-            file.read_to_end(&mut data)?;
-            return Self::from_bytes(&data);
-        }
-        Self::from_sections(format::read_from(
-            std::io::BufReader::new(file),
-            metadata.len(),
-        )?)
+        // У канала, устройства или каталога размер в метаданных - не длина потока
+        let size = metadata.is_file().then_some(metadata.len());
+        Self::from_sections(format::read_from(std::io::BufReader::new(file), size)?)
     }
 
     /// Читает словарь из байтов файла словаря
@@ -201,7 +197,11 @@ impl Dictionary {
             .collect::<Option<Vec<_>>>()
             .ok_or_else(|| Error::Format("неверный тег UD".into()))?;
         let table_offsets = check_tables(&sections, ud_tags.len())?;
+        check_lists(&sections, &table_offsets)?;
         let rule_tags = rules::Tags::add(&mut ud_tags);
+        if ud_tags.len() > usize::from(u16::MAX) + 1 {
+            return Err(Error::Format("больше 65 536 тегов UD".into()));
+        }
         let mut cores: HashMap<(&str, String), u16> = HashMap::new();
         let ud_core = ud_tags
             .iter()
@@ -219,14 +219,18 @@ impl Dictionary {
                 .insert(value.clone());
         }
         let (ud_codes, code_ids) = codes(&ud_tags, &features);
-        let fst_error = |err: fst::Error| Error::Format(err.to_string());
-        let words = Map::new(sections.words).map_err(fst_error)?;
-        let probabilities = Map::new(sections.probabilities).map_err(fst_error)?;
-        let guesses = Map::new(sections.guesses).map_err(fst_error)?;
-        // Поврежденный автомат грузится без ошибок, но паникует при обходе
-        for map in [&words, &probabilities, &guesses] {
-            map.as_fst().verify().map_err(fst_error)?;
-        }
+        let code = |name: &str, value: &str| feature_code(&features, name, value);
+        let preferences = Preferences {
+            infinitive: code("VerbForm", "Inf"),
+            finite: code("VerbForm", "Fin"),
+            short: code("Variant", "Short"),
+            animate: code("Animacy", "Anim"),
+            first_person: code("Person", "1"),
+            inclusive: code_ids.get("incl").copied(),
+        };
+        let words = automaton(sections.words)?;
+        let probabilities = automaton(sections.probabilities)?;
+        let guesses = automaton(sections.guesses)?;
         Ok(Dictionary {
             words,
             probabilities,
@@ -237,6 +241,7 @@ impl Dictionary {
             ud_codes,
             rule_tags,
             code_ids,
+            preferences,
             features,
             prefixes: sections.prefixes,
             suffixes: sections.suffixes,
@@ -282,8 +287,13 @@ impl Dictionary {
     /// сливаются в один с суммой вероятностей и пометами более вероятного. Токен, которого нет
     /// в словаре, разбирается по правилам (`Source::Rule`), а незнакомое слово кириллицей
     /// угадывается (`Source::Guess`): слово через дефис - по последней части, слово с известной
-    /// приставкой - по слову без нее, остальное - по окончанию
+    /// приставкой - по слову без нее, остальное - по окончанию. Токен, который не разобрался,
+    /// получает запасной разбор `X`; пустой список - только у токена с пробелом, управляющим
+    /// или невидимым символом
     pub fn analyze(&self, word: &str) -> Vec<Analysis> {
+        if let Some(normal) = normalized_input(word) {
+            return self.analyze(&normal);
+        }
         let mut analyses = self.merge(self.candidates(word));
         if !analyses.is_empty() {
             self.reweight_numerals(&mut analyses);
@@ -297,7 +307,11 @@ impl Dictionary {
         if !analyses.is_empty() {
             return analyses;
         }
-        self.guess(word)
+        let analyses = self.guess(word);
+        if !analyses.is_empty() {
+            return analyses;
+        }
+        self.fallback(word)
     }
 
     /// Разборы словаря до слияния с вероятностями P(тег | словоформа); без частот вероятности нулевые
@@ -348,18 +362,27 @@ impl Dictionary {
             .collect()
     }
 
-    /// Слияние разборов с одинаковыми написанием, леммой, частью речи и признаками; без частот
-    /// каждый слитый разбор получает равную долю, и порядок словаря сохраняется
+    /// Слияние разборов с одинаковыми написанием (с точностью до «е» на месте «ё»), леммой,
+    /// частью речи и признаками; у слитого разбора написание с меньшим числом «ё» - точное
+    /// написание запроса («недалеко», а не «недалёко»). Без частот каждый слитый разбор получает
+    /// равную долю, и порядок словаря сохраняется
     fn merge(&self, analyses: Vec<Analysis>) -> Vec<Analysis> {
+        let yo_count = |word: &str| word.chars().filter(|&ch| ch == 'ё').count();
         let mut merged: Vec<Analysis> = Vec::with_capacity(analyses.len());
         for analysis in analyses {
             let core = self.ud_core[usize::from(analysis.ud)];
             match merged.iter_mut().find(|known| {
                 self.ud_core[usize::from(known.ud)] == core
                     && known.lemma == analysis.lemma
-                    && known.word == analysis.word
+                    && same_up_to_yo(&known.word, &analysis.word)
             }) {
-                Some(known) => known.prob += analysis.prob,
+                Some(known) => {
+                    let prob = known.prob + analysis.prob;
+                    if yo_count(&analysis.word) < yo_count(&known.word) {
+                        *known = analysis;
+                    }
+                    known.prob = prob;
+                }
                 None => merged.push(analysis),
             }
         }
@@ -379,19 +402,38 @@ impl Dictionary {
     /// в словаре, у угаданного или разобранного по правилу проверяется только, что словоформа
     /// подходит к форме таблицы
     pub fn analysis(&self, word: &str, entry: Entry, source: Source) -> Option<Analysis> {
-        let packed = (u32::from(entry.table) << 16) | u32::from(entry.form);
-        if source == Source::Dictionary
-            && !self
-                .words
-                .get(word)
-                .and_then(|offset| self.records_at(offset))?
-                .contains(&packed)
+        // Угаданное слово с частицей («выпивал-то»): форма - у первой части
+        if source == Source::Guess
+            && let Some((base, particle)) = parts::split_particle(word)
+            && self
+                .lexeme(entry.table, entry.form, &base.to_lowercase())
+                .is_some()
         {
-            return None;
+            return self
+                .analysis(base, entry, source)
+                .map(|analysis| with_particle(analysis, particle));
         }
         // Лемма - в нижнем регистре, как у угадывания; словоформа - как сохранена
         let lower = word.to_lowercase();
         let lexeme = self.lexeme(entry.table, entry.form, &lower)?;
+        if source == Source::Dictionary {
+            // Запись словоформы ссылается на эту форму или на форму той же таблицы с тем же
+            // написанием и тегом: копии форм («ивановы» в женской лексеме) записей не имеют
+            let same = |packed: u32| {
+                let form = packed as u16;
+                (packed >> 16) as u16 == entry.table
+                    && (form == entry.form
+                        || (lexeme.affixes(form) == lexeme.affixes(entry.form)
+                            && lexeme.tag(form) == lexeme.tag(entry.form)))
+            };
+            let records = self
+                .words
+                .get(word)
+                .and_then(|offset| self.records_at(offset))?;
+            if !records.iter().any(|&packed| same(packed)) {
+                return None;
+            }
+        }
         Some(Analysis {
             word: word.to_owned(),
             lemma: self.spell(&lexeme, lexeme.lemma_form(entry.form)),
@@ -407,6 +449,13 @@ impl Dictionary {
     ///
     /// Формы, которые совпали в написании, части речи и признаках, сливаются, как в `analyze`
     pub fn forms(&self, analysis: &Analysis) -> Vec<Analysis> {
+        if let Some((base, particle)) = self.without_particle(analysis) {
+            return self
+                .forms(&base)
+                .into_iter()
+                .map(|form| with_particle(form, &particle))
+                .collect();
+        }
         if let Some(lower) = self.lowercased(analysis) {
             return self
                 .forms(&lower)
@@ -439,6 +488,11 @@ impl Dictionary {
     /// Форма лексемы с признаками `feats`; из подходящих - ближайшая к разбору по части речи,
     /// остальным признакам и пометам, при равенстве - первая в парадигме
     pub fn inflect(&self, analysis: &Analysis, feats: &[(&str, &str)]) -> Option<Analysis> {
+        if let Some((base, particle)) = self.without_particle(analysis) {
+            return self
+                .inflect(&base, feats)
+                .map(|form| with_particle(form, &particle));
+        }
         if let Some(lower) = self.lowercased(analysis) {
             return self
                 .inflect(&lower, feats)
@@ -467,9 +521,25 @@ impl Dictionary {
     /// родительного падежа множественного числа берется счетная («5 вольт»). У слов без
     /// единственного числа («сутки») берется множественное: «1 сутки», «2 суток»
     pub fn agree(&self, analysis: &Analysis, number: u64) -> Option<Analysis> {
+        self.agree_with(analysis, Some(number))
+    }
+
+    /// Форма, согласованная с дробным количеством («1,5 рубля», «о 2,5 рубля»): родительный падеж
+    /// единственного числа в любом падеже, у слов без единственного числа - множественного
+    pub fn agree_fraction(&self, analysis: &Analysis) -> Option<Analysis> {
+        self.agree_with(analysis, None)
+    }
+
+    /// Форма, согласованная с целым количеством `number` или с дробным (`None`)
+    fn agree_with(&self, analysis: &Analysis, number: Option<u64>) -> Option<Analysis> {
+        if let Some((base, particle)) = self.without_particle(analysis) {
+            return self
+                .agree_with(&base, number)
+                .map(|form| with_particle(form, &particle));
+        }
         if let Some(lower) = self.lowercased(analysis) {
             return self
-                .agree(&lower, number)
+                .agree_with(&lower, number)
                 .map(|form| capitalized_like(&analysis.word, form));
         }
         let tag = self.ud_tags.get(usize::from(analysis.ud))?;
@@ -486,19 +556,34 @@ impl Dictionary {
         };
         let (lexeme, forms) = self.lexeme_forms(analysis)?;
         let nominal = matches!(tag.pos.as_str(), "NOUN" | "PROPN");
+        // Женские фамилии на -ова, -ина («Иванова») склоняются как краткие прилагательные:
+        // «две Ивановы»; несклоняемые («Абрамович») и на согласный («Брик») - нет
+        let female_surname = feat("NameType") == Some("Sur")
+            && feat("Gender") == Some("Fem")
+            && feat("InflClass").is_none()
+            && ["ова", "ева", "ёва", "ина", "ына"]
+                .iter()
+                .any(|ending| analysis.lemma.ends_with(ending));
         let adjectival = matches!(tag.pos.as_str(), "ADJ" | "DET")
             || feat("VerbForm") == Some("Part")
-            || (nominal && self.adjectival_declension(&lexeme, &forms));
+            || (nominal && (female_surname || self.adjectival_declension(&lexeme, &forms)));
         if !adjectival && !nominal {
             return None;
         }
+        let gen_sing = [("Case", "Gen"), ("Number", "Sing")];
+        let gen_plur = [("Case", "Gen"), ("Number", "Plur")];
+        let counting: Vec<u16> = self.code_ids.get("Coun").copied().into_iter().collect();
+        let Some(number) = number else {
+            let form = [&gen_sing[..], &gen_plur[..]]
+                .into_iter()
+                .find_map(|feats| self.closest(analysis, &lexeme, &forms, feats, &[]))?;
+            return Some(self.form(analysis, &lexeme, form));
+        };
         let one = number % 10 == 1 && number % 100 != 11;
         let few = (2..=4).contains(&(number % 10)) && !(12..=14).contains(&(number % 100));
         let animate = feat("Animacy") == Some("Anim");
         let sing = [("Case", case), ("Number", "Sing")];
         let plur = [("Case", case), ("Number", "Plur")];
-        let gen_sing = [("Case", "Gen"), ("Number", "Sing")];
-        let gen_plur = [("Case", "Gen"), ("Number", "Plur")];
         let plur_inanimate = [("Case", case), ("Number", "Plur"), ("Animacy", "Inan")];
         let targets: Vec<&[(&str, &str)]> = if one {
             vec![&sing, &plur]
@@ -514,7 +599,6 @@ impl Dictionary {
         } else {
             vec![&gen_plur]
         };
-        let counting: Vec<u16> = self.code_ids.get("Coun").copied().into_iter().collect();
         let form = targets
             .into_iter()
             .find_map(|feats| self.closest(analysis, &lexeme, &forms, feats, &counting))?;
@@ -550,9 +634,11 @@ impl Dictionary {
     }
 
     /// Форма из `forms` с признаками `feats`, ближайшая к разбору: больше общих с ним части речи,
-    /// признаков и помет, а также желательных помет `prefer`, затем меньше лишних помет и краткой
-    /// формы, если ее не просили («кошкой», а не «кошкою»; «мешаемый», а не «мешаем»), затем
-    /// раньше в парадигме - поэтому без рода и числа берется мужской род единственного числа
+    /// признаков и помет, а также желательных помет `prefer`, затем меньше лишних помет и того,
+    /// чего не просили, - краткой формы, одушевленности, инклюзива («кошкой», а не «кошкою»;
+    /// «новый», а не «нового»; «сделай», а не «сделаем»), затем ближе по написанию к разбору,
+    /// если у его формы есть вариант написания («листьев», а не «листов»), затем раньше
+    /// в парадигме - поэтому без рода и числа берется мужской род единственного числа
     fn closest(
         &self,
         analysis: &Analysis,
@@ -567,6 +653,19 @@ impl Dictionary {
             .collect::<Option<Vec<_>>>()?;
         let current = self.ud_codes.get(usize::from(analysis.ud))?;
         let mut wanted = current.values.clone();
+        let preferences = &self.preferences;
+        // У инфинитива, который сам не подходит под запрос, без запроса формы глагола желательна
+        // личная форма, а не причастие
+        if let (Some((form_name, infinitive)), Some((_, finite))) =
+            (preferences.infinitive, preferences.finite)
+            && wanted[form_name] == infinitive
+            && required.iter().all(|&(name, _)| name != form_name)
+            && required
+                .iter()
+                .any(|&(name, value)| current.values[name] != value)
+        {
+            wanted[form_name] = finite;
+        }
         for &(name, value) in &required {
             wanted[name] = value;
         }
@@ -576,8 +675,19 @@ impl Dictionary {
                 labels.push(label);
             }
         }
-        let short = self.code("Variant", "Short");
-        let mut best: Option<(u16, (usize, Reverse<usize>))> = None;
+        let unwanted = |feature: Option<(usize, u16)>, codes: &Codes| {
+            feature
+                .is_some_and(|(index, code)| codes.values[index] == code && wanted[index] != code)
+        };
+        // Форма разбора с вариантом написания («листья» и «листы»): из равных берется ближайшая
+        // по написанию
+        let own = lexeme.affixes(analysis.entry.map_or(0, |entry| entry.form));
+        let twin = forms
+            .iter()
+            .any(|&form| lexeme.ud(form) == analysis.ud && lexeme.affixes(form) != own);
+        // Оценка формы: общее с разбором, лишнее, общее начало написания
+        type Score = (usize, Reverse<usize>, usize);
+        let mut best: Option<(u16, Score)> = None;
         for &form in forms {
             let codes = &self.ud_codes[usize::from(lexeme.ud(form))];
             if required
@@ -601,10 +711,24 @@ impl Dictionary {
                 .iter()
                 .filter(|label| !labels.contains(label))
                 .count()
-                + usize::from(short.is_some_and(|(name, value)| {
-                    codes.values[name] == value && wanted[name] != value
+                + usize::from(unwanted(preferences.short, codes))
+                + usize::from(unwanted(preferences.animate, codes))
+                + usize::from(preferences.inclusive.is_some_and(|label| {
+                    codes.labels.contains(&label)
+                        && preferences
+                            .first_person
+                            .is_none_or(|(index, code)| wanted[index] != code)
                 }));
-            let score = (same, Reverse(extra));
+            let common = if twin {
+                self.spell(lexeme, form)
+                    .chars()
+                    .zip(analysis.word.chars())
+                    .take_while(|(a, b)| a == b)
+                    .count()
+            } else {
+                0
+            };
+            let score = (same, Reverse(extra), common);
             if best.is_none_or(|(_, top)| score > top) {
                 best = Some((form, score));
             }
@@ -614,13 +738,7 @@ impl Dictionary {
 
     /// Номер признака в `features` и код значения
     fn code(&self, name: &str, value: &str) -> Option<(usize, u16)> {
-        let (index, (_, values)) = self
-            .features
-            .iter()
-            .enumerate()
-            .find(|(_, (known, _))| *known == name)?;
-        let position = values.iter().position(|known| known == value)?;
-        Some((index, position as u16 + 1))
+        feature_code(&self.features, name, value)
     }
 
     /// Лексема разбора и номера ее форм с той же леммой по порядку
@@ -727,6 +845,7 @@ impl Dictionary {
 
     /// Есть ли словоформа в словаре
     pub fn is_known(&self, word: &str) -> bool {
+        let word = normalized_input(word).unwrap_or_else(|| word.to_owned());
         !self.lookup(&word.to_lowercase()).is_empty()
     }
 
@@ -757,22 +876,39 @@ impl Dictionary {
     /// P(тег | словоформа) берется для написания из запроса, а без частот у него - для написания
     /// разбора в словаре («еще» - частоты «ещё»); вероятность тега делится поровну между разборами
     /// с этим тегом и той же таблицей частот и нормируется. Без частот вероятности остаются
-    /// нулевыми: равные доли раздает `merge` после слияния
+    /// нулевыми: равные доли раздает `merge` после слияния. Если частоты есть только у части
+    /// написаний («совершённого», но не «совершенного»), разбор написания без частот получает
+    /// среднюю долю разборов с частотами
     fn assign_probabilities(&self, word: &str, analyses: &mut [Analysis]) {
         let input = self.probabilities_for(word);
-        let mut total = 0.0;
+        let mut tables: Vec<Option<&[u32]>> = Vec::with_capacity(analyses.len());
         for i in 0..analyses.len() {
+            let spelling = analyses[i].word.as_str();
+            tables.push(match input {
+                Some(table) => Some(table),
+                None if spelling == word => None,
+                None => match (0..i).find(|&j| analyses[j].word == spelling) {
+                    Some(j) => tables[j],
+                    None => self.probabilities_for(spelling),
+                },
+            });
+        }
+        if tables.iter().all(Option::is_none) {
+            return;
+        }
+        let mut total = 0.0;
+        let (mut known_total, mut known_count) = (0.0, 0);
+        for i in 0..analyses.len() {
+            if tables[i].is_none() {
+                continue;
+            }
             let (tag, spelling) = (analyses[i].tag, analyses[i].word.as_str());
-            let table = match input {
-                Some(table) => table,
-                None if spelling == word => &[],
-                None => self.probabilities_for(spelling).unwrap_or_default(),
-            };
             let share = analyses
                 .iter()
                 .filter(|other| other.tag == tag && (input.is_some() || other.word == spelling))
                 .count() as f64;
-            let prob = table
+            let prob = tables[i]
+                .unwrap_or_default()
                 .as_chunks::<2>()
                 .0
                 .iter()
@@ -780,6 +916,16 @@ impl Dictionary {
                 .map_or(0.0, |[_, millionths]| f64::from(*millionths));
             analyses[i].prob = prob / share;
             total += analyses[i].prob;
+            known_total += analyses[i].prob;
+            known_count += 1;
+        }
+        // Разбор написания без частот получает среднюю долю разборов с частотами
+        let mean = known_total / f64::from(known_count);
+        for (analysis, table) in analyses.iter_mut().zip(&tables) {
+            if table.is_none() {
+                analysis.prob = mean;
+                total += mean;
+            }
         }
         if total > 0.0 {
             for analysis in analyses.iter_mut() {
@@ -793,49 +939,135 @@ impl Dictionary {
     /// сначала точное совпадение, затем варианты с «ё» по позициям слева направо
     fn lookup(&self, key: &str) -> Vec<(String, u64)> {
         let fst = self.words.as_fst();
-        lookup_from(fst, String::new(), key, 0, fst.root(), Output::zero())
+        let (spelling, variants) = lookup_from(fst, "", key, 0, fst.root(), Output::zero());
+        let mut found: Vec<_> = spelling.into_iter().collect();
+        // Свой стек, а не рекурсия: глубина - число «е», у которых в автомате есть ветка с «ё».
+        // У большинства слов вариантов нет, и стек не заводится
+        let mut stack: Vec<_> = variants.into_iter().rev().collect();
+        while let Some((prefix, start, node, output)) = stack.pop() {
+            let (spelling, variants) = lookup_from(fst, &prefix, key, start, node, output);
+            found.extend(spelling);
+            // Варианты левее - раньше: в стек справа налево
+            stack.extend(variants.into_iter().rev());
+        }
+        found
     }
 }
 
+/// Состояние поиска с «ё»: найденное начало словоформы, позиция в ключе, узел и выход автомата
+type Search<'f> = (String, usize, Node<'f>, Output);
+
+/// Поиск продолжения `key` с позиции `start` от узла `node`: словоформа без новых «ё»,
+/// если она есть, и состояния поиска с «ё» на месте каждой следующей «е» слева направо
+#[inline(always)]
 fn lookup_from<'f>(
     fst: &'f Fst<Vec<u8>>,
-    prefix: String,
+    prefix: &str,
     key: &str,
     start: usize,
     mut node: Node<'f>,
     mut output: Output,
-) -> Vec<(String, u64)> {
-    let mut found = Vec::new();
-    let mut complete = true;
+) -> (Option<(String, u64)>, Vec<Search<'f>>) {
+    let mut variants = Vec::new();
     for (offset, ch) in key[start..].char_indices() {
         let pos = start + offset;
         if ch == 'е'
             && let Some((next, next_output)) = follow(fst, node, output, "ё".as_bytes())
         {
-            let variant = [prefix.as_str(), &key[start..pos], "ё"].concat();
-            found.extend(lookup_from(
-                fst,
-                variant,
-                key,
-                pos + ch.len_utf8(),
-                next,
-                next_output,
-            ));
+            let variant = [prefix, &key[start..pos], "ё"].concat();
+            variants.push((variant, pos + ch.len_utf8(), next, next_output));
         }
         let mut buf = [0u8; 4];
         match follow(fst, node, output, ch.encode_utf8(&mut buf).as_bytes()) {
             Some((next, next_output)) => (node, output) = (next, next_output),
-            None => {
-                complete = false;
-                break;
-            }
+            None => return (None, variants),
         }
     }
-    if complete && node.is_final() {
+    let spelling = node.is_final().then(|| {
         let value = output.cat(node.final_output()).value();
-        found.insert(0, (prefix + &key[start..], value));
+        ([prefix, &key[start..]].concat(), value)
+    });
+    (spelling, variants)
+}
+
+/// Автомат секции словаря. Поврежденный автомат грузится без ошибок, но паникует при обходе,
+/// поэтому проверяются контрольная сумма и адрес корня: `Fst::new` проверяет адрес только
+/// у пустого автомата
+fn automaton(data: Vec<u8>) -> Result<Map<Vec<u8>>, Error> {
+    let fst_error = |err: fst::Error| Error::Format(err.to_string());
+    let map = Map::new(data).map_err(fst_error)?;
+    map.as_fst().verify().map_err(fst_error)?;
+    // Корень пишется последним, за ним - 20 байт: число ключей, адрес корня и контрольная сумма
+    let bytes = map.as_fst().as_bytes();
+    let end = bytes.len() - 4;
+    let root = u64::from_le_bytes(bytes[end - 8..end].try_into().unwrap());
+    let empty = root == 0 && bytes.len() == 36;
+    if !empty && root.checked_add(21) != Some(bytes.len() as u64) {
+        return Err(Error::Format("неверный адрес корня автомата".into()));
     }
-    found
+    Ok(map)
+}
+
+/// Номер признака `name` в `features` и код значения `value`
+fn feature_code(
+    features: &BTreeMap<String, BTreeSet<String>>,
+    name: &str,
+    value: &str,
+) -> Option<(usize, u16)> {
+    let (index, (_, values)) = features
+        .iter()
+        .enumerate()
+        .find(|(_, (known, _))| *known == name)?;
+    let position = values.iter().position(|known| known == value)?;
+    Some((index, position as u16 + 1))
+}
+
+/// Признаки и пометы, которые `closest` берет, только если их просят, и личная форма
+/// для инфинитива
+struct Preferences {
+    infinitive: Option<(usize, u16)>,
+    finite: Option<(usize, u16)>,
+    short: Option<(usize, u16)>,
+    animate: Option<(usize, u16)>,
+    first_person: Option<(usize, u16)>,
+    inclusive: Option<u16>,
+}
+
+/// Слово в составленной записи и с обычным дефисом: «и» со знаком краткой и «е» с диерезисом
+/// (разложенный Unicode, NFD) - «й» и «ё», неразрывный дефис и дефис U+2010 - «-»; `None`, если
+/// менять нечего
+fn normalized_input(word: &str) -> Option<String> {
+    if !word.contains(['\u{306}', '\u{308}', '\u{2010}', '\u{2011}']) {
+        return None;
+    }
+    let mut normal = String::with_capacity(word.len());
+    for c in word.chars() {
+        let composed = match (normal.chars().last(), c) {
+            (Some('и'), '\u{306}') => Some('й'),
+            (Some('И'), '\u{306}') => Some('Й'),
+            (Some('е'), '\u{308}') => Some('ё'),
+            (Some('Е'), '\u{308}') => Some('Ё'),
+            _ => None,
+        };
+        match (composed, c) {
+            (Some(letter), _) => {
+                normal.pop();
+                normal.push(letter);
+            }
+            (None, '\u{2010}' | '\u{2011}') => normal.push('-'),
+            (None, c) => normal.push(c),
+        }
+    }
+    (normal != word).then_some(normal)
+}
+
+/// Совпадают ли написания с точностью до «е» на месте «ё»
+fn same_up_to_yo(a: &str, b: &str) -> bool {
+    a == b
+        || (a.len() == b.len()
+            && a.chars()
+                .zip(b.chars())
+                .all(|(x, y)| x == y || matches!((x, y), ('е', 'ё') | ('ё', 'е'))))
 }
 
 fn follow<'f>(
@@ -908,6 +1140,58 @@ fn capitalized_like(original: &str, form: Analysis) -> Analysis {
 }
 
 /// Таблицы словоизменения ссылаются на существующие парадигмы, формы и теги UD; вывод - начала таблиц
+/// Наибольшая длина списка разборов, частот или форм для угадывания: в словаре они не длиннее
+/// нескольких десятков, а испорченная длина делает разбор слова квадратичным
+const MAX_LIST: usize = 255;
+
+/// Списки разборов, частот и форм для угадывания ровно закрывают свои секции, они не длиннее
+/// `MAX_LIST`, а таблицы, формы и теги в них существуют
+fn check_lists(sections: &Sections, table_offsets: &[u32]) -> Result<(), Error> {
+    let form_count = |table: usize| -> Option<usize> {
+        let start = *table_offsets.get(table)? as usize;
+        let paradigm = *sections.tables.get(start)? as usize;
+        let begin = *sections.paradigm_offsets.get(paradigm)?;
+        let end = *sections.paradigm_offsets.get(paradigm + 1)?;
+        Some((end - begin) as usize / 3)
+    };
+    let entry = |packed: u32| {
+        form_count((packed >> 16) as usize)
+            .is_some_and(|count| ((packed & 0xFFFF) as usize) < count)
+    };
+    walk_lists(&sections.records, 1, |items| {
+        items.iter().all(|&packed| entry(packed))
+    })?;
+    walk_lists(&sections.probability_records, 2, |items| {
+        items
+            .chunks(2)
+            .all(|pair| (pair[0] as usize) < sections.tags.len())
+    })?;
+    walk_lists(&sections.guess_records, 2, |items| {
+        items.chunks(2).all(|pair| entry(pair[0]))
+    })
+}
+
+/// Обход списков вида «длина, элементы по `width` чисел»
+fn walk_lists(lists: &[u32], width: usize, valid: impl Fn(&[u32]) -> bool) -> Result<(), Error> {
+    let invalid = |msg: &str| Err(Error::Format(msg.into()));
+    let mut start = 0;
+    while start < lists.len() {
+        let count = lists[start] as usize;
+        if count > MAX_LIST {
+            return invalid("список длиннее 255 элементов");
+        }
+        let end = start + 1 + count * width;
+        let Some(items) = lists.get(start + 1..end) else {
+            return invalid("список обрезан");
+        };
+        if !valid(items) {
+            return invalid("список ссылается на несуществующую таблицу, форму или тег");
+        }
+        start = end;
+    }
+    Ok(())
+}
+
 fn check_tables(sections: &Sections, ud_count: usize) -> Result<Vec<u32>, Error> {
     let invalid = |msg: &str| Err(Error::Format(msg.into()));
     let tables = &sections.tables;
@@ -980,7 +1264,7 @@ fn codes(
 }
 
 #[cfg(test)]
-mod tests {
+pub(super) mod tests {
     use super::*;
     use crate::{Builder, Entry, GuessIndex};
 
@@ -1104,7 +1388,7 @@ mod tests {
     }
 
     /// Формы лексемы: окончание и признаки UD
-    type Forms = Vec<(&'static str, String)>;
+    pub(super) type Forms = Vec<(&'static str, String)>;
 
     /// Лексемы «кот», «учёный», «сутки», «молоко», «новый» и «нести»
     fn lexicon() -> Dictionary {
@@ -1193,9 +1477,18 @@ mod tests {
                 ],
             ),
         ];
+        dictionary_of(&lexemes, &[])
+    }
+
+    /// Словарь из лексем «часть речи, основа, формы» с тегами OpenCorpora «часть речи признаки»
+    /// и частотами `(словоформа, часть речи и признаки формы, доля в миллионных)`; лемма - форма 0
+    pub(super) fn dictionary_of(
+        lexemes: &[(&str, &str, Forms)],
+        probabilities: &[(&str, &str, u32)],
+    ) -> Dictionary {
         let mut tags: Vec<String> = Vec::new();
         let mut suffixes: Vec<String> = Vec::new();
-        for (pos, _, forms) in &lexemes {
+        for (pos, _, forms) in lexemes {
             for (ending, feats) in forms {
                 let tag = format!("{pos} {feats}");
                 if !tags.contains(&tag) {
@@ -1214,7 +1507,7 @@ mod tests {
         let id = |items: &[String], item: &str| {
             items.iter().position(|known| known == item).unwrap() as u16
         };
-        for (pos, stem, forms) in &lexemes {
+        for (pos, stem, forms) in lexemes {
             let paradigm: Vec<(u16, u16, u16)> = forms
                 .iter()
                 .map(|(ending, feats)| {
@@ -1231,6 +1524,11 @@ mod tests {
                     .add_word(&format!("{stem}{ending}"), &[entry(table, form as u16)])
                     .unwrap();
             }
+        }
+        for &(word, tag, millionths) in probabilities {
+            builder
+                .add_probability(word, id(&tags, tag), millionths)
+                .unwrap();
         }
         Dictionary::from_bytes(&builder.build().unwrap()).unwrap()
     }
@@ -1296,6 +1594,11 @@ mod tests {
             Some("коту")
         );
         assert_eq!(inflect("кот", &[]).as_deref(), Some("кот"));
+        // Одушевленность, которой нет ни в разборе, ни в запросе, не выбирается: «новые», а не «новых»
+        assert_eq!(
+            inflect("новые", &[("Case", "Acc")]).as_deref(),
+            Some("новые")
+        );
         assert_eq!(inflect("кот", &[("Tense", "Past")]), None);
         assert_eq!(inflect("сутки", &[("Number", "Sing")]), None);
         assert_eq!(
@@ -1484,8 +1787,8 @@ mod tests {
         assert_eq!(summary, [("зумова", "зумов", Source::Guess)]);
         assert_eq!(dict.ud_tags()[usize::from(analyses[0].ud)].pos, "NOUN");
         assert_eq!(dict.analyze("зума")[0].lemma, "зум");
-        assert!(dict.analyze("зумы").is_empty());
-        assert!(dict.analyze("зумова1").is_empty());
+        assert_eq!(dict.analyze("зумы"), dict.fallback("зумы"));
+        assert_eq!(dict.analyze("зумова1"), dict.fallback("зумова1"));
     }
 
     #[test]
@@ -1511,7 +1814,7 @@ mod tests {
             .map(|form| form.word)
             .collect();
         assert_eq!(forms, ["Зумов", "Зумова"]);
-        assert!(dict.analyze("ЗуМова").is_empty());
+        assert_eq!(dict.analyze("ЗуМова"), dict.fallback("ЗуМова"));
     }
 
     #[test]
@@ -1627,18 +1930,24 @@ mod tests {
     }
 
     #[test]
-    fn broken_guess_records_give_no_guesses() {
+    fn broken_guess_records_are_rejected() {
         let data = guessing_bytes();
         assert_eq!(
             Dictionary::from_bytes(&data).unwrap().analyze("зума")[0].lemma,
             "зума"
         );
-        // Нулевое число словоформ в поврежденном файле не дает вероятности NaN
-        for records in [vec![9, 0], vec![1, 0x0007_0000, 2], vec![1, 0, 0], vec![]] {
+        // Нулевое число словоформ не дает вероятности NaN, а обрезанный список и несуществующая
+        // таблица - ошибка формата при загрузке
+        for records in [vec![1, 0, 0], vec![]] {
             let mut sections = format::read(&data).unwrap();
             sections.guess_records = records;
             let dict = Dictionary::from_bytes(&format::write(&sections)).unwrap();
-            assert!(dict.analyze("зума").is_empty());
+            assert_eq!(dict.analyze("зума"), dict.fallback("зума"));
+        }
+        for records in [vec![9, 0], vec![1, 0x0007_0000, 2], vec![300]] {
+            let mut sections = format::read(&data).unwrap();
+            sections.guess_records = records;
+            assert!(Dictionary::from_bytes(&format::write(&sections)).is_err());
         }
     }
 
@@ -1798,12 +2107,13 @@ mod tests {
             .into_iter()
             .map(|a| (a.word, a.tag.unwrap(), (a.prob * 1000.0).round() / 1000.0))
             .collect();
+        // У написания из запроса частот нет: его разбор получает среднюю долю разборов «алёше»
         assert_eq!(
             summary,
             [
-                ("алёше".to_string(), 0, 0.667),
-                ("алёше".to_string(), 1, 0.333),
-                ("алеше".to_string(), 0, 0.0),
+                ("алёше".to_string(), 0, 0.444),
+                ("алеше".to_string(), 0, 0.333),
+                ("алёше".to_string(), 1, 0.222),
             ]
         );
     }
@@ -1830,9 +2140,9 @@ mod tests {
     #[test]
     fn unknown_words() {
         let dict = dictionary();
-        assert!(dict.analyze("вайб").is_empty());
+        assert_eq!(dict.analyze("вайб"), dict.fallback("вайб"));
         assert!(dict.analyze("").is_empty());
-        assert!(dict.analyze("ежаа").is_empty());
+        assert_eq!(dict.analyze("ежаа"), dict.fallback("ежаа"));
         assert!(!dict.is_known("вайб"));
         assert!(dict.is_known("Еж"));
     }
@@ -1913,17 +2223,21 @@ mod tests {
     }
 
     #[test]
-    fn broken_records_give_no_analyses() {
+    fn broken_records_are_rejected() {
         let mut builder = builder(&["NOUN"], &[""], &[""]);
         let table = lexeme_table(&mut builder, &[(0, 0, 0)]);
         builder.add_word("кот", &[entry(table, 0)]).unwrap();
         let data = builder.build().unwrap();
-        for records in [vec![5, 0], vec![1, 7], vec![1, 0x0005_0000]] {
+        // Обрезанный или слишком длинный список и несуществующие таблица и форма - ошибка формата
+        for records in [vec![5, 0], vec![1, 7], vec![1, 0x0005_0000], vec![256]] {
             let mut sections = format::read(&data).unwrap();
             sections.records = records;
-            let dict = Dictionary::from_bytes(&format::write(&sections)).unwrap();
-            assert!(dict.analyze("кот").is_empty());
+            assert!(Dictionary::from_bytes(&format::write(&sections)).is_err());
         }
+        // Частота несуществующего тега
+        let mut sections = format::read(&data).unwrap();
+        sections.probability_records = vec![1, 99, 5];
+        assert!(Dictionary::from_bytes(&format::write(&sections)).is_err());
     }
 
     #[test]
@@ -1933,6 +2247,162 @@ mod tests {
         sections.words[middle] ^= 1;
         let result = Dictionary::from_bytes(&format::write(&sections));
         assert!(matches!(result, Err(Error::Format(_))));
+    }
+
+    /// Контрольная сумма автомата, как ее считает `fst`: CRC32C с маской
+    fn masked_crc32c(data: &[u8]) -> u32 {
+        let mut crc = !0u32;
+        for &byte in data {
+            crc ^= u32::from(byte);
+            for _ in 0..8 {
+                crc = if crc & 1 == 1 {
+                    (crc >> 1) ^ 0x82F6_3B78
+                } else {
+                    crc >> 1
+                };
+            }
+        }
+        let sum = !crc;
+        (sum.rotate_right(15)).wrapping_add(0xA282_EAD8)
+    }
+
+    #[test]
+    fn rejects_automaton_with_moved_root() {
+        let mut sections = format::read(&dictionary_bytes()).unwrap();
+        let words = &mut sections.words;
+        let end = words.len() - 4;
+        let root = u64::from_le_bytes(words[end - 8..end].try_into().unwrap());
+        assert_eq!(masked_crc32c(&words[..end]).to_le_bytes(), words[end..]);
+        // Корень раньше настоящего и пересчитанная контрольная сумма: `Fst::new` такое пропускает
+        words[end - 8..end].copy_from_slice(&(root - 1).to_le_bytes());
+        let crc = masked_crc32c(&words[..end]);
+        words[end..].copy_from_slice(&crc.to_le_bytes());
+        let err = Dictionary::from_bytes(&format::write(&sections))
+            .err()
+            .unwrap();
+        assert!(err.to_string().contains("адрес корня"), "{err}");
+    }
+
+    #[test]
+    fn rejects_too_many_ud_tags() {
+        let mut sections = sections();
+        sections.ud_tags = (0..=u16::MAX)
+            .map(|number| format!("X\tTag={number}\t"))
+            .collect();
+        let err = Dictionary::from_bytes(&format::write(&sections))
+            .err()
+            .unwrap();
+        assert!(err.to_string().contains("65 536 тегов"), "{err}");
+    }
+
+    /// Все, что можно спросить у словаря: поврежденный, но загруженный словарь не паникует
+    fn exercise(dict: &Dictionary) {
+        let words = [
+            "ёж",
+            "ежа",
+            "еж",
+            "стали",
+            "наибольший",
+            "все",
+            "кота",
+            "зума",
+            "Зума",
+            "XIX-го",
+            "кот-то",
+            "Д-д-да",
+        ];
+        for word in words {
+            dict.is_known(word);
+            dict.opencorpora(word);
+            for analysis in dict.analyze(word) {
+                dict.forms(&analysis);
+                dict.inflect(&analysis, &[("Case", "Gen")]);
+                dict.agree(&analysis, 5);
+                dict.agree_fraction(&analysis);
+            }
+        }
+        // Восстановление сохраненного разбора с любой ссылкой на таблицу
+        for (table, form) in (0..8).flat_map(|table| (0..4).map(move |form| (table, form))) {
+            for source in [Source::Dictionary, Source::Rule, Source::Guess] {
+                if let Some(analysis) = dict.analysis("стали", entry(table, form), source) {
+                    dict.forms(&analysis);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn corrupted_dictionary_never_panics() {
+        for data in [dictionary_bytes(), guessing_bytes()] {
+            exercise(&Dictionary::from_bytes(&data).unwrap());
+            for len in 0..data.len() {
+                assert!(Dictionary::from_bytes(&data[..len]).is_err(), "{len}");
+            }
+            // Испорченный байт: ошибка формата или словарь, который не паникует
+            for at in 0..data.len() {
+                let mut corrupted = data.clone();
+                corrupted[at] ^= 0xFF;
+                if let Ok(dict) = Dictionary::from_bytes(&corrupted) {
+                    exercise(&dict);
+                }
+            }
+            // Числа секций: ошибка формата или словарь, который не паникует
+            let numbers: [fn(&mut Sections) -> &mut Vec<u32>; 5] = [
+                |s| &mut s.paradigm_offsets,
+                |s| &mut s.tables,
+                |s| &mut s.records,
+                |s| &mut s.probability_records,
+                |s| &mut s.guess_records,
+            ];
+            let mut original = format::read(&data).unwrap();
+            for section in numbers {
+                for at in 0..section(&mut original).len() {
+                    let number = section(&mut original)[at];
+                    for value in [
+                        0,
+                        1,
+                        number.wrapping_add(1),
+                        number.wrapping_sub(1),
+                        0xFFFF,
+                        0x1_0000,
+                        u32::MAX,
+                    ] {
+                        let mut sections = format::read(&data).unwrap();
+                        section(&mut sections)[at] = value;
+                        if let Ok(dict) = Dictionary::from_bytes(&format::write(&sections)) {
+                            exercise(&dict);
+                        }
+                    }
+                }
+            }
+            for at in 0..original.paradigms.len() {
+                for value in [0, 1, u16::MAX] {
+                    let mut sections = format::read(&data).unwrap();
+                    sections.paradigms[at] = value;
+                    if let Ok(dict) = Dictionary::from_bytes(&format::write(&sections)) {
+                        exercise(&dict);
+                    }
+                }
+            }
+            // Секции одного типа местами
+            let swaps: [fn(&mut Sections); 8] = [
+                |s| std::mem::swap(&mut s.words, &mut s.probabilities),
+                |s| std::mem::swap(&mut s.words, &mut s.guesses),
+                |s| std::mem::swap(&mut s.prefixes, &mut s.suffixes),
+                |s| std::mem::swap(&mut s.tags, &mut s.ud_tags),
+                |s| std::mem::swap(&mut s.records, &mut s.guess_records),
+                |s| std::mem::swap(&mut s.records, &mut s.probability_records),
+                |s| std::mem::swap(&mut s.tables, &mut s.records),
+                |s| std::mem::swap(&mut s.paradigm_offsets, &mut s.tables),
+            ];
+            for swap in swaps {
+                let mut sections = format::read(&data).unwrap();
+                swap(&mut sections);
+                if let Ok(dict) = Dictionary::from_bytes(&format::write(&sections)) {
+                    exercise(&dict);
+                }
+            }
+        }
     }
 
     #[test]

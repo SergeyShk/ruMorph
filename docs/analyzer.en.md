@@ -4,7 +4,7 @@
 Analyzer(path=None)
 ```
 
-Morphological analyzer: for a word form it finds all [analyses](analysis.md) in the OpenCorpora dictionary - the initial form, the part of speech and the [Universal Dependencies](https://universaldependencies.org/) features - and orders them by probability. The dictionary is loaded when the analyzer is created, so it is enough to create the analyzer once and use it across the program.
+Morphological analyzer: for a word form it finds all [analyses](analysis.md) in the OpenCorpora dictionary - the initial form, the part of speech and the [Universal Dependencies](https://universaldependencies.org/) features - and orders them by probability. The dictionary is loaded when the first analyzer is created: analyzers with the same dictionary file in a process share it, so a new analyzer is created instantly.
 
 Exceptions:
 
@@ -34,7 +34,7 @@ Exceptions:
 | :-------- | :--- | :------ | :---------- |
 | `path` | `str` / `PathLike` | `None` | Path to the dictionary file; by default, the dictionary from the package |
 
-The object keeps the dictionary path in `path` of type `Path`, read-only.
+The object keeps the dictionary path in `path` of type `Path`, read-only. A dictionary is trusted data, like code: loading rejects a damaged file but not every deliberately crafted one, so dictionaries from untrusted sources should not be loaded.
 
 ## Methods
 
@@ -49,7 +49,7 @@ The object keeps the dictionary path in `path` of type `Path`, read-only.
 analyze(word)
 ```
 
-Analyses of the word form in descending order of probability; the probabilities sum to 1. Case does not matter, and the letter «е» may stand for «ё»: `analyze("ЕЖ")` returns the analyses of the word form «ёж». A token that is not in the dictionary - a number, a symbol, a Latin word, an abbreviation - is analyzed [by rules](analysis.md#rules), and the analyses of an unknown Cyrillic word are [guessed](analysis.md#guess) from its ending and parts.
+Analyses of the word form in descending order of probability; the probabilities sum to 1. Case does not matter, and the letter «е» may stand for «ё»: `analyze("ЕЖ")` returns the analyses of the word form «ёж». A token that is not in the dictionary - a number, a symbol, a Latin word, an abbreviation - is analyzed [by rules](analysis.md#rules), and the analyses of an unknown Cyrillic word are [guessed](analysis.md#guess) from its ending and parts. A token without spaces and invisible characters gets at least one analysis: if nothing fits, `X` without features.
 
 | Parameter | Type | Default | Description |
 | :-------- | :--- | :------ | :---------- |
@@ -191,7 +191,7 @@ The package dictionary is built from the [OpenCorpora](https://opencorpora.org) 
 
 ## Threads and processes { #parallel }
 
-One analyzer can be used from several threads: `analyze_many` and `lemmatize` release the GIL and process lists in parallel. The analyzer and analyses are pickled, so they work with `multiprocessing` and joblib: a process loads the dictionary once, however many analyses it receives.
+One analyzer can be used from several threads: `analyze_many` and `lemmatize` release the GIL and process lists in parallel. The analyzer and analyses are pickled, so they work with `multiprocessing` and joblib: a process loads the dictionary once, however many analyses it receives. Passing analyses between processes costs more than the analysis itself, so in processes it is better to get lemmas and analysis fields, and analyses in threads.
 
 === "Code"
 

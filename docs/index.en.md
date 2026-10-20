@@ -4,8 +4,8 @@
 
 **ruMorph** is a morphological analyzer of Russian: a Rust core with a Python API. For a word form the analyzer finds its analyses in the OpenCorpora dictionary - the initial form (lemma), the part of speech and the [Universal Dependencies](https://universaldependencies.org/) features - orders them by probability and builds the forms of the word.
 
-!!! warning "Work in progress"
-    Versions `0.1.0.devN` are published on TestPyPI; the API may change before the 0.1.0 release.
+!!! note "Early version"
+    Before 1.0 the API may change between 0.x versions, changes are described in the release notes.
 
 ## Features
 

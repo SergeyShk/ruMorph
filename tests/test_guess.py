@@ -83,9 +83,9 @@ def test_guessed_inflection(morph):
     assert {form.lemma for form in morph.analyze("чатботу")[0].forms()} == {"чатбот"}
 
 
-@pytest.mark.parametrize("word", ["ВаЙб", "ЗуМер", "вайб1"])
+@pytest.mark.parametrize("word", ["ВаЙб", "ЗуМер", "вайб1", "Б" + "е" * 200])
 def test_not_guessed(morph, word):
-    assert morph.analyze(word) == []
+    assert [(a.pos, a.source) for a in morph.analyze(word)] == [("X", "rule")]
 
 
 def test_order_of_sources(morph):
@@ -103,3 +103,44 @@ def test_pickled_guesses(morph):
     assert [form.word for form in restored[0].forms()] == [
         form.word for form in analyses[0].forms()
     ]
+
+
+@pytest.mark.parametrize("word", ["Шатов", "Версилов"])
+def test_surnames_singular(morph, word):
+    # Угаданное имя собственное - чаще единственное число, чем множественное другого имени
+    analysis = morph.analyze(word)[0]
+    assert (analysis.lemma, analysis.pos, analysis.feats["Number"]) == (
+        word.lower(),
+        "PROPN",
+        "Sing",
+    )
+
+
+def test_capitalized_adjective(morph):
+    assert morph.analyze("Стэнфордская")[0].pos == "ADJ"
+
+
+def test_long_capitals(morph):
+    # Длинное слово капсом угадывается как слово, короткое - аббревиатура
+    analysis = morph.analyze("ЧАТБОТАМИ")[0]
+    assert (analysis.word, analysis.lemma, analysis.feats["Case"]) == (
+        "ЧАТБОТАМИ",
+        "чатбот",
+        "Ins",
+    )
+    assert analysis.inflect(Case="Nom", Number="Sing") == "ЧАТБОТ"
+    assert morph.analyze("НКО")[0].feats["Abbr"] == "Yes"
+
+
+@pytest.mark.parametrize(
+    ("word", "lemma"), [("МЭРТа", "мэрт"), ("КВНу", "квн"), ("ГАПов", "гап"), ("МУПы", "муп")]
+)
+def test_abbreviation_with_ending(morph, word, lemma):
+    # Лемма - заглавная часть, даже без гласной
+    assert morph.analyze(word)[0].lemma == lemma
+    analysis = morph.analyze("МЭРТа")[0]
+    assert (analysis.pos, analysis.feats["Case"]) == ("PROPN", "Gen")
+
+
+def test_no_vowelless_lemma(morph):
+    assert all(any(c in "аеёиоуыэюя" for c in a.lemma) for a in morph.analyze("Лем"))

@@ -87,7 +87,7 @@ pip install rumorph
 | `PRCL` | `PART` |
 | `INTJ` | `INTJ` |
 
-Отдельные слова получают часть речи по соглашениям SynTagRus: вводные «однако», «например» - `ADV`, «бы» - `AUX` и т. д. (см. [Части речи и признаки](analysis.md#ud)). Токены вне словаря: `NUMB` - `NUM` с `NumForm=Digit`, `ROMN` - `ADJ` с `NumForm=Roman`, `LATN` - `X` с `Foreign=Yes`, `PNCT` - `PUNCT` или `SYM` (см. [Токены вне словаря](analysis.md#rules)).
+Отдельные слова получают часть речи по соглашениям SynTagRus: вводные «однако», «например» - `ADV`, «бы» - `AUX` и т. д. (см. [Части речи и признаки](analysis.md#ud)). Токены вне словаря: `NUMB` - `NUM` с `NumForm=Digit`, `ROMN` - `ADJ` с `NumForm=Roman`, `LATN` - `X` с `Foreign=Yes`, `PNCT` - `PUNCT` или `SYM`, `UNKN` - `X` без признаков (см. [Токены вне словаря](analysis.md#rules)).
 
 ## Граммемы { #grammemes }
 
@@ -102,16 +102,16 @@ pip install rumorph
 | `ms-f` («сирота») | `Gender=Masc` |
 | `anim`, `inan` | `Animacy`: `Anim`, `Inan` |
 | `1per`, `2per`, `3per` | `Person`: `1`, `2`, `3` |
-| `pres`, `past`, `futr` | `Tense`: `Pres`, `Past`, `Fut` |
+| `pres`, `past`, `futr` | `Tense`: `Pres`, `Past`, `Fut`; будущее «быть» - `Tense=Pres` с пометой `futr` |
 | `perf`, `impf` | `Aspect`: `Perf`, `Imp` |
 | `indc`, `impr` | `Mood`: `Ind`, `Imp` |
 | `actv`, `pssv` | `Voice`: `Act`, `Pass`; у возвратных глаголов - `Mid` |
-| `Name`, `Surn`, `Patr`, `Geox`, `Orgn`, `Trad` | `NameType`: `Giv`, `Sur`, `Pat`, `Geo`, `Com`, `Pro` |
+| `Name`, `Surn`, `Patr`, `Geox`, `Orgn`, `Trad` | `NameType`: `Giv`, `Sur`, `Pat`, `Geo`, `Com`, `Pro`; у прилагательных - пометы `labels` |
 | `Supr` | `Degree=Sup` |
-| `Abbr` | `Abbr=Yes` |
+| `Abbr` | `Abbr=Yes`; у склоняемых аббревиатур («вуз») - помета `labels` |
 | `Abbr` и `Anum` вместе («1-го», «90-х») | `NumType=Ord`, `NumForm=Combi`, без `Abbr` |
-| `Poss` | `Poss=Yes` |
-| `Fixd` | `InflClass=Ind` |
+| `Poss` | `Poss=Yes`; у прилагательных - помета `labels` |
+| `Fixd` | у существительных, кроме аббревиатур, - `InflClass=Ind`, у остальных слов - помета `labels` |
 | `Apro` | часть речи `DET` |
 | `Dmns`, `Ques` («там», «где») | `PronType`: `Dem`, `Rel`, `Int` |
 | `Anum` у слов («первый»), `GNdr` | нет |

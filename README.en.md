@@ -36,8 +36,8 @@ Analysis and lemmatization are about 5 times faster than in pymorphy3 with the `
 * **[Migrating from pymorphy](https://sergeyshk.github.io/ruMorph/en/migration/)** - pymorphy2 and pymorphy3 calls, parts of speech and grammemes and their counterparts
 * **[Speed and memory](https://sergeyshk.github.io/ruMorph/en/performance/)** - analysis, lemmatization and inflection compared with pymorphy3, dictionary loading and memory
 
-> [!WARNING]
-> Work in progress: versions `0.1.0.devN` are published on TestPyPI, the API may change before the 0.1.0 release.
+> [!NOTE]
+> Early version: before 1.0 the API may change between 0.x versions, changes are described in the release notes.
 
 ## Installation
 

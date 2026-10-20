@@ -87,7 +87,7 @@ There is no counterpart for the Russian names of grammemes (`cyr_repr`, `lat2cyr
 | `PRCL` | `PART` |
 | `INTJ` | `INTJ` |
 
-Some words get their part of speech by the SynTagRus conventions: the parenthetical «однако», «например» are `ADV`, «бы» is `AUX` and so on (see [Parts of speech and features](analysis.md#ud)). Tokens outside the dictionary: `NUMB` - `NUM` with `NumForm=Digit`, `ROMN` - `ADJ` with `NumForm=Roman`, `LATN` - `X` with `Foreign=Yes`, `PNCT` - `PUNCT` or `SYM` (see [Tokens outside the dictionary](analysis.md#rules)).
+Some words get their part of speech by the SynTagRus conventions: the parenthetical «однако», «например» are `ADV`, «бы» is `AUX` and so on (see [Parts of speech and features](analysis.md#ud)). Tokens outside the dictionary: `NUMB` - `NUM` with `NumForm=Digit`, `ROMN` - `ADJ` with `NumForm=Roman`, `LATN` - `X` with `Foreign=Yes`, `PNCT` - `PUNCT` or `SYM`, `UNKN` - `X` without features (see [Tokens outside the dictionary](analysis.md#rules)).
 
 ## Grammemes { #grammemes }
 
@@ -102,16 +102,16 @@ Some words get their part of speech by the SynTagRus conventions: the parentheti
 | `ms-f` («сирота») | `Gender=Masc` |
 | `anim`, `inan` | `Animacy`: `Anim`, `Inan` |
 | `1per`, `2per`, `3per` | `Person`: `1`, `2`, `3` |
-| `pres`, `past`, `futr` | `Tense`: `Pres`, `Past`, `Fut` |
+| `pres`, `past`, `futr` | `Tense`: `Pres`, `Past`, `Fut`; the future of «быть» is `Tense=Pres` with the `futr` label |
 | `perf`, `impf` | `Aspect`: `Perf`, `Imp` |
 | `indc`, `impr` | `Mood`: `Ind`, `Imp` |
 | `actv`, `pssv` | `Voice`: `Act`, `Pass`; reflexive verbs - `Mid` |
-| `Name`, `Surn`, `Patr`, `Geox`, `Orgn`, `Trad` | `NameType`: `Giv`, `Sur`, `Pat`, `Geo`, `Com`, `Pro` |
+| `Name`, `Surn`, `Patr`, `Geox`, `Orgn`, `Trad` | `NameType`: `Giv`, `Sur`, `Pat`, `Geo`, `Com`, `Pro`; `labels` for adjectives |
 | `Supr` | `Degree=Sup` |
-| `Abbr` | `Abbr=Yes` |
+| `Abbr` | `Abbr=Yes`; a label in `labels` for declinable abbreviations («вуз») |
 | `Abbr` and `Anum` together («1-го», «90-х») | `NumType=Ord`, `NumForm=Combi`, without `Abbr` |
-| `Poss` | `Poss=Yes` |
-| `Fixd` | `InflClass=Ind` |
+| `Poss` | `Poss=Yes`; a label in `labels` for adjectives |
+| `Fixd` | `InflClass=Ind` for nouns except abbreviations, a label in `labels` for other words |
 | `Apro` | the `DET` part of speech |
 | `Dmns`, `Ques` («там», «где») | `PronType`: `Dem`, `Rel`, `Int` |
 | `Anum` on words («первый»), `GNdr` | none |

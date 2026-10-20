@@ -63,6 +63,7 @@ pub(super) struct Tags {
     organization: u16,
     abbreviation: u16,
     adverb: u16,
+    other: u16,
 }
 
 impl Tags {
@@ -99,6 +100,7 @@ impl Tags {
             organization: tag("PROPN", &abbreviated("Com")),
             abbreviation: tag("NOUN", &[("Abbr", "Yes")]),
             adverb: tag("ADV", &[("Degree", "Pos")]),
+            other: tag("X", &[]),
         }
     }
 }
@@ -133,11 +135,7 @@ impl Dictionary {
                 ],
             );
         }
-        if chars
-            .iter()
-            .any(|&c| c.is_whitespace() || c.is_control() || invisible(c))
-            || chars.iter().all(|&c| joiner(c))
-        {
+        if !token(&chars) {
             return Vec::new();
         }
         if chars.iter().all(|c| !c.is_alphanumeric()) {
@@ -161,14 +159,29 @@ impl Dictionary {
             return self.shares(word, &[(&lower, tags.adverb, 1.0)]);
         }
         if roman(word) {
-            let (ordinal, foreign) = ROMAN_LETTERS
-                .iter()
-                .find(|(letter, _, _)| *letter == word)
-                .map_or((471.0, 19.0), |&(_, ordinal, foreign)| (ordinal, foreign));
+            let (ordinal, foreign) =
+                match ROMAN_LETTERS.iter().find(|(letter, _, _)| *letter == word) {
+                    Some(&(_, ordinal, foreign)) => (ordinal, foreign),
+                    // «CV», «CI», «XL» - чаще латинские сокращения, чем римские числа
+                    None if chars.len() == 2 && word.contains(['C', 'L']) => (1.0, 3.0),
+                    None => (471.0, 19.0),
+                };
             return self.shares(
                 word,
                 &[(word, tags.roman, ordinal), (&lower, tags.foreign, foreign)],
             );
+        }
+        // Римские в нижнем регистре («xix») и диапазоны римских («II-III», «III–IV»); строчные
+        // с «c», «l» («ci», «cl») - латинские слова
+        let upper = word.to_uppercase();
+        if chars.len() > 1 && chars.iter().all(|c| "ivx".contains(*c)) && roman(&upper) {
+            return self.shares(
+                word,
+                &[(word, tags.roman, 1.0), (&lower, tags.foreign, 1.0)],
+            );
+        }
+        if word.contains(RANGE) && word.split(RANGE).all(roman) {
+            return self.shares(word, &[(word, tags.roman, 1.0)]);
         }
         if chars.iter().any(|c| c.is_alphabetic())
             && !chars.iter().any(|&c| cyrillic(c))
@@ -178,7 +191,8 @@ impl Dictionary {
         {
             return self.shares(word, &[(&lower, tags.foreign, 1.0)]);
         }
-        if let [letter, '.'] = chars[..]
+        // Инициал - заглавная буква с точкой или без нее («А.», «А»)
+        if let [letter, '.'] | [letter] = chars[..]
             && cyrillic(letter)
             && letter.is_uppercase()
             && !"ЪЫЬ".contains(letter)
@@ -197,15 +211,48 @@ impl Dictionary {
             return analyses;
         }
         if chars.len() > 1 && chars.iter().all(|&c| cyrillic(c) && c.is_uppercase()) {
-            return self.shares(
+            let mut analyses = self.shares(
                 word,
                 &[
                     (&lower, tags.organization, 510.0),
                     (&lower, tags.abbreviation, 327.0),
                 ],
             );
+            // Длинное слово капсом в SynTagRus - чаще обычное слово заглавными буквами, чем
+            // аббревиатура: его разборы угадываются по форме с заглавной буквы
+            if chars.len() >= LONG_CAPS {
+                let capitalized: String = chars[..1]
+                    .iter()
+                    .chain(lower.chars().skip(1).collect::<Vec<_>>().iter())
+                    .collect();
+                let guessed = self.guess(&capitalized);
+                if !guessed.is_empty() {
+                    let share = if chars.len() > LONG_CAPS { 0.85 } else { 0.5 };
+                    for analysis in &mut analyses {
+                        analysis.prob *= 1.0 - share;
+                    }
+                    analyses.extend(guessed.into_iter().map(|analysis| Analysis {
+                        word: word.to_owned(),
+                        prob: analysis.prob * share,
+                        ..analysis
+                    }));
+                    analyses.sort_by(|a, b| b.prob.total_cmp(&a.prob));
+                }
+            }
+            return analyses;
         }
         Vec::new()
+    }
+
+    /// Запасной разбор токена, который не разобрали ни словарь, ни правила, ни угадывание
+    /// («км/ч», «РосПил»): `X` без признаков, лемма - токен в нижнем регистре. Токен с пробелом,
+    /// управляющим или невидимым символом разборов не получает
+    pub(super) fn fallback(&self, word: &str) -> Vec<Analysis> {
+        let chars: Vec<char> = word.chars().collect();
+        if !token(&chars) {
+            return Vec::new();
+        }
+        self.shares(word, &[(&word.to_lowercase(), self.rule_tags.other, 1.0)])
     }
 
     /// Разборы токена без лексемы с долями вероятности: «лемма, тег UD, вес»; словоформа - как
@@ -233,11 +280,22 @@ impl Dictionary {
     /// таких порядковых в SynTagRus. Короткое окончание без образца («5-ти», «2-мя») -
     /// количественное с леммой из цифр
     fn numeral_with_ending(&self, word: &str) -> Option<Vec<Analysis>> {
-        let (digits, ending) = word.split_once('-')?;
-        if digits.is_empty()
-            || !digits.bytes().all(|b| b.is_ascii_digit())
-            || ending.is_empty()
-            || !ending.chars().all(cyrillic)
+        let (digits, ending) = word.rsplit_once('-')?;
+        if ending.is_empty() || !ending.chars().all(cyrillic) {
+            return None;
+        }
+        // Римское с порядковым окончанием («XIX-го»), но не буква со словом («X-хромосома»)
+        if roman(digits)
+            && !self
+                .candidates(&format!("1-{}", ending.to_lowercase()))
+                .is_empty()
+        {
+            return Some(self.shares(word, &[(digits, self.rule_tags.roman, 1.0)]));
+        }
+        // Слева число или диапазон чисел: «2005-го», «10-15-го», «1840–1860-х»
+        if !digits
+            .split(RANGE)
+            .all(|group| !group.is_empty() && group.bytes().all(|b| b.is_ascii_digit()))
         {
             return None;
         }
@@ -323,11 +381,13 @@ impl Dictionary {
         if base.is_empty() || !base.chars().all(cyrillic) {
             return None;
         }
+        // Сокращение - признак Abbr=Yes или помета Abbr у склоняемой аббревиатуры
         let abbreviated = |analysis: &Analysis| {
-            self.ud_tags[usize::from(analysis.ud)]
-                .feats
+            let tag = &self.ud_tags[usize::from(analysis.ud)];
+            tag.feats
                 .iter()
                 .any(|(name, value)| name == "Abbr" && value == "Yes")
+                || tag.labels.iter().any(|label| label == "Abbr")
         };
         let mut analyses: Vec<Analysis> = self
             .merge(self.candidates(base))
@@ -346,6 +406,22 @@ impl Dictionary {
         }
         Some(analyses)
     }
+}
+
+/// Длина слова капсом, с которой его разборы угадываются, а не только как аббревиатура
+const LONG_CAPS: usize = 7;
+
+/// Разделители диапазона чисел: дефис и тире
+const RANGE: [char; 3] = ['-', '–', '—'];
+
+/// Токен, который может получить разбор: непустой, без пробелов, управляющих и невидимых
+/// символов и не из одних соединителей эмодзи
+fn token(chars: &[char]) -> bool {
+    !chars.is_empty()
+        && !chars
+            .iter()
+            .any(|&c| c.is_whitespace() || c.is_control() || invisible(c))
+        && !chars.iter().all(|&c| joiner(c))
 }
 
 pub(super) fn cyrillic(c: char) -> bool {
@@ -404,13 +480,14 @@ fn joiner(c: char) -> bool {
     )
 }
 
-/// Число цифрами: `Some(true)` - только цифры, `Some(false)` - со знаком, дробной частью или
-/// разделителями групп, времени и дат («3,14», «-5», «10 000», «17:04», «2/3», «01.02.2003»)
+/// Число цифрами: `Some(true)` - только цифры, `Some(false)` - со знаком, дробной частью,
+/// разделителями групп, времени и дат или диапазон («3,14», «-5», «10 000», «17:04», «2/3»,
+/// «01.02.2003», «1990-2000»)
 fn number(word: &str) -> Option<bool> {
     let unsigned = word.strip_prefix(['+', '-', '−']).unwrap_or(word);
     unsigned
         .split([
-            ',', '.', ':', '/', ' ', '\u{A0}', '\u{2007}', '\u{2009}', '\u{202F}',
+            ',', '.', ':', '/', ' ', '\u{A0}', '\u{2007}', '\u{2009}', '\u{202F}', '-', '–', '—',
         ])
         .all(|group| !group.is_empty() && group.bytes().all(|b| b.is_ascii_digit()))
         .then(|| unsigned == word && unsigned.bytes().all(|b| b.is_ascii_digit()))
@@ -437,6 +514,9 @@ fn roman(word: &str) -> bool {
     while let Some(&(digit, amount)) = DIGITS.iter().find(|(digit, _)| rest.starts_with(digit)) {
         value += amount;
         rest = &rest[digit.len()..];
+        if value >= 400 {
+            return false;
+        }
     }
     if !rest.is_empty() || value >= 400 {
         return false;
@@ -455,6 +535,117 @@ fn roman(word: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dictionary::tests::dictionary_of;
+
+    /// Образец порядковых из цифр «1-й», «1-го» и сокращение «им»
+    fn dictionary() -> Dictionary {
+        let ordinal =
+            |case| format!("Case={case}|Gender=Masc|NumForm=Combi|NumType=Ord|Number=Sing");
+        dictionary_of(
+            &[
+                (
+                    "ADJ",
+                    "1-",
+                    vec![("й", ordinal("Nom")), ("го", ordinal("Gen"))],
+                ),
+                (
+                    "NOUN",
+                    "им",
+                    vec![("", "Abbr=Yes|Case=Gen|Number=Sing".to_owned())],
+                ),
+            ],
+            &[],
+        )
+    }
+
+    /// Лемма, часть речи и признаки разборов по правилам
+    fn rules(dict: &Dictionary, word: &str) -> Vec<(String, String, String)> {
+        dict.rules(word)
+            .into_iter()
+            .map(|analysis| {
+                assert_eq!(
+                    (analysis.word.as_str(), analysis.source),
+                    (word, Source::Rule)
+                );
+                let tag = &dict.ud_tags[usize::from(analysis.ud)];
+                (analysis.lemma, tag.pos.clone(), tag.feats_string())
+            })
+            .collect()
+    }
+
+    fn parts_of_speech(dict: &Dictionary, word: &str) -> Vec<String> {
+        rules(dict, word)
+            .into_iter()
+            .map(|(_, pos, _)| pos)
+            .collect()
+    }
+
+    fn analysis(lemma: &str, pos: &str, feats: &str) -> (String, String, String) {
+        (lemma.to_owned(), pos.to_owned(), feats.to_owned())
+    }
+
+    #[test]
+    fn numerals_by_template() {
+        let dict = dictionary();
+        let genitive = "Case=Gen|Gender=Masc|NumForm=Combi|NumType=Ord|Number=Sing";
+        assert_eq!(
+            rules(&dict, "2005-го"),
+            [analysis("2005-й", "ADJ", genitive)]
+        );
+        assert_eq!(
+            rules(&dict, "10-15-го"),
+            [analysis("10-15-й", "ADJ", genitive)]
+        );
+        // Короткое окончание без образца - количественное с леммой из цифр
+        let cardinal = "NumForm=Digit|NumType=Card";
+        assert_eq!(rules(&dict, "5-ти"), [analysis("5", "NUM", cardinal)]);
+        assert_eq!(rules(&dict, "3,14"), [analysis("3,14", "NUM", cardinal)]);
+        // Год - чаще порядковое
+        assert_eq!(parts_of_speech(&dict, "2008"), ["ADJ", "NUM"]);
+        assert_eq!(parts_of_speech(&dict, "2050-летний"), Vec::<String>::new());
+    }
+
+    #[test]
+    fn roman_and_latin() {
+        let dict = dictionary();
+        let roman = "NumForm=Roman|NumType=Ord";
+        assert_eq!(rules(&dict, "XIX-го"), [analysis("XIX", "ADJ", roman)]);
+        // Буква со словом - не римское порядковое
+        assert!(rules(&dict, "X-хромосома").is_empty());
+        assert_eq!(parts_of_speech(&dict, "xix"), ["ADJ", "X"]);
+        assert_eq!(parts_of_speech(&dict, "CV"), ["X", "ADJ"]);
+        assert_eq!(rules(&dict, "ci"), [analysis("ci", "X", "Foreign=Yes")]);
+        assert_eq!(parts_of_speech(&dict, "II-III"), ["ADJ"]);
+    }
+
+    #[test]
+    fn initials_abbreviations_and_symbols() {
+        let dict = dictionary();
+        let initials: Vec<_> = rules(&dict, "Х")
+            .into_iter()
+            .map(|(lemma, _, feats)| (lemma, feats))
+            .collect();
+        assert_eq!(
+            initials,
+            ["Giv", "Pat", "Sur"].map(|name| ("х".to_owned(), format!("Abbr=Yes|NameType={name}")))
+        );
+        assert_eq!(
+            rules(&dict, "им."),
+            [analysis("им", "NOUN", "Abbr=Yes|Case=Gen|Number=Sing")]
+        );
+        assert_eq!(parts_of_speech(&dict, "ГОСТ"), ["PROPN", "NOUN"]);
+        assert_eq!(
+            rules(&dict, "по-бурятски"),
+            [analysis("по-бурятски", "ADV", "Degree=Pos")]
+        );
+        assert_eq!(parts_of_speech(&dict, "%"), ["SYM"]);
+        assert_eq!(parts_of_speech(&dict, "«"), ["PUNCT"]);
+        // Не подошло ни одно правило - запасной X; токен с пробелом разборов не получает
+        assert!(rules(&dict, "км/ч").is_empty());
+        let fallback = dict.fallback("км/ч").remove(0);
+        assert_eq!((fallback.lemma.as_str(), fallback.prob), ("км/ч", 1.0));
+        assert!(dict.fallback("км ч").is_empty());
+    }
 
     #[test]
     fn numbers() {
@@ -487,6 +678,24 @@ mod tests {
     }
 
     #[test]
+    fn ranges() {
+        assert_eq!(number("1990-2000"), Some(false));
+        assert_eq!(number("37–38"), Some(false));
+        assert_eq!(number("3—4"), Some(false));
+        assert_eq!(number("5-"), None);
+        assert_eq!(number("5-Б"), None);
+    }
+
+    #[test]
+    fn tokens() {
+        assert!(token(&['к', 'м', '/', 'ч']));
+        assert!(!token(&[]));
+        assert!(!token(&['к', ' ', 'м']));
+        assert!(!token(&['к', '\u{200B}']));
+        assert!(!token(&['\u{200D}']));
+    }
+
+    #[test]
     fn roman_numerals() {
         for word in ["I", "IV", "XIV", "XX", "XXI", "XLIX", "CCCXC"] {
             assert!(roman(word), "{word}");
@@ -494,5 +703,7 @@ mod tests {
         for word in ["", "IIII", "IC", "VX", "CD", "MIX", "ii", "XXL"] {
             assert!(!roman(word), "{word}");
         }
+        // Длинная строка из «C» отбрасывается без переполнения суммы
+        assert!(!roman(&"C".repeat(100_000)));
     }
 }

@@ -1,5 +1,7 @@
 import pickle
 from concurrent.futures import ThreadPoolExecutor
+from decimal import Decimal
+from fractions import Fraction
 
 import pytest
 
@@ -376,8 +378,9 @@ def test_agree_large_and_negative(morph):
 def test_agree_errors(morph, word, number):
     with pytest.raises(FormNotFoundError, match=f"не согласуется с количеством {number}"):
         morph.analyze(word)[0].agree(number)
-    with pytest.raises(TypeError):
-        morph.analyze(word)[0].agree(2.5)
+    if word != "молоко":
+        with pytest.raises(FormNotFoundError, match=r"не согласуется с количеством 2\.5"):
+            morph.analyze(word)[0].agree(2.5)
 
 
 @pytest.mark.parametrize("word", ["мешаемый", "передох", "брызжет", "кошкою", "лесу"])
@@ -406,3 +409,96 @@ def test_threads(morph):
             pool.map(lambda word: [form.word for form in morph.analyze(word)[0].forms()], words)
         )
     assert results == [[form.word for form in morph.analyze(word)[0].forms()] for word in words]
+
+
+@pytest.mark.parametrize(
+    ("word", "feats", "form"),
+    [
+        # Повелительное без лица - 2-е лицо, а не инклюзив «сделаем»
+        ("сделать", {"Mood": "Imp"}, "сделай"),
+        ("сделать", {"Mood": "Imp", "Number": "Plur"}, "сделайте"),
+        ("пойти", {"Mood": "Imp", "Person": "1", "Number": "Plur"}, "пойдёмте"),
+        ("быть", {"Mood": "Imp"}, "будь"),
+        # Без запроса одушевленности - неодушевленный винительный
+        ("новый", {"Case": "Acc"}, "новый"),
+        ("новые", {"Case": "Acc"}, "новые"),
+        ("кот", {"Case": "Acc"}, "кота"),
+        # Будущее «быть»: формы с пометой futr
+        ("буду", {"Person": "3"}, "будет"),
+        # Вариант написания исходной формы
+        ("листья", {"Case": "Gen"}, "листьев"),
+        ("листы", {"Case": "Gen"}, "листов"),
+        ("человек", {"Case": "Dat", "Number": "Plur"}, "людям"),
+        # От инфинитива без запроса формы глагола - личная форма, а не причастие
+        ("достигнуть", {"Tense": "Past"}, "достиг"),
+    ],
+)
+def test_inflect_prefers_requested(morph, word, feats, form):
+    assert morph.analyze(word)[0].inflect(**feats) == form
+
+
+def test_future_of_be(morph):
+    future = next(a for a in morph.analyze("будет") if a.feats.get("Mood") == "Ind")
+    assert "futr" in future.labels
+    assert future.inflect(Number="Plur") == "будут"
+
+
+def test_female_surname_agreement(morph):
+    female = next(a for a in morph.analyze("Иванова") if a.feats.get("Gender") == "Fem")
+    assert [female.agree(n) for n in (1, 2, 5, 21)] == [
+        "иванова",
+        "ивановы",
+        "ивановых",
+        "иванова",
+    ]
+
+
+def test_agree_number_types(morph):
+    ruble = morph.analyze("рубль")[0]
+
+    class Count:
+        def __index__(self):
+            return 3
+
+    # Целое - всё, у чего есть __index__; дробное - родительный падеж единственного числа
+    assert ruble.agree(Count()) == "рубля"
+    assert [ruble.agree(n) for n in (1.5, Decimal("2.5"), Fraction(1, 2), 5.0)] == ["рубля"] * 4
+    days = morph.analyze("сутки")[0]
+    assert days.agree(1.5) == "суток"
+    with pytest.raises(TypeError, match="Количество должно быть числом, а не str"):
+        ruble.agree("5")
+    with pytest.raises(ValueError, match="конечным числом"):
+        ruble.agree(float("nan"))
+    # Decimal и Fraction без дробной части - целые, конечность - без перевода во float
+    integral = (Decimal("21"), Decimal(5), Fraction(10, 2), Decimal("5E+1"), Decimal("1E+400"))
+    assert [ruble.agree(n) for n in integral] == ["рубль", "рублей", "рублей", "рублей", "рублей"]
+    # Без перевода в int: большой порядок не стоит времени
+    huge = (
+        Decimal("1E+1000000"),
+        Decimal("-121"),
+        Decimal("2E+1"),
+        Decimal("0E+5"),
+        Decimal("102"),
+    )
+    assert [ruble.agree(n) for n in huge] == ["рублей", "рубль", "рублей", "рублей", "рубля"]
+    assert [ruble.agree(Decimal(n)) for n in range(300)] == [ruble.agree(n) for n in range(300)]
+    assert [ruble.agree(n) for n in (Decimal("5.00"), Fraction(10**400, 3))] == ["рубля"] * 2
+    for special in (Decimal("sNaN"), Decimal("-Infinity")):
+        with pytest.raises(ValueError, match="конечным числом"):
+            ruble.agree(special)
+
+
+@pytest.mark.parametrize(
+    ("word", "two", "five"), [("Абрамович", "абрамович", "абрамовичей"), ("Кох", "кох", "кохов")]
+)
+def test_indeclinable_female_surnames(morph, word, two, five):
+    # Несклоняемые женские фамилии не согласуются как прилагательные
+    female = next(a for a in morph.analyze(word) if a.feats.get("Gender") == "Fem")
+    assert (female.agree(2), female.agree(5)) == (two, five)
+
+
+def test_infinitive_fitting_request(morph):
+    # Инфинитив, который сам подходит под запрос, не меняется на личную форму
+    reading = morph.analyze("читать")[0]
+    assert (reading.inflect(), reading.inflect(Aspect="Imp")) == ("читать", "читать")
+    assert morph.analyze("сделать")[0].inflect(Voice="Act") == "сделать"

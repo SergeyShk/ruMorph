@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "rumorph"
-version = "0.1.0.dev9"
+version = "0.1.0.dev14"
 description = "Fast Russian morphological analyzer written in Rust with a Python API"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -22,7 +22,7 @@ keywords = [
     "russian",
 ]
 classifiers = [
-    "Development Status :: 2 - Pre-Alpha",
+    "Development Status :: 3 - Alpha",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
@@ -50,6 +50,7 @@ manifest-path = "crates/rumorph-py/Cargo.toml"
 module-name = "rumorph._rumorph"
 python-source = "python"
 include = [{ path = "python/rumorph/data/ru.dict", format = ["sdist", "wheel"] }]
+sdist-generator = "git"
 
 [tool.uv]
 cache-keys = [
@@ -59,12 +60,6 @@ cache-keys = [
     { file = "crates/**/Cargo.toml" },
     { file = "crates/**/*.rs" },
 ]
-
-[[tool.uv.index]]
-name = "testpypi"
-url = "https://test.pypi.org/simple/"
-publish-url = "https://test.pypi.org/legacy/"
-explicit = true
 
 [dependency-groups]
 dictionary = ["pymorphy3==2.0.6", "pymorphy3-dicts-ru==2.4.417150.4580142"]
