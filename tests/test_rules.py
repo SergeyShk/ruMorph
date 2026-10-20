@@ -22,9 +22,14 @@ def summary(morph, word):
         ("«", "PUNCT"),
         ("...", "PUNCT"),
         ("—", "PUNCT"),
+        ("<", "PUNCT"),
         ("%", "SYM"),
         ("№", "SYM"),
         ("$", "SYM"),
+        ("−", "SYM"),
+        ("♥", "SYM"),
+        ("😀", "SYM"),
+        ("❤\ufe0f", "SYM"),
     ],
 )
 def test_punctuation_and_symbols(morph, word, pos):
