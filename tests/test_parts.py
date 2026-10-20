@@ -60,14 +60,41 @@ def test_aspect_prefixes(morph):
         assert morph.analyze(word)[0].feats["Aspect"] == "Perf"
 
 
-@pytest.mark.parametrize("word", ["5-Б", "10-А", "9-В", "кто-то-то"])
+@pytest.mark.parametrize("word", ["5-Б", "10-А", "9-В", "кто-то-то", "К-за", "iPhone-ы"])
 def test_no_parts(morph, word):
-    assert morph.analyze(word) == []
+    assert [(a.pos, a.source) for a in morph.analyze(word)] == [("X", "rule")]
 
 
 def test_particle_chain(morph):
     # Длинная цепочка частиц не разбирается и не уводит в глубокую рекурсию
-    assert morph.analyze("кто" + "-то" * 12000) == []
+    assert [a.pos for a in morph.analyze("кто" + "-то" * 12000)] == ["X"]
+
+
+def test_stretched_particle_chain(morph):
+    # Протяжка и частица («да-то-о-то-о») не вызывают друг друга без конца
+    assert morph.analyze("да" + "-то-о" * 12000)
+
+
+@pytest.mark.parametrize(
+    ("word", "lemma", "pos"),
+    [
+        # Протянутая буква - междометие, а без него - не слово
+        ("А-а", "а", "INTJ"),
+        ("Ш-ш", "ш-ш", "X"),
+        # Заикание на несколько букв
+        ("Д-д-да", "да", "PART"),
+        ("В-в-ваше", "ваш", "DET"),
+        # Составные междометия
+        ("Ой-ой", "ой-ой", "INTJ"),
+        ("Н-да", "н-да", "INTJ"),
+        # Первая часть в начальной форме, а не в родительном множественного
+        ("поп-песен", "поп-песня", "NOUN"),
+        ("тест-пилотов", "тест-пилот", "NOUN"),
+    ],
+)
+def test_stretched_and_compound(morph, word, lemma, pos):
+    first = morph.analyze(word)[0]
+    assert (first.lemma, first.pos) == (lemma, pos)
 
 
 def test_capitalized_forms(morph):
@@ -143,6 +170,32 @@ def test_pickled_parts(morph):
     analyses += morph.analyze("сколь-нибудь") + morph.analyze("ГУ-ВШЭ")
     analyses += analyses[0].forms()
     assert pickle.loads(pickle.dumps(analyses)) == analyses
+
+
+@pytest.mark.parametrize(
+    ("word", "lemma", "pos"),
+    [
+        ("IT-компания", "it-компания", "NOUN"),
+        ("PR-менеджера", "pr-менеджер", "NOUN"),
+        # Обе части изменяются: лемма из лемм частей
+        ("дивана-кровати", "диван-кровать", "NOUN"),
+        ("человека-паука", "человек-паук", "NOUN"),
+        ("думал-думал", "думать-думать", "VERB"),
+        # Первая часть в начальной форме не меняет лемму
+        ("фитнес-тренера", "фитнес-тренер", "NOUN"),
+        # Протяжка и заикание
+        ("Что-о", "что", "SCONJ"),
+        ("Н-нет", "нет", "VERB"),
+    ],
+)
+def test_hyphenated_lemmas(morph, word, lemma, pos):
+    analysis = morph.analyze(word)[0]
+    assert (analysis.lemma, analysis.pos, analysis.word) == (lemma, pos, word)
+
+
+def test_both_parts_inflected_have_no_forms(morph):
+    sofa = morph.analyze("дивана-кровати")[0]
+    assert [form.word for form in sofa.forms()] == ["дивана-кровати"]
 
 
 @pytest.mark.parametrize(

@@ -3,7 +3,7 @@
 //! приставкой, поэтому лемма и формы - у целого слова
 
 use super::rules::cyrillic;
-use super::{Analysis, Dictionary, Source};
+use super::{Analysis, Dictionary, Source, UdTag};
 
 /// Частицы после дефиса: слово разбирается по первой части («сколь-нибудь», «смотри-ка»)
 const PARTICLES: &[&str] = &["то", "либо", "нибудь", "ка", "таки", "де", "с"];
@@ -72,6 +72,9 @@ const PREFIXES: &[&str] = &[
     "ре",
 ];
 
+/// Части речи последней части слова через дефис: служебные слова и буквы - не части сложного слова
+const HYPHENATED_CLASSES: &[&str] = &["NOUN", "PROPN", "ADJ", "VERB", "ADV", "NUM", "INTJ", "X"];
+
 /// Части речи, которые образуются с приставками
 const OPEN_CLASSES: &[&str] = &["NOUN", "ADJ", "VERB", "ADV"];
 
@@ -102,7 +105,7 @@ impl Dictionary {
             || left.ends_with('-')
             || !left
                 .chars()
-                .all(|c| cyrillic(c) || c.is_ascii_digit() || c == '-')
+                .all(|c| cyrillic(c) || c.is_ascii_alphanumeric() || c == '-')
             || right.is_empty()
             || !right.chars().all(cyrillic)
             // Число с литерой («5-Б», «10-А») - не слово из частей
@@ -131,10 +134,73 @@ impl Dictionary {
                 .collect();
             return normalized(self.merge(analyses));
         }
+        // Протяжка («Что-о», «Да-а-а») - разбор слова без повторов последней буквы; в левой части
+        // только кириллица, латиница и цифры, поэтому позиции в нижнем регистре те же
+        let stretched = repeats(right_lower, left_lower);
+        let mut end = left.len();
+        while stretched
+            && let Some((shorter, part)) = left_lower[..end].rsplit_once('-')
+            && repeats(part, shorter)
+        {
+            end = shorter.len();
+        }
+        // Заикание («Н-нет», «Д-д-да») - разбор последней части
+        let mut letters = left_lower.split('-');
+        let stutter = letters.next().is_some_and(|first| {
+            first.chars().count() == 1
+                && letters.all(|letter| letter == first)
+                && right_lower.starts_with(first)
+        });
+        if stretched || stutter {
+            let part = if stretched { &left[..end] } else { right };
+            // Часть с дефисом - только из словаря: иначе протяжка и частица («да-то-о-то-о»)
+            // вызывают друг друга без конца
+            let found = if part.contains('-') {
+                self.merge(self.candidates(part))
+            } else {
+                self.analyze(part)
+            };
+            // Протянутая буква - междометие («А-а»), а не союз или сокращение («Ш-ш»)
+            let letter = stretched && part.chars().count() == 1;
+            let analyses = found
+                .into_iter()
+                .filter(|analysis| !letter || self.ud_tags[usize::from(analysis.ud)].pos == "INTJ")
+                .map(|analysis| Analysis {
+                    word: word.to_owned(),
+                    source: Source::Guess,
+                    entry: None,
+                    ..analysis
+                })
+                .collect();
+            return normalized(self.merge(analyses));
+        }
+        // Последняя часть - знаменательное слово, а не предлог или буква («К-за», «Коба-Т»)
+        if right.chars().count() < 2 {
+            return Vec::new();
+        }
+        let left_analyses = self.candidates(left);
         let analyses = self
             .analyze(right)
             .into_iter()
+            .filter(|analysis| {
+                HYPHENATED_CLASSES.contains(&self.ud_tags[usize::from(analysis.ud)].pos.as_str())
+            })
             .filter_map(|analysis| {
+                // Обе части изменяются («дивана-кровати», «думал-думал»): лемма - из лемм частей,
+                // форм нет
+                if let Some(first) = left_analyses
+                    .iter()
+                    .find(|first| self.inflected_together(first, &analysis))
+                    .filter(|first| !self.rarer_than_lemma(first, &left_analyses))
+                {
+                    return Some(Analysis {
+                        word: word.to_owned(),
+                        lemma: format!("{}-{}", first.lemma, analysis.lemma),
+                        source: Source::Guess,
+                        entry: None,
+                        ..analysis
+                    });
+                }
                 // Последняя часть - в написании разбора: с «ё» из словаря («грязно-жёлтый»)
                 let word = format!("{left}-{}", with_yo(right, &analysis.word));
                 let lemma = match analysis.entry {
@@ -153,7 +219,44 @@ impl Dictionary {
                 })
             })
             .collect();
-        normalized(analyses)
+        normalized(self.merge(analyses))
+    }
+
+    /// Первая часть слова через дефис изменяется вместе с последней: та же часть речи, падеж
+    /// и число (у глагола - форма, время, лицо, род и число), и это не начальная форма
+    /// («дивана-кровати», но не «диван-кровать» и не «интернет-магазина»)
+    fn inflected_together(&self, first: &Analysis, last: &Analysis) -> bool {
+        let (first_tag, last_tag) = (
+            &self.ud_tags[usize::from(first.ud)],
+            &self.ud_tags[usize::from(last.ud)],
+        );
+        fn feat<'a>(tag: &'a UdTag, name: &str) -> Option<&'a str> {
+            tag.feats
+                .iter()
+                .find(|(known, _)| known == name)
+                .map(|(_, value)| value.as_str())
+        }
+        let names: &[&str] = if feat(last_tag, "Case").is_some() {
+            &["Case", "Number"]
+        } else {
+            &["VerbForm", "Tense", "Person", "Gender", "Number"]
+        };
+        first.lemma != first.word
+            && first_tag.pos == last_tag.pos
+            && matches!(first_tag.pos.as_str(), "NOUN" | "PROPN" | "ADJ" | "VERB")
+            && names
+                .iter()
+                .all(|name| feat(first_tag, name) == feat(last_tag, name))
+    }
+
+    /// У первой части есть более вероятное нарицательное существительное в начальной форме:
+    /// «поп» в «поп-песен» - «поп», а не «попа» в родительном множественного
+    fn rarer_than_lemma(&self, first: &Analysis, left_analyses: &[Analysis]) -> bool {
+        let noun = |analysis: &Analysis| self.ud_tags[usize::from(analysis.ud)].pos == "NOUN";
+        noun(first)
+            && left_analyses
+                .iter()
+                .any(|other| noun(other) && other.lemma == other.word && other.prob > first.prob)
     }
 
     /// Угаданный разбор слова с частицей через дефис («смотри-ка») без частицы и частица
@@ -252,6 +355,15 @@ fn with_yo(text: &str, spelled: &str) -> String {
         .collect()
 }
 
+/// Часть `part` - повтор последней буквы `before`: «о» в «что-о»
+fn repeats(part: &str, before: &str) -> bool {
+    !part.is_empty()
+        && before
+            .chars()
+            .last()
+            .is_some_and(|last| part.chars().all(|c| c == last))
+}
+
 /// Слово с частицей через дефис: первая часть и частица в написании слова
 pub(super) fn split_particle(word: &str) -> Option<(&str, &str)> {
     let (base, particle) = word.rsplit_once('-')?;
@@ -272,6 +384,14 @@ pub(super) fn with_particle(form: Analysis, particle: &str) -> Analysis {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn repeated_letters() {
+        assert!(repeats("о", "что"));
+        assert!(repeats("аа", "да"));
+        assert!(!repeats("за", "к"));
+        assert!(!repeats("", "да"));
+    }
 
     #[test]
     fn yo_from_spelling() {

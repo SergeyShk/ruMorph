@@ -87,7 +87,7 @@ There is no counterpart for the Russian names of grammemes (`cyr_repr`, `lat2cyr
 | `PRCL` | `PART` |
 | `INTJ` | `INTJ` |
 
-Some words get their part of speech by the SynTagRus conventions: the parenthetical «однако», «например» are `ADV`, «бы» is `AUX` and so on (see [Parts of speech and features](analysis.md#ud)). Tokens outside the dictionary: `NUMB` - `NUM` with `NumForm=Digit`, `ROMN` - `ADJ` with `NumForm=Roman`, `LATN` - `X` with `Foreign=Yes`, `PNCT` - `PUNCT` or `SYM` (see [Tokens outside the dictionary](analysis.md#rules)).
+Some words get their part of speech by the SynTagRus conventions: the parenthetical «однако», «например» are `ADV`, «бы» is `AUX` and so on (see [Parts of speech and features](analysis.md#ud)). Tokens outside the dictionary: `NUMB` - `NUM` with `NumForm=Digit`, `ROMN` - `ADJ` with `NumForm=Roman`, `LATN` - `X` with `Foreign=Yes`, `PNCT` - `PUNCT` or `SYM`, `UNKN` - `X` without features (see [Tokens outside the dictionary](analysis.md#rules)).
 
 ## Grammemes { #grammemes }
 

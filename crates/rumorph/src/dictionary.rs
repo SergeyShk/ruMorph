@@ -296,8 +296,13 @@ impl Dictionary {
     /// сливаются в один с суммой вероятностей и пометами более вероятного. Токен, которого нет
     /// в словаре, разбирается по правилам (`Source::Rule`), а незнакомое слово кириллицей
     /// угадывается (`Source::Guess`): слово через дефис - по последней части, слово с известной
-    /// приставкой - по слову без нее, остальное - по окончанию
+    /// приставкой - по слову без нее, остальное - по окончанию. Токен, который не разобрался,
+    /// получает запасной разбор `X`; пустой список - только у токена с пробелом, управляющим
+    /// или невидимым символом
     pub fn analyze(&self, word: &str) -> Vec<Analysis> {
+        if let Some(normal) = normalized_input(word) {
+            return self.analyze(&normal);
+        }
         let mut analyses = self.merge(self.candidates(word));
         if !analyses.is_empty() {
             self.reweight_numerals(&mut analyses);
@@ -311,7 +316,11 @@ impl Dictionary {
         if !analyses.is_empty() {
             return analyses;
         }
-        self.guess(word)
+        let analyses = self.guess(word);
+        if !analyses.is_empty() {
+            return analyses;
+        }
+        self.fallback(word)
     }
 
     /// Разборы словаря до слияния с вероятностями P(тег | словоформа); без частот вероятности нулевые
@@ -828,6 +837,7 @@ impl Dictionary {
 
     /// Есть ли словоформа в словаре
     pub fn is_known(&self, word: &str) -> bool {
+        let word = normalized_input(word).unwrap_or_else(|| word.to_owned());
         !self.lookup(&word.to_lowercase()).is_empty()
     }
 
@@ -989,6 +999,34 @@ struct Preferences {
     animate: Option<(usize, u16)>,
     first_person: Option<(usize, u16)>,
     inclusive: Option<u16>,
+}
+
+/// Слово в составленной записи и с обычным дефисом: «и» со знаком краткой и «е» с диерезисом
+/// (разложенный Unicode, NFD) - «й» и «ё», неразрывный дефис и дефис U+2010 - «-»; `None`, если
+/// менять нечего
+fn normalized_input(word: &str) -> Option<String> {
+    if !word.contains(['\u{306}', '\u{308}', '\u{2010}', '\u{2011}']) {
+        return None;
+    }
+    let mut normal = String::with_capacity(word.len());
+    for c in word.chars() {
+        let composed = match (normal.chars().last(), c) {
+            (Some('и'), '\u{306}') => Some('й'),
+            (Some('И'), '\u{306}') => Some('Й'),
+            (Some('е'), '\u{308}') => Some('ё'),
+            (Some('Е'), '\u{308}') => Some('Ё'),
+            _ => None,
+        };
+        match (composed, c) {
+            (Some(letter), _) => {
+                normal.pop();
+                normal.push(letter);
+            }
+            (None, '\u{2010}' | '\u{2011}') => normal.push('-'),
+            (None, c) => normal.push(c),
+        }
+    }
+    (normal != word).then_some(normal)
 }
 
 /// Совпадают ли написания с точностью до «е» на месте «ё»
@@ -1651,8 +1689,8 @@ mod tests {
         assert_eq!(summary, [("зумова", "зумов", Source::Guess)]);
         assert_eq!(dict.ud_tags()[usize::from(analyses[0].ud)].pos, "NOUN");
         assert_eq!(dict.analyze("зума")[0].lemma, "зум");
-        assert!(dict.analyze("зумы").is_empty());
-        assert!(dict.analyze("зумова1").is_empty());
+        assert_eq!(dict.analyze("зумы"), dict.fallback("зумы"));
+        assert_eq!(dict.analyze("зумова1"), dict.fallback("зумова1"));
     }
 
     #[test]
@@ -1678,7 +1716,7 @@ mod tests {
             .map(|form| form.word)
             .collect();
         assert_eq!(forms, ["Зумов", "Зумова"]);
-        assert!(dict.analyze("ЗуМова").is_empty());
+        assert_eq!(dict.analyze("ЗуМова"), dict.fallback("ЗуМова"));
     }
 
     #[test]
@@ -1805,7 +1843,7 @@ mod tests {
             let mut sections = format::read(&data).unwrap();
             sections.guess_records = records;
             let dict = Dictionary::from_bytes(&format::write(&sections)).unwrap();
-            assert!(dict.analyze("зума").is_empty());
+            assert_eq!(dict.analyze("зума"), dict.fallback("зума"));
         }
     }
 
@@ -1998,9 +2036,9 @@ mod tests {
     #[test]
     fn unknown_words() {
         let dict = dictionary();
-        assert!(dict.analyze("вайб").is_empty());
+        assert_eq!(dict.analyze("вайб"), dict.fallback("вайб"));
         assert!(dict.analyze("").is_empty());
-        assert!(dict.analyze("ежаа").is_empty());
+        assert_eq!(dict.analyze("ежаа"), dict.fallback("ежаа"));
         assert!(!dict.is_known("вайб"));
         assert!(dict.is_known("Еж"));
     }
@@ -2090,7 +2128,7 @@ mod tests {
             let mut sections = format::read(&data).unwrap();
             sections.records = records;
             let dict = Dictionary::from_bytes(&format::write(&sections)).unwrap();
-            assert!(dict.analyze("кот").is_empty());
+            assert_eq!(dict.analyze("кот"), dict.fallback("кот"));
         }
     }
 
