@@ -108,10 +108,10 @@ pip install rumorph
 | `actv`, `pssv` | `Voice`: `Act`, `Pass`; у возвратных глаголов - `Mid` |
 | `Name`, `Surn`, `Patr`, `Geox`, `Orgn`, `Trad` | `NameType`: `Giv`, `Sur`, `Pat`, `Geo`, `Com`, `Pro`; у прилагательных - пометы `labels` |
 | `Supr` | `Degree=Sup` |
-| `Abbr` | `Abbr=Yes` |
+| `Abbr` | `Abbr=Yes`; у склоняемых аббревиатур («вуз») - помета `labels` |
 | `Abbr` и `Anum` вместе («1-го», «90-х») | `NumType=Ord`, `NumForm=Combi`, без `Abbr` |
 | `Poss` | `Poss=Yes`; у прилагательных - помета `labels` |
-| `Fixd` | у существительных - `InflClass=Ind`, у остальных слов - помета `labels` |
+| `Fixd` | у существительных, кроме аббревиатур, - `InflClass=Ind`, у остальных слов - помета `labels` |
 | `Apro` | часть речи `DET` |
 | `Dmns`, `Ques` («там», «где») | `PronType`: `Dem`, `Rel`, `Int` |
 | `Anum` у слов («первый»), `GNdr` | нет |
