@@ -880,6 +880,10 @@
 <td>аббревиатуры капсом: «НКО»</td>
 <td><code>PROPN</code> или <code>NOUN</code> с <code>Abbr=Yes</code></td>
 </tr>
+<tr>
+<td>наречия «по-бурятски», «по-молодому»</td>
+<td><code>ADV</code> с <code>Degree=Pos</code></td>
+</tr>
 </tbody>
 </table>
 <p>Доли неоднозначных разборов взяты из частот в SynTagRus. Токен с пробелом (кроме числа), управляющим или невидимым символом разборов не получает.</p>
@@ -891,7 +895,9 @@
 <span class="o">&gt;&gt;&gt;</span> <span class="n">guess</span><span class="o">.</span><span class="n">lemma</span><span class="p">,</span> <span class="n">guess</span><span class="o">.</span><span class="n">pos</span><span class="p">,</span> <span class="n">guess</span><span class="o">.</span><span class="n">feats</span><span class="p">[</span><span class="s2">"NameType"</span><span class="p">],</span> <span class="n">guess</span><span class="o">.</span><span class="n">inflect</span><span class="p">(</span><span class="n">Case</span><span class="o">=</span><span class="s2">"Dat"</span><span class="p">)</span>
 <span class="p">(</span><span class="s1">'мартов'</span><span class="p">,</span> <span class="s1">'PROPN'</span><span class="p">,</span> <span class="s1">'Sur'</span><span class="p">,</span> <span class="s1">'Мартову'</span><span class="p">)</span>
 </code></pre></div>
-<p>Слово в нижнем регистре угадывается как нарицательное, слово с заглавной буквы - в основном как имя собственное: фамилия, имя, топоним. У угаданного разбора есть формы, с ним работают <code>forms</code>, <code>inflect</code> и <code>agree</code>; формы сохраняют заглавную букву. Слова через дефис и в смешанном регистре («ЗуМер») пока не угадываются.</p>
+<p>Слово в нижнем регистре угадывается как нарицательное, слово с заглавной буквы - в основном как имя собственное: фамилия, имя, топоним. Слова в смешанном регистре («ЗуМер») не угадываются.</p>
+<p>Слово через дефис разбирается по последней части: «крэш-тестов» - «крэш-тест», «Мак-Киннона» - «мак-киннон»; если последняя часть - частица («сколь-нибудь»), то по первой. Слово с известной приставкой - «эко», «анти», «супер», «микро» и другими - разбирается по словарному слову без нее: «экодомов» - «экодом». Такие разборы тоже угаданные.</p>
+<p>У угаданного разбора есть формы, с ним работают <code>forms</code>, <code>inflect</code> и <code>agree</code>; формы сохраняют заглавные буквы: «Мак-Киннона» в дательном - «Мак-Киннону», «ПИН-КОДОВ» - «ПИН-КОДАМ». Исключение - разбор с частицей («сколь-нибудь»): у него форм нет, <code>forms</code> дает только его самого.</p>
 <h2 id="lists">Списки слов<a class="headerlink" href="#lists" title="Permanent link">&para;</a></h2>
 <p><code>analyze_many</code> разбирает набор словоформ, <code>lemmatize</code> возвращает леммы их самых вероятных разборов:</p>
 <div class="highlight"><pre><span></span><code><span class="o">&gt;&gt;&gt;</span> <span class="n">morph</span><span class="o">.</span><span class="n">lemmatize</span><span class="p">([</span><span class="s2">"Мы"</span><span class="p">,</span> <span class="s2">"стали"</span><span class="p">,</span> <span class="s2">"друзьями"</span><span class="p">])</span>

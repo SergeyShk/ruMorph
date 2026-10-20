@@ -880,6 +880,10 @@
 <td>capitalized abbreviations: «НКО»</td>
 <td><code>PROPN</code> or <code>NOUN</code> with <code>Abbr=Yes</code></td>
 </tr>
+<tr>
+<td>adverbs «по-бурятски», «по-молодому»</td>
+<td><code>ADV</code> with <code>Degree=Pos</code></td>
+</tr>
 </tbody>
 </table>
 <p>The shares of ambiguous analyses come from the frequencies in SynTagRus. A token with whitespace (except a number), a control or an invisible character gets no analyses.</p>
@@ -891,7 +895,9 @@
 <span class="o">&gt;&gt;&gt;</span> <span class="n">guess</span><span class="o">.</span><span class="n">lemma</span><span class="p">,</span> <span class="n">guess</span><span class="o">.</span><span class="n">pos</span><span class="p">,</span> <span class="n">guess</span><span class="o">.</span><span class="n">feats</span><span class="p">[</span><span class="s2">"NameType"</span><span class="p">],</span> <span class="n">guess</span><span class="o">.</span><span class="n">inflect</span><span class="p">(</span><span class="n">Case</span><span class="o">=</span><span class="s2">"Dat"</span><span class="p">)</span>
 <span class="p">(</span><span class="s1">'мартов'</span><span class="p">,</span> <span class="s1">'PROPN'</span><span class="p">,</span> <span class="s1">'Sur'</span><span class="p">,</span> <span class="s1">'Мартову'</span><span class="p">)</span>
 </code></pre></div>
-<p>A lowercase word is guessed as a common word, a capitalized word mostly as a proper noun: a surname, a given name, a place. A guessed analysis has forms, and <code>forms</code>, <code>inflect</code> and <code>agree</code> work with it; the forms keep the capital letter. Hyphenated words and words in mixed case («ЗуМер») are not guessed yet.</p>
+<p>A lowercase word is guessed as a common word, a capitalized word mostly as a proper noun: a surname, a given name, a place. Words in mixed case («ЗуМер») are not guessed.</p>
+<p>A hyphenated word is analyzed by its last part: «крэш-тестов» - «крэш-тест», «Мак-Киннона» - «мак-киннон»; if the last part is a particle («сколь-нибудь»), by the first one. A word with a known prefix - «эко», «анти», «супер», «микро» and others - is analyzed by the dictionary word without it: «экодомов» - «экодом». These analyses are guessed too.</p>
+<p>A guessed analysis has forms, and <code>forms</code>, <code>inflect</code> and <code>agree</code> work with it; the forms keep the capital letters: «Мак-Киннона» in the dative is «Мак-Киннону», «ПИН-КОДОВ» is «ПИН-КОДАМ». The exception is an analysis with a particle («сколь-нибудь»): it has no forms, <code>forms</code> gives only the analysis itself.</p>
 <h2 id="lists">Lists of words<a class="headerlink" href="#lists" title="Permanent link">&para;</a></h2>
 <p><code>analyze_many</code> analyzes a collection of word forms, and <code>lemmatize</code> returns the lemmas of their most probable analyses:</p>
 <div class="highlight"><pre><span></span><code><span class="o">&gt;&gt;&gt;</span> <span class="n">morph</span><span class="o">.</span><span class="n">lemmatize</span><span class="p">([</span><span class="s2">"Мы"</span><span class="p">,</span> <span class="s2">"стали"</span><span class="p">,</span> <span class="s2">"друзьями"</span><span class="p">])</span>
