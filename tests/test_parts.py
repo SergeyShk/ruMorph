@@ -33,6 +33,46 @@ def test_hyphenated(morph, word, lemma, pos, case):
     assert math.isclose(sum(a.prob for a in morph.analyze(word)), 1.0)
 
 
+@pytest.mark.parametrize(
+    ("word", "spelled", "lemma"),
+    [
+        ("грязно-желтый", "грязно-жёлтый", "грязно-жёлтый"),
+        ("бело-зеленого", "бело-зелёного", "бело-зелёный"),
+        ("бизнес-счет", "бизнес-счёт", "бизнес-счёт"),
+        ("экс-королем", "экс-королём", "экс-король"),
+    ],
+)
+def test_yo_in_dictionary_part(morph, word, spelled, lemma):
+    first = morph.analyze(word)[0]
+    assert (first.word, first.lemma) == (spelled, lemma)
+    assert first.forms()
+
+
+def test_parts_probabilities(morph):
+    # У словарных разборов части нет частот: доли поровну, а не нули
+    for word in ("суперсем", "квази-совершенного"):
+        assert math.isclose(sum(a.prob for a in morph.analyze(word)), 1.0)
+
+
+def test_aspect_prefixes(morph):
+    # Глагол с «про» и «недо» меняет вид, поэтому угадывается по окончанию, а не по слову без приставки
+    for word in ("проплатил", "прозреют"):
+        assert morph.analyze(word)[0].feats["Aspect"] == "Perf"
+
+
+@pytest.mark.parametrize("word", ["5-Б", "10-А", "9-В", "кто-то-то", "кто" + "-то" * 12000])
+def test_no_parts(morph, word):
+    assert morph.analyze(word) == []
+
+
+def test_capitalized_forms(morph):
+    pin = morph.analyze("ПИН-КОДОВ")[0]
+    assert pin.inflect(Case="Dat") == "ПИН-КОДАМ"
+    # У разбора с частицей форм нет: только он сам
+    particle = morph.analyze("этакому-то")[0]
+    assert [form.word for form in particle.forms()] == ["этакому-то"]
+
+
 def test_hyphenated_forms(morph):
     tests = morph.analyze("крэш-тестов")[0]
     assert [form.word for form in tests.forms()][:3] == ["крэш-тест", "крэш-теста", "крэш-тесту"]

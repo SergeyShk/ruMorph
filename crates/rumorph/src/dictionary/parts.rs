@@ -75,6 +75,9 @@ const PREFIXES: &[&str] = &[
 /// Части речи, которые образуются с приставками
 const OPEN_CLASSES: &[&str] = &["NOUN", "ADJ", "VERB", "ADV"];
 
+/// Приставки, с которыми глагол меняет вид («платил» - «проплатил»): глаголы без них не берутся
+const ASPECT_PREFIXES: &[&str] = &["про", "недо"];
+
 impl Dictionary {
     /// Разборы незнакомого слова по частям; пустой список, если части не разобрались
     pub(super) fn parts(&self, word: &str) -> Vec<Analysis> {
@@ -88,9 +91,9 @@ impl Dictionary {
     /// Слово через дефис: разборы последней части с основой, продленной первой частью,
     /// или разборы первой части, если последняя - частица
     fn hyphenated(&self, word: &str) -> Vec<Analysis> {
-        let lower = word.to_lowercase();
+        let lowered = word.to_lowercase();
         let (Some((left, right)), Some((left_lower, right_lower))) =
-            (word.rsplit_once('-'), lower.rsplit_once('-'))
+            (word.rsplit_once('-'), lowered.rsplit_once('-'))
         else {
             return Vec::new();
         };
@@ -102,10 +105,19 @@ impl Dictionary {
                 .all(|c| cyrillic(c) || c.is_ascii_digit() || c == '-')
             || right.is_empty()
             || !right.chars().all(cyrillic)
+            // Число с литерой («5-Б», «10-А») - не слово из частей
+            || (left.bytes().all(|b| b.is_ascii_digit()) && right.chars().count() < 3)
         {
             return Vec::new();
         }
         if PARTICLES.contains(&right_lower) {
+            // Частица одна: «кто-то-то» не разбирается, иначе цепочка частиц - глубокая рекурсия
+            if left_lower
+                .rsplit_once('-')
+                .is_some_and(|(_, last)| PARTICLES.contains(&last))
+            {
+                return Vec::new();
+            }
             let analyses = self
                 .analyze(left)
                 .into_iter()
@@ -123,15 +135,18 @@ impl Dictionary {
             .analyze(right)
             .into_iter()
             .filter_map(|analysis| {
+                // Последняя часть - в написании разбора: с «ё» из словаря («грязно-жёлтый»)
+                let word = format!("{left}-{}", with_yo(right, &analysis.word));
                 let lemma = match analysis.entry {
                     Some(entry) => {
+                        let lower = word.to_lowercase();
                         let lexeme = self.lexeme(entry.table, entry.form, &lower)?;
                         self.spell(&lexeme, lexeme.lemma_form(entry.form))
                     }
                     None => format!("{left_lower}-{}", analysis.lemma),
                 };
                 Some(Analysis {
-                    word: word.to_owned(),
+                    word,
                     lemma,
                     source: Source::Guess,
                     ..analysis
@@ -158,14 +173,21 @@ impl Dictionary {
                 .merge(self.candidates(rest))
                 .into_iter()
                 .filter(|analysis| {
-                    OPEN_CLASSES.contains(&self.ud_tags[usize::from(analysis.ud)].pos.as_str())
+                    let pos = self.ud_tags[usize::from(analysis.ud)].pos.as_str();
+                    OPEN_CLASSES.contains(&pos)
+                        && !(pos == "VERB" && ASPECT_PREFIXES.contains(prefix))
                 })
                 .filter_map(|analysis| {
                     let entry = analysis.entry?;
-                    let lexeme = self.lexeme(entry.table, entry.form, word)?;
+                    // Слово без приставки - в написании словаря: с «ё» («экс-королём»)
+                    let word = format!("{prefix}{}", with_yo(rest, &analysis.word));
+                    let lemma = {
+                        let lexeme = self.lexeme(entry.table, entry.form, &word)?;
+                        self.spell(&lexeme, lexeme.lemma_form(entry.form))
+                    };
                     Some(Analysis {
-                        word: word.to_owned(),
-                        lemma: self.spell(&lexeme, lexeme.lemma_form(entry.form)),
+                        word,
+                        lemma,
                         source: Source::Guess,
                         ..analysis
                     })
@@ -179,14 +201,46 @@ impl Dictionary {
     }
 }
 
-/// Разборы с вероятностями, нормированными к единице, по убыванию вероятности
+/// Разборы с вероятностями, нормированными к единице (при нулевой сумме - поровну),
+/// по убыванию вероятности
 fn normalized(mut analyses: Vec<Analysis>) -> Vec<Analysis> {
     let total: f64 = analyses.iter().map(|analysis| analysis.prob).sum();
-    if total > 0.0 {
-        for analysis in &mut analyses {
-            analysis.prob /= total;
-        }
+    let count = analyses.len() as f64;
+    for analysis in &mut analyses {
+        analysis.prob = if total > 0.0 {
+            analysis.prob / total
+        } else {
+            1.0 / count
+        };
     }
     analyses.sort_by(|a, b| b.prob.total_cmp(&a.prob));
     analyses
+}
+
+/// Часть слова как в тексте, но с «ё» на местах «ё» в написании разбора
+fn with_yo(text: &str, spelled: &str) -> String {
+    if text.chars().count() != spelled.chars().count() {
+        return text.to_owned();
+    }
+    text.chars()
+        .zip(spelled.chars())
+        .map(|pair| match pair {
+            ('е', 'ё' | 'Ё') => 'ё',
+            ('Е', 'ё' | 'Ё') => 'Ё',
+            (letter, _) => letter,
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn yo_from_spelling() {
+        assert_eq!(with_yo("желтый", "жёлтый"), "жёлтый");
+        assert_eq!(with_yo("ЖЕЛТЫЙ", "жёлтый"), "ЖЁЛТЫЙ");
+        assert_eq!(with_yo("кот", "кот"), "кот");
+        assert_eq!(with_yo("кот", "котёнок"), "кот");
+    }
 }

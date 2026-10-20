@@ -872,9 +872,15 @@ fn check_paradigms(sections: &Sections) -> Result<(), Error> {
     Ok(())
 }
 
-/// Форма с заглавной первой буквой, если с нее начинается слово, от которого строились формы
-/// в нижнем регистре («Покринжовее» → «Кринжового»)
+/// Форма в регистре слова, от которого формы строились в нижнем регистре: капсом, если слово
+/// капсом («ПИН-КОДАМ»), иначе с заглавной первой буквой («Покринжовее» → «Кринжового»)
 fn capitalized_like(original: &str, form: Analysis) -> Analysis {
+    if original.chars().any(char::is_alphabetic) && !original.chars().any(char::is_lowercase) {
+        return Analysis {
+            word: form.word.to_uppercase(),
+            ..form
+        };
+    }
     let upper = original.chars().next().is_some_and(char::is_uppercase);
     let mut letters = form.word.chars();
     match letters.next() {

@@ -99,10 +99,10 @@ def test_numeral_with_ending(morph):
     assert "Gen" in {a.feats["Case"] for a in analyses}
     assert [form.word for form in analyses[0].forms()][:3] == ["2005-й", "2005-го", "2005-му"]
     assert analyses[0].inflect(Case="Loc", Gender="Masc") == "2005-м"
-    # Окончание заглавными: формы строятся по словоформе в нижнем регистре
+    # Окончание заглавными: формы строятся в нижнем регистре и пишутся капсом, как слово
     upper = morph.analyze("2005-ГО")[0]
-    assert [form.word for form in upper.forms()][:2] == ["2005-й", "2005-го"]
-    assert (upper.inflect(Case="Dat"), upper.inflect()) == ("2005-му", "2005-го")
+    assert [form.word for form in upper.forms()][:2] == ["2005-Й", "2005-ГО"]
+    assert (upper.inflect(Case="Dat"), upper.inflect()) == ("2005-МУ", "2005-ГО")
     assert {a.lemma for a in morph.analyze("1990-х")} == {"1990-й"}
     # Короткое окончание без образца - количественное
     assert summary(morph, "5-ти") == [

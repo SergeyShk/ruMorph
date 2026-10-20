@@ -71,7 +71,7 @@ Numbers, punctuation, Latin words and abbreviations are analyzed by rules, their
 | initials: «А.» | `PROPN` with `Abbr=Yes`: a given name, a patronymic or a surname |
 | abbreviations with a dot: «т.», «им.» | the analyses of the dictionary abbreviation without the dot |
 | capitalized abbreviations: «НКО» | `PROPN` or `NOUN` with `Abbr=Yes` |
-| adverbs «по-русски», «по-новому» | `ADV` with `Degree=Pos` |
+| adverbs «по-бурятски», «по-молодому» | `ADV` with `Degree=Pos` |
 
 The shares of ambiguous analyses come from the frequencies in SynTagRus. A token with whitespace (except a number), a control or an invisible character gets no analyses.
 
@@ -91,7 +91,7 @@ A lowercase word is guessed as a common word, a capitalized word mostly as a pro
 
 A hyphenated word is analyzed by its last part: «крэш-тестов» - «крэш-тест», «Мак-Киннона» - «мак-киннон»; if the last part is a particle («сколь-нибудь»), by the first one. A word with a known prefix - «эко», «анти», «супер», «микро» and others - is analyzed by the dictionary word without it: «экодомов» - «экодом». These analyses are guessed too.
 
-A guessed analysis has forms, and `forms`, `inflect` and `agree` work with it; the forms keep the capital letters: «Мак-Киннона» in the dative is «Мак-Киннону».
+A guessed analysis has forms, and `forms`, `inflect` and `agree` work with it; the forms keep the capital letters: «Мак-Киннона» in the dative is «Мак-Киннону», «ПИН-КОДОВ» is «ПИН-КОДАМ». The exception is an analysis with a particle («сколь-нибудь»): it has no forms, `forms` gives only the analysis itself.
 
 ## Lists of words { #lists }
 
