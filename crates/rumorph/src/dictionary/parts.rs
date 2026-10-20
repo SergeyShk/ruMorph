@@ -118,6 +118,7 @@ impl Dictionary {
             {
                 return Vec::new();
             }
+            // Разбор первой части с частицей: формы строятся по ней (`without_particle`)
             let analyses = self
                 .analyze(left)
                 .into_iter()
@@ -125,11 +126,10 @@ impl Dictionary {
                     word: word.to_owned(),
                     lemma: format!("{}-{right_lower}", analysis.lemma),
                     source: Source::Guess,
-                    entry: None,
                     ..analysis
                 })
                 .collect();
-            return normalized(analyses);
+            return normalized(self.merge(analyses));
         }
         let analyses = self
             .analyze(right)
@@ -154,6 +154,26 @@ impl Dictionary {
             })
             .collect();
         normalized(analyses)
+    }
+
+    /// Угаданный разбор слова с частицей через дефис («смотри-ка») без частицы и частица
+    /// в написании слова: формы строятся по первой части. У словарных слов («кто-то») частица -
+    /// часть основы
+    pub(super) fn without_particle(&self, analysis: &Analysis) -> Option<(Analysis, String)> {
+        if analysis.source != Source::Guess {
+            return None;
+        }
+        let entry = analysis.entry?;
+        let (base, particle) = split_particle(&analysis.word)?;
+        let lower = particle.to_lowercase();
+        self.lexeme(entry.table, entry.form, &base.to_lowercase())?;
+        let lemma = analysis.lemma.strip_suffix(&lower)?.strip_suffix('-')?;
+        let base = Analysis {
+            word: base.to_owned(),
+            lemma: lemma.to_owned(),
+            ..analysis.clone()
+        };
+        Some((base, particle.to_owned()))
     }
 
     /// Слово в нижнем регистре с известной приставкой: разборы словарного слова без приставки,
@@ -230,6 +250,23 @@ fn with_yo(text: &str, spelled: &str) -> String {
             (letter, _) => letter,
         })
         .collect()
+}
+
+/// Слово с частицей через дефис: первая часть и частица в написании слова
+pub(super) fn split_particle(word: &str) -> Option<(&str, &str)> {
+    let (base, particle) = word.rsplit_once('-')?;
+    PARTICLES
+        .contains(&particle.to_lowercase().as_str())
+        .then_some((base, particle))
+}
+
+/// Форма слова с частицей `particle` через дефис: «смотрите» - «смотрите-ка»
+pub(super) fn with_particle(form: Analysis, particle: &str) -> Analysis {
+    Analysis {
+        word: format!("{}-{particle}", form.word),
+        lemma: format!("{}-{}", form.lemma, particle.to_lowercase()),
+        ..form
+    }
 }
 
 #[cfg(test)]

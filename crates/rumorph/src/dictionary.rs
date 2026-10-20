@@ -13,6 +13,8 @@ mod guess;
 mod parts;
 mod rules;
 
+use parts::with_particle;
+
 /// Откуда взят разбор
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Source {
@@ -154,6 +156,8 @@ pub struct Dictionary {
     rule_tags: rules::Tags,
     /// Номера частей речи и помет в `ud_codes`
     code_ids: HashMap<String, u16>,
+    /// Коды признаков и помет, которые `closest` проверяет у каждой формы
+    preferences: Preferences,
     features: BTreeMap<String, BTreeSet<String>>,
     prefixes: Vec<String>,
     suffixes: Vec<String>,
@@ -219,6 +223,15 @@ impl Dictionary {
                 .insert(value.clone());
         }
         let (ud_codes, code_ids) = codes(&ud_tags, &features);
+        let code = |name: &str, value: &str| feature_code(&features, name, value);
+        let preferences = Preferences {
+            infinitive: code("VerbForm", "Inf"),
+            finite: code("VerbForm", "Fin"),
+            short: code("Variant", "Short"),
+            animate: code("Animacy", "Anim"),
+            first_person: code("Person", "1"),
+            inclusive: code_ids.get("incl").copied(),
+        };
         let fst_error = |err: fst::Error| Error::Format(err.to_string());
         let words = Map::new(sections.words).map_err(fst_error)?;
         let probabilities = Map::new(sections.probabilities).map_err(fst_error)?;
@@ -237,6 +250,7 @@ impl Dictionary {
             ud_codes,
             rule_tags,
             code_ids,
+            preferences,
             features,
             prefixes: sections.prefixes,
             suffixes: sections.suffixes,
@@ -388,6 +402,17 @@ impl Dictionary {
     /// в словаре, у угаданного или разобранного по правилу проверяется только, что словоформа
     /// подходит к форме таблицы
     pub fn analysis(&self, word: &str, entry: Entry, source: Source) -> Option<Analysis> {
+        // Угаданное слово с частицей («выпивал-то»): форма - у первой части
+        if source == Source::Guess
+            && let Some((base, particle)) = parts::split_particle(word)
+            && self
+                .lexeme(entry.table, entry.form, &base.to_lowercase())
+                .is_some()
+        {
+            return self
+                .analysis(base, entry, source)
+                .map(|analysis| with_particle(analysis, particle));
+        }
         // Лемма - в нижнем регистре, как у угадывания; словоформа - как сохранена
         let lower = word.to_lowercase();
         let lexeme = self.lexeme(entry.table, entry.form, &lower)?;
@@ -424,6 +449,13 @@ impl Dictionary {
     ///
     /// Формы, которые совпали в написании, части речи и признаках, сливаются, как в `analyze`
     pub fn forms(&self, analysis: &Analysis) -> Vec<Analysis> {
+        if let Some((base, particle)) = self.without_particle(analysis) {
+            return self
+                .forms(&base)
+                .into_iter()
+                .map(|form| with_particle(form, &particle))
+                .collect();
+        }
         if let Some(lower) = self.lowercased(analysis) {
             return self
                 .forms(&lower)
@@ -456,6 +488,11 @@ impl Dictionary {
     /// Форма лексемы с признаками `feats`; из подходящих - ближайшая к разбору по части речи,
     /// остальным признакам и пометам, при равенстве - первая в парадигме
     pub fn inflect(&self, analysis: &Analysis, feats: &[(&str, &str)]) -> Option<Analysis> {
+        if let Some((base, particle)) = self.without_particle(analysis) {
+            return self
+                .inflect(&base, feats)
+                .map(|form| with_particle(form, &particle));
+        }
         if let Some(lower) = self.lowercased(analysis) {
             return self
                 .inflect(&lower, feats)
@@ -484,6 +521,11 @@ impl Dictionary {
     /// родительного падежа множественного числа берется счетная («5 вольт»). У слов без
     /// единственного числа («сутки») берется множественное: «1 сутки», «2 суток»
     pub fn agree(&self, analysis: &Analysis, number: u64) -> Option<Analysis> {
+        if let Some((base, particle)) = self.without_particle(analysis) {
+            return self
+                .agree(&base, number)
+                .map(|form| with_particle(form, &particle));
+        }
         if let Some(lower) = self.lowercased(analysis) {
             return self
                 .agree(&lower, number)
@@ -503,9 +545,17 @@ impl Dictionary {
         };
         let (lexeme, forms) = self.lexeme_forms(analysis)?;
         let nominal = matches!(tag.pos.as_str(), "NOUN" | "PROPN");
+        // Женские фамилии на -ова, -ина («Иванова») склоняются как краткие прилагательные:
+        // «две Ивановы»; несклоняемые («Абрамович») и на согласный («Брик») - нет
+        let female_surname = feat("NameType") == Some("Sur")
+            && feat("Gender") == Some("Fem")
+            && feat("InflClass").is_none()
+            && ["ова", "ева", "ёва", "ина", "ына"]
+                .iter()
+                .any(|ending| analysis.lemma.ends_with(ending));
         let adjectival = matches!(tag.pos.as_str(), "ADJ" | "DET")
             || feat("VerbForm") == Some("Part")
-            || (nominal && self.adjectival_declension(&lexeme, &forms));
+            || (nominal && (female_surname || self.adjectival_declension(&lexeme, &forms)));
         if !adjectival && !nominal {
             return None;
         }
@@ -567,9 +617,11 @@ impl Dictionary {
     }
 
     /// Форма из `forms` с признаками `feats`, ближайшая к разбору: больше общих с ним части речи,
-    /// признаков и помет, а также желательных помет `prefer`, затем меньше лишних помет и краткой
-    /// формы, если ее не просили («кошкой», а не «кошкою»; «мешаемый», а не «мешаем»), затем
-    /// раньше в парадигме - поэтому без рода и числа берется мужской род единственного числа
+    /// признаков и помет, а также желательных помет `prefer`, затем меньше лишних помет и того,
+    /// чего не просили, - краткой формы, одушевленности, инклюзива («кошкой», а не «кошкою»;
+    /// «новый», а не «нового»; «сделай», а не «сделаем»), затем ближе по написанию к разбору,
+    /// если у его формы есть вариант написания («листьев», а не «листов»), затем раньше
+    /// в парадигме - поэтому без рода и числа берется мужской род единственного числа
     fn closest(
         &self,
         analysis: &Analysis,
@@ -584,6 +636,19 @@ impl Dictionary {
             .collect::<Option<Vec<_>>>()?;
         let current = self.ud_codes.get(usize::from(analysis.ud))?;
         let mut wanted = current.values.clone();
+        let preferences = &self.preferences;
+        // У инфинитива, который сам не подходит под запрос, без запроса формы глагола желательна
+        // личная форма, а не причастие
+        if let (Some((form_name, infinitive)), Some((_, finite))) =
+            (preferences.infinitive, preferences.finite)
+            && wanted[form_name] == infinitive
+            && required.iter().all(|&(name, _)| name != form_name)
+            && required
+                .iter()
+                .any(|&(name, value)| current.values[name] != value)
+        {
+            wanted[form_name] = finite;
+        }
         for &(name, value) in &required {
             wanted[name] = value;
         }
@@ -593,8 +658,19 @@ impl Dictionary {
                 labels.push(label);
             }
         }
-        let short = self.code("Variant", "Short");
-        let mut best: Option<(u16, (usize, Reverse<usize>))> = None;
+        let unwanted = |feature: Option<(usize, u16)>, codes: &Codes| {
+            feature
+                .is_some_and(|(index, code)| codes.values[index] == code && wanted[index] != code)
+        };
+        // Форма разбора с вариантом написания («листья» и «листы»): из равных берется ближайшая
+        // по написанию
+        let own = lexeme.affixes(analysis.entry.map_or(0, |entry| entry.form));
+        let twin = forms
+            .iter()
+            .any(|&form| lexeme.ud(form) == analysis.ud && lexeme.affixes(form) != own);
+        // Оценка формы: общее с разбором, лишнее, общее начало написания
+        type Score = (usize, Reverse<usize>, usize);
+        let mut best: Option<(u16, Score)> = None;
         for &form in forms {
             let codes = &self.ud_codes[usize::from(lexeme.ud(form))];
             if required
@@ -618,10 +694,24 @@ impl Dictionary {
                 .iter()
                 .filter(|label| !labels.contains(label))
                 .count()
-                + usize::from(short.is_some_and(|(name, value)| {
-                    codes.values[name] == value && wanted[name] != value
+                + usize::from(unwanted(preferences.short, codes))
+                + usize::from(unwanted(preferences.animate, codes))
+                + usize::from(preferences.inclusive.is_some_and(|label| {
+                    codes.labels.contains(&label)
+                        && preferences
+                            .first_person
+                            .is_none_or(|(index, code)| wanted[index] != code)
                 }));
-            let score = (same, Reverse(extra));
+            let common = if twin {
+                self.spell(lexeme, form)
+                    .chars()
+                    .zip(analysis.word.chars())
+                    .take_while(|(a, b)| a == b)
+                    .count()
+            } else {
+                0
+            };
+            let score = (same, Reverse(extra), common);
             if best.is_none_or(|(_, top)| score > top) {
                 best = Some((form, score));
             }
@@ -631,13 +721,7 @@ impl Dictionary {
 
     /// Номер признака в `features` и код значения
     fn code(&self, name: &str, value: &str) -> Option<(usize, u16)> {
-        let (index, (_, values)) = self
-            .features
-            .iter()
-            .enumerate()
-            .find(|(_, (known, _))| *known == name)?;
-        let position = values.iter().position(|known| known == value)?;
-        Some((index, position as u16 + 1))
+        feature_code(&self.features, name, value)
     }
 
     /// Лексема разбора и номера ее форм с той же леммой по порядку
@@ -880,6 +964,31 @@ fn lookup_from<'f>(
         found.insert(0, (prefix + &key[start..], value));
     }
     found
+}
+
+/// Номер признака `name` в `features` и код значения `value`
+fn feature_code(
+    features: &BTreeMap<String, BTreeSet<String>>,
+    name: &str,
+    value: &str,
+) -> Option<(usize, u16)> {
+    let (index, (_, values)) = features
+        .iter()
+        .enumerate()
+        .find(|(_, (known, _))| *known == name)?;
+    let position = values.iter().position(|known| known == value)?;
+    Some((index, position as u16 + 1))
+}
+
+/// Признаки и пометы, которые `closest` берет, только если их просят, и личная форма
+/// для инфинитива
+struct Preferences {
+    infinitive: Option<(usize, u16)>,
+    finite: Option<(usize, u16)>,
+    short: Option<(usize, u16)>,
+    animate: Option<(usize, u16)>,
+    first_person: Option<(usize, u16)>,
+    inclusive: Option<u16>,
 }
 
 /// Совпадают ли написания с точностью до «е» на месте «ё»
@@ -1349,6 +1458,11 @@ mod tests {
             Some("коту")
         );
         assert_eq!(inflect("кот", &[]).as_deref(), Some("кот"));
+        // Одушевленность, которой нет ни в разборе, ни в запросе, не выбирается: «новые», а не «новых»
+        assert_eq!(
+            inflect("новые", &[("Case", "Acc")]).as_deref(),
+            Some("новые")
+        );
         assert_eq!(inflect("кот", &[("Tense", "Past")]), None);
         assert_eq!(inflect("сутки", &[("Number", "Sing")]), None);
         assert_eq!(

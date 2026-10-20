@@ -73,9 +73,17 @@ def test_particle_chain(morph):
 def test_capitalized_forms(morph):
     pin = morph.analyze("ПИН-КОДОВ")[0]
     assert pin.inflect(Case="Dat") == "ПИН-КОДАМ"
-    # У разбора с частицей форм нет: только он сам
+
+
+def test_particle_forms(morph):
+    # Формы слова с частицей - формы первой части с той же частицей
     particle = morph.analyze("этакому-то")[0]
-    assert [form.word for form in particle.forms()] == ["этакому-то"]
+    assert particle.lemma == "этакий-то"
+    assert {"этакий-то", "этакого-то", "этакому-то"} <= {form.word for form in particle.forms()}
+    assert morph.analyze("смотри-ка")[0].inflect(Number="Plur") == "смотрите-ка"
+    assert morph.analyze("Смотри-КА")[0].inflect(Number="Plur") == "Смотрите-КА"
+    # Повторы разборов слова с частицей сливаются
+    assert len(morph.analyze("орешь-то")) == 1
 
 
 def test_hyphenated_forms(morph):
@@ -135,3 +143,19 @@ def test_pickled_parts(morph):
     analyses += morph.analyze("сколь-нибудь") + morph.analyze("ГУ-ВШЭ")
     analyses += analyses[0].forms()
     assert pickle.loads(pickle.dumps(analyses)) == analyses
+
+
+@pytest.mark.parametrize(
+    ("word", "forms"),
+    [("кот-то", ["кот-то", "кота-то", "коту-то"]), ("это-то", ["это-то", "этого-то", "этому-то"])],
+)
+def test_particle_forms_of_dictionary_words(morph, word, forms):
+    # Частица после словарного слова: формы строятся по первой части, а не по целому слову
+    assert [form.word for form in morph.analyze(word)[0].forms()][:3] == forms
+
+
+@pytest.mark.parametrize("word", ["выпивал-то", "Иванова-то", "смотри-ка"])
+def test_particle_forms_pickle(morph, word):
+    forms = [form for analysis in morph.analyze(word) for form in analysis.forms()]
+    assert forms
+    assert pickle.loads(pickle.dumps(forms)) == forms
