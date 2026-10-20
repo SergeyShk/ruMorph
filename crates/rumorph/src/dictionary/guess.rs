@@ -28,6 +28,7 @@ impl Dictionary {
         let mut analyses = Vec::new();
         for &(index, share) in indexes {
             let found = self.guess_in(index, word, &lower);
+            // Формы с нулевым числом словоформ отброшены, поэтому сумма больше нуля
             let total: f64 = found.iter().map(|(_, count)| f64::from(*count)).sum();
             analyses.extend(found.into_iter().map(|(analysis, count)| Analysis {
                 prob: share * f64::from(count) / total,
@@ -42,27 +43,30 @@ impl Dictionary {
     }
 
     /// Разборы по самому длинному окончанию слова, для которого в индексе есть подходящие формы,
-    /// с числом словоформ словаря; словоформа разбора - как в тексте, лемма - в нижнем регистре
+    /// с числом словоформ словаря; словоформа разбора - как в тексте, лемма - в нижнем регистре.
+    /// Окончания в индексе записаны через «е»: «ё» суффикса формы подставляется в словоформу
     fn guess_in(&self, index: GuessIndex, word: &str, lower: &str) -> Vec<(Analysis, u32)> {
         let bounds: Vec<usize> = lower.char_indices().map(|(at, _)| at).collect();
         for length in (1..=GuessIndex::MAX_ENDING.min(bounds.len().saturating_sub(1))).rev() {
-            let ending = &lower[bounds[bounds.len() - length]..];
+            let ending = lower[bounds[bounds.len() - length]..].replace('ё', "е");
             let Some(forms) = self
                 .guesses
-                .get(index.key(ending))
+                .get(index.key(&ending))
                 .and_then(|offset| self.guess_records_at(offset))
             else {
                 continue;
             };
             let found: Vec<(Analysis, u32)> = forms
                 .iter()
+                .filter(|&&[_, count]| count > 0)
                 .filter_map(|&[packed, count]| {
                     let (table, form) = ((packed >> 16) as u16, packed as u16);
-                    let lexeme = self.lexeme(table, form, lower)?;
+                    let (word, lower) = self.with_suffix(table, form, word, lower)?;
+                    let lexeme = self.lexeme(table, form, &lower)?;
                     // Основа слова как в тексте нужна, чтобы формы сохраняли заглавную букву
-                    self.lexeme(table, form, word)?;
+                    self.lexeme(table, form, &word)?;
                     let analysis = Analysis {
-                        word: word.to_owned(),
+                        word,
                         lemma: self.spell(&lexeme, lexeme.lemma_form(form)),
                         ud: lexeme.ud(form),
                         tag: Some(lexeme.tag(form)),
@@ -78,6 +82,32 @@ impl Dictionary {
             }
         }
         Vec::new()
+    }
+
+    /// Словоформа как в тексте и в нижнем регистре, в которых «е» на месте «ё» суффикса формы
+    /// заменена на «ё»; `None`, если слово не кончается суффиксом формы
+    fn with_suffix(
+        &self,
+        table: u16,
+        form: u16,
+        word: &str,
+        lower: &str,
+    ) -> Option<(String, String)> {
+        let start = *self.table_offsets.get(usize::from(table))? as usize;
+        let forms = self.paradigm(*self.tables.get(start)? as u16)?;
+        if usize::from(form) >= forms.len() / 3 {
+            return None;
+        }
+        let suffix = self.suffixes[usize::from(forms[usize::from(form)])].as_str();
+        if lower.ends_with(suffix) {
+            return Some((word.to_owned(), lower.to_owned()));
+        }
+        if !suffix.contains('ё') || !lower.ends_with(&suffix.replace('ё', "е")) {
+            return None;
+        }
+        // «е» и «ё» занимают одинаково байт, поэтому граница суффикса та же
+        let replace = |text: &str| [&text[..text.len() - suffix.len()], suffix].concat();
+        Some((replace(word), replace(lower)))
     }
 
     /// Список форм для угадывания: пары `(таблица << 16) | форма`, число словоформ

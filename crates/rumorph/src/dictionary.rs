@@ -370,7 +370,6 @@ impl Dictionary {
         // Лемма - в нижнем регистре, как у угадывания; словоформа - как сохранена
         let lower = word.to_lowercase();
         let lexeme = self.lexeme(entry.table, entry.form, &lower)?;
-        self.lexeme(entry.table, entry.form, word)?;
         Some(Analysis {
             word: word.to_owned(),
             lemma: self.spell(&lexeme, lexeme.lemma_form(entry.form)),
@@ -667,8 +666,23 @@ impl Dictionary {
 
     /// Разбор формы лексемы разбора `analysis`
     fn form(&self, analysis: &Analysis, lexeme: &Lexeme, form: u16) -> Analysis {
+        let (prefix, suffix) = lexeme.affixes(form);
+        let prefix = self.prefixes[prefix].as_str();
+        let mut stem = lexeme.stem.chars();
+        // У слова с заглавной буквы заглавной становится приставка формы: «Покринжовее»
+        let word = match (prefix.chars().next(), stem.next()) {
+            (Some(head), Some(first)) if first.is_uppercase() => [
+                head.to_uppercase().to_string().as_str(),
+                &prefix[head.len_utf8()..],
+                first.to_lowercase().to_string().as_str(),
+                stem.as_str(),
+                self.suffixes[suffix].as_str(),
+            ]
+            .concat(),
+            _ => self.spell(lexeme, form),
+        };
         Analysis {
-            word: self.spell(lexeme, form),
+            word,
             lemma: analysis.lemma.clone(),
             ud: lexeme.ud(form),
             tag: Some(lexeme.tag(form)),
@@ -1451,13 +1465,84 @@ mod tests {
     }
 
     #[test]
+    fn guess_with_yo_in_suffix() {
+        // В индексе окончание через «е», в словаре суффикс с «ё»
+        let mut builder = Builder::new(
+            vec!["NOUN,nomn".into(), "NOUN,gent".into()],
+            vec![String::new()],
+            vec!["ёнок".into(), "ёнка".into()],
+        );
+        let nominative = builder.add_ud_tag("NOUN", "Case=Nom", &[]).unwrap();
+        let genitive = builder.add_ud_tag("NOUN", "Case=Gen", &[]).unwrap();
+        let paradigm = builder.add_paradigm(&[(0, 0, 0), (1, 1, 0)]).unwrap();
+        let table = builder
+            .add_table(paradigm, &[(0, nominative), (0, genitive)])
+            .unwrap();
+        builder.add_word("котёнок", &[entry(table, 0)]).unwrap();
+        builder.add_word("котёнка", &[entry(table, 1)]).unwrap();
+        builder
+            .add_guesses(GuessIndex::Common, "енка", &[(entry(table, 1), 3)])
+            .unwrap();
+        let dict = Dictionary::from_bytes(&builder.build().unwrap()).unwrap();
+        for word in ["слоненка", "слонёнка"] {
+            let analyses = dict.analyze(word);
+            assert_eq!(
+                (analyses[0].word.as_str(), analyses[0].lemma.as_str()),
+                ("слонёнка", "слонёнок"),
+                "{word}"
+            );
+        }
+        let forms: Vec<String> = dict
+            .forms(&dict.analyze("слоненка")[0])
+            .into_iter()
+            .map(|form| form.word)
+            .collect();
+        assert_eq!(forms, ["слонёнок", "слонёнка"]);
+    }
+
+    #[test]
+    fn capitalized_guess_with_prefixed_form() {
+        // Сравнительная степень с приставкой «по»: «Покринжовее», а не «поКринжовее»
+        let mut builder = Builder::new(
+            vec!["ADJF".into(), "COMP".into()],
+            vec![String::new(), "по".into()],
+            vec!["ый".into(), "ее".into()],
+        );
+        let positive = builder.add_ud_tag("ADJ", "Degree=Pos", &[]).unwrap();
+        let comparative = builder.add_ud_tag("ADJ", "Degree=Cmp", &[]).unwrap();
+        let paradigm = builder.add_paradigm(&[(0, 0, 0), (1, 1, 1)]).unwrap();
+        let table = builder
+            .add_table(paradigm, &[(0, positive), (0, comparative)])
+            .unwrap();
+        builder.add_word("новый", &[entry(table, 0)]).unwrap();
+        builder.add_word("поновее", &[entry(table, 1)]).unwrap();
+        builder
+            .add_guesses(GuessIndex::Common, "ый", &[(entry(table, 0), 3)])
+            .unwrap();
+        let dict = Dictionary::from_bytes(&builder.build().unwrap()).unwrap();
+        let analysis = &dict.analyze("Кринжовый")[0];
+        let forms: Vec<String> = dict
+            .forms(analysis)
+            .into_iter()
+            .map(|form| form.word)
+            .collect();
+        assert_eq!(forms, ["Кринжовый", "Покринжовее"]);
+        let comparative = dict.inflect(analysis, &[("Degree", "Cmp")]).unwrap();
+        assert_eq!(comparative.word, "Покринжовее");
+        let entry = comparative.entry.unwrap();
+        let restored = dict.analysis("Покринжовее", entry, Source::Guess).unwrap();
+        assert_eq!(restored.lemma, "кринжовый");
+    }
+
+    #[test]
     fn broken_guess_records_give_no_guesses() {
         let data = guessing_bytes();
         assert_eq!(
             Dictionary::from_bytes(&data).unwrap().analyze("зума")[0].lemma,
             "зума"
         );
-        for records in [vec![9, 0], vec![1, 0x0007_0000, 2], vec![]] {
+        // Нулевое число словоформ в поврежденном файле не дает вероятности NaN
+        for records in [vec![9, 0], vec![1, 0x0007_0000, 2], vec![1, 0, 0], vec![]] {
             let mut sections = format::read(&data).unwrap();
             sections.guess_records = records;
             let dict = Dictionary::from_bytes(&format::write(&sections)).unwrap();

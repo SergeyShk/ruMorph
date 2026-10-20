@@ -220,8 +220,8 @@ impl Builder {
         Ok(())
     }
 
-    /// Добавляет формы для угадывания незнакомых слов с окончанием `ending`: форма таблицы
-    /// и число словоформ словаря с этим окончанием и этой формой
+    /// Добавляет формы для угадывания незнакомых слов с окончанием `ending` (через «е», без «ё»):
+    /// форма таблицы и число словоформ словаря с этим окончанием и этой формой
     pub fn add_guesses(
         &mut self,
         index: GuessIndex,
@@ -233,6 +233,11 @@ impl Builder {
             let &(paradigm, _) = self.tables.get(entry.table as usize).ok_or_else(|| {
                 Error::Build(format!("окончание {ending:?}: нет таблицы {}", entry.table))
             })?;
+            if count == 0 {
+                return Err(Error::Build(format!(
+                    "окончание {ending:?}: нулевое число словоформ"
+                )));
+            }
             check_id("форма", entry.form, self.paradigms[paradigm as usize].len())?;
             packed.push((
                 (u32::from(entry.table) << 16) | u32::from(entry.form),
@@ -396,6 +401,11 @@ mod tests {
         assert!(
             builder
                 .add_guesses(GuessIndex::Common, "а", &[(entry(0, 2), 1)])
+                .is_err()
+        );
+        assert!(
+            builder
+                .add_guesses(GuessIndex::Common, "а", &[(entry(0, 1), 0)])
                 .is_err()
         );
         builder

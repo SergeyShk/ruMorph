@@ -279,7 +279,8 @@ fn build(export: &Path, output: &Path) -> Result<(), Box<dyn Error>> {
     for (table, _) in &placed {
         *popularity.entry(*table).or_default() += 1;
     }
-    let mut guesses: HashMap<(GuessIndex, &str), HashMap<Entry, u32>> = HashMap::new();
+    // Окончания - через «е»: в текстах «ё» часто пишут как «е»
+    let mut guesses: HashMap<(GuessIndex, String), HashMap<Entry, u32>> = HashMap::new();
     for (number, line) in text.lines().enumerate() {
         let (word, records) = parse(number, line)?;
         let mut entries = Vec::with_capacity(records.len());
@@ -301,7 +302,7 @@ fn build(export: &Path, output: &Path) -> Result<(), Box<dyn Error>> {
             let spelling = line.split_once('\t').map_or(line, |(spelling, _)| spelling);
             let starts: Vec<usize> = spelling.char_indices().map(|(at, _)| at).collect();
             for length in 1..=GuessIndex::MAX_ENDING.min(starts.len().saturating_sub(1)) {
-                let ending = &spelling[starts[starts.len() - length]..];
+                let ending = spelling[starts[starts.len() - length]..].replace('ё', "е");
                 *guesses
                     .entry((index, ending))
                     .or_default()
@@ -312,7 +313,7 @@ fn build(export: &Path, output: &Path) -> Result<(), Box<dyn Error>> {
         builder.add_word(&word, &entries)?;
     }
     // Окончание, которое встретилось меньше трех раз, - скорее примета одного слова, чем образец
-    let lists: HashMap<(GuessIndex, &str), Vec<(Entry, u32)>> = guesses
+    let lists: HashMap<(GuessIndex, String), Vec<(Entry, u32)>> = guesses
         .into_iter()
         .filter(|(_, counts)| counts.values().sum::<u32>() >= lexemes::MIN_ENDING_COUNT)
         .map(|(key, counts)| {
@@ -324,11 +325,12 @@ fn build(export: &Path, output: &Path) -> Result<(), Box<dyn Error>> {
         })
         .collect();
     let mut guess_endings = 0;
-    for (&(index, ending), forms) in &lists {
+    for ((index, ending), forms) in &lists {
+        let (index, ending) = (*index, ending.as_str());
         // Окончание, у которого список тот же, что у окончания на букву короче, ничего не меняет:
         // угадывание по нему перейдет к более короткому
         let shorter = ending.char_indices().nth(1).map(|(at, _)| &ending[at..]);
-        if shorter.is_some_and(|shorter| lists.get(&(index, shorter)) == Some(forms)) {
+        if shorter.is_some_and(|shorter| lists.get(&(index, shorter.to_owned())) == Some(forms)) {
             continue;
         }
         builder.add_guesses(index, ending, forms)?;

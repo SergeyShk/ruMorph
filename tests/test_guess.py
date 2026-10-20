@@ -46,6 +46,29 @@ def test_capitalized_guess(morph):
     assert any(a.pos != "PROPN" for a in analyses)
 
 
+def test_yo_written_as_e(morph):
+    for word in ("пингвиненка", "пингвинёнка"):
+        first = morph.analyze(word)[0]
+        assert (first.word, first.lemma, first.feats["Case"]) == (
+            "пингвинёнка",
+            "пингвинёнок",
+            "Gen",
+        )
+    assert [form.word for form in morph.analyze("пингвиненка")[0].forms()][:2] == [
+        "пингвинёнок",
+        "пингвинёнка",
+    ]
+
+
+def test_capitalized_prefixed_forms(morph):
+    adjective = next(a for a in morph.analyze("Кринжовый") if a.pos == "ADJ")
+    words = [form.word for form in adjective.forms()]
+    assert "Покринжовее" in words
+    assert not any(char.isupper() for word in words for char in word[1:])
+    comparative = next(form for form in adjective.forms() if form.word == "Покринжовее")
+    assert pickle.loads(pickle.dumps(comparative)) == comparative
+
+
 def test_guessed_inflection(morph):
     assert morph.analyze("зумер")[0].agree(5) == "зумеров"
     assert morph.analyze("загуглить")[0].inflect(Tense="Past", Gender="Fem") == "загуглила"
