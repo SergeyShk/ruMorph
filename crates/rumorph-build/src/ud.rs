@@ -618,8 +618,11 @@ pub fn convert(tag: &str, lemma: &str) -> Ud {
     let uninflected = matches!(pos, "ADV" | "PART" | "ADP" | "CCONJ" | "SCONJ" | "INTJ")
         || (pos == "VERB" && !verbal_pos);
     if oc == "PRED" || (exception && uninflected) {
-        // Признаки OpenCorpora другой части речи не переходят: «плохо» - ADV без времени, «мало» - без падежа
+        // Признаки OpenCorpora другой части речи не переходят: «плохо» - ADV без времени, «мало» - без падежа;
+        // у «нечего», «нечем» (NPRO → VERB) падеж в SynTagRus остается
+        let case = feats.get("Case").copied().filter(|_| oc == "NPRO");
         feats.clear();
+        feats.extend(case.map(|case| ("Case", case)));
     }
     if exception
         && let Some(&(_, _, extra)) = EXCEPTION_FEATS
@@ -827,6 +830,14 @@ pub fn strip_abbreviation(ud: &mut Ud) {
         for name in UNINFLECTED_ABBREVIATION {
             ud.feats.remove(name);
         }
+    }
+}
+
+/// Склоняемая аббревиатура («вуз», «МИД»): в SynTagRus у нее нет Abbr=Yes, он остается пометой
+pub fn abbreviation_label(ud: &mut Ud) {
+    if ud.feats.remove("Abbr").is_some() {
+        ud.labels.push("Abbr".into());
+        ud.labels.sort();
     }
 }
 
@@ -1242,7 +1253,10 @@ mod tests {
         );
         assert!(feats("NPRO,neut sing,nomn", "многое").starts_with("Animacy=Inan"));
         assert_eq!(feats("PRED,pres", "нельзя"), "Polarity=Neg");
-        assert_eq!(feats("NPRO,neut sing,gent", "нечего"), "Polarity=Neg");
+        assert_eq!(
+            feats("NPRO,neut sing,gent", "нечего"),
+            "Case=Gen|Polarity=Neg"
+        );
         // «некогда» - наречие «когда-то» без отрицания, предикатив - с отрицанием
         assert_eq!(feats("ADVB", "некогда"), "Degree=Pos|PronType=Ind");
         assert_eq!(feats("PRED,pres", "некогда"), "Polarity=Neg");

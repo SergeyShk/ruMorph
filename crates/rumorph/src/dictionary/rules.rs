@@ -376,11 +376,13 @@ impl Dictionary {
         if base.is_empty() || !base.chars().all(cyrillic) {
             return None;
         }
+        // Сокращение - признак Abbr=Yes или помета Abbr у склоняемой аббревиатуры
         let abbreviated = |analysis: &Analysis| {
-            self.ud_tags[usize::from(analysis.ud)]
-                .feats
+            let tag = &self.ud_tags[usize::from(analysis.ud)];
+            tag.feats
                 .iter()
                 .any(|(name, value)| name == "Abbr" && value == "Yes")
+                || tag.labels.iter().any(|label| label == "Abbr")
         };
         let mut analyses: Vec<Analysis> = self
             .merge(self.candidates(base))
