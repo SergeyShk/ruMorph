@@ -384,6 +384,149 @@ pub(super) fn with_particle(form: Analysis, particle: &str) -> Analysis {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dictionary::tests::{Forms, dictionary_of};
+
+    fn forms(items: &[(&'static str, &str)]) -> Forms {
+        items
+            .iter()
+            .map(|&(ending, feats)| (ending, feats.to_owned()))
+            .collect()
+    }
+
+    /// «кот», «да», «а» (союз и междометие), «ой», «за», «поп», «попа» и «песня»
+    fn dictionary() -> Dictionary {
+        let noun = forms(&[
+            ("", "Case=Nom|Number=Sing"),
+            ("а", "Case=Gen|Number=Sing"),
+            ("у", "Case=Dat|Number=Sing"),
+        ]);
+        let word = || forms(&[("", "")]);
+        dictionary_of(
+            &[
+                ("NOUN", "кот", noun),
+                ("PART", "да", word()),
+                ("CCONJ", "а", word()),
+                ("INTJ", "а", word()),
+                ("INTJ", "ой", word()),
+                ("ADP", "за", word()),
+                ("NOUN", "поп", forms(&[("", "Case=Nom|Number=Sing")])),
+                (
+                    "NOUN",
+                    "поп",
+                    forms(&[("а", "Case=Nom|Number=Sing"), ("", "Case=Gen|Number=Plur")]),
+                ),
+                (
+                    "NOUN",
+                    "пес",
+                    forms(&[
+                        ("ня", "Case=Nom|Number=Sing"),
+                        ("ен", "Case=Gen|Number=Plur"),
+                    ]),
+                ),
+            ],
+            &[
+                ("поп", "NOUN Case=Nom|Number=Sing", 930_000),
+                ("поп", "NOUN Case=Gen|Number=Plur", 70_000),
+            ],
+        )
+    }
+
+    /// Словоформа, лемма и часть речи первого разбора по частям
+    fn first(dict: &Dictionary, word: &str) -> Option<(String, String, String)> {
+        let analysis = dict.parts(word).into_iter().next()?;
+        assert_eq!(analysis.source, Source::Guess);
+        let pos = dict.ud_tags[usize::from(analysis.ud)].pos.clone();
+        Some((analysis.word, analysis.lemma, pos))
+    }
+
+    fn found(word: &str, lemma: &str, pos: &str) -> Option<(String, String, String)> {
+        Some((word.to_owned(), lemma.to_owned(), pos.to_owned()))
+    }
+
+    #[test]
+    fn last_part_with_first_part_in_stem() {
+        let dict = dictionary();
+        assert_eq!(
+            first(&dict, "крэш-кота"),
+            found("крэш-кота", "крэш-кот", "NOUN")
+        );
+        let forms: Vec<String> = dict
+            .forms(&dict.parts("крэш-кота")[0])
+            .into_iter()
+            .map(|form| form.word)
+            .collect();
+        assert_eq!(forms, ["крэш-кот", "крэш-кота", "крэш-коту"]);
+        // Служебное слово или буква в конце - не часть сложного слова
+        assert_eq!(first(&dict, "К-за"), None);
+        assert_eq!(first(&dict, "кот-у"), None);
+        assert_eq!(first(&dict, "Ой-ой"), found("Ой-ой", "ой-ой", "INTJ"));
+    }
+
+    #[test]
+    fn both_parts_inflected() {
+        let dict = dictionary();
+        let analysis = dict.parts("кота-кота").remove(0);
+        assert_eq!(analysis.lemma, "кот-кот");
+        assert_eq!(analysis.entry, None);
+        // Первая часть - начальная форма, а не редкий родительный множественного
+        assert_eq!(
+            first(&dict, "поп-песен"),
+            found("поп-песен", "поп-песня", "NOUN")
+        );
+    }
+
+    #[test]
+    fn particles() {
+        let dict = dictionary();
+        assert_eq!(first(&dict, "кота-то"), found("кота-то", "кот-то", "NOUN"));
+        let analysis = dict.parts("кота-то").remove(0);
+        let forms: Vec<String> = dict
+            .forms(&analysis)
+            .into_iter()
+            .map(|form| form.word)
+            .collect();
+        assert_eq!(forms, ["кот-то", "кота-то", "коту-то"]);
+        // Восстановление сохраненного разбора с частицей
+        let restored = dict
+            .analysis("кота-то", analysis.entry.unwrap(), Source::Guess)
+            .unwrap();
+        assert_eq!(restored.lemma, "кот-то");
+        assert_eq!(first(&dict, "кот-то-то"), None);
+    }
+
+    #[test]
+    fn stretched_and_stuttered() {
+        let dict = dictionary();
+        assert_eq!(first(&dict, "Да-а-а"), found("Да-а-а", "да", "PART"));
+        // Протянутая буква - только междометие
+        assert_eq!(
+            dict.parts("А-а")
+                .iter()
+                .map(|analysis| dict.ud_tags[usize::from(analysis.ud)].pos.as_str())
+                .collect::<Vec<_>>(),
+            ["INTJ"]
+        );
+        assert_eq!(first(&dict, "Ш-ш"), None);
+        assert_eq!(first(&dict, "Д-д-да"), found("Д-д-да", "да", "PART"));
+        // Протяжка после частицы не вызывает разбор частицы снова и снова
+        assert!(
+            !dict
+                .analyze(&format!("да{}", "-то-о".repeat(3000)))
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn prefixed() {
+        let dict = dictionary();
+        assert_eq!(
+            first(&dict, "суперкота"),
+            found("суперкота", "суперкот", "NOUN")
+        );
+        // Приставка без слова после нее и слово с заглавной не разбираются
+        assert_eq!(first(&dict, "суперот"), None);
+        assert_eq!(first(&dict, "Суперкота"), None);
+    }
 
     #[test]
     fn repeated_letters() {
