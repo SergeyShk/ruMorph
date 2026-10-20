@@ -13,7 +13,7 @@
         <link rel="canonical" href="https://sergeyshk.github.io/ruMorph/analysis/">
       
       
-        <link rel="prev" href="../authors/">
+        <link rel="prev" href="../analyzer/">
       
       
         <link rel="next" href="../inflection/">
@@ -31,7 +31,7 @@
     
     
       
-        <title>Разбор словоформ - ruMorph</title>
+        <title>Разбор словоформы - ruMorph</title>
       
     
     
@@ -52,8 +52,8 @@
         
         
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
-        <style>:root{--md-text-font:"Source Sans Pro";--md-code-font:"Roboto Mono"}</style>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,300i,400,400i,700,700i%7CSource+Code+Pro:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Source Sans Pro";--md-code-font:"Source Code Pro"}</style>
       
     
     
@@ -69,6 +69,8 @@
   
   
     
+    
+      
     
     
     
@@ -116,7 +118,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Разбор словоформ
+              Разбор словоформы
             
           </span>
         </div>
@@ -124,7 +126,33 @@
     </div>
     
       
+        <form class="md-header__option" data-md-component="palette">
+  
     
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="blue"  aria-label="Темная тема"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Темная тема" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="blue" data-md-color-accent="blue"  aria-label="Светлая тема"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Светлая тема" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
     
     
       <div class="md-header__option">
@@ -178,6 +206,8 @@
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
         </button>
       </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
       
     </form>
     <div class="md-search__output">
@@ -245,6 +275,25 @@
   
   
   
+  
+    <li class="md-tabs__item">
+      <a href="../analyzer/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Анализатор
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
     
   
   
@@ -255,7 +304,7 @@
   
     
   
-  Разбор словоформ
+  Разбор словоформы
 
       </a>
     </li>
@@ -439,6 +488,90 @@
   
   
     <li class="md-nav__item">
+      <a href="../migration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Переход с pymorphy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../performance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Скорость и память
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../exceptions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Исключения
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../authors/" class="md-nav__link">
         
   
@@ -471,6 +604,33 @@
       
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../analyzer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Анализатор
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
     
   
   
@@ -490,7 +650,7 @@
   <span class="md-ellipsis">
     
   
-    Разбор словоформ
+    Разбор словоформы
   
 
     
@@ -508,7 +668,7 @@
   <span class="md-ellipsis">
     
   
-    Разбор словоформ
+    Разбор словоформы
   
 
     
@@ -534,21 +694,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#analyzer" class="md-nav__link">
+  <a href="#attributes" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Анализатор
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#analyze" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Разборы словоформы
+        Атрибуты
       
     </span>
   </a>
@@ -582,28 +731,6 @@
     <span class="md-ellipsis">
       
         Незнакомые слова
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#lists" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Списки слов
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#dictionary" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Словарь
       
     </span>
   </a>
@@ -672,21 +799,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#analyzer" class="md-nav__link">
+  <a href="#attributes" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Анализатор
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#analyze" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Разборы словоформы
+        Атрибуты
       
     </span>
   </a>
@@ -726,28 +842,6 @@
   
 </li>
       
-        <li class="md-nav__item">
-  <a href="#lists" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Списки слов
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#dictionary" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Словарь
-      
-    </span>
-  </a>
-  
-</li>
-      
     </ul>
   
 </nav>
@@ -768,59 +862,79 @@
   
 
 
-<h1 id="_1">Разбор словоформ<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h1>
-<p>Анализатор находит для словоформы все варианты разбора по словарю OpenCorpora - начальную форму, часть речи и признаки <a href="https://universaldependencies.org/">Universal Dependencies</a> - и упорядочивает их по вероятности.</p>
-<h2 id="analyzer">Анализатор<a class="headerlink" href="#analyzer" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">rumorph</span><span class="w"> </span><span class="kn">import</span> <span class="n">Analyzer</span>
-<span class="o">&gt;&gt;&gt;</span> <span class="n">morph</span> <span class="o">=</span> <span class="n">Analyzer</span><span class="p">()</span>
+<h1 id="_1">Разбор словоформы<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h1>
+<p>Разбор - объект <code>Analysis</code>, который возвращают методы <a href="../analyzer/">анализатора</a> <code>analyze</code> и <code>analyze_many</code>: лемма, часть речи и признаки <a href="https://universaldependencies.org/">Universal Dependencies</a>, вероятность и источник разбора. Разборы неизменяемы; их можно сравнивать, класть в множества и сохранять через pickle. Формы слова по разбору дают методы <code>forms</code>, <code>inflect</code> и <code>agree</code> - см. <a href="../inflection/">Словоизменение</a>.</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Код</label><label for="__tabbed_1_2">Результат</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">rumorph</span><span class="w"> </span><span class="kn">import</span> <span class="n">Analyzer</span>
+
+<span class="n">morph</span> <span class="o">=</span> <span class="n">Analyzer</span><span class="p">()</span>
+<span class="n">analysis</span> <span class="o">=</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"стали"</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+<span class="n">analysis</span><span class="o">.</span><span class="n">lemma</span><span class="p">,</span> <span class="n">analysis</span><span class="o">.</span><span class="n">pos</span><span class="p">,</span> <span class="n">analysis</span><span class="o">.</span><span class="n">feats</span><span class="p">,</span> <span class="n">analysis</span><span class="o">.</span><span class="n">labels</span>
 </code></pre></div>
-<p>Словарь загружается при создании анализатора за несколько миллисекунд. Достаточно создать анализатор один раз и пользоваться им во всей программе, в том числе из нескольких потоков. По умолчанию берется словарь из пакета, другой файл словаря передается аргументом <code>path</code>. Анализатор и разборы сохраняются через pickle, поэтому работают с multiprocessing и joblib: другой процесс загружает словарь один раз, сколько бы разборов он ни получил.</p>
-<h2 id="analyze">Разборы словоформы<a class="headerlink" href="#analyze" title="Permanent link">&para;</a></h2>
-<p><code>analyze</code> возвращает разборы словоформы по убыванию вероятности:</p>
-<div class="highlight"><pre><span></span><code><span class="o">&gt;&gt;&gt;</span> <span class="k">for</span> <span class="n">analysis</span> <span class="ow">in</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"стали"</span><span class="p">)[:</span><span class="mi">2</span><span class="p">]:</span>
-<span class="o">...</span>     <span class="nb">print</span><span class="p">(</span><span class="n">analysis</span><span class="o">.</span><span class="n">lemma</span><span class="p">,</span> <span class="n">analysis</span><span class="o">.</span><span class="n">pos</span><span class="p">,</span> <span class="nb">dict</span><span class="p">(</span><span class="n">analysis</span><span class="o">.</span><span class="n">feats</span><span class="p">),</span> <span class="nb">round</span><span class="p">(</span><span class="n">analysis</span><span class="o">.</span><span class="n">prob</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
-<span class="n">стать</span> <span class="n">VERB</span> <span class="p">{</span><span class="s1">'Aspect'</span><span class="p">:</span> <span class="s1">'Perf'</span><span class="p">,</span> <span class="s1">'Mood'</span><span class="p">:</span> <span class="s1">'Ind'</span><span class="p">,</span> <span class="s1">'Number'</span><span class="p">:</span> <span class="s1">'Plur'</span><span class="p">,</span> <span class="s1">'Tense'</span><span class="p">:</span> <span class="s1">'Past'</span><span class="p">,</span> <span class="s1">'VerbForm'</span><span class="p">:</span> <span class="s1">'Fin'</span><span class="p">,</span> <span class="s1">'Voice'</span><span class="p">:</span> <span class="s1">'Mid'</span><span class="p">}</span> <span class="mf">0.975</span>
-<span class="n">сталь</span> <span class="n">NOUN</span> <span class="p">{</span><span class="s1">'Animacy'</span><span class="p">:</span> <span class="s1">'Inan'</span><span class="p">,</span> <span class="s1">'Case'</span><span class="p">:</span> <span class="s1">'Gen'</span><span class="p">,</span> <span class="s1">'Gender'</span><span class="p">:</span> <span class="s1">'Fem'</span><span class="p">,</span> <span class="s1">'Number'</span><span class="p">:</span> <span class="s1">'Sing'</span><span class="p">}</span> <span class="mf">0.011</span>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code>('стать',
+ 'VERB',
+ {'Aspect': 'Perf',
+  'Mood': 'Ind',
+  'Number': 'Plur',
+  'Tense': 'Past',
+  'VerbForm': 'Fin',
+  'Voice': 'Mid'},
+ frozenset({'intr'}))
 </code></pre></div>
+</div>
+</div>
+</div>
+<h2 id="attributes">Атрибуты<a class="headerlink" href="#attributes" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
 <tr>
-<th>Поле</th>
-<th>Значение</th>
+<th style="text-align: left;">Атрибут</th>
+<th style="text-align: left;">Тип</th>
+<th style="text-align: left;">Описание</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>word</code></td>
-<td>словоформа в написании словаря: с буквой «ё», если она есть в словаре; у разборов по правилам и угаданных - как в тексте, но у угаданных с «ё» из окончания словарной формы («пингвиненка» → «пингвинёнка»)</td>
+<td style="text-align: left;"><code>word</code></td>
+<td style="text-align: left;"><code>str</code></td>
+<td style="text-align: left;">Словоформа в написании словаря: с буквой «ё», если она есть в словаре; у разборов по правилам и угаданных - как в тексте, но у угаданных с «ё» из окончания словарной формы («пингвиненка» - «пингвинёнка»)</td>
 </tr>
 <tr>
-<td><code>lemma</code></td>
-<td>начальная форма</td>
+<td style="text-align: left;"><code>lemma</code></td>
+<td style="text-align: left;"><code>str</code></td>
+<td style="text-align: left;">Начальная форма</td>
 </tr>
 <tr>
-<td><code>pos</code></td>
-<td>часть речи UD: <code>NOUN</code>, <code>VERB</code>, <code>ADJ</code>, <code>DET</code>, <code>ADP</code> и т. д.</td>
+<td style="text-align: left;"><code>pos</code></td>
+<td style="text-align: left;"><code>str</code></td>
+<td style="text-align: left;">Часть речи UD: <code>NOUN</code>, <code>VERB</code>, <code>ADJ</code>, <code>DET</code>, <code>ADP</code> и т. д.</td>
 </tr>
 <tr>
-<td><code>feats</code></td>
-<td>признаки UD - словарь <code>{"Case": "Gen", "Number": "Sing"}</code>; каждый раз новый, его изменение не меняет разбор</td>
+<td style="text-align: left;"><code>feats</code></td>
+<td style="text-align: left;"><code>dict[str, str]</code></td>
+<td style="text-align: left;">Признаки UD: <code>{"Case": "Gen", "Number": "Sing"}</code>; каждый раз новый словарь, его изменение не меняет разбор</td>
 </tr>
 <tr>
-<td><code>labels</code></td>
-<td>пометы словаря, у которых нет признака UD, - <code>frozenset</code>: <code>{"Infr"}</code> (разговорное)</td>
+<td style="text-align: left;"><code>labels</code></td>
+<td style="text-align: left;"><code>frozenset[str]</code></td>
+<td style="text-align: left;">Пометы словаря, у которых нет признака UD: <code>Infr</code> (разговорное) и др.</td>
 </tr>
 <tr>
-<td><code>prob</code></td>
-<td>вероятность разбора; сумма по всем разборам словоформы равна 1</td>
+<td style="text-align: left;"><code>prob</code></td>
+<td style="text-align: left;"><code>float</code></td>
+<td style="text-align: left;">Вероятность разбора; сумма по всем разборам словоформы равна 1</td>
 </tr>
 <tr>
-<td><code>source</code></td>
-<td>откуда взят разбор: <code>"dictionary"</code> - словоформа есть в словаре, <code>"rule"</code> - токена нет в словаре, разбор по правилу (см. <a href="#rules">ниже</a>), <code>"guess"</code> - разбор незнакомого слова угадан (см. <a href="#guess">ниже</a>)</td>
+<td style="text-align: left;"><code>source</code></td>
+<td style="text-align: left;"><code>str</code></td>
+<td style="text-align: left;">Откуда взят разбор: <code>"dictionary"</code> - словоформа есть в словаре, <code>"rule"</code> - <a href="#rules">разбор по правилу</a>, <code>"guess"</code> - <a href="#guess">угаданный разбор</a> незнакомого слова</td>
 </tr>
 </tbody>
 </table>
-<p>Регистр не важен, а буква «е» может обозначать «ё»: <code>analyze("ЕЖ")</code> возвращает разборы словоформы «ёж».</p>
 <h2 id="ud">Части речи и признаки<a class="headerlink" href="#ud" title="Permanent link">&para;</a></h2>
 <p>Части речи и признаки следуют <a href="https://universaldependencies.org/u/pos/">Universal Dependencies</a> в соглашениях крупнейшего русского трибанка <a href="https://github.com/UniversalDependencies/UD_Russian-SynTagRus">UD_Russian-SynTagRus</a>, поэтому результат можно сравнивать с разметкой spaCy, Stanza и других инструментов на UD. Отличия от частей речи OpenCorpora:</p>
 <ul>
@@ -831,81 +945,92 @@
 <li>предлоги - <code>ADP</code>, сочинительные союзы - <code>CCONJ</code>, подчинительные - <code>SCONJ</code>, частицы - <code>PART</code>.</li>
 </ul>
 <p>Признаки: падеж, число, род, одушевленность, лицо, время, вид, наклонение, залог, форма глагола, степень, краткая форма (<code>Variant=Short</code>), тип имени собственного (<code>NameType</code>), сокращение (<code>Abbr</code>), притяжательность (<code>Poss</code>), тип числительного (<code>NumType</code>) и его запись (<code>NumForm</code>), тип местоимения и местоименного наречия (<code>PronType</code>: «там» - <code>Dem</code>, «где» - <code>Rel</code>, «никогда» - <code>Neg</code>), возвратность (<code>Reflex</code>), несклоняемость (<code>InflClass=Ind</code>), отрицание (<code>Polarity=Neg</code>).</p>
-<p>Леммы тоже следуют SynTagRus: у женских фамилий и отчеств лемма в женском роде («Ивановой» - «иванова»), превосходная степень остается превосходной («важнейшей» - «важнейший»), «денег» - «деньги». Если несколько разборов OpenCorpora в UD совпадают (союз и наречие «так»), они объединены в один, их вероятности сложены. Формы слова по разбору дают методы <code>forms</code>, <code>inflect</code> и <code>agree</code> - см. <a href="../inflection/">Словоизменение</a>.</p>
+<p>Леммы тоже следуют SynTagRus: у женских фамилий и отчеств лемма в женском роде («Ивановой» - «иванова»), превосходная степень остается превосходной («важнейшей» - «важнейший»), «денег» - «деньги». Если несколько разборов OpenCorpora в UD совпадают (союз и наречие «так»), они объединены в один, их вероятности сложены.</p>
 <p>Пометы <code>labels</code> - граммемы <a href="https://opencorpora.org/dict.php?act=gram">OpenCorpora</a>, для которых в UD нет признака: стиль (<code>Infr</code>, <code>Slng</code>, <code>Arch</code>), качественное прилагательное (<code>Qual</code>), вводное слово (<code>Prnt</code>), переходность (<code>tran</code>, <code>intr</code>), включенность говорящего в повелительном наклонении (<code>incl</code> - «пойдемте», <code>excl</code> - «иди»), второй предложный падеж (<code>loc2</code> - «в лесу») и другие.</p>
 <h2 id="rules">Токены вне словаря<a class="headerlink" href="#rules" title="Permanent link">&para;</a></h2>
 <p>Числа, знаки, латиницу и сокращения анализатор разбирает по правилам, <code>source</code> у таких разборов - <code>"rule"</code>:</p>
-<div class="highlight"><pre><span></span><code><span class="o">&gt;&gt;&gt;</span> <span class="p">[(</span><span class="n">a</span><span class="o">.</span><span class="n">lemma</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">pos</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">feats</span><span class="p">[</span><span class="s2">"NumType"</span><span class="p">],</span> <span class="nb">round</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">prob</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"2026"</span><span class="p">)]</span>
-<span class="p">[(</span><span class="s1">'2026'</span><span class="p">,</span> <span class="s1">'ADJ'</span><span class="p">,</span> <span class="s1">'Ord'</span><span class="p">,</span> <span class="mf">0.94</span><span class="p">),</span> <span class="p">(</span><span class="s1">'2026'</span><span class="p">,</span> <span class="s1">'NUM'</span><span class="p">,</span> <span class="s1">'Card'</span><span class="p">,</span> <span class="mf">0.06</span><span class="p">)]</span>
-<span class="o">&gt;&gt;&gt;</span> <span class="p">[(</span><span class="n">a</span><span class="o">.</span><span class="n">lemma</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">pos</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">feats</span><span class="p">[</span><span class="s2">"Case"</span><span class="p">])</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"2005-го"</span><span class="p">)][:</span><span class="mi">1</span><span class="p">]</span>
-<span class="p">[(</span><span class="s1">'2005-й'</span><span class="p">,</span> <span class="s1">'ADJ'</span><span class="p">,</span> <span class="s1">'Gen'</span><span class="p">)]</span>
-</code></pre></div>
 <table>
 <thead>
 <tr>
-<th>Токен</th>
-<th>Разбор</th>
+<th style="text-align: left;">Токен</th>
+<th style="text-align: left;">Разбор</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>знаки препинания; символы <code>%</code>, <code>$</code>, <code>№</code>, <code>−</code>, эмодзи</td>
-<td><code>PUNCT</code>; <code>SYM</code></td>
+<td style="text-align: left;">знаки препинания; символы <code>%</code>, <code>$</code>, <code>№</code>, <code>−</code>, эмодзи</td>
+<td style="text-align: left;"><code>PUNCT</code>; <code>SYM</code></td>
 </tr>
 <tr>
-<td>числа цифрами: «15», «3,14», «10 000», «17:04»</td>
-<td><code>NUM</code> с <code>NumForm=Digit</code>, <code>NumType=Card</code>; целое число может быть и порядковым <code>ADJ</code> с <code>NumType=Ord</code> - у чисел 1000-2100 (годы), кроме круглых сотен, это первый разбор</td>
+<td style="text-align: left;">числа цифрами: «15», «3,14», «10 000», «17:04»</td>
+<td style="text-align: left;"><code>NUM</code> с <code>NumForm=Digit</code>, <code>NumType=Card</code>; целое число может быть и порядковым <code>ADJ</code> с <code>NumType=Ord</code> - у чисел 1000-2100 (годы), кроме круглых сотен, это первый разбор</td>
 </tr>
 <tr>
-<td>числа с окончанием: «2005-го», «5-ти»</td>
-<td>порядковое <code>ADJ</code> с падежом и формами, как у «1-го», или количественное <code>NUM</code></td>
+<td style="text-align: left;">числа с окончанием: «2005-го», «5-ти»</td>
+<td style="text-align: left;">порядковое <code>ADJ</code> с падежом и формами, как у «1-го», или количественное <code>NUM</code></td>
 </tr>
 <tr>
-<td>римские числа: «XX»</td>
-<td>порядковое <code>ADJ</code> с <code>NumForm=Roman</code></td>
+<td style="text-align: left;">римские числа: «XX»</td>
+<td style="text-align: left;">порядковое <code>ADJ</code> с <code>NumForm=Roman</code></td>
 </tr>
 <tr>
-<td>слова латиницей: «iPhone»</td>
-<td><code>X</code> с <code>Foreign=Yes</code></td>
+<td style="text-align: left;">слова латиницей: «iPhone»</td>
+<td style="text-align: left;"><code>X</code> с <code>Foreign=Yes</code></td>
 </tr>
 <tr>
-<td>инициалы: «А.»</td>
-<td><code>PROPN</code> с <code>Abbr=Yes</code>: имя, отчество или фамилия</td>
+<td style="text-align: left;">инициалы: «А.»</td>
+<td style="text-align: left;"><code>PROPN</code> с <code>Abbr=Yes</code>: имя, отчество или фамилия</td>
 </tr>
 <tr>
-<td>сокращения с точкой: «т.», «им.»</td>
-<td>разборы словарного сокращения без точки</td>
+<td style="text-align: left;">сокращения с точкой: «т.», «им.»</td>
+<td style="text-align: left;">разборы словарного сокращения без точки</td>
 </tr>
 <tr>
-<td>аббревиатуры капсом: «НКО»</td>
-<td><code>PROPN</code> или <code>NOUN</code> с <code>Abbr=Yes</code></td>
+<td style="text-align: left;">аббревиатуры капсом: «НКО»</td>
+<td style="text-align: left;"><code>PROPN</code> или <code>NOUN</code> с <code>Abbr=Yes</code></td>
 </tr>
 <tr>
-<td>наречия «по-бурятски», «по-молодому»</td>
-<td><code>ADV</code> с <code>Degree=Pos</code></td>
+<td style="text-align: left;">наречия «по-бурятски», «по-молодому»</td>
+<td style="text-align: left;"><code>ADV</code> с <code>Degree=Pos</code></td>
 </tr>
 </tbody>
 </table>
-<p>Доли неоднозначных разборов взяты из частот в SynTagRus. Токен с пробелом (кроме числа), управляющим или невидимым символом разборов не получает.</p>
-<h2 id="guess">Незнакомые слова<a class="headerlink" href="#guess" title="Permanent link">&para;</a></h2>
-<p>Разборы слова кириллицей, которого нет в словаре, анализатор угадывает по окончанию: берет формы словарных слов с тем же окончанием - их часть речи, признаки и словоизменение. <code>source</code> у таких разборов - <code>"guess"</code>:</p>
-<div class="highlight"><pre><span></span><code><span class="o">&gt;&gt;&gt;</span> <span class="p">[(</span><span class="n">a</span><span class="o">.</span><span class="n">lemma</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">pos</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">feats</span><span class="p">[</span><span class="s2">"Case"</span><span class="p">],</span> <span class="nb">round</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">prob</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"чатботу"</span><span class="p">)][:</span><span class="mi">2</span><span class="p">]</span>
-<span class="p">[(</span><span class="s1">'чатбот'</span><span class="p">,</span> <span class="s1">'NOUN'</span><span class="p">,</span> <span class="s1">'Dat'</span><span class="p">,</span> <span class="mf">0.44</span><span class="p">),</span> <span class="p">(</span><span class="s1">'чатбота'</span><span class="p">,</span> <span class="s1">'NOUN'</span><span class="p">,</span> <span class="s1">'Acc'</span><span class="p">,</span> <span class="mf">0.4</span><span class="p">)]</span>
-<span class="o">&gt;&gt;&gt;</span> <span class="n">guess</span> <span class="o">=</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"Мартова"</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
-<span class="o">&gt;&gt;&gt;</span> <span class="n">guess</span><span class="o">.</span><span class="n">lemma</span><span class="p">,</span> <span class="n">guess</span><span class="o">.</span><span class="n">pos</span><span class="p">,</span> <span class="n">guess</span><span class="o">.</span><span class="n">feats</span><span class="p">[</span><span class="s2">"NameType"</span><span class="p">],</span> <span class="n">guess</span><span class="o">.</span><span class="n">inflect</span><span class="p">(</span><span class="n">Case</span><span class="o">=</span><span class="s2">"Dat"</span><span class="p">)</span>
-<span class="p">(</span><span class="s1">'мартов'</span><span class="p">,</span> <span class="s1">'PROPN'</span><span class="p">,</span> <span class="s1">'Sur'</span><span class="p">,</span> <span class="s1">'Мартову'</span><span class="p">)</span>
+<p>Доли неоднозначных разборов взяты из частот в SynTagRus.</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="2:2"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Код</label><label for="__tabbed_2_2">Результат</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="p">[(</span><span class="n">a</span><span class="o">.</span><span class="n">lemma</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">pos</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">feats</span><span class="p">[</span><span class="s2">"NumType"</span><span class="p">],</span> <span class="nb">round</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">prob</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"2026"</span><span class="p">)]</span>
+<span class="p">[(</span><span class="n">a</span><span class="o">.</span><span class="n">lemma</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">pos</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">feats</span><span class="p">[</span><span class="s2">"Case"</span><span class="p">])</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"2005-го"</span><span class="p">)][:</span><span class="mi">1</span><span class="p">]</span>
 </code></pre></div>
-<p>Слово в нижнем регистре угадывается как нарицательное, слово с заглавной буквы - в основном как имя собственное: фамилия, имя, топоним. Слова в смешанном регистре («ЗуМер») не угадываются.</p>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code>[('2026', 'ADJ', 'Ord', 0.94), ('2026', 'NUM', 'Card', 0.06)]
+[('2005-й', 'ADJ', 'Gen')]
+</code></pre></div>
+</div>
+</div>
+</div>
+<h2 id="guess">Незнакомые слова<a class="headerlink" href="#guess" title="Permanent link">&para;</a></h2>
+<p>Разборы слова кириллицей, которого нет в словаре, анализатор угадывает по окончанию: берет формы словарных слов с тем же окончанием - их часть речи, признаки и словоизменение. <code>source</code> у таких разборов - <code>"guess"</code>. Слово в нижнем регистре угадывается как нарицательное, слово с заглавной буквы - в основном как имя собственное: фамилия, имя, топоним. Слова в смешанном регистре («ЗуМер») не угадываются.</p>
 <p>Слово через дефис разбирается по последней части: «крэш-тестов» - «крэш-тест», «Мак-Киннона» - «мак-киннон»; если последняя часть - частица («сколь-нибудь»), то по первой. Слово с известной приставкой - «эко», «анти», «супер», «микро» и другими - разбирается по словарному слову без нее: «экодомов» - «экодом». Такие разборы тоже угаданные.</p>
 <p>У угаданного разбора есть формы, с ним работают <code>forms</code>, <code>inflect</code> и <code>agree</code>; формы сохраняют заглавные буквы: «Мак-Киннона» в дательном - «Мак-Киннону», «ПИН-КОДОВ» - «ПИН-КОДАМ». Исключение - разбор с частицей («сколь-нибудь»): у него форм нет, <code>forms</code> дает только его самого.</p>
-<h2 id="lists">Списки слов<a class="headerlink" href="#lists" title="Permanent link">&para;</a></h2>
-<p><code>analyze_many</code> разбирает набор словоформ, <code>lemmatize</code> возвращает леммы их самых вероятных разборов:</p>
-<div class="highlight"><pre><span></span><code><span class="o">&gt;&gt;&gt;</span> <span class="n">morph</span><span class="o">.</span><span class="n">lemmatize</span><span class="p">([</span><span class="s2">"Мы"</span><span class="p">,</span> <span class="s2">"стали"</span><span class="p">,</span> <span class="s2">"друзьями"</span><span class="p">])</span>
-<span class="p">[</span><span class="s1">'мы'</span><span class="p">,</span> <span class="s1">'стать'</span><span class="p">,</span> <span class="s1">'друг'</span><span class="p">]</span>
+<div class="tabbed-set tabbed-alternate" data-tabs="3:2"><input checked="checked" id="__tabbed_3_1" name="__tabbed_3" type="radio" /><input id="__tabbed_3_2" name="__tabbed_3" type="radio" /><div class="tabbed-labels"><label for="__tabbed_3_1">Код</label><label for="__tabbed_3_2">Результат</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="p">[(</span><span class="n">a</span><span class="o">.</span><span class="n">lemma</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">pos</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">feats</span><span class="p">[</span><span class="s2">"Case"</span><span class="p">],</span> <span class="nb">round</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">prob</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"чатботу"</span><span class="p">)][:</span><span class="mi">2</span><span class="p">]</span>
+<span class="n">guess</span> <span class="o">=</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"Мартова"</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+<span class="n">guess</span><span class="o">.</span><span class="n">lemma</span><span class="p">,</span> <span class="n">guess</span><span class="o">.</span><span class="n">pos</span><span class="p">,</span> <span class="n">guess</span><span class="o">.</span><span class="n">feats</span><span class="p">[</span><span class="s2">"NameType"</span><span class="p">],</span> <span class="n">guess</span><span class="o">.</span><span class="n">inflect</span><span class="p">(</span><span class="n">Case</span><span class="o">=</span><span class="s2">"Dat"</span><span class="p">)</span>
+<span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"крэш-тестов"</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">lemma</span><span class="p">,</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"экодомов"</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">lemma</span>
 </code></pre></div>
-<p>Токен без разборов <code>lemmatize</code> возвращает в нижнем регистре. Оба метода принимают любой набор слов - список, кортеж, генератор - и разбирают его без GIL: несколько потоков с одним анализатором работают параллельно.</p>
-<h2 id="dictionary">Словарь<a class="headerlink" href="#dictionary" title="Permanent link">&para;</a></h2>
-<p><code>is_known</code> проверяет, есть ли словоформа в словаре. Словарь - OpenCorpora, около 3,1 млн словоформ; вероятности разборов взяты из корпуса OpenCorpora: у слова, написанного через «е» вместо «ё», - частоты написания с «ё», у словоформ, которых в корпусе нет, разборы равновероятны. Словарь распространяется по лицензии <a href="https://creativecommons.org/licenses/by-sa/3.0/">CC BY-SA 3.0</a>.</p>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code>[('чатбот', 'NOUN', 'Dat', 0.44), ('чатбота', 'NOUN', 'Acc', 0.4)]
+('мартов', 'PROPN', 'Sur', 'Мартову')
+('крэш-тест', 'экодом')
+</code></pre></div>
+</div>
+</div>
+</div>
 
 
 
@@ -925,6 +1050,12 @@
           
 <script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
         </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  К началу
+</button>
         
       </main>
       
@@ -982,7 +1113,7 @@
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "\u0421\u043a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u043d\u043e \u0432 \u0431\u0443\u0444\u0435\u0440", "clipboard.copy": "\u041a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u0432 \u0431\u0443\u0444\u0435\u0440", "search.result.more.one": "\u0415\u0449\u0451 1 \u043d\u0430 \u044d\u0442\u043e\u0439 \u0441\u0442\u0440\u0430\u043d\u0438\u0446\u0435", "search.result.more.other": "\u0415\u0449\u0451 # \u043d\u0430 \u044d\u0442\u043e\u0439 \u0441\u0442\u0440\u0430\u043d\u0438\u0446\u0435", "search.result.none": "\u0421\u043e\u0432\u043f\u0430\u0434\u0435\u043d\u0438\u0439 \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d\u043e", "search.result.one": "\u041d\u0430\u0439\u0434\u0435\u043d\u043e 1 \u0441\u043e\u0432\u043f\u0430\u0434\u0435\u043d\u0438\u0435", "search.result.other": "\u041d\u0430\u0439\u0434\u0435\u043d\u043e \u0441\u043e\u0432\u043f\u0430\u0434\u0435\u043d\u0438\u0439: #", "search.result.placeholder": "\u041d\u0430\u0447\u043d\u0438\u0442\u0435 \u043f\u0435\u0447\u0430\u0442\u0430\u0442\u044c \u0434\u043b\u044f \u043f\u043e\u0438\u0441\u043a\u0430", "search.result.term.missing": "\u041e\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u0435\u0442", "select.version": "\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0432\u0435\u0440\u0441\u0438\u044e"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.top", "content.code.copy", "search.highlight", "search.suggest"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "\u0421\u043a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u043d\u043e \u0432 \u0431\u0443\u0444\u0435\u0440", "clipboard.copy": "\u041a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u0432 \u0431\u0443\u0444\u0435\u0440", "search.result.more.one": "\u0415\u0449\u0451 1 \u043d\u0430 \u044d\u0442\u043e\u0439 \u0441\u0442\u0440\u0430\u043d\u0438\u0446\u0435", "search.result.more.other": "\u0415\u0449\u0451 # \u043d\u0430 \u044d\u0442\u043e\u0439 \u0441\u0442\u0440\u0430\u043d\u0438\u0446\u0435", "search.result.none": "\u0421\u043e\u0432\u043f\u0430\u0434\u0435\u043d\u0438\u0439 \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d\u043e", "search.result.one": "\u041d\u0430\u0439\u0434\u0435\u043d\u043e 1 \u0441\u043e\u0432\u043f\u0430\u0434\u0435\u043d\u0438\u0435", "search.result.other": "\u041d\u0430\u0439\u0434\u0435\u043d\u043e \u0441\u043e\u0432\u043f\u0430\u0434\u0435\u043d\u0438\u0439: #", "search.result.placeholder": "\u041d\u0430\u0447\u043d\u0438\u0442\u0435 \u043f\u0435\u0447\u0430\u0442\u0430\u0442\u044c \u0434\u043b\u044f \u043f\u043e\u0438\u0441\u043a\u0430", "search.result.term.missing": "\u041e\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u0435\u0442", "select.version": "\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0432\u0435\u0440\u0441\u0438\u044e"}, "version": null}</script>
     
     
       <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>

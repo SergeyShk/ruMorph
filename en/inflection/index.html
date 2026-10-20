@@ -50,8 +50,8 @@
         
         
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
-        <style>:root{--md-text-font:"Source Sans Pro";--md-code-font:"Roboto Mono"}</style>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,300i,400,400i,700,700i%7CSource+Code+Pro:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Source Sans Pro";--md-code-font:"Source Code Pro"}</style>
       
     
     
@@ -67,6 +67,8 @@
   
   
     
+    
+      
     
     
     
@@ -122,7 +124,33 @@
     </div>
     
       
+        <form class="md-header__option" data-md-component="palette">
+  
     
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="blue"  aria-label="Темная тема"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Темная тема" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="blue" data-md-color-accent="blue"  aria-label="Светлая тема"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Светлая тема" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
     
     
       <div class="md-header__option">
@@ -176,6 +204,8 @@
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
         </button>
       </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
       
     </form>
     <div class="md-search__output">
@@ -236,6 +266,25 @@
         </a>
       </li>
     
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../analyzer/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Analyzer
+
+      </a>
+    </li>
   
 
       
@@ -437,6 +486,90 @@
   
   
     <li class="md-nav__item">
+      <a href="../migration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrating from pymorphy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../performance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Speed and memory
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../exceptions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Exceptions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../authors/" class="md-nav__link">
         
   
@@ -461,6 +594,33 @@
           </ul>
         </nav>
       
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../analyzer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Analyzer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -559,6 +719,18 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Methods
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Methods">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
   <a href="#forms" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -568,8 +740,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#inflect" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -579,8 +751,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#agree" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -588,6 +760,11 @@
       
     </span>
   </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -626,6 +803,18 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Methods
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Methods">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
   <a href="#forms" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -635,8 +824,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#inflect" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -646,8 +835,8 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
+        
+          <li class="md-nav__item">
   <a href="#agree" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -655,6 +844,11 @@
       
     </span>
   </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -679,40 +873,142 @@
 
 
 <h1 id="inflection">Inflection<a class="headerlink" href="#inflection" title="Permanent link">&para;</a></h1>
-<p>Every analysis knows its lexeme - all forms of the word with the same lemma. From an analysis you can get the list of forms, the form with given UD features or the form that agrees with a number.</p>
-<h2 id="forms">Forms of the lexeme<a class="headerlink" href="#forms" title="Permanent link">&para;</a></h2>
-<p><code>forms</code> returns the forms of the lexeme in dictionary order - they are analyses like those of <code>analyze</code>, with probability 1:</p>
-<div class="highlight"><pre><span></span><code><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">rumorph</span><span class="w"> </span><span class="kn">import</span> <span class="n">Analyzer</span>
-<span class="o">&gt;&gt;&gt;</span> <span class="n">morph</span> <span class="o">=</span> <span class="n">Analyzer</span><span class="p">()</span>
-<span class="o">&gt;&gt;&gt;</span> <span class="n">cat</span> <span class="o">=</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"кошка"</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
-<span class="o">&gt;&gt;&gt;</span> <span class="p">[</span><span class="n">form</span><span class="o">.</span><span class="n">word</span> <span class="k">for</span> <span class="n">form</span> <span class="ow">in</span> <span class="n">cat</span><span class="o">.</span><span class="n">forms</span><span class="p">()]</span>
-<span class="p">[</span><span class="s1">'кошка'</span><span class="p">,</span> <span class="s1">'кошки'</span><span class="p">,</span> <span class="s1">'кошке'</span><span class="p">,</span> <span class="s1">'кошку'</span><span class="p">,</span> <span class="s1">'кошкой'</span><span class="p">,</span> <span class="s1">'кошкою'</span><span class="p">,</span> <span class="s1">'кошке'</span><span class="p">,</span> <span class="s1">'кошки'</span><span class="p">,</span> <span class="s1">'кошек'</span><span class="p">,</span> <span class="s1">'кошкам'</span><span class="p">,</span> <span class="s1">'кошек'</span><span class="p">,</span> <span class="s1">'кошками'</span><span class="p">,</span> <span class="s1">'кошках'</span><span class="p">]</span>
-<span class="o">&gt;&gt;&gt;</span> <span class="n">form</span> <span class="o">=</span> <span class="n">cat</span><span class="o">.</span><span class="n">forms</span><span class="p">()[</span><span class="mi">8</span><span class="p">]</span>
-<span class="o">&gt;&gt;&gt;</span> <span class="n">form</span><span class="o">.</span><span class="n">word</span><span class="p">,</span> <span class="nb">dict</span><span class="p">(</span><span class="n">form</span><span class="o">.</span><span class="n">feats</span><span class="p">)</span>
-<span class="p">(</span><span class="s1">'кошек'</span><span class="p">,</span> <span class="p">{</span><span class="s1">'Animacy'</span><span class="p">:</span> <span class="s1">'Anim'</span><span class="p">,</span> <span class="s1">'Case'</span><span class="p">:</span> <span class="s1">'Gen'</span><span class="p">,</span> <span class="s1">'Gender'</span><span class="p">:</span> <span class="s1">'Fem'</span><span class="p">,</span> <span class="s1">'Number'</span><span class="p">:</span> <span class="s1">'Plur'</span><span class="p">})</span>
+<p>Every <a href="../analysis/">analysis</a> knows its lexeme - all forms of the word with the same lemma. From an analysis you can get the list of forms, the form with given UD features or the form that agrees with a number. The lexeme is defined by the lemma, so it follows the UD lemma conventions: the lexeme of «Ивановой» is the feminine forms of the surname «Иванова», the lexeme of «важнейшего» is the superlative forms.</p>
+<p>The word forms are spelled as in the dictionary: lowercase and with «ё» where the dictionary has it; the forms of guessed words are described in <a href="../analysis/#guess">Unknown words</a>.</p>
+<h2 id="methods">Methods<a class="headerlink" href="#methods" title="Permanent link">&para;</a></h2>
+<div class="metric-card">
+<h3 id="forms">Forms of the lexeme<a class="headerlink" href="#forms" title="Permanent link">&para;</a></h3>
+<p class="metric-meta"><code>forms</code> · <code>list[Analysis]</code></p>
+<div class="signature highlight"><pre><span></span><code><span class="n">forms</span><span class="p">()</span>
 </code></pre></div>
-<p>The lexeme is defined by the lemma, so it follows the UD lemma conventions: the lexeme of «Ивановой» is the feminine forms of the surname «Иванова», the lexeme of «важнейшего» is the superlative forms. Form variants differ in labels: «кошкою» has <code>V-oy</code>, the second locative «в лесу» has <code>loc2</code> (its <code>Case=Loc</code> feature is the same as in «о лесе»).</p>
-<h2 id="inflect">Form by features<a class="headerlink" href="#inflect" title="Permanent link">&para;</a></h2>
-<p><code>inflect</code> takes UD features as keyword arguments and returns the word form:</p>
-<div class="highlight"><pre><span></span><code><span class="o">&gt;&gt;&gt;</span> <span class="n">cat</span><span class="o">.</span><span class="n">inflect</span><span class="p">(</span><span class="n">Case</span><span class="o">=</span><span class="s2">"Gen"</span><span class="p">)</span>
-<span class="s1">'кошки'</span>
-<span class="o">&gt;&gt;&gt;</span> <span class="n">cat</span><span class="o">.</span><span class="n">inflect</span><span class="p">(</span><span class="n">Case</span><span class="o">=</span><span class="s2">"Gen"</span><span class="p">,</span> <span class="n">Number</span><span class="o">=</span><span class="s2">"Plur"</span><span class="p">)</span>
-<span class="s1">'кошек'</span>
-<span class="o">&gt;&gt;&gt;</span> <span class="n">verb</span> <span class="o">=</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"читал"</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
-<span class="o">&gt;&gt;&gt;</span> <span class="n">verb</span><span class="o">.</span><span class="n">inflect</span><span class="p">(</span><span class="n">Gender</span><span class="o">=</span><span class="s2">"Fem"</span><span class="p">),</span> <span class="n">verb</span><span class="o">.</span><span class="n">inflect</span><span class="p">(</span><span class="n">Tense</span><span class="o">=</span><span class="s2">"Pres"</span><span class="p">,</span> <span class="n">Person</span><span class="o">=</span><span class="s2">"3"</span><span class="p">,</span> <span class="n">Number</span><span class="o">=</span><span class="s2">"Plur"</span><span class="p">),</span> <span class="n">verb</span><span class="o">.</span><span class="n">inflect</span><span class="p">(</span><span class="n">VerbForm</span><span class="o">=</span><span class="s2">"Inf"</span><span class="p">)</span>
-<span class="p">(</span><span class="s1">'читала'</span><span class="p">,</span> <span class="s1">'читают'</span><span class="p">,</span> <span class="s1">'читать'</span><span class="p">)</span>
-<span class="o">&gt;&gt;&gt;</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"новый"</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">inflect</span><span class="p">(</span><span class="n">Degree</span><span class="o">=</span><span class="s2">"Cmp"</span><span class="p">)</span>
-<span class="s1">'новее'</span>
+<p>The forms of the lexeme in dictionary order - analyses like those of <code>analyze</code>, with probability 1. Form variants differ in labels: «кошкою» has <code>V-oy</code>, the second locative «в лесу» has <code>loc2</code> (its <code>Case=Loc</code> feature is the same as in «о лесе»).</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Code</label><label for="__tabbed_1_2">Result</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">rumorph</span><span class="w"> </span><span class="kn">import</span> <span class="n">Analyzer</span>
+
+<span class="n">morph</span> <span class="o">=</span> <span class="n">Analyzer</span><span class="p">()</span>
+<span class="n">cat</span> <span class="o">=</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"кошка"</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+<span class="p">[</span><span class="n">form</span><span class="o">.</span><span class="n">word</span> <span class="k">for</span> <span class="n">form</span> <span class="ow">in</span> <span class="n">cat</span><span class="o">.</span><span class="n">forms</span><span class="p">()]</span>
+<span class="n">form</span> <span class="o">=</span> <span class="n">cat</span><span class="o">.</span><span class="n">forms</span><span class="p">()[</span><span class="mi">8</span><span class="p">]</span>
+<span class="n">form</span><span class="o">.</span><span class="n">word</span><span class="p">,</span> <span class="n">form</span><span class="o">.</span><span class="n">feats</span>
 </code></pre></div>
-<p>Features that are not given are kept where possible: «кошка» in the genitive is «кошки», not «кошек». The short form is chosen only when asked for (<code>Variant="Short"</code>). If the lexeme has no form with these features, <code>inflect</code> raises <code>FormNotFoundError</code>, a subclass of <code>LookupError</code>; if the feature or the value is not in the dictionary (a typo like <code>Case="Genitive"</code>), it raises <code>ValueError</code> with the list of valid values.</p>
-<h2 id="agree">Agreement with a number<a class="headerlink" href="#agree" title="Permanent link">&para;</a></h2>
-<p><code>agree</code> makes a noun, an adjective, a pronominal adjective or a participle agree with a number:</p>
-<div class="highlight"><pre><span></span><code><span class="o">&gt;&gt;&gt;</span> <span class="n">ruble</span> <span class="o">=</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"рубль"</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
-<span class="o">&gt;&gt;&gt;</span> <span class="p">[</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">n</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">ruble</span><span class="o">.</span><span class="n">agree</span><span class="p">(</span><span class="n">n</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">21</span><span class="p">)]</span>
-<span class="p">[</span><span class="s1">'1 рубль'</span><span class="p">,</span> <span class="s1">'2 рубля'</span><span class="p">,</span> <span class="s1">'5 рублей'</span><span class="p">,</span> <span class="s1">'21 рубль'</span><span class="p">]</span>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code>['кошка',
+ 'кошки',
+ 'кошке',
+ 'кошку',
+ 'кошкой',
+ 'кошкою',
+ 'кошке',
+ 'кошки',
+ 'кошек',
+ 'кошкам',
+ 'кошек',
+ 'кошками',
+ 'кошках']
+('кошек', {'Animacy': 'Anim', 'Case': 'Gen', 'Gender': 'Fem', 'Number': 'Plur'})
 </code></pre></div>
-<p>The case of the analysis is kept: «рублях» with 2 is «рублях» («о 2 рублях»), the accusative of animate nouns gives «вижу двух котов». Adjectives and nouns declined like adjectives agree by gender: «две новые», «два новых», «два учёных», «две столовые». After a number the counting form is taken: «5 вольт», «5 лет», «5 человек». Words without a singular take the plural: «1 сутки», «2 суток». If the needed form does not exist («5 молока») or the word does not agree with numbers (a verb, an adverb), <code>agree</code> raises <code>FormNotFoundError</code>.</p>
-<p>The word forms of <code>forms</code>, <code>inflect</code> and <code>agree</code> are spelled as in the dictionary: lowercase and with the letter «ё» where the dictionary has it.</p>
+</div>
+</div>
+</div>
+</div>
+<div class="metric-card">
+<h3 id="inflect">Form by features<a class="headerlink" href="#inflect" title="Permanent link">&para;</a></h3>
+<p class="metric-meta"><code>inflect</code> · <code>str</code></p>
+<div class="signature highlight"><pre><span></span><code><span class="n">inflect</span><span class="p">(</span><span class="o">**</span><span class="n">feats</span><span class="p">)</span>
+</code></pre></div>
+<p>The form of the lexeme with the given UD features. Features that are not given are kept where possible: «кошка» in the genitive is «кошки», not «кошек». The short form is chosen only when asked for (<code>Variant="Short"</code>).</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Parameter</th>
+<th style="text-align: left;">Type</th>
+<th style="text-align: left;">Default</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>**feats</code></td>
+<td style="text-align: left;"><code>str</code></td>
+<td style="text-align: left;">-</td>
+<td style="text-align: left;">UD features and their values: <code>Case="Gen"</code>, <code>Number="Plur"</code></td>
+</tr>
+</tbody>
+</table>
+<p>Exceptions:</p>
+<ul>
+<li><code>FormNotFoundError</code> - the lexeme has no form with these features;</li>
+<li><code>ValueError</code> - the feature or the value is not in the dictionary (a typo like <code>Case="Genitive"</code>), the message lists the valid ones;</li>
+<li><code>TypeError</code> - a feature value that is not a string.</li>
+</ul>
+<div class="tabbed-set tabbed-alternate" data-tabs="2:2"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Code</label><label for="__tabbed_2_2">Result</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="n">cat</span><span class="o">.</span><span class="n">inflect</span><span class="p">(</span><span class="n">Case</span><span class="o">=</span><span class="s2">"Gen"</span><span class="p">),</span> <span class="n">cat</span><span class="o">.</span><span class="n">inflect</span><span class="p">(</span><span class="n">Case</span><span class="o">=</span><span class="s2">"Gen"</span><span class="p">,</span> <span class="n">Number</span><span class="o">=</span><span class="s2">"Plur"</span><span class="p">)</span>
+<span class="n">verb</span> <span class="o">=</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"читал"</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+<span class="n">verb</span><span class="o">.</span><span class="n">inflect</span><span class="p">(</span><span class="n">Gender</span><span class="o">=</span><span class="s2">"Fem"</span><span class="p">),</span> <span class="n">verb</span><span class="o">.</span><span class="n">inflect</span><span class="p">(</span><span class="n">VerbForm</span><span class="o">=</span><span class="s2">"Inf"</span><span class="p">)</span>
+<span class="n">verb</span><span class="o">.</span><span class="n">inflect</span><span class="p">(</span><span class="n">Tense</span><span class="o">=</span><span class="s2">"Pres"</span><span class="p">,</span> <span class="n">Person</span><span class="o">=</span><span class="s2">"3"</span><span class="p">,</span> <span class="n">Number</span><span class="o">=</span><span class="s2">"Plur"</span><span class="p">)</span>
+<span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"новый"</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">inflect</span><span class="p">(</span><span class="n">Degree</span><span class="o">=</span><span class="s2">"Cmp"</span><span class="p">)</span>
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code>('кошки', 'кошек')
+('читала', 'читать')
+'читают'
+'новее'
+</code></pre></div>
+</div>
+</div>
+</div>
+</div>
+<div class="metric-card">
+<h3 id="agree">Agreement with a number<a class="headerlink" href="#agree" title="Permanent link">&para;</a></h3>
+<p class="metric-meta"><code>agree</code> · <code>str</code></p>
+<div class="signature highlight"><pre><span></span><code><span class="n">agree</span><span class="p">(</span><span class="n">number</span><span class="p">)</span>
+</code></pre></div>
+<p>The form of a noun, an adjective, a pronominal adjective or a participle that agrees with a number. The case of the analysis is kept: «рублях» with 2 is «рублях» («о 2 рублях»), the accusative of animate nouns gives «вижу двух котов». Adjectives and nouns declined like adjectives agree by gender: «две новые», «два новых», «два учёных», «две столовые». After a number the counting form is taken: «5 вольт», «5 лет», «5 человек». Words without a singular take the plural: «1 сутки», «2 суток». A negative number agrees as its absolute value.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Parameter</th>
+<th style="text-align: left;">Type</th>
+<th style="text-align: left;">Default</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>number</code></td>
+<td style="text-align: left;"><code>int</code></td>
+<td style="text-align: left;">-</td>
+<td style="text-align: left;">The number</td>
+</tr>
+</tbody>
+</table>
+<p>Exceptions:</p>
+<ul>
+<li><code>FormNotFoundError</code> - the word does not agree with numbers (a verb, an adverb) or the lexeme has no needed form («5 молока»);</li>
+<li><code>TypeError</code> - a number that is not an integer.</li>
+</ul>
+<div class="tabbed-set tabbed-alternate" data-tabs="3:2"><input checked="checked" id="__tabbed_3_1" name="__tabbed_3" type="radio" /><input id="__tabbed_3_2" name="__tabbed_3" type="radio" /><div class="tabbed-labels"><label for="__tabbed_3_1">Code</label><label for="__tabbed_3_2">Result</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="n">ruble</span> <span class="o">=</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"рубль"</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+<span class="p">[</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">n</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">ruble</span><span class="o">.</span><span class="n">agree</span><span class="p">(</span><span class="n">n</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">21</span><span class="p">)]</span>
+<span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"сутки"</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">agree</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code>['1 рубль', '2 рубля', '5 рублей', '21 рубль']
+'суток'
+</code></pre></div>
+</div>
+</div>
+</div>
+</div>
 
 
 
@@ -732,6 +1028,12 @@
           
 <script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
         </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
         
       </main>
       
@@ -789,7 +1091,7 @@
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.top", "content.code.copy", "search.highlight", "search.suggest"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
       <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>

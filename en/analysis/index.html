@@ -13,7 +13,7 @@
         <link rel="canonical" href="https://sergeyshk.github.io/ruMorph/en/analysis/">
       
       
-        <link rel="prev" href="../authors/">
+        <link rel="prev" href="../analyzer/">
       
       
         <link rel="next" href="../inflection/">
@@ -52,8 +52,8 @@
         
         
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
-        <style>:root{--md-text-font:"Source Sans Pro";--md-code-font:"Roboto Mono"}</style>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,300i,400,400i,700,700i%7CSource+Code+Pro:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Source Sans Pro";--md-code-font:"Source Code Pro"}</style>
       
     
     
@@ -69,6 +69,8 @@
   
   
     
+    
+      
     
     
     
@@ -124,7 +126,33 @@
     </div>
     
       
+        <form class="md-header__option" data-md-component="palette">
+  
     
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="blue"  aria-label="Темная тема"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Темная тема" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="blue" data-md-color-accent="blue"  aria-label="Светлая тема"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Светлая тема" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
     
     
       <div class="md-header__option">
@@ -178,6 +206,8 @@
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
         </button>
       </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
       
     </form>
     <div class="md-search__output">
@@ -238,6 +268,25 @@
         </a>
       </li>
     
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../analyzer/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Analyzer
+
+      </a>
+    </li>
   
 
       
@@ -439,6 +488,90 @@
   
   
     <li class="md-nav__item">
+      <a href="../migration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrating from pymorphy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../performance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Speed and memory
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../exceptions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Exceptions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../authors/" class="md-nav__link">
         
   
@@ -463,6 +596,33 @@
           </ul>
         </nav>
       
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../analyzer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Analyzer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -534,21 +694,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#analyzer" class="md-nav__link">
+  <a href="#attributes" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Analyzer
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#analyze" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Analyses of a word form
+        Attributes
       
     </span>
   </a>
@@ -582,28 +731,6 @@
     <span class="md-ellipsis">
       
         Unknown words
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#lists" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Lists of words
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#dictionary" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Dictionary
       
     </span>
   </a>
@@ -672,21 +799,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#analyzer" class="md-nav__link">
+  <a href="#attributes" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Analyzer
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#analyze" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Analyses of a word form
+        Attributes
       
     </span>
   </a>
@@ -726,28 +842,6 @@
   
 </li>
       
-        <li class="md-nav__item">
-  <a href="#lists" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Lists of words
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#dictionary" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Dictionary
-      
-    </span>
-  </a>
-  
-</li>
-      
     </ul>
   
 </nav>
@@ -769,58 +863,78 @@
 
 
 <h1 id="word-analysis">Word analysis<a class="headerlink" href="#word-analysis" title="Permanent link">&para;</a></h1>
-<p>The analyzer finds every analysis of a word form in the OpenCorpora dictionary - the normal form, the part of speech and the <a href="https://universaldependencies.org/">Universal Dependencies</a> features - and orders them by probability.</p>
-<h2 id="analyzer">Analyzer<a class="headerlink" href="#analyzer" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">rumorph</span><span class="w"> </span><span class="kn">import</span> <span class="n">Analyzer</span>
-<span class="o">&gt;&gt;&gt;</span> <span class="n">morph</span> <span class="o">=</span> <span class="n">Analyzer</span><span class="p">()</span>
+<p>An analysis is an <code>Analysis</code> object returned by the <code>analyze</code> and <code>analyze_many</code> methods of the <a href="../analyzer/">analyzer</a>: the lemma, the part of speech and the <a href="https://universaldependencies.org/">Universal Dependencies</a> features, the probability and the source of the analysis. Analyses are immutable; they can be compared, put into sets and pickled. The forms of a word are given by the <code>forms</code>, <code>inflect</code> and <code>agree</code> methods - see <a href="../inflection/">Inflection</a>.</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Code</label><label for="__tabbed_1_2">Result</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">rumorph</span><span class="w"> </span><span class="kn">import</span> <span class="n">Analyzer</span>
+
+<span class="n">morph</span> <span class="o">=</span> <span class="n">Analyzer</span><span class="p">()</span>
+<span class="n">analysis</span> <span class="o">=</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"стали"</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+<span class="n">analysis</span><span class="o">.</span><span class="n">lemma</span><span class="p">,</span> <span class="n">analysis</span><span class="o">.</span><span class="n">pos</span><span class="p">,</span> <span class="n">analysis</span><span class="o">.</span><span class="n">feats</span><span class="p">,</span> <span class="n">analysis</span><span class="o">.</span><span class="n">labels</span>
 </code></pre></div>
-<p>The dictionary loads in a few milliseconds when the analyzer is created. One analyzer is enough for the whole program, including several threads. By default the dictionary from the package is used; another dictionary file is passed as the <code>path</code> argument. The analyzer and the analyses can be pickled, so they work with multiprocessing and joblib: another process loads the dictionary once, however many analyses it receives.</p>
-<h2 id="analyze">Analyses of a word form<a class="headerlink" href="#analyze" title="Permanent link">&para;</a></h2>
-<p><code>analyze</code> returns the analyses of a word form in order of decreasing probability:</p>
-<div class="highlight"><pre><span></span><code><span class="o">&gt;&gt;&gt;</span> <span class="k">for</span> <span class="n">analysis</span> <span class="ow">in</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"стали"</span><span class="p">)[:</span><span class="mi">2</span><span class="p">]:</span>
-<span class="o">...</span>     <span class="nb">print</span><span class="p">(</span><span class="n">analysis</span><span class="o">.</span><span class="n">lemma</span><span class="p">,</span> <span class="n">analysis</span><span class="o">.</span><span class="n">pos</span><span class="p">,</span> <span class="nb">dict</span><span class="p">(</span><span class="n">analysis</span><span class="o">.</span><span class="n">feats</span><span class="p">),</span> <span class="nb">round</span><span class="p">(</span><span class="n">analysis</span><span class="o">.</span><span class="n">prob</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
-<span class="n">стать</span> <span class="n">VERB</span> <span class="p">{</span><span class="s1">'Aspect'</span><span class="p">:</span> <span class="s1">'Perf'</span><span class="p">,</span> <span class="s1">'Mood'</span><span class="p">:</span> <span class="s1">'Ind'</span><span class="p">,</span> <span class="s1">'Number'</span><span class="p">:</span> <span class="s1">'Plur'</span><span class="p">,</span> <span class="s1">'Tense'</span><span class="p">:</span> <span class="s1">'Past'</span><span class="p">,</span> <span class="s1">'VerbForm'</span><span class="p">:</span> <span class="s1">'Fin'</span><span class="p">,</span> <span class="s1">'Voice'</span><span class="p">:</span> <span class="s1">'Mid'</span><span class="p">}</span> <span class="mf">0.975</span>
-<span class="n">сталь</span> <span class="n">NOUN</span> <span class="p">{</span><span class="s1">'Animacy'</span><span class="p">:</span> <span class="s1">'Inan'</span><span class="p">,</span> <span class="s1">'Case'</span><span class="p">:</span> <span class="s1">'Gen'</span><span class="p">,</span> <span class="s1">'Gender'</span><span class="p">:</span> <span class="s1">'Fem'</span><span class="p">,</span> <span class="s1">'Number'</span><span class="p">:</span> <span class="s1">'Sing'</span><span class="p">}</span> <span class="mf">0.011</span>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code>('стать',
+ 'VERB',
+ {'Aspect': 'Perf',
+  'Mood': 'Ind',
+  'Number': 'Plur',
+  'Tense': 'Past',
+  'VerbForm': 'Fin',
+  'Voice': 'Mid'},
+ frozenset({'intr'}))
 </code></pre></div>
+</div>
+</div>
+</div>
+<h2 id="attributes">Attributes<a class="headerlink" href="#attributes" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
 <tr>
-<th>Field</th>
-<th>Meaning</th>
+<th style="text-align: left;">Attribute</th>
+<th style="text-align: left;">Type</th>
+<th style="text-align: left;">Description</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>word</code></td>
-<td>the word form as spelled in the dictionary: with the letter «ё» if the dictionary has it; for rule and guessed analyses - as in the text, but a guessed one takes «ё» from the ending of the dictionary form («пингвиненка» → «пингвинёнка»)</td>
+<td style="text-align: left;"><code>word</code></td>
+<td style="text-align: left;"><code>str</code></td>
+<td style="text-align: left;">The word form as spelled in the dictionary: with «ё» if the dictionary has it; for analyses by rules and guessed ones - as in the text, but guessed ones take «ё» from the ending of the dictionary form («пингвиненка» - «пингвинёнка»)</td>
 </tr>
 <tr>
-<td><code>lemma</code></td>
-<td>the normal form</td>
+<td style="text-align: left;"><code>lemma</code></td>
+<td style="text-align: left;"><code>str</code></td>
+<td style="text-align: left;">Initial form</td>
 </tr>
 <tr>
-<td><code>pos</code></td>
-<td>the UD part of speech: <code>NOUN</code>, <code>VERB</code>, <code>ADJ</code>, <code>DET</code>, <code>ADP</code> and so on</td>
+<td style="text-align: left;"><code>pos</code></td>
+<td style="text-align: left;"><code>str</code></td>
+<td style="text-align: left;">UD part of speech: <code>NOUN</code>, <code>VERB</code>, <code>ADJ</code>, <code>DET</code>, <code>ADP</code> and so on</td>
 </tr>
 <tr>
-<td><code>feats</code></td>
-<td>the UD features as a dict <code>{"Case": "Gen", "Number": "Sing"}</code>; a new one each time, changing it does not change the analysis</td>
+<td style="text-align: left;"><code>feats</code></td>
+<td style="text-align: left;"><code>dict[str, str]</code></td>
+<td style="text-align: left;">UD features: <code>{"Case": "Gen", "Number": "Sing"}</code>; a new dictionary each time, changing it does not change the analysis</td>
 </tr>
 <tr>
-<td><code>labels</code></td>
-<td>dictionary labels without a UD feature, as a <code>frozenset</code>: <code>{"Infr"}</code> (informal)</td>
+<td style="text-align: left;"><code>labels</code></td>
+<td style="text-align: left;"><code>frozenset[str]</code></td>
+<td style="text-align: left;">Dictionary labels that have no UD feature: <code>Infr</code> (informal) and others</td>
 </tr>
 <tr>
-<td><code>prob</code></td>
-<td>the probability of the analysis; it sums to 1 over all analyses of the word form</td>
+<td style="text-align: left;"><code>prob</code></td>
+<td style="text-align: left;"><code>float</code></td>
+<td style="text-align: left;">Probability of the analysis; it sums to 1 over all analyses of the word form</td>
 </tr>
 <tr>
-<td><code>source</code></td>
-<td>where the analysis comes from: <code>"dictionary"</code> - the word form is in the dictionary, <code>"rule"</code> - the token is not in the dictionary and is analyzed by a rule (see <a href="#rules">below</a>), <code>"guess"</code> - the analysis of an unknown word is guessed (see <a href="#guess">below</a>)</td>
+<td style="text-align: left;"><code>source</code></td>
+<td style="text-align: left;"><code>str</code></td>
+<td style="text-align: left;">Where the analysis comes from: <code>"dictionary"</code> - the word form is in the dictionary, <code>"rule"</code> - an <a href="#rules">analysis by rule</a>, <code>"guess"</code> - a <a href="#guess">guessed analysis</a> of an unknown word</td>
 </tr>
 </tbody>
 </table>
-<p>Case does not matter, and the letter «е» may stand for «ё»: <code>analyze("ЕЖ")</code> returns the analyses of the word form «ёж».</p>
 <h2 id="ud">Parts of speech and features<a class="headerlink" href="#ud" title="Permanent link">&para;</a></h2>
 <p>Parts of speech and features follow <a href="https://universaldependencies.org/u/pos/">Universal Dependencies</a> as annotated in the largest Russian treebank, <a href="https://github.com/UniversalDependencies/UD_Russian-SynTagRus">UD_Russian-SynTagRus</a>, so the output can be compared with spaCy, Stanza and other UD tools. Differences from the OpenCorpora parts of speech:</p>
 <ul>
@@ -831,81 +945,92 @@
 <li>prepositions are <code>ADP</code>, coordinating conjunctions <code>CCONJ</code>, subordinating ones <code>SCONJ</code>, particles <code>PART</code>.</li>
 </ul>
 <p>Features: case, number, gender, animacy, person, tense, aspect, mood, voice, verb form, degree, the short form (<code>Variant=Short</code>), the type of a proper name (<code>NameType</code>), abbreviation (<code>Abbr</code>), possessiveness (<code>Poss</code>), the type of a numeral (<code>NumType</code>) and how it is written (<code>NumForm</code>), the type of a pronoun or pronominal adverb (<code>PronType</code>: «там» - <code>Dem</code>, «где» - <code>Rel</code>, «никогда» - <code>Neg</code>), reflexivity (<code>Reflex</code>), indeclinability (<code>InflClass=Ind</code>), negation (<code>Polarity=Neg</code>).</p>
-<p>Lemmas follow SynTagRus too: feminine surnames and patronymics keep the feminine lemma («Ивановой» - «иванова»), superlatives stay superlative («важнейшей» - «важнейший»), «денег» - «деньги». When several OpenCorpora analyses coincide in UD (the conjunction and the adverb «так»), they are merged into one with the sum of their probabilities. The forms of a word are given by the <code>forms</code>, <code>inflect</code> and <code>agree</code> methods of the analysis - see <a href="../inflection/">Inflection</a>.</p>
+<p>Lemmas follow SynTagRus too: feminine surnames and patronymics keep the feminine lemma («Ивановой» - «иванова»), superlatives stay superlative («важнейшей» - «важнейший»), «денег» - «деньги». When several OpenCorpora analyses coincide in UD (the conjunction and the adverb «так»), they are merged into one with the sum of their probabilities.</p>
 <p>The <code>labels</code> are the <a href="https://opencorpora.org/dict.php?act=gram">OpenCorpora</a> grammemes that have no UD feature: style (<code>Infr</code>, <code>Slng</code>, <code>Arch</code>), qualitative adjective (<code>Qual</code>), parenthetical word (<code>Prnt</code>), transitivity (<code>tran</code>, <code>intr</code>), whether the speaker is included in an imperative (<code>incl</code> - «пойдемте», <code>excl</code> - «иди»), the second locative (<code>loc2</code> - «в лесу») and others.</p>
 <h2 id="rules">Tokens outside the dictionary<a class="headerlink" href="#rules" title="Permanent link">&para;</a></h2>
 <p>Numbers, punctuation, Latin words and abbreviations are analyzed by rules, their <code>source</code> is <code>"rule"</code>:</p>
-<div class="highlight"><pre><span></span><code><span class="o">&gt;&gt;&gt;</span> <span class="p">[(</span><span class="n">a</span><span class="o">.</span><span class="n">lemma</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">pos</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">feats</span><span class="p">[</span><span class="s2">"NumType"</span><span class="p">],</span> <span class="nb">round</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">prob</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"2026"</span><span class="p">)]</span>
-<span class="p">[(</span><span class="s1">'2026'</span><span class="p">,</span> <span class="s1">'ADJ'</span><span class="p">,</span> <span class="s1">'Ord'</span><span class="p">,</span> <span class="mf">0.94</span><span class="p">),</span> <span class="p">(</span><span class="s1">'2026'</span><span class="p">,</span> <span class="s1">'NUM'</span><span class="p">,</span> <span class="s1">'Card'</span><span class="p">,</span> <span class="mf">0.06</span><span class="p">)]</span>
-<span class="o">&gt;&gt;&gt;</span> <span class="p">[(</span><span class="n">a</span><span class="o">.</span><span class="n">lemma</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">pos</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">feats</span><span class="p">[</span><span class="s2">"Case"</span><span class="p">])</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"2005-го"</span><span class="p">)][:</span><span class="mi">1</span><span class="p">]</span>
-<span class="p">[(</span><span class="s1">'2005-й'</span><span class="p">,</span> <span class="s1">'ADJ'</span><span class="p">,</span> <span class="s1">'Gen'</span><span class="p">)]</span>
-</code></pre></div>
 <table>
 <thead>
 <tr>
-<th>Token</th>
-<th>Analysis</th>
+<th style="text-align: left;">Token</th>
+<th style="text-align: left;">Analysis</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>punctuation; symbols <code>%</code>, <code>$</code>, <code>№</code>, <code>−</code>, emoji</td>
-<td><code>PUNCT</code>; <code>SYM</code></td>
+<td style="text-align: left;">punctuation; symbols <code>%</code>, <code>$</code>, <code>№</code>, <code>−</code>, emoji</td>
+<td style="text-align: left;"><code>PUNCT</code>; <code>SYM</code></td>
 </tr>
 <tr>
-<td>numbers in digits: «15», «3,14», «10 000», «17:04»</td>
-<td><code>NUM</code> with <code>NumForm=Digit</code>, <code>NumType=Card</code>; an integer may also be an ordinal <code>ADJ</code> with <code>NumType=Ord</code> - for 1000-2100 (years), except round hundreds, this is the first analysis</td>
+<td style="text-align: left;">numbers in digits: «15», «3,14», «10 000», «17:04»</td>
+<td style="text-align: left;"><code>NUM</code> with <code>NumForm=Digit</code>, <code>NumType=Card</code>; an integer may also be an ordinal <code>ADJ</code> with <code>NumType=Ord</code> - for 1000-2100 (years), except round hundreds, this is the first analysis</td>
 </tr>
 <tr>
-<td>numbers with an ending: «2005-го», «5-ти»</td>
-<td>an ordinal <code>ADJ</code> with the case and forms of «1-го», or a cardinal <code>NUM</code></td>
+<td style="text-align: left;">numbers with an ending: «2005-го», «5-ти»</td>
+<td style="text-align: left;">an ordinal <code>ADJ</code> with the case and forms of «1-го», or a cardinal <code>NUM</code></td>
 </tr>
 <tr>
-<td>Roman numerals: «XX»</td>
-<td>an ordinal <code>ADJ</code> with <code>NumForm=Roman</code></td>
+<td style="text-align: left;">Roman numerals: «XX»</td>
+<td style="text-align: left;">an ordinal <code>ADJ</code> with <code>NumForm=Roman</code></td>
 </tr>
 <tr>
-<td>Latin words: «iPhone»</td>
-<td><code>X</code> with <code>Foreign=Yes</code></td>
+<td style="text-align: left;">Latin words: «iPhone»</td>
+<td style="text-align: left;"><code>X</code> with <code>Foreign=Yes</code></td>
 </tr>
 <tr>
-<td>initials: «А.»</td>
-<td><code>PROPN</code> with <code>Abbr=Yes</code>: a given name, a patronymic or a surname</td>
+<td style="text-align: left;">initials: «А.»</td>
+<td style="text-align: left;"><code>PROPN</code> with <code>Abbr=Yes</code>: a given name, a patronymic or a surname</td>
 </tr>
 <tr>
-<td>abbreviations with a dot: «т.», «им.»</td>
-<td>the analyses of the dictionary abbreviation without the dot</td>
+<td style="text-align: left;">abbreviations with a dot: «т.», «им.»</td>
+<td style="text-align: left;">the analyses of the dictionary abbreviation without the dot</td>
 </tr>
 <tr>
-<td>capitalized abbreviations: «НКО»</td>
-<td><code>PROPN</code> or <code>NOUN</code> with <code>Abbr=Yes</code></td>
+<td style="text-align: left;">capitalized abbreviations: «НКО»</td>
+<td style="text-align: left;"><code>PROPN</code> or <code>NOUN</code> with <code>Abbr=Yes</code></td>
 </tr>
 <tr>
-<td>adverbs «по-бурятски», «по-молодому»</td>
-<td><code>ADV</code> with <code>Degree=Pos</code></td>
+<td style="text-align: left;">adverbs «по-бурятски», «по-молодому»</td>
+<td style="text-align: left;"><code>ADV</code> with <code>Degree=Pos</code></td>
 </tr>
 </tbody>
 </table>
-<p>The shares of ambiguous analyses come from the frequencies in SynTagRus. A token with whitespace (except a number), a control or an invisible character gets no analyses.</p>
-<h2 id="guess">Unknown words<a class="headerlink" href="#guess" title="Permanent link">&para;</a></h2>
-<p>The analyses of a Cyrillic word that is not in the dictionary are guessed by its ending: the analyzer takes the forms of dictionary words with the same ending - their part of speech, features and inflection. Their <code>source</code> is <code>"guess"</code>:</p>
-<div class="highlight"><pre><span></span><code><span class="o">&gt;&gt;&gt;</span> <span class="p">[(</span><span class="n">a</span><span class="o">.</span><span class="n">lemma</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">pos</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">feats</span><span class="p">[</span><span class="s2">"Case"</span><span class="p">],</span> <span class="nb">round</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">prob</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"чатботу"</span><span class="p">)][:</span><span class="mi">2</span><span class="p">]</span>
-<span class="p">[(</span><span class="s1">'чатбот'</span><span class="p">,</span> <span class="s1">'NOUN'</span><span class="p">,</span> <span class="s1">'Dat'</span><span class="p">,</span> <span class="mf">0.44</span><span class="p">),</span> <span class="p">(</span><span class="s1">'чатбота'</span><span class="p">,</span> <span class="s1">'NOUN'</span><span class="p">,</span> <span class="s1">'Acc'</span><span class="p">,</span> <span class="mf">0.4</span><span class="p">)]</span>
-<span class="o">&gt;&gt;&gt;</span> <span class="n">guess</span> <span class="o">=</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"Мартова"</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
-<span class="o">&gt;&gt;&gt;</span> <span class="n">guess</span><span class="o">.</span><span class="n">lemma</span><span class="p">,</span> <span class="n">guess</span><span class="o">.</span><span class="n">pos</span><span class="p">,</span> <span class="n">guess</span><span class="o">.</span><span class="n">feats</span><span class="p">[</span><span class="s2">"NameType"</span><span class="p">],</span> <span class="n">guess</span><span class="o">.</span><span class="n">inflect</span><span class="p">(</span><span class="n">Case</span><span class="o">=</span><span class="s2">"Dat"</span><span class="p">)</span>
-<span class="p">(</span><span class="s1">'мартов'</span><span class="p">,</span> <span class="s1">'PROPN'</span><span class="p">,</span> <span class="s1">'Sur'</span><span class="p">,</span> <span class="s1">'Мартову'</span><span class="p">)</span>
+<p>The shares of ambiguous analyses come from the frequencies in SynTagRus.</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="2:2"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Code</label><label for="__tabbed_2_2">Result</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="p">[(</span><span class="n">a</span><span class="o">.</span><span class="n">lemma</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">pos</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">feats</span><span class="p">[</span><span class="s2">"NumType"</span><span class="p">],</span> <span class="nb">round</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">prob</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"2026"</span><span class="p">)]</span>
+<span class="p">[(</span><span class="n">a</span><span class="o">.</span><span class="n">lemma</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">pos</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">feats</span><span class="p">[</span><span class="s2">"Case"</span><span class="p">])</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"2005-го"</span><span class="p">)][:</span><span class="mi">1</span><span class="p">]</span>
 </code></pre></div>
-<p>A lowercase word is guessed as a common word, a capitalized word mostly as a proper noun: a surname, a given name, a place. Words in mixed case («ЗуМер») are not guessed.</p>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code>[('2026', 'ADJ', 'Ord', 0.94), ('2026', 'NUM', 'Card', 0.06)]
+[('2005-й', 'ADJ', 'Gen')]
+</code></pre></div>
+</div>
+</div>
+</div>
+<h2 id="guess">Unknown words<a class="headerlink" href="#guess" title="Permanent link">&para;</a></h2>
+<p>The analyses of a Cyrillic word that is not in the dictionary are guessed by its ending: the analyzer takes the forms of dictionary words with the same ending - their part of speech, features and inflection. Their <code>source</code> is <code>"guess"</code>. A lowercase word is guessed as a common word, a capitalized word mostly as a proper noun: a surname, a given name, a place. Words in mixed case («ЗуМер») are not guessed.</p>
 <p>A hyphenated word is analyzed by its last part: «крэш-тестов» - «крэш-тест», «Мак-Киннона» - «мак-киннон»; if the last part is a particle («сколь-нибудь»), by the first one. A word with a known prefix - «эко», «анти», «супер», «микро» and others - is analyzed by the dictionary word without it: «экодомов» - «экодом». These analyses are guessed too.</p>
 <p>A guessed analysis has forms, and <code>forms</code>, <code>inflect</code> and <code>agree</code> work with it; the forms keep the capital letters: «Мак-Киннона» in the dative is «Мак-Киннону», «ПИН-КОДОВ» is «ПИН-КОДАМ». The exception is an analysis with a particle («сколь-нибудь»): it has no forms, <code>forms</code> gives only the analysis itself.</p>
-<h2 id="lists">Lists of words<a class="headerlink" href="#lists" title="Permanent link">&para;</a></h2>
-<p><code>analyze_many</code> analyzes a collection of word forms, and <code>lemmatize</code> returns the lemmas of their most probable analyses:</p>
-<div class="highlight"><pre><span></span><code><span class="o">&gt;&gt;&gt;</span> <span class="n">morph</span><span class="o">.</span><span class="n">lemmatize</span><span class="p">([</span><span class="s2">"Мы"</span><span class="p">,</span> <span class="s2">"стали"</span><span class="p">,</span> <span class="s2">"друзьями"</span><span class="p">])</span>
-<span class="p">[</span><span class="s1">'мы'</span><span class="p">,</span> <span class="s1">'стать'</span><span class="p">,</span> <span class="s1">'друг'</span><span class="p">]</span>
+<div class="tabbed-set tabbed-alternate" data-tabs="3:2"><input checked="checked" id="__tabbed_3_1" name="__tabbed_3" type="radio" /><input id="__tabbed_3_2" name="__tabbed_3" type="radio" /><div class="tabbed-labels"><label for="__tabbed_3_1">Code</label><label for="__tabbed_3_2">Result</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="p">[(</span><span class="n">a</span><span class="o">.</span><span class="n">lemma</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">pos</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">feats</span><span class="p">[</span><span class="s2">"Case"</span><span class="p">],</span> <span class="nb">round</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">prob</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"чатботу"</span><span class="p">)][:</span><span class="mi">2</span><span class="p">]</span>
+<span class="n">guess</span> <span class="o">=</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"Мартова"</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+<span class="n">guess</span><span class="o">.</span><span class="n">lemma</span><span class="p">,</span> <span class="n">guess</span><span class="o">.</span><span class="n">pos</span><span class="p">,</span> <span class="n">guess</span><span class="o">.</span><span class="n">feats</span><span class="p">[</span><span class="s2">"NameType"</span><span class="p">],</span> <span class="n">guess</span><span class="o">.</span><span class="n">inflect</span><span class="p">(</span><span class="n">Case</span><span class="o">=</span><span class="s2">"Dat"</span><span class="p">)</span>
+<span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"крэш-тестов"</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">lemma</span><span class="p">,</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"экодомов"</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">lemma</span>
 </code></pre></div>
-<p><code>lemmatize</code> returns a token without analyses in lower case. Both methods accept any collection of words - a list, a tuple, a generator - and analyze it without the GIL: several threads sharing one analyzer run in parallel.</p>
-<h2 id="dictionary">Dictionary<a class="headerlink" href="#dictionary" title="Permanent link">&para;</a></h2>
-<p><code>is_known</code> checks whether a word form is in the dictionary. The dictionary is OpenCorpora, about 3.1 million word forms; the probabilities of the analyses come from the OpenCorpora corpus: a word written with «е» instead of «ё» gets the frequencies of the spelling with «ё», and the analyses of word forms missing from the corpus are equally probable. The dictionary is distributed under the <a href="https://creativecommons.org/licenses/by-sa/3.0/">CC BY-SA 3.0</a> license.</p>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code>[('чатбот', 'NOUN', 'Dat', 0.44), ('чатбота', 'NOUN', 'Acc', 0.4)]
+('мартов', 'PROPN', 'Sur', 'Мартову')
+('крэш-тест', 'экодом')
+</code></pre></div>
+</div>
+</div>
+</div>
 
 
 
@@ -925,6 +1050,12 @@
           
 <script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
         </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
         
       </main>
       
@@ -982,7 +1113,7 @@
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.top", "content.code.copy", "search.highlight", "search.suggest"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
       <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
