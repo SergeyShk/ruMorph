@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+message: "If you use ruMorph in research or software, please cite it."
+title: "ruMorph, a fast morphological analyzer for Russian"
+type: software
+authors:
+  - family-names: Shkarin
+    given-names: Sergey
+    email: kouki.sergey@gmail.com
+repository-code: "https://github.com/SergeyShk/ruMorph"
+url: "https://sergeyshk.github.io/ruMorph/"
+license: MIT
+keywords:
+  - russian
+  - nlp
+  - morphology
+  - morphological analysis
+  - lemmatization
+  - inflection
+  - universal dependencies
+  - opencorpora
+  - rust
+abstract: "ruMorph is a morphological analyzer of Russian with a Rust core and a Python API. For a word form it finds the analyses in the OpenCorpora dictionary - the lemma, the part of speech and the Universal Dependencies features in the conventions of the SynTagRus treebank - and orders them by probability; numbers, signs, Latin script and abbreviations are analyzed by rules, and the analyses of unknown words are guessed by their endings, hyphenated parts and prefixes. Every analysis gives the forms of its lexeme, the form with the requested features and the form that agrees with a number. Lists of words are analyzed without the GIL."
