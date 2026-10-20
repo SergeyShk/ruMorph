@@ -143,3 +143,12 @@ def test_pickled_parts(morph):
     analyses += morph.analyze("сколь-нибудь") + morph.analyze("ГУ-ВШЭ")
     analyses += analyses[0].forms()
     assert pickle.loads(pickle.dumps(analyses)) == analyses
+
+
+@pytest.mark.parametrize(
+    ("word", "forms"),
+    [("кот-то", ["кот-то", "кота-то", "коту-то"]), ("это-то", ["это-то", "этого-то", "этому-то"])],
+)
+def test_particle_forms_of_dictionary_words(morph, word, forms):
+    # Частица после словарного слова: формы строятся по первой части, а не по целому слову
+    assert [form.word for form in morph.analyze(word)[0].forms()][:3] == forms

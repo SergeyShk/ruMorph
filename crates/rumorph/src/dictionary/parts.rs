@@ -156,19 +156,20 @@ impl Dictionary {
         normalized(analyses)
     }
 
-    /// Разбор слова с частицей через дефис («смотри-ка») без частицы и частица в написании слова,
-    /// если формы строятся по первой части, а не по всему слову, как у «кто-то»
+    /// Угаданный разбор слова с частицей через дефис («смотри-ка») без частицы и частица
+    /// в написании слова: формы строятся по первой части. У словарных слов («кто-то») частица -
+    /// часть основы
     pub(super) fn without_particle(&self, analysis: &Analysis) -> Option<(Analysis, String)> {
+        if analysis.source != Source::Guess {
+            return None;
+        }
         let entry = analysis.entry?;
         let (base, particle) = analysis.word.rsplit_once('-')?;
         let lower = particle.to_lowercase();
-        if !PARTICLES.contains(&lower.as_str())
-            || self
-                .lexeme(entry.table, entry.form, &analysis.word.to_lowercase())
-                .is_some()
-        {
+        if !PARTICLES.contains(&lower.as_str()) {
             return None;
         }
+        self.lexeme(entry.table, entry.form, &base.to_lowercase())?;
         let lemma = analysis.lemma.strip_suffix(&lower)?.strip_suffix('-')?;
         let base = Analysis {
             word: base.to_owned(),

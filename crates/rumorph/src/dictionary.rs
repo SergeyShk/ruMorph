@@ -534,8 +534,14 @@ impl Dictionary {
         };
         let (lexeme, forms) = self.lexeme_forms(analysis)?;
         let nominal = matches!(tag.pos.as_str(), "NOUN" | "PROPN");
-        // Женские фамилии («Иванова») склоняются как краткие прилагательные: «две Ивановы»
-        let female_surname = feat("NameType") == Some("Sur") && feat("Gender") == Some("Fem");
+        // Женские фамилии на -ова, -ина («Иванова») склоняются как краткие прилагательные:
+        // «две Ивановы»; несклоняемые («Абрамович») и на согласный («Брик») - нет
+        let female_surname = feat("NameType") == Some("Sur")
+            && feat("Gender") == Some("Fem")
+            && feat("InflClass").is_none()
+            && ["ова", "ева", "ёва", "ина", "ына"]
+                .iter()
+                .any(|ending| analysis.lemma.ends_with(ending));
         let adjectival = matches!(tag.pos.as_str(), "ADJ" | "DET")
             || feat("VerbForm") == Some("Part")
             || (nominal && (female_surname || self.adjectival_declension(&lexeme, &forms)));
@@ -620,11 +626,15 @@ impl Dictionary {
         let current = self.ud_codes.get(usize::from(analysis.ud))?;
         let mut wanted = current.values.clone();
         let preferences = &self.preferences;
-        // У инфинитива без запроса формы глагола желательна личная форма, а не причастие
+        // У инфинитива, который сам не подходит под запрос, без запроса формы глагола желательна
+        // личная форма, а не причастие
         if let (Some((form_name, infinitive)), Some((_, finite))) =
             (preferences.infinitive, preferences.finite)
             && wanted[form_name] == infinitive
             && required.iter().all(|&(name, _)| name != form_name)
+            && required
+                .iter()
+                .any(|&(name, value)| current.values[name] != value)
         {
             wanted[form_name] = finite;
         }

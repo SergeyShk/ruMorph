@@ -448,3 +448,19 @@ def test_female_surname_agreement(morph):
         "ивановых",
         "иванова",
     ]
+
+
+@pytest.mark.parametrize(
+    ("word", "two", "five"), [("Абрамович", "абрамович", "абрамовичей"), ("Кох", "кох", "кохов")]
+)
+def test_indeclinable_female_surnames(morph, word, two, five):
+    # Несклоняемые женские фамилии не согласуются как прилагательные
+    female = next(a for a in morph.analyze(word) if a.feats.get("Gender") == "Fem")
+    assert (female.agree(2), female.agree(5)) == (two, five)
+
+
+def test_infinitive_fitting_request(morph):
+    # Инфинитив, который сам подходит под запрос, не меняется на личную форму
+    reading = morph.analyze("читать")[0]
+    assert (reading.inflect(), reading.inflect(Aspect="Imp")) == ("читать", "читать")
+    assert morph.analyze("сделать")[0].inflect(Voice="Act") == "сделать"
