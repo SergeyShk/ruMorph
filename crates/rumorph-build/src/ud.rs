@@ -139,6 +139,7 @@ const POS_EXCEPTIONS: &[(&str, &str, &str)] = &[
     ("PRCL", "приблизительно", "ADV"),
     ("PRCL", "прямо", "ADV"),
     ("PRCL", "собственно", "ADV"),
+    ("PRCL", "также", "ADV"),
     ("PRCL", "там", "ADV"),
     ("PRCL", "угодно", "ADV"),
     ("PRCL", "хоть", "ADV"),
@@ -173,6 +174,173 @@ const MIDDLE_VERBS: &[&str] = &[
     "сесть",
     "стать",
 ];
+
+/// Тип местоимения и местоименного наречия (PronType) по части речи UD и лемме
+const PRONOUN_TYPES: &[(&str, &str, &str)] = &[
+    ("ADV", "более", "Tot"),
+    ("ADV", "больше", "Tot"),
+    ("ADV", "везде", "Tot"),
+    ("ADV", "вон", "Dem"),
+    ("ADV", "всегда", "Tot"),
+    ("ADV", "всего", "Tot"),
+    ("ADV", "всюду", "Tot"),
+    ("ADV", "всячески", "Tot"),
+    ("ADV", "где", "Rel"),
+    ("ADV", "где-нибудь", "Ind"),
+    ("ADV", "где-то", "Ind"),
+    ("ADV", "доселе", "Dem"),
+    ("ADV", "затем", "Dem"),
+    ("ADV", "зачем", "Int"),
+    ("ADV", "зачем-то", "Ind"),
+    ("ADV", "здесь", "Dem"),
+    ("ADV", "иначе", "Tot"),
+    ("ADV", "иногда", "Tot"),
+    ("ADV", "как", "Rel"),
+    ("ADV", "как-нибудь", "Ind"),
+    ("ADV", "как-то", "Ind"),
+    ("ADV", "когда", "Rel"),
+    ("ADV", "когда-нибудь", "Ind"),
+    ("ADV", "когда-то", "Ind"),
+    ("ADV", "кое-где", "Ind"),
+    ("ADV", "кое-как", "Ind"),
+    ("ADV", "куда", "Rel"),
+    ("ADV", "куда-нибудь", "Ind"),
+    ("ADV", "куда-то", "Ind"),
+    ("ADV", "мало", "Tot"),
+    ("ADV", "менее", "Tot"),
+    ("ADV", "меньше", "Tot"),
+    ("ADV", "много", "Tot"),
+    ("ADV", "навсегда", "Tot"),
+    ("ADV", "наиболее", "Tot"),
+    ("ADV", "насколько", "Rel"),
+    ("ADV", "настолько", "Dem"),
+    ("ADV", "некогда", "Ind"),
+    ("ADV", "немало", "Tot"),
+    ("ADV", "немного", "Tot"),
+    ("ADV", "немножко", "Tot"),
+    ("ADV", "несколько", "Ind"),
+    ("ADV", "нигде", "Neg"),
+    ("ADV", "никак", "Neg"),
+    ("ADV", "никогда", "Neg"),
+    ("ADV", "никуда", "Neg"),
+    ("ADV", "нисколько", "Neg"),
+    ("ADV", "ничего", "Neg"),
+    ("ADV", "ныне", "Dem"),
+    ("ADV", "откуда", "Rel"),
+    ("ADV", "откуда-то", "Ind"),
+    ("ADV", "отныне", "Dem"),
+    ("ADV", "отовсюду", "Tot"),
+    ("ADV", "отсюда", "Dem"),
+    ("ADV", "оттого", "Dem"),
+    ("ADV", "оттуда", "Dem"),
+    ("ADV", "отчего", "Rel"),
+    ("ADV", "по-другому", "Tot"),
+    ("ADV", "повсюду", "Tot"),
+    ("ADV", "потом", "Dem"),
+    ("ADV", "потому", "Dem"),
+    ("ADV", "почему", "Int"),
+    ("ADV", "почему-то", "Ind"),
+    ("ADV", "почто", "Int"),
+    ("ADV", "поэтому", "Dem"),
+    ("ADV", "притом", "Dem"),
+    ("ADV", "причем", "Rel"),
+    ("ADV", "сейчас", "Dem"),
+    ("ADV", "сколь", "Rel"),
+    ("ADV", "сколько", "Rel"),
+    ("ADV", "сколько-нибудь", "Ind"),
+    ("ADV", "столь", "Dem"),
+    ("ADV", "столько", "Dem"),
+    ("ADV", "сюда", "Dem"),
+    ("ADV", "так", "Dem"),
+    ("ADV", "также", "Dem"),
+    ("ADV", "там", "Dem"),
+    ("ADV", "теперь", "Dem"),
+    ("ADV", "тогда", "Dem"),
+    ("ADV", "туда", "Dem"),
+    ("ADV", "тут", "Dem"),
+    ("ADV", "что", "Int"),
+    ("ADV", "что-то", "Ind"),
+    ("DET", "ваш", "Prs"),
+    ("DET", "весь", "Tot"),
+    ("DET", "всякий", "Tot"),
+    ("DET", "всяческий", "Tot"),
+    ("DET", "другой", "Tot"),
+    ("DET", "его", "Prs"),
+    ("DET", "ее", "Prs"),
+    ("DET", "её", "Prs"),
+    ("DET", "иной", "Tot"),
+    ("DET", "их", "Prs"),
+    ("DET", "каждый", "Tot"),
+    ("DET", "каков", "Int"),
+    ("DET", "какой", "Int,Rel"),
+    ("DET", "какой-либо", "Ind"),
+    ("DET", "какой-нибудь", "Ind"),
+    ("DET", "какой-то", "Ind"),
+    ("DET", "кое-какой", "Ind"),
+    ("DET", "кой", "Neg"),
+    ("DET", "который", "Rel"),
+    ("DET", "любой", "Ind"),
+    ("DET", "многий", "Tot"),
+    ("DET", "мой", "Prs"),
+    ("DET", "наш", "Prs"),
+    ("DET", "некий", "Ind"),
+    ("DET", "некоторый", "Ind"),
+    ("DET", "никакой", "Neg"),
+    ("DET", "никой", "Neg"),
+    ("DET", "ничей", "Neg"),
+    ("DET", "один", "Ind"),
+    ("DET", "остальной", "Tot"),
+    ("DET", "прочий", "Tot"),
+    ("DET", "сам", "Emp"),
+    ("DET", "самый", "Emp"),
+    ("DET", "свой", "Prs"),
+    ("DET", "сей", "Dem"),
+    ("DET", "таков", "Dem"),
+    ("DET", "таковой", "Dem"),
+    ("DET", "такой", "Dem"),
+    ("DET", "такой-то", "Dem"),
+    ("DET", "твой", "Prs"),
+    ("DET", "тот", "Dem"),
+    ("DET", "чей", "Int,Rel"),
+    ("DET", "чей-то", "Ind"),
+    ("DET", "этакий", "Dem"),
+    ("DET", "этот", "Dem"),
+    ("PRON", "все", "Tot"),
+    ("PRON", "всё", "Tot"),
+    ("PRON", "вы", "Prs"),
+    ("PRON", "кое-кто", "Ind"),
+    ("PRON", "кое-что", "Ind"),
+    ("PRON", "кто", "Int,Rel"),
+    ("PRON", "кто-либо", "Ind"),
+    ("PRON", "кто-нибудь", "Ind"),
+    ("PRON", "кто-то", "Ind"),
+    ("PRON", "многие", "Tot"),
+    ("PRON", "многое", "Tot"),
+    ("PRON", "мы", "Prs"),
+    ("PRON", "некто", "Ind"),
+    ("PRON", "немногие", "Tot"),
+    ("PRON", "немногое", "Tot"),
+    ("PRON", "нечто", "Ind"),
+    ("PRON", "никто", "Neg"),
+    ("PRON", "ничто", "Neg"),
+    ("PRON", "он", "Prs"),
+    ("PRON", "она", "Prs"),
+    ("PRON", "они", "Prs"),
+    ("PRON", "оно", "Prs"),
+    ("PRON", "прочее", "Ind"),
+    ("PRON", "себя", "Prs"),
+    ("PRON", "то", "Dem"),
+    ("PRON", "ты", "Prs"),
+    ("PRON", "что", "Int,Rel"),
+    ("PRON", "что-либо", "Ind"),
+    ("PRON", "что-нибудь", "Ind"),
+    ("PRON", "что-то", "Ind"),
+    ("PRON", "это", "Dem"),
+    ("PRON", "я", "Prs"),
+];
+
+/// Возвратные местоимения (Reflex=Yes)
+const REFLEXIVE: &[&str] = &["свой", "себя"];
 
 /// Притяжательные местоимения (Poss=Yes)
 const POSSESSIVE: &[&str] = &["ваш", "его", "её", "их", "мой", "наш", "свой", "твой"];
@@ -259,8 +427,8 @@ const OPENCORPORA_POS: &[&str] = &[
 const CONSUMED: &[&str] = &[
     "anim", "inan", "masc", "femn", "neut", "ms-f", "GNdr", "sing", "plur", "nomn", "gent", "datv",
     "accs", "ablt", "loct", "voct", "gen1", "gen2", "acc2", "loc1", "loc2", "perf", "impf", "1per",
-    "2per", "3per", "pres", "past", "futr", "indc", "impr", "actv", "pssv", "incl", "excl", "Name",
-    "Surn", "Patr", "Geox", "Orgn", "Trad", "Abbr", "Poss", "Supr", "Anum", "Apro",
+    "2per", "3per", "pres", "past", "futr", "indc", "impr", "actv", "pssv", "Name", "Surn", "Patr",
+    "Geox", "Orgn", "Trad", "Abbr", "Poss", "Supr", "Anum", "Apro",
 ];
 
 /// Перевод тега OpenCorpora и леммы разбора в часть речи, признаки и пометы UD
@@ -427,12 +595,29 @@ pub fn convert(tag: &str, lemma: &str) -> Ud {
         // Порядковые из цифр (90-х) - NumType=Ord, а не сокращения
         feats.remove("Abbr");
         feats.insert("NumType", "Ord");
+        feats.insert("NumForm", "Combi");
+    }
+    if pos == "NUM" {
+        feats.insert("NumForm", "Word");
+    }
+    if let Some(&(_, _, kind)) = PRONOUN_TYPES
+        .iter()
+        .find(|&&(table_pos, word, _)| table_pos == pos && word == lemma)
+    {
+        feats.insert("PronType", kind);
+    }
+    if REFLEXIVE.contains(&lemma) && matches!(pos, "PRON" | "DET") {
+        feats.insert("Reflex", "Yes");
+    }
+    if g("Fixd") && !g("Abbr") && matches!(pos, "NOUN" | "PROPN") {
+        feats.insert("InflClass", "Ind");
     }
 
     let mut labels: Vec<String> = grammemes
         .iter()
         .skip(1)
         .filter(|g| !CONSUMED.contains(g) && !OPENCORPORA_POS.contains(g))
+        .filter(|g| **g != "Fixd" || !feats.contains_key("InflClass"))
         .map(|g| g.to_string())
         .collect();
     labels.sort();
@@ -483,6 +668,7 @@ pub fn lemma_class(lemma: &str) -> &str {
     let listed = SCONJ.contains(&lemma)
         || POS_EXCEPTIONS.iter().any(|&(_, word, _)| word == lemma)
         || ADVERB_DEGREES.iter().any(|&(word, _)| word == lemma)
+        || PRONOUN_TYPES.iter().any(|&(_, word, _)| word == lemma)
         || [
             MIDDLE_VERBS,
             POSSESSIVE,
@@ -490,6 +676,7 @@ pub fn lemma_class(lemma: &str) -> &str {
             SUPPLETIVE_SUPERLATIVES,
             PARTICLE_PRONOUNS,
             INANIMATE_PRONOUNS,
+            REFLEXIVE,
             &["быть", "бы", "должный", "себя"],
         ]
         .iter()
@@ -586,13 +773,13 @@ mod tests {
         assert_eq!(summary("ADJF,Apro,Subx masc,sing,nomn", "который").0, "DET");
         assert_eq!(
             summary("ADJF,Apro,Anum masc,sing,nomn", "один").1,
-            "Case=Nom|Gender=Masc|NumType=Card|Number=Sing"
+            "Case=Nom|Gender=Masc|NumForm=Word|NumType=Card|Number=Sing"
         );
         assert_eq!(
             summary("ADJF,Apro,Fixd,Anph masc,sing,gent", "его"),
             (
                 "DET".into(),
-                "Case=Gen|Gender=Masc|Number=Sing|Poss=Yes".into(),
+                "Case=Gen|Gender=Masc|Number=Sing|Poss=Yes|PronType=Prs".into(),
                 vec!["Anph".into(), "Fixd".into()]
             )
         );
@@ -647,7 +834,7 @@ mod tests {
         );
         assert_eq!(
             summary("NUMR,gent", "мало"),
-            ("ADV".into(), "Degree=Pos".into(), vec![])
+            ("ADV".into(), "Degree=Pos|PronType=Tot".into(), vec![])
         );
         assert_eq!(summary("NUMR,nomn", "много").0, "NUM");
         assert_eq!(summary("CONJ", "чтобы").1, "Mood=Cnd");
@@ -655,40 +842,88 @@ mod tests {
             summary("PRCL", "это"),
             (
                 "PRON".into(),
-                "Animacy=Inan|Case=Nom|Gender=Neut|Number=Sing".into(),
+                "Animacy=Inan|Case=Nom|Gender=Neut|Number=Sing|PronType=Dem".into(),
                 vec![]
             )
         );
-        assert_eq!(summary("ADVB", "более").1, "Degree=Cmp");
-        assert_eq!(summary("ADVB", "наиболее").1, "Degree=Sup");
+        assert_eq!(summary("ADVB", "более").1, "Degree=Cmp|PronType=Tot");
+        assert_eq!(summary("ADVB", "наиболее").1, "Degree=Sup|PronType=Tot");
         assert_eq!(summary("PREP", "в").0, "ADP");
-        assert_eq!(summary("NUMR,nomn", "пять").1, "Case=Nom|NumType=Card");
+        assert_eq!(
+            summary("NUMR,nomn", "пять").1,
+            "Case=Nom|NumForm=Word|NumType=Card"
+        );
         assert_eq!(
             summary("NPRO,1per sing,nomn", "я").1,
-            "Case=Nom|Number=Sing|Person=1"
+            "Case=Nom|Number=Sing|Person=1|PronType=Prs"
         );
         assert_eq!(
             summary("NPRO,neut sing,gent", "что").1,
-            "Animacy=Inan|Case=Gen|Gender=Neut|Number=Sing"
+            "Animacy=Inan|Case=Gen|Gender=Neut|Number=Sing|PronType=Int,Rel"
         );
         assert_eq!(
             summary("NPRO,masc sing,nomn", "кто").1,
-            "Animacy=Anim|Case=Nom|Gender=Masc|Number=Sing"
+            "Animacy=Anim|Case=Nom|Gender=Masc|Number=Sing|PronType=Int,Rel"
         );
-        assert_eq!(summary("NPRO sing,datv", "себя").1, "Case=Dat");
+        assert_eq!(
+            summary("NPRO sing,datv", "себя").1,
+            "Case=Dat|PronType=Prs|Reflex=Yes"
+        );
         assert_eq!(
             summary("NPRO,neut sing,nomn", "это").1,
-            "Animacy=Inan|Case=Nom|Gender=Neut|Number=Sing"
+            "Animacy=Inan|Case=Nom|Gender=Neut|Number=Sing|PronType=Dem"
         );
         assert_eq!(
             summary("ADJF,Abbr,Anum plur,gent", "90-й").1,
-            "Case=Gen|Degree=Pos|NumType=Ord|Number=Plur"
+            "Case=Gen|Degree=Pos|NumForm=Combi|NumType=Ord|Number=Plur"
         );
         assert_eq!(
             summary("NOUN,inan,femn,Abbr,Fixd,Geox sing,gent", "рф").1,
             "Abbr=Yes|NameType=Geo"
         );
         assert_eq!(summary("ADVB", "быстро").1, "Degree=Pos");
+    }
+
+    #[test]
+    fn lexical_features() {
+        let feats = |tag: &str, lemma: &str| summary(tag, lemma).1;
+        assert_eq!(feats("ADVB", "там"), "Degree=Pos|PronType=Dem");
+        assert_eq!(feats("ADVB", "никогда"), "Degree=Pos|PronType=Neg");
+        assert_eq!(
+            feats("ADJF,Apro masc,sing,nomn", "который"),
+            "Case=Nom|Gender=Masc|Number=Sing|PronType=Rel"
+        );
+        assert_eq!(
+            feats("ADJF,Apro masc,sing,nomn", "свой"),
+            "Case=Nom|Gender=Masc|Number=Sing|Poss=Yes|PronType=Prs|Reflex=Yes"
+        );
+        assert_eq!(
+            feats("NPRO sing,accs", "себя"),
+            "Case=Acc|PronType=Prs|Reflex=Yes"
+        );
+        assert_eq!(
+            feats("NUMR,nomn", "два"),
+            "Case=Nom|NumForm=Word|NumType=Card"
+        );
+        assert_eq!(
+            feats("ADJF,Abbr,Anum plur,gent", "90-й"),
+            "Case=Gen|Degree=Pos|NumForm=Combi|NumType=Ord|Number=Plur"
+        );
+        let (_, kino, labels) = summary("NOUN,inan,neut,Fixd sing,gent", "кино");
+        assert_eq!(
+            kino,
+            "Animacy=Inan|Case=Gen|Gender=Neut|InflClass=Ind|Number=Sing"
+        );
+        assert!(labels.is_empty());
+        assert!(!feats("NOUN,inan,femn,Abbr,Fixd,Geox sing,gent", "рф").contains("InflClass"));
+        assert_eq!(
+            summary("VERB,perf,intr plur,impr,incl", "пойти"),
+            (
+                "VERB".into(),
+                "Aspect=Perf|Mood=Imp|Number=Plur|Person=1|VerbForm=Fin|Voice=Act".into(),
+                vec!["incl".into(), "intr".into()]
+            )
+        );
     }
 
     #[test]

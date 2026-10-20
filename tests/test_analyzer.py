@@ -185,12 +185,24 @@ def test_ud_fields(morph):
         ("об", "об", "ADP", {}),
         ("денег", "деньги", "NOUN", {"Number": "Plur"}),
         ("РФ", "рф", "PROPN", {"Abbr": "Yes", "NameType": "Geo"}),
+        ("там", "там", "ADV", {"PronType": "Dem"}),
+        ("никогда", "никогда", "ADV", {"PronType": "Neg"}),
+        ("также", "также", "ADV", {"PronType": "Dem"}),
+        ("себя", "себя", "PRON", {"PronType": "Prs", "Reflex": "Yes"}),
+        ("два", "два", "NUM", {"NumForm": "Word", "NumType": "Card"}),
+        ("90-х", "90-й", "ADJ", {"NumForm": "Combi", "NumType": "Ord"}),
+        ("кино", "кино", "NOUN", {"InflClass": "Ind"}),
     ],
 )
 def test_syntagrus_conventions(morph, word, lemma, pos, feats):
     analysis = morph.analyze(word)[0]
     assert (analysis.lemma, analysis.pos) == (lemma, pos)
     assert feats.items() <= analysis.feats.items()
+
+
+def test_clusivity_label(morph):
+    assert "incl" in morph.analyze("пойдёмте")[0].labels
+    assert "excl" in morph.analyze("иди")[0].labels
 
 
 def test_merged_analyses(morph):
