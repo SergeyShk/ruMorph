@@ -99,6 +99,7 @@ const POS_EXCEPTIONS: &[(&str, &str, &str)] = &[
     ("CONJ", "пожалуй", "ADV"),
     ("CONJ", "похоже", "ADV"),
     ("CONJ", "правда", "ADV"),
+    ("CONJ", "притом", "ADV"),
     ("CONJ", "разве", "PART"),
     ("CONJ", "разумеется", "ADV"),
     ("CONJ", "ровно", "ADV"),
@@ -139,7 +140,6 @@ const POS_EXCEPTIONS: &[(&str, &str, &str)] = &[
     ("PRCL", "приблизительно", "ADV"),
     ("PRCL", "прямо", "ADV"),
     ("PRCL", "собственно", "ADV"),
-    ("PRCL", "также", "ADV"),
     ("PRCL", "там", "ADV"),
     ("PRCL", "угодно", "ADV"),
     ("PRCL", "хоть", "ADV"),
@@ -208,7 +208,6 @@ const PRONOUN_TYPES: &[(&str, &str, &str)] = &[
     ("ADV", "куда-то", "Ind"),
     ("ADV", "мало", "Tot"),
     ("ADV", "менее", "Tot"),
-    ("ADV", "меньше", "Tot"),
     ("ADV", "много", "Tot"),
     ("ADV", "навсегда", "Tot"),
     ("ADV", "наиболее", "Tot"),
@@ -218,7 +217,6 @@ const PRONOUN_TYPES: &[(&str, &str, &str)] = &[
     ("ADV", "немало", "Tot"),
     ("ADV", "немного", "Tot"),
     ("ADV", "немножко", "Tot"),
-    ("ADV", "несколько", "Ind"),
     ("ADV", "нигде", "Neg"),
     ("ADV", "никак", "Neg"),
     ("ADV", "никогда", "Neg"),
@@ -243,7 +241,6 @@ const PRONOUN_TYPES: &[(&str, &str, &str)] = &[
     ("ADV", "почто", "Int"),
     ("ADV", "поэтому", "Dem"),
     ("ADV", "притом", "Dem"),
-    ("ADV", "причем", "Rel"),
     ("ADV", "сейчас", "Dem"),
     ("ADV", "сколь", "Rel"),
     ("ADV", "сколько", "Rel"),
@@ -252,21 +249,18 @@ const PRONOUN_TYPES: &[(&str, &str, &str)] = &[
     ("ADV", "столько", "Dem"),
     ("ADV", "сюда", "Dem"),
     ("ADV", "так", "Dem"),
-    ("ADV", "также", "Dem"),
     ("ADV", "там", "Dem"),
     ("ADV", "теперь", "Dem"),
     ("ADV", "тогда", "Dem"),
     ("ADV", "туда", "Dem"),
     ("ADV", "тут", "Dem"),
     ("ADV", "что", "Int"),
-    ("ADV", "что-то", "Ind"),
     ("DET", "ваш", "Prs"),
     ("DET", "весь", "Tot"),
     ("DET", "всякий", "Tot"),
     ("DET", "всяческий", "Tot"),
     ("DET", "другой", "Tot"),
     ("DET", "его", "Prs"),
-    ("DET", "ее", "Prs"),
     ("DET", "её", "Prs"),
     ("DET", "иной", "Tot"),
     ("DET", "их", "Prs"),
@@ -288,7 +282,6 @@ const PRONOUN_TYPES: &[(&str, &str, &str)] = &[
     ("DET", "никакой", "Neg"),
     ("DET", "никой", "Neg"),
     ("DET", "ничей", "Neg"),
-    ("DET", "один", "Ind"),
     ("DET", "остальной", "Tot"),
     ("DET", "прочий", "Tot"),
     ("DET", "сам", "Emp"),
@@ -305,7 +298,6 @@ const PRONOUN_TYPES: &[(&str, &str, &str)] = &[
     ("DET", "чей-то", "Ind"),
     ("DET", "этакий", "Dem"),
     ("DET", "этот", "Dem"),
-    ("PRON", "все", "Tot"),
     ("PRON", "всё", "Tot"),
     ("PRON", "вы", "Prs"),
     ("PRON", "кое-кто", "Ind"),
@@ -329,7 +321,6 @@ const PRONOUN_TYPES: &[(&str, &str, &str)] = &[
     ("PRON", "оно", "Prs"),
     ("PRON", "прочее", "Ind"),
     ("PRON", "себя", "Prs"),
-    ("PRON", "то", "Dem"),
     ("PRON", "ты", "Prs"),
     ("PRON", "что", "Int,Rel"),
     ("PRON", "что-либо", "Ind"),
@@ -339,11 +330,82 @@ const PRONOUN_TYPES: &[(&str, &str, &str)] = &[
     ("PRON", "я", "Prs"),
 ];
 
+/// Тип редких, устаревших и сокращенных местоимений, которых нет в SynTagRus, для PRON и DET
+const RARE_PRONOUN_TYPES: &[(&str, &str)] = &[
+    ("всяк", "Tot"),
+    ("всякая", "Tot"),
+    ("всякое", "Tot"),
+    ("др", "Tot"),
+    ("иже", "Rel"),
+    ("ихний", "Prs"),
+    ("к-рый", "Rel"),
+    ("каковой", "Rel"),
+    ("каковский", "Int"),
+    ("любая", "Ind"),
+    ("нек-рый", "Ind"),
+    ("некоторые", "Ind"),
+    ("немногий", "Tot"),
+    ("никоторый", "Neg"),
+    ("ничего", "Neg"),
+    ("оное", "Dem"),
+    ("оный", "Dem"),
+    ("пр", "Tot"),
+    ("проч", "Tot"),
+    ("сие", "Dem"),
+    ("сякой", "Dem"),
+    ("таковский", "Dem"),
+    ("эдакий", "Dem"),
+    ("экий", "Dem"),
+    ("энный", "Ind"),
+];
+
+/// Тип местоимения по серии, если лемма не в таблице: «когда-либо», «кое-где» - Ind, «ниоткуда» - Neg
+pub fn pronoun_series(lemma: &str) -> Option<&'static str> {
+    const INTERROGATIVE: &[&str] = &[
+        "где",
+        "зачем",
+        "как",
+        "каков",
+        "какой",
+        "когда",
+        "кто",
+        "куда",
+        "насколько",
+        "откуда",
+        "почему",
+        "сколько",
+        "что",
+        "чей",
+    ];
+    if ["-то", "-нибудь", "-либо"]
+        .iter()
+        .any(|suffix| lemma.ends_with(suffix))
+        || lemma.starts_with("кое-")
+        || lemma.starts_with("кой-")
+    {
+        return Some("Ind");
+    }
+    lemma
+        .strip_prefix("ни")
+        .filter(|stem| INTERROGATIVE.contains(stem))
+        .map(|_| "Neg")
+}
+
 /// Возвратные местоимения (Reflex=Yes)
 const REFLEXIVE: &[&str] = &["свой", "себя"];
 
 /// Притяжательные местоимения (Poss=Yes)
-const POSSESSIVE: &[&str] = &["ваш", "его", "её", "их", "мой", "наш", "свой", "твой"];
+const POSSESSIVE: &[&str] = &[
+    "ваш",
+    "его",
+    "её",
+    "их",
+    "ихний",
+    "мой",
+    "наш",
+    "свой",
+    "твой",
+];
 
 /// Отрицательные слова (Polarity=Neg)
 const NEGATIVE: &[&str] = &["не", "нет", "ни"];
@@ -399,7 +461,7 @@ fn pos(oc: &str, grammemes: &[&str], lemma: &str) -> (&'static str, bool) {
             "PROPN"
         }
         "NOUN" => "NOUN",
-        "ADJF" if has(grammemes, "Apro") => "DET",
+        "ADJF" | "ADJS" if has(grammemes, "Apro") => "DET",
         "ADJF" | "ADJS" | "COMP" => "ADJ",
         "VERB" | "INFN" | "PRTF" | "PRTS" | "GRND" if lemma == "быть" => "AUX",
         "VERB" | "INFN" | "PRTF" | "PRTS" | "GRND" => "VERB",
@@ -600,11 +662,21 @@ pub fn convert(tag: &str, lemma: &str) -> Ud {
     if pos == "NUM" {
         feats.insert("NumForm", "Word");
     }
-    if let Some(&(_, _, kind)) = PRONOUN_TYPES
-        .iter()
-        .find(|&&(table_pos, word, _)| table_pos == pos && word == lemma)
-    {
-        feats.insert("PronType", kind);
+    if matches!(pos, "PRON" | "DET" | "ADV") {
+        let kind = PRONOUN_TYPES
+            .iter()
+            .find(|&&(table_pos, word, _)| table_pos == pos && word == lemma)
+            .map(|&(_, _, kind)| kind)
+            .or_else(|| pronoun_series(lemma))
+            .or_else(|| {
+                RARE_PRONOUN_TYPES
+                    .iter()
+                    .find(|&&(word, _)| word == lemma && pos != "ADV")
+                    .map(|&(_, kind)| kind)
+            });
+        if let Some(kind) = kind {
+            feats.insert("PronType", kind);
+        }
     }
     if REFLEXIVE.contains(&lemma) && matches!(pos, "PRON" | "DET") {
         feats.insert("Reflex", "Yes");
@@ -618,6 +690,7 @@ pub fn convert(tag: &str, lemma: &str) -> Ud {
         .skip(1)
         .filter(|g| !CONSUMED.contains(g) && !OPENCORPORA_POS.contains(g))
         .filter(|g| **g != "Fixd" || !feats.contains_key("InflClass"))
+        .filter(|g| !matches!(**g, "Dmns" | "Ques") || !feats.contains_key("PronType"))
         .map(|g| g.to_string())
         .collect();
     labels.sort();
@@ -655,7 +728,8 @@ pub fn lemma_form(tag: &str, lemma: &str, word: &str) -> Option<LemmaForm> {
         Some("ADJF") if g("Supr") => {
             Some(LemmaForm::With(&["ADJF", "Supr", "masc", "sing", "nomn"]))
         }
-        Some("ADJS") if lemma == "должный" => {
+        // Краткие местоименные прилагательные - леммы «таков», «каков», а не «таковой»
+        Some("ADJS") if lemma == "должный" || g("Apro") => {
             Some(LemmaForm::With(&["ADJS", "masc", "sing"]))
         }
         _ => None,
@@ -669,6 +743,8 @@ pub fn lemma_class(lemma: &str) -> &str {
         || POS_EXCEPTIONS.iter().any(|&(_, word, _)| word == lemma)
         || ADVERB_DEGREES.iter().any(|&(word, _)| word == lemma)
         || PRONOUN_TYPES.iter().any(|&(_, word, _)| word == lemma)
+        || pronoun_series(lemma).is_some()
+        || RARE_PRONOUN_TYPES.iter().any(|&(word, _)| word == lemma)
         || [
             MIDDLE_VERBS,
             POSSESSIVE,
@@ -917,6 +993,26 @@ mod tests {
         assert!(labels.is_empty());
         assert!(!feats("NOUN,inan,femn,Abbr,Fixd,Geox sing,gent", "рф").contains("InflClass"));
         assert_eq!(
+            summary("ADJS,Apro masc,sing", "таков"),
+            (
+                "DET".into(),
+                "Gender=Masc|Number=Sing|PronType=Dem|Variant=Short".into(),
+                vec![]
+            )
+        );
+        assert_eq!(feats("ADVB", "когда-либо"), "Degree=Pos|PronType=Ind");
+        assert_eq!(feats("ADVB", "ниоткуда"), "Degree=Pos|PronType=Neg");
+        assert!(feats("NPRO,masc sing,nomn", "кое-кто").contains("PronType=Ind"));
+        assert_eq!(feats("CONJ", "притом"), "Degree=Pos|PronType=Dem");
+        assert_eq!(
+            feats("ADJF,Apro masc,sing,nomn", "оный"),
+            "Case=Nom|Gender=Masc|Number=Sing|PronType=Dem"
+        );
+        assert!(feats("ADJF,Apro masc,sing,nomn", "ихний").contains("Poss=Yes|PronType=Prs"));
+        assert_eq!(summary("ADVB,Dmns", "там").2, Vec::<String>::new());
+        assert_eq!(summary("ADVB,Ques", "почему").2, Vec::<String>::new());
+        assert_eq!(pronoun_series("ниже"), None);
+        assert_eq!(
             summary("VERB,perf,intr plur,impr,incl", "пойти"),
             (
                 "VERB".into(),
@@ -971,6 +1067,10 @@ mod tests {
         );
         assert!(lemma_form("ADJS,Qual masc,sing", "нужный", "нужен").is_none());
         assert!(lemma_form("ADJS femn,sing", "должный", "должна").is_some());
+        assert_eq!(
+            lemma_form("ADJS,Apro masc,sing", "таковой", "таков"),
+            Some(LemmaForm::With(&["ADJS", "masc", "sing"]))
+        );
         assert_eq!(lemma_form("PREP", "о", "об"), Some(LemmaForm::Own));
         assert!(lemma_form("PREP", "в", "во").is_none());
         assert!(lemma_form("NOUN,inan,femn plur,gent", "деньга", "денег").is_some());
