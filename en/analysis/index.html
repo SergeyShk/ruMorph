@@ -567,6 +567,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tokens outside the dictionary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#lists" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -683,6 +694,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tokens outside the dictionary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#lists" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -748,7 +770,7 @@
 <tbody>
 <tr>
 <td><code>word</code></td>
-<td>the word form as spelled in the dictionary: with the letter «ё» if the dictionary has it</td>
+<td>the word form as spelled in the dictionary: with the letter «ё» if the dictionary has it; for rule analyses - as in the text</td>
 </tr>
 <tr>
 <td><code>lemma</code></td>
@@ -772,11 +794,11 @@
 </tr>
 <tr>
 <td><code>source</code></td>
-<td>where the analysis comes from: <code>"dictionary"</code> - the word form is in the dictionary</td>
+<td>where the analysis comes from: <code>"dictionary"</code> - the word form is in the dictionary, <code>"rule"</code> - the token is not in the dictionary and is analyzed by a rule (see <a href="#rules">below</a>)</td>
 </tr>
 </tbody>
 </table>
-<p>Case does not matter, and the letter «е» may stand for «ё»: <code>analyze("ЕЖ")</code> returns the analyses of the word form «ёж». For a word that is not in the dictionary the list is empty.</p>
+<p>Case does not matter, and the letter «е» may stand for «ё»: <code>analyze("ЕЖ")</code> returns the analyses of the word form «ёж».</p>
 <h2 id="ud">Parts of speech and features<a class="headerlink" href="#ud" title="Permanent link">&para;</a></h2>
 <p>Parts of speech and features follow <a href="https://universaldependencies.org/u/pos/">Universal Dependencies</a> as annotated in the largest Russian treebank, <a href="https://github.com/UniversalDependencies/UD_Russian-SynTagRus">UD_Russian-SynTagRus</a>, so the output can be compared with spaCy, Stanza and other UD tools. Differences from the OpenCorpora parts of speech:</p>
 <ul>
@@ -789,12 +811,62 @@
 <p>Features: case, number, gender, animacy, person, tense, aspect, mood, voice, verb form, degree, the short form (<code>Variant=Short</code>), the type of a proper name (<code>NameType</code>), abbreviation (<code>Abbr</code>), possessiveness (<code>Poss</code>), the type of a numeral (<code>NumType</code>) and how it is written (<code>NumForm</code>), the type of a pronoun or pronominal adverb (<code>PronType</code>: «там» - <code>Dem</code>, «где» - <code>Rel</code>, «никогда» - <code>Neg</code>), reflexivity (<code>Reflex</code>), indeclinability (<code>InflClass=Ind</code>), negation (<code>Polarity=Neg</code>).</p>
 <p>Lemmas follow SynTagRus too: feminine surnames and patronymics keep the feminine lemma («Ивановой» - «иванова»), superlatives stay superlative («важнейшей» - «важнейший»), «денег» - «деньги». When several OpenCorpora analyses coincide in UD (the conjunction and the adverb «так»), they are merged into one with the sum of their probabilities. The forms of a word are given by the <code>forms</code>, <code>inflect</code> and <code>agree</code> methods of the analysis - see <a href="../inflection/">Inflection</a>.</p>
 <p>The <code>labels</code> are the <a href="https://opencorpora.org/dict.php?act=gram">OpenCorpora</a> grammemes that have no UD feature: style (<code>Infr</code>, <code>Slng</code>, <code>Arch</code>), qualitative adjective (<code>Qual</code>), parenthetical word (<code>Prnt</code>), transitivity (<code>tran</code>, <code>intr</code>), whether the speaker is included in an imperative (<code>incl</code> - «пойдемте», <code>excl</code> - «иди»), the second locative (<code>loc2</code> - «в лесу») and others.</p>
+<h2 id="rules">Tokens outside the dictionary<a class="headerlink" href="#rules" title="Permanent link">&para;</a></h2>
+<p>Numbers, punctuation, Latin words and abbreviations are analyzed by rules, their <code>source</code> is <code>"rule"</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="o">&gt;&gt;&gt;</span> <span class="p">[(</span><span class="n">a</span><span class="o">.</span><span class="n">lemma</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">pos</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">feats</span><span class="p">[</span><span class="s2">"NumType"</span><span class="p">],</span> <span class="nb">round</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">prob</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"2026"</span><span class="p">)]</span>
+<span class="p">[(</span><span class="s1">'2026'</span><span class="p">,</span> <span class="s1">'ADJ'</span><span class="p">,</span> <span class="s1">'Ord'</span><span class="p">,</span> <span class="mf">0.94</span><span class="p">),</span> <span class="p">(</span><span class="s1">'2026'</span><span class="p">,</span> <span class="s1">'NUM'</span><span class="p">,</span> <span class="s1">'Card'</span><span class="p">,</span> <span class="mf">0.06</span><span class="p">)]</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="p">[(</span><span class="n">a</span><span class="o">.</span><span class="n">lemma</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">pos</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">feats</span><span class="p">[</span><span class="s2">"Case"</span><span class="p">])</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"2005-го"</span><span class="p">)][:</span><span class="mi">1</span><span class="p">]</span>
+<span class="p">[(</span><span class="s1">'2005-й'</span><span class="p">,</span> <span class="s1">'ADJ'</span><span class="p">,</span> <span class="s1">'Gen'</span><span class="p">)]</span>
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Token</th>
+<th>Analysis</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>punctuation; symbols <code>%</code>, <code>$</code>, <code>№</code>, <code>−</code>, emoji</td>
+<td><code>PUNCT</code>; <code>SYM</code></td>
+</tr>
+<tr>
+<td>numbers in digits: «15», «3,14», «10 000», «17:04»</td>
+<td><code>NUM</code> with <code>NumForm=Digit</code>, <code>NumType=Card</code>; an integer may also be an ordinal <code>ADJ</code> with <code>NumType=Ord</code> - for 1000-2100 (years), except round hundreds, this is the first analysis</td>
+</tr>
+<tr>
+<td>numbers with an ending: «2005-го», «5-ти»</td>
+<td>an ordinal <code>ADJ</code> with the case and forms of «1-го», or a cardinal <code>NUM</code></td>
+</tr>
+<tr>
+<td>Roman numerals: «XX»</td>
+<td>an ordinal <code>ADJ</code> with <code>NumForm=Roman</code></td>
+</tr>
+<tr>
+<td>Latin words: «iPhone»</td>
+<td><code>X</code> with <code>Foreign=Yes</code></td>
+</tr>
+<tr>
+<td>initials: «А.»</td>
+<td><code>PROPN</code> with <code>Abbr=Yes</code>: a given name, a patronymic or a surname</td>
+</tr>
+<tr>
+<td>abbreviations with a dot: «т.», «им.»</td>
+<td>the analyses of the dictionary abbreviation without the dot</td>
+</tr>
+<tr>
+<td>capitalized abbreviations: «НКО»</td>
+<td><code>PROPN</code> or <code>NOUN</code> with <code>Abbr=Yes</code></td>
+</tr>
+</tbody>
+</table>
+<p>The shares of ambiguous analyses come from the frequencies in SynTagRus. A token with whitespace (except a number), a control or an invisible character gets no analyses. Unknown Cyrillic words are not analyzed yet: their list of analyses is empty.</p>
 <h2 id="lists">Lists of words<a class="headerlink" href="#lists" title="Permanent link">&para;</a></h2>
 <p><code>analyze_many</code> analyzes a collection of word forms, and <code>lemmatize</code> returns the lemmas of their most probable analyses:</p>
 <div class="highlight"><pre><span></span><code><span class="o">&gt;&gt;&gt;</span> <span class="n">morph</span><span class="o">.</span><span class="n">lemmatize</span><span class="p">([</span><span class="s2">"Мы"</span><span class="p">,</span> <span class="s2">"стали"</span><span class="p">,</span> <span class="s2">"друзьями"</span><span class="p">])</span>
 <span class="p">[</span><span class="s1">'мы'</span><span class="p">,</span> <span class="s1">'стать'</span><span class="p">,</span> <span class="s1">'друг'</span><span class="p">]</span>
 </code></pre></div>
-<p><code>lemmatize</code> returns a word that is not in the dictionary in lower case. Both methods accept any collection of words - a list, a tuple, a generator - and analyze it without the GIL: several threads sharing one analyzer run in parallel.</p>
+<p><code>lemmatize</code> returns a token without analyses in lower case. Both methods accept any collection of words - a list, a tuple, a generator - and analyze it without the GIL: several threads sharing one analyzer run in parallel.</p>
 <h2 id="dictionary">Dictionary<a class="headerlink" href="#dictionary" title="Permanent link">&para;</a></h2>
 <p><code>is_known</code> checks whether a word form is in the dictionary. The dictionary is OpenCorpora, about 3.1 million word forms; the probabilities of the analyses come from the OpenCorpora corpus: a word written with «е» instead of «ё» gets the frequencies of the spelling with «ё», and the analyses of word forms missing from the corpus are equally probable. The dictionary is distributed under the <a href="https://creativecommons.org/licenses/by-sa/3.0/">CC BY-SA 3.0</a> license.</p>
 

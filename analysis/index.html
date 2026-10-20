@@ -567,6 +567,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Токены вне словаря
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#lists" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -683,6 +694,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Токены вне словаря
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#lists" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -748,7 +770,7 @@
 <tbody>
 <tr>
 <td><code>word</code></td>
-<td>словоформа в написании словаря: с буквой «ё», если она есть в словаре</td>
+<td>словоформа в написании словаря: с буквой «ё», если она есть в словаре; у разборов по правилам - как в тексте</td>
 </tr>
 <tr>
 <td><code>lemma</code></td>
@@ -772,11 +794,11 @@
 </tr>
 <tr>
 <td><code>source</code></td>
-<td>откуда взят разбор: <code>"dictionary"</code> - словоформа есть в словаре</td>
+<td>откуда взят разбор: <code>"dictionary"</code> - словоформа есть в словаре, <code>"rule"</code> - токена нет в словаре, разбор по правилу (см. <a href="#rules">ниже</a>)</td>
 </tr>
 </tbody>
 </table>
-<p>Регистр не важен, а буква «е» может обозначать «ё»: <code>analyze("ЕЖ")</code> возвращает разборы словоформы «ёж». Для слова, которого нет в словаре, список пуст.</p>
+<p>Регистр не важен, а буква «е» может обозначать «ё»: <code>analyze("ЕЖ")</code> возвращает разборы словоформы «ёж».</p>
 <h2 id="ud">Части речи и признаки<a class="headerlink" href="#ud" title="Permanent link">&para;</a></h2>
 <p>Части речи и признаки следуют <a href="https://universaldependencies.org/u/pos/">Universal Dependencies</a> в соглашениях крупнейшего русского трибанка <a href="https://github.com/UniversalDependencies/UD_Russian-SynTagRus">UD_Russian-SynTagRus</a>, поэтому результат можно сравнивать с разметкой spaCy, Stanza и других инструментов на UD. Отличия от частей речи OpenCorpora:</p>
 <ul>
@@ -789,12 +811,62 @@
 <p>Признаки: падеж, число, род, одушевленность, лицо, время, вид, наклонение, залог, форма глагола, степень, краткая форма (<code>Variant=Short</code>), тип имени собственного (<code>NameType</code>), сокращение (<code>Abbr</code>), притяжательность (<code>Poss</code>), тип числительного (<code>NumType</code>) и его запись (<code>NumForm</code>), тип местоимения и местоименного наречия (<code>PronType</code>: «там» - <code>Dem</code>, «где» - <code>Rel</code>, «никогда» - <code>Neg</code>), возвратность (<code>Reflex</code>), несклоняемость (<code>InflClass=Ind</code>), отрицание (<code>Polarity=Neg</code>).</p>
 <p>Леммы тоже следуют SynTagRus: у женских фамилий и отчеств лемма в женском роде («Ивановой» - «иванова»), превосходная степень остается превосходной («важнейшей» - «важнейший»), «денег» - «деньги». Если несколько разборов OpenCorpora в UD совпадают (союз и наречие «так»), они объединены в один, их вероятности сложены. Формы слова по разбору дают методы <code>forms</code>, <code>inflect</code> и <code>agree</code> - см. <a href="../inflection/">Словоизменение</a>.</p>
 <p>Пометы <code>labels</code> - граммемы <a href="https://opencorpora.org/dict.php?act=gram">OpenCorpora</a>, для которых в UD нет признака: стиль (<code>Infr</code>, <code>Slng</code>, <code>Arch</code>), качественное прилагательное (<code>Qual</code>), вводное слово (<code>Prnt</code>), переходность (<code>tran</code>, <code>intr</code>), включенность говорящего в повелительном наклонении (<code>incl</code> - «пойдемте», <code>excl</code> - «иди»), второй предложный падеж (<code>loc2</code> - «в лесу») и другие.</p>
+<h2 id="rules">Токены вне словаря<a class="headerlink" href="#rules" title="Permanent link">&para;</a></h2>
+<p>Числа, знаки, латиницу и сокращения анализатор разбирает по правилам, <code>source</code> у таких разборов - <code>"rule"</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="o">&gt;&gt;&gt;</span> <span class="p">[(</span><span class="n">a</span><span class="o">.</span><span class="n">lemma</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">pos</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">feats</span><span class="p">[</span><span class="s2">"NumType"</span><span class="p">],</span> <span class="nb">round</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">prob</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"2026"</span><span class="p">)]</span>
+<span class="p">[(</span><span class="s1">'2026'</span><span class="p">,</span> <span class="s1">'ADJ'</span><span class="p">,</span> <span class="s1">'Ord'</span><span class="p">,</span> <span class="mf">0.94</span><span class="p">),</span> <span class="p">(</span><span class="s1">'2026'</span><span class="p">,</span> <span class="s1">'NUM'</span><span class="p">,</span> <span class="s1">'Card'</span><span class="p">,</span> <span class="mf">0.06</span><span class="p">)]</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="p">[(</span><span class="n">a</span><span class="o">.</span><span class="n">lemma</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">pos</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">feats</span><span class="p">[</span><span class="s2">"Case"</span><span class="p">])</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"2005-го"</span><span class="p">)][:</span><span class="mi">1</span><span class="p">]</span>
+<span class="p">[(</span><span class="s1">'2005-й'</span><span class="p">,</span> <span class="s1">'ADJ'</span><span class="p">,</span> <span class="s1">'Gen'</span><span class="p">)]</span>
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Токен</th>
+<th>Разбор</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>знаки препинания; символы <code>%</code>, <code>$</code>, <code>№</code>, <code>−</code>, эмодзи</td>
+<td><code>PUNCT</code>; <code>SYM</code></td>
+</tr>
+<tr>
+<td>числа цифрами: «15», «3,14», «10 000», «17:04»</td>
+<td><code>NUM</code> с <code>NumForm=Digit</code>, <code>NumType=Card</code>; целое число может быть и порядковым <code>ADJ</code> с <code>NumType=Ord</code> - у чисел 1000-2100 (годы), кроме круглых сотен, это первый разбор</td>
+</tr>
+<tr>
+<td>числа с окончанием: «2005-го», «5-ти»</td>
+<td>порядковое <code>ADJ</code> с падежом и формами, как у «1-го», или количественное <code>NUM</code></td>
+</tr>
+<tr>
+<td>римские числа: «XX»</td>
+<td>порядковое <code>ADJ</code> с <code>NumForm=Roman</code></td>
+</tr>
+<tr>
+<td>слова латиницей: «iPhone»</td>
+<td><code>X</code> с <code>Foreign=Yes</code></td>
+</tr>
+<tr>
+<td>инициалы: «А.»</td>
+<td><code>PROPN</code> с <code>Abbr=Yes</code>: имя, отчество или фамилия</td>
+</tr>
+<tr>
+<td>сокращения с точкой: «т.», «им.»</td>
+<td>разборы словарного сокращения без точки</td>
+</tr>
+<tr>
+<td>аббревиатуры капсом: «НКО»</td>
+<td><code>PROPN</code> или <code>NOUN</code> с <code>Abbr=Yes</code></td>
+</tr>
+</tbody>
+</table>
+<p>Доли неоднозначных разборов взяты из частот в SynTagRus. Токен с пробелом (кроме числа), управляющим или невидимым символом разборов не получает. Незнакомые слова кириллицей пока не разбираются: для них список разборов пуст.</p>
 <h2 id="lists">Списки слов<a class="headerlink" href="#lists" title="Permanent link">&para;</a></h2>
 <p><code>analyze_many</code> разбирает набор словоформ, <code>lemmatize</code> возвращает леммы их самых вероятных разборов:</p>
 <div class="highlight"><pre><span></span><code><span class="o">&gt;&gt;&gt;</span> <span class="n">morph</span><span class="o">.</span><span class="n">lemmatize</span><span class="p">([</span><span class="s2">"Мы"</span><span class="p">,</span> <span class="s2">"стали"</span><span class="p">,</span> <span class="s2">"друзьями"</span><span class="p">])</span>
 <span class="p">[</span><span class="s1">'мы'</span><span class="p">,</span> <span class="s1">'стать'</span><span class="p">,</span> <span class="s1">'друг'</span><span class="p">]</span>
 </code></pre></div>
-<p>Слово, которого нет в словаре, <code>lemmatize</code> возвращает в нижнем регистре. Оба метода принимают любой набор слов - список, кортеж, генератор - и разбирают его без GIL: несколько потоков с одним анализатором работают параллельно.</p>
+<p>Токен без разборов <code>lemmatize</code> возвращает в нижнем регистре. Оба метода принимают любой набор слов - список, кортеж, генератор - и разбирают его без GIL: несколько потоков с одним анализатором работают параллельно.</p>
 <h2 id="dictionary">Словарь<a class="headerlink" href="#dictionary" title="Permanent link">&para;</a></h2>
 <p><code>is_known</code> проверяет, есть ли словоформа в словаре. Словарь - OpenCorpora, около 3,1 млн словоформ; вероятности разборов взяты из корпуса OpenCorpora: у слова, написанного через «е» вместо «ё», - частоты написания с «ё», у словоформ, которых в корпусе нет, разборы равновероятны. Словарь распространяется по лицензии <a href="https://creativecommons.org/licenses/by-sa/3.0/">CC BY-SA 3.0</a>.</p>
 
