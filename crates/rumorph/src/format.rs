@@ -1,6 +1,6 @@
 //! Бинарный формат словаря: сигнатура, версия формата и секции «длина u64 + данные», числа little-endian
 
-use std::io::{ErrorKind, Read};
+use std::io::Read;
 
 use crate::Error;
 
@@ -63,12 +63,14 @@ pub(crate) fn write(sections: &Sections) -> Vec<u8> {
 
 /// Словарь из байтов в памяти
 pub(crate) fn read(data: &[u8]) -> Result<Sections, Error> {
-    read_from(data, data.len() as u64)
+    read_from(data, Some(data.len() as u64))
 }
 
-/// Словарь из потока длиной `size` байт: секции читаются по одной, без копии всего файла
-/// в памяти; длина секции больше остатка потока - ошибка формата, а не огромная аллокация
-pub(crate) fn read_from(input: impl Read, size: u64) -> Result<Sections, Error> {
+/// Словарь из потока длиной `size` байт (`None` - длина неизвестна: канал, устройство): секции
+/// читаются по одной, без копии всего файла в памяти. Длина секции больше остатка потока -
+/// ошибка формата, а не огромная аллокация; у потока неизвестной длины память под секцию
+/// растет по мере данных
+pub(crate) fn read_from(input: impl Read, size: Option<u64>) -> Result<Sections, Error> {
     let mut stream = Stream { input, left: size };
     let signature = match stream.take(MAGIC.len() as u64) {
         Err(Error::Io(err)) => return Err(Error::Io(err)),
@@ -99,32 +101,47 @@ pub(crate) fn read_from(input: impl Read, size: u64) -> Result<Sections, Error> 
         guesses: stream.section()?,
         guess_records: stream.numbers::<4, _>(u32::from_le_bytes)?,
     };
-    if stream.left != 0 {
+    let extra = match stream.left {
+        Some(left) => left != 0,
+        None => !stream.take_up_to(1)?.is_empty(),
+    };
+    if extra {
         return Err(Error::Format("лишние данные после последней секции".into()));
     }
     Ok(sections)
 }
 
-/// Поток с известным остатком длины
+/// Поток с остатком длины, если он известен
 struct Stream<R> {
     input: R,
-    left: u64,
+    left: Option<u64>,
 }
 
 impl<R: Read> Stream<R> {
     fn take(&mut self, len: u64) -> Result<Vec<u8>, Error> {
-        let truncated = || Error::Format("файл обрезан".into());
-        if len > self.left {
-            return Err(truncated());
+        let bytes = self.take_up_to(len)?;
+        if (bytes.len() as u64) < len {
+            return Err(Error::Format("файл обрезан".into()));
         }
-        let mut bytes = vec![0; usize::try_from(len).map_err(|_| truncated())?];
-        self.input
-            .read_exact(&mut bytes)
-            .map_err(|err| match err.kind() {
-                ErrorKind::UnexpectedEof => truncated(),
-                _ => Error::Io(err),
-            })?;
-        self.left -= len;
+        Ok(bytes)
+    }
+
+    /// До `len` байт: меньше - только в конце потока
+    fn take_up_to(&mut self, len: u64) -> Result<Vec<u8>, Error> {
+        let truncated = || Error::Format("файл обрезан".into());
+        let capacity = match self.left {
+            Some(left) if len > left => return Err(truncated()),
+            Some(_) => usize::try_from(len).map_err(|_| truncated())?,
+            None => 0,
+        };
+        let mut bytes = Vec::with_capacity(capacity);
+        (&mut self.input)
+            .take(len)
+            .read_to_end(&mut bytes)
+            .map_err(Error::Io)?;
+        if let Some(left) = &mut self.left {
+            *left -= bytes.len() as u64;
+        }
         Ok(bytes)
     }
 
@@ -138,13 +155,17 @@ impl<R: Read> Stream<R> {
         const CHUNK: usize = 1 << 16;
         let truncated = || Error::Format("файл обрезан".into());
         let len = u64::from_le_bytes(self.take(8)?.try_into().unwrap());
-        if len > self.left {
+        if self.left.is_some_and(|left| len > left) {
             return Err(truncated());
         }
         if len % N as u64 != 0 {
             return Err(Error::Format(format!("длина секции не кратна {N}")));
         }
-        let mut values = Vec::with_capacity(usize::try_from(len).map_err(|_| truncated())? / N);
+        let capacity = match self.left {
+            Some(_) => usize::try_from(len).map_err(|_| truncated())? / N,
+            None => 0,
+        };
+        let mut values = Vec::with_capacity(capacity);
         let mut left = len;
         while left > 0 {
             let chunk = self.take(left.min(CHUNK as u64))?;
@@ -260,12 +281,14 @@ mod tests {
     #[test]
     fn reads_stream_by_sections() {
         let data = write(&sample());
-        let read_back = read_from(data.as_slice(), data.len() as u64).unwrap();
+        let read_back = read_from(data.as_slice(), Some(data.len() as u64)).unwrap();
         assert_eq!(read_back.records, sample().records);
         // Длина секции больше остатка - ошибка формата, а не аллокация на эту длину
         let mut huge = data[..MAGIC.len() + 4].to_vec();
         huge.extend_from_slice(&u64::MAX.to_le_bytes());
-        let err = read_from(huge.as_slice(), huge.len() as u64).err().unwrap();
+        let err = read_from(huge.as_slice(), Some(huge.len() as u64))
+            .err()
+            .unwrap();
         assert!(err.to_string().contains("файл обрезан"));
     }
 
@@ -295,6 +318,23 @@ mod tests {
     }
 
     #[test]
+    fn reads_stream_of_unknown_length() {
+        let data = write(&sample());
+        assert_eq!(write(&read_from(data.as_slice(), None).unwrap()), data);
+        // Лишние данные и обрезанный поток - ошибки формата
+        let mut longer = data.clone();
+        longer.push(0);
+        assert!(read_from(longer.as_slice(), None).is_err());
+        assert!(read_from(&data[..data.len() - 1], None).is_err());
+        // Огромная длина секции в потоке неизвестной длины не заказывает память заранее
+        let mut huge = data[..MAGIC.len() + 4].to_vec();
+        huge.extend_from_slice(&u64::MAX.to_le_bytes());
+        huge.extend_from_slice(b"meta");
+        let err = read_from(huge.as_slice(), None).err().unwrap();
+        assert!(err.to_string().contains("файл обрезан"));
+    }
+
+    #[test]
     fn passes_io_errors() {
         struct Broken;
         impl Read for Broken {
@@ -302,7 +342,8 @@ mod tests {
                 Err(std::io::Error::other("диск"))
             }
         }
-        assert!(matches!(read_from(Broken, 100), Err(Error::Io(_))));
+        assert!(matches!(read_from(Broken, Some(100)), Err(Error::Io(_))));
+        assert!(matches!(read_from(Broken, None), Err(Error::Io(_))));
     }
 
     #[test]

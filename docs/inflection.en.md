@@ -107,16 +107,17 @@ Exceptions:
 agree(number)
 ```
 
-The form of a noun, an adjective, a pronominal adjective or a participle that agrees with a number. The case of the analysis is kept: «рублях» with 2 is «рублях» («о 2 рублях»), the accusative of animate nouns gives «вижу двух котов». Adjectives and nouns declined like adjectives agree by gender: «две новые», «два новых», «два учёных», «две столовые». After a number the counting form is taken: «5 вольт», «5 лет», «5 человек». Words without a singular take the plural: «1 сутки», «2 суток». Feminine surnames agree like adjectives: «две Ивановы», «пять Ивановых». A negative number agrees as its absolute value.
+The form of a noun, an adjective, a pronominal adjective or a participle that agrees with a number. The case of the analysis is kept: «рублях» with 2 is «рублях» («о 2 рублях»), the accusative of animate nouns gives «вижу двух котов». Adjectives and nouns declined like adjectives agree by gender: «две новые», «два новых», «два учёных», «две столовые». After a number the counting form is taken: «5 вольт», «5 лет», «5 человек». Words without a singular take the plural: «1 сутки», «2 суток». Feminine surnames agree like adjectives: «две Ивановы», «пять Ивановых». A negative number agrees as its absolute value, a fractional one («1,5», `Decimal`, `Fraction`) takes the genitive singular in any case: «1,5 рубля», «о 2,5 рубля».
 
 | Parameter | Type | Default | Description |
 | :-------- | :--- | :------ | :---------- |
-| `number` | `int` | - | The number |
+| `number` | `int` / `float` / `Decimal` / `Fraction` | - | The number; an integer is any number with `__index__` |
 
 Exceptions:
 
 - `FormNotFoundError` - the word does not agree with numbers (a verb, an adverb) or the lexeme has no needed form («5 молока»);
-- `TypeError` - a number that is not an integer.
+- `TypeError` - a value that is not a number;
+- `ValueError` - infinity or NaN.
 
 === "Code"
 

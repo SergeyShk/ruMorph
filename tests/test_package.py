@@ -27,17 +27,9 @@ def test_metadata():
     assert rumorph.__all__ == sorted(rumorph.__all__)
 
 
-def test_version_fallback(monkeypatch):
-    def missing(name):
-        raise importlib.metadata.PackageNotFoundError(name)
-
-    monkeypatch.setattr(importlib.metadata, "version", missing)
-    try:
-        assert importlib.reload(rumorph).__version__ == "0.0.0"
-    finally:
-        monkeypatch.undo()
-        importlib.reload(rumorph)
-    assert rumorph.__version__ != "0.0.0"
+def test_version_matches_metadata():
+    # Версия берется из модуля расширения, без медленного importlib.metadata при импорте
+    assert rumorph.__version__ == importlib.metadata.version("rumorph")
 
 
 def test_crate_version():

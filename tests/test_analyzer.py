@@ -157,8 +157,6 @@ def test_words_must_be_strings(morph, method):
         getattr(morph, method)(["стали", 5])
     with pytest.raises(TypeError, match="элемент 0 - bytes"):
         getattr(morph, method)([b"stali"])
-    with pytest.raises(UnicodeEncodeError):
-        getattr(morph, method)(["\udcff"])
 
 
 def test_threads(morph):
@@ -368,9 +366,16 @@ def test_pickle(morph):
     assert restored.path == morph.path
     assert restored.lemmatize(["стали"]) == ["стать"]
     assert pickle.loads(pickle.dumps(Analyzer(str(morph.path)))).path == morph.path
-    # Разборы из разных pickle используют один восстановленный анализатор, а не грузят словарь заново
-    assert pickle.loads(pickle.dumps(morph)) is restored
     hedgehog = morph.analyze("ёж")[0]
+    # Копия анализатора и разбора - тот же объект: словарь не загружается еще раз
+    assert copy.copy(morph) is morph
+    assert copy.deepcopy(morph) is morph
+    assert copy.deepcopy(hedgehog) is hedgehog
+    # Вероятность не входит в равенство: разбор равен своей форме
+    cat = morph.analyze("кошка")[0]
+    assert cat.prob < 1
+    assert cat in cat.forms()
+    assert hash(cat) == hash(next(form for form in cat.forms() if form == cat))
     _, (_, state) = hedgehog.__reduce__()
     restored_analysis = rumorph._rumorph._analysis(morph, (*state[:5], 0.5, *state[6:]))
     assert (restored_analysis.prob, restored_analysis.inflect(Case="Gen")) == (0.5, "ежа")
@@ -380,3 +385,43 @@ def test_pickle(morph):
         rumorph._rumorph._analysis(morph, (*state[:6], "corpus", *state[7:]))
     with pytest.raises(ValueError, match="В словаре нет разбора"):
         rumorph._rumorph._analysis(morph, (*state[:3], "Case", *state[4:]))
+
+
+def test_relative_path_pickles(morph, tmp_path, monkeypatch):
+    # Путь хранится абсолютным: pickle работает в другом рабочем каталоге
+    (tmp_path / "ru.dict").symlink_to(morph.path)
+    monkeypatch.chdir(tmp_path)
+    relative = Analyzer("ru.dict")
+    assert relative.path == tmp_path / "ru.dict"
+    data = pickle.dumps(relative.analyze("стали")[0])
+    monkeypatch.chdir(tmp_path.parent)
+    assert pickle.loads(data).lemma == "стать"
+
+
+@pytest.mark.parametrize(
+    ("call", "message"),
+    [
+        (lambda morph: morph.analyze(123), "Слово должно быть строкой, а не int"),
+        (lambda morph: morph.is_known(None), "Слово должно быть строкой, а не NoneType"),
+        (lambda morph: morph.lemmatize(5), "Ожидается набор слов, а не int"),
+        (
+            lambda morph: Analyzer(123),
+            "Путь к словарю должен быть строкой или os.PathLike, а не int",
+        ),
+    ],
+)
+def test_type_errors_in_russian(morph, call, message):
+    with pytest.raises(TypeError, match=message):
+        call(morph)
+
+
+def test_surrogates_replaced(morph):
+    # Непарный суррогат не роняет пакетный разбор: он заменяется на U+FFFD
+    assert morph.lemmatize(["кот", "\ud800", "стали"])[::2] == ["кот", "стать"]
+    assert morph.analyze("кот\udc00")[0].word == "кот�"
+    assert not morph.is_known("\ud800")
+
+
+def test_lemmatize_shares_strings(morph):
+    first, second = morph.lemmatize(["стали", "стали"])
+    assert first is second

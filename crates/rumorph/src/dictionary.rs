@@ -1,6 +1,5 @@
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
-use std::io::Read;
 use std::path::Path;
 
 use fst::Map;
@@ -177,18 +176,11 @@ pub struct Dictionary {
 impl Dictionary {
     /// Читает словарь из файла
     pub fn open(path: impl AsRef<Path>) -> Result<Self, Error> {
-        let mut file = std::fs::File::open(path)?;
+        let file = std::fs::File::open(path)?;
         let metadata = file.metadata()?;
-        if !metadata.is_file() {
-            // У канала, устройства или каталога размер в метаданных - не длина потока
-            let mut data = Vec::new();
-            file.read_to_end(&mut data)?;
-            return Self::from_bytes(&data);
-        }
-        Self::from_sections(format::read_from(
-            std::io::BufReader::new(file),
-            metadata.len(),
-        )?)
+        // У канала, устройства или каталога размер в метаданных - не длина потока
+        let size = metadata.is_file().then_some(metadata.len());
+        Self::from_sections(format::read_from(std::io::BufReader::new(file), size)?)
     }
 
     /// Читает словарь из байтов файла словаря
@@ -205,6 +197,7 @@ impl Dictionary {
             .collect::<Option<Vec<_>>>()
             .ok_or_else(|| Error::Format("неверный тег UD".into()))?;
         let table_offsets = check_tables(&sections, ud_tags.len())?;
+        check_lists(&sections, &table_offsets)?;
         let rule_tags = rules::Tags::add(&mut ud_tags);
         let mut cores: HashMap<(&str, String), u16> = HashMap::new();
         let ud_core = ud_tags
@@ -519,14 +512,25 @@ impl Dictionary {
     /// родительного падежа множественного числа берется счетная («5 вольт»). У слов без
     /// единственного числа («сутки») берется множественное: «1 сутки», «2 суток»
     pub fn agree(&self, analysis: &Analysis, number: u64) -> Option<Analysis> {
+        self.agree_with(analysis, Some(number))
+    }
+
+    /// Форма, согласованная с дробным количеством («1,5 рубля», «о 2,5 рубля»): родительный падеж
+    /// единственного числа в любом падеже, у слов без единственного числа - множественного
+    pub fn agree_fraction(&self, analysis: &Analysis) -> Option<Analysis> {
+        self.agree_with(analysis, None)
+    }
+
+    /// Форма, согласованная с целым количеством `number` или с дробным (`None`)
+    fn agree_with(&self, analysis: &Analysis, number: Option<u64>) -> Option<Analysis> {
         if let Some((base, particle)) = self.without_particle(analysis) {
             return self
-                .agree(&base, number)
+                .agree_with(&base, number)
                 .map(|form| with_particle(form, &particle));
         }
         if let Some(lower) = self.lowercased(analysis) {
             return self
-                .agree(&lower, number)
+                .agree_with(&lower, number)
                 .map(|form| capitalized_like(&analysis.word, form));
         }
         let tag = self.ud_tags.get(usize::from(analysis.ud))?;
@@ -557,13 +561,20 @@ impl Dictionary {
         if !adjectival && !nominal {
             return None;
         }
+        let gen_sing = [("Case", "Gen"), ("Number", "Sing")];
+        let gen_plur = [("Case", "Gen"), ("Number", "Plur")];
+        let counting: Vec<u16> = self.code_ids.get("Coun").copied().into_iter().collect();
+        let Some(number) = number else {
+            let form = [&gen_sing[..], &gen_plur[..]]
+                .into_iter()
+                .find_map(|feats| self.closest(analysis, &lexeme, &forms, feats, &[]))?;
+            return Some(self.form(analysis, &lexeme, form));
+        };
         let one = number % 10 == 1 && number % 100 != 11;
         let few = (2..=4).contains(&(number % 10)) && !(12..=14).contains(&(number % 100));
         let animate = feat("Animacy") == Some("Anim");
         let sing = [("Case", case), ("Number", "Sing")];
         let plur = [("Case", case), ("Number", "Plur")];
-        let gen_sing = [("Case", "Gen"), ("Number", "Sing")];
-        let gen_plur = [("Case", "Gen"), ("Number", "Plur")];
         let plur_inanimate = [("Case", case), ("Number", "Plur"), ("Animacy", "Inan")];
         let targets: Vec<&[(&str, &str)]> = if one {
             vec![&sing, &plur]
@@ -579,7 +590,6 @@ impl Dictionary {
         } else {
             vec![&gen_plur]
         };
-        let counting: Vec<u16> = self.code_ids.get("Coun").copied().into_iter().collect();
         let form = targets
             .into_iter()
             .find_map(|feats| self.closest(analysis, &lexeme, &forms, feats, &counting))?;
@@ -1097,6 +1107,58 @@ fn capitalized_like(original: &str, form: Analysis) -> Analysis {
 }
 
 /// Таблицы словоизменения ссылаются на существующие парадигмы, формы и теги UD; вывод - начала таблиц
+/// Наибольшая длина списка разборов, частот или форм для угадывания: в словаре они не длиннее
+/// нескольких десятков, а испорченная длина делает разбор слова квадратичным
+const MAX_LIST: usize = 255;
+
+/// Списки разборов, частот и форм для угадывания ровно закрывают свои секции, они не длиннее
+/// `MAX_LIST`, а таблицы, формы и теги в них существуют
+fn check_lists(sections: &Sections, table_offsets: &[u32]) -> Result<(), Error> {
+    let form_count = |table: usize| -> Option<usize> {
+        let start = *table_offsets.get(table)? as usize;
+        let paradigm = *sections.tables.get(start)? as usize;
+        let begin = *sections.paradigm_offsets.get(paradigm)?;
+        let end = *sections.paradigm_offsets.get(paradigm + 1)?;
+        Some((end - begin) as usize / 3)
+    };
+    let entry = |packed: u32| {
+        form_count((packed >> 16) as usize)
+            .is_some_and(|count| ((packed & 0xFFFF) as usize) < count)
+    };
+    walk_lists(&sections.records, 1, |items| {
+        items.iter().all(|&packed| entry(packed))
+    })?;
+    walk_lists(&sections.probability_records, 2, |items| {
+        items
+            .chunks(2)
+            .all(|pair| (pair[0] as usize) < sections.tags.len())
+    })?;
+    walk_lists(&sections.guess_records, 2, |items| {
+        items.chunks(2).all(|pair| entry(pair[0]))
+    })
+}
+
+/// Обход списков вида «длина, элементы по `width` чисел»
+fn walk_lists(lists: &[u32], width: usize, valid: impl Fn(&[u32]) -> bool) -> Result<(), Error> {
+    let invalid = |msg: &str| Err(Error::Format(msg.into()));
+    let mut start = 0;
+    while start < lists.len() {
+        let count = lists[start] as usize;
+        if count > MAX_LIST {
+            return invalid("список длиннее 255 элементов");
+        }
+        let end = start + 1 + count * width;
+        let Some(items) = lists.get(start + 1..end) else {
+            return invalid("список обрезан");
+        };
+        if !valid(items) {
+            return invalid("список ссылается на несуществующую таблицу, форму или тег");
+        }
+        start = end;
+    }
+    Ok(())
+}
+
 fn check_tables(sections: &Sections, ud_count: usize) -> Result<Vec<u32>, Error> {
     let invalid = |msg: &str| Err(Error::Format(msg.into()));
     let tables = &sections.tables;
@@ -1821,18 +1883,24 @@ mod tests {
     }
 
     #[test]
-    fn broken_guess_records_give_no_guesses() {
+    fn broken_guess_records_are_rejected() {
         let data = guessing_bytes();
         assert_eq!(
             Dictionary::from_bytes(&data).unwrap().analyze("зума")[0].lemma,
             "зума"
         );
-        // Нулевое число словоформ в поврежденном файле не дает вероятности NaN
-        for records in [vec![9, 0], vec![1, 0x0007_0000, 2], vec![1, 0, 0], vec![]] {
+        // Нулевое число словоформ не дает вероятности NaN, а обрезанный список и несуществующая
+        // таблица - ошибка формата при загрузке
+        for records in [vec![1, 0, 0], vec![]] {
             let mut sections = format::read(&data).unwrap();
             sections.guess_records = records;
             let dict = Dictionary::from_bytes(&format::write(&sections)).unwrap();
             assert_eq!(dict.analyze("зума"), dict.fallback("зума"));
+        }
+        for records in [vec![9, 0], vec![1, 0x0007_0000, 2], vec![300]] {
+            let mut sections = format::read(&data).unwrap();
+            sections.guess_records = records;
+            assert!(Dictionary::from_bytes(&format::write(&sections)).is_err());
         }
     }
 
@@ -2108,17 +2176,21 @@ mod tests {
     }
 
     #[test]
-    fn broken_records_give_no_analyses() {
+    fn broken_records_are_rejected() {
         let mut builder = builder(&["NOUN"], &[""], &[""]);
         let table = lexeme_table(&mut builder, &[(0, 0, 0)]);
         builder.add_word("кот", &[entry(table, 0)]).unwrap();
         let data = builder.build().unwrap();
-        for records in [vec![5, 0], vec![1, 7], vec![1, 0x0005_0000]] {
+        // Обрезанный или слишком длинный список и несуществующие таблица и форма - ошибка формата
+        for records in [vec![5, 0], vec![1, 7], vec![1, 0x0005_0000], vec![256]] {
             let mut sections = format::read(&data).unwrap();
             sections.records = records;
-            let dict = Dictionary::from_bytes(&format::write(&sections)).unwrap();
-            assert_eq!(dict.analyze("кот"), dict.fallback("кот"));
+            assert!(Dictionary::from_bytes(&format::write(&sections)).is_err());
         }
+        // Частота несуществующего тега
+        let mut sections = format::read(&data).unwrap();
+        sections.probability_records = vec![1, 99, 5];
+        assert!(Dictionary::from_bytes(&format::write(&sections)).is_err());
     }
 
     #[test]

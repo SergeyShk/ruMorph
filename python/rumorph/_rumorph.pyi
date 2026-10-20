@@ -1,7 +1,11 @@
 from collections.abc import Iterable
+from decimal import Decimal
+from fractions import Fraction
 from os import PathLike
 from pathlib import Path
-from typing import Literal, final
+from typing import Literal, SupportsIndex, final
+
+__version__: str
 
 class FormNotFoundError(LookupError): ...
 
@@ -23,7 +27,7 @@ class Analysis:
     def source(self) -> Literal["dictionary", "rule", "guess"]: ...
     def forms(self) -> list[Analysis]: ...
     def inflect(self, **feats: str) -> str: ...
-    def agree(self, number: int) -> str: ...
+    def agree(self, number: SupportsIndex | float | Decimal | Fraction) -> str: ...
 
 @final
 class Analyzer:

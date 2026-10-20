@@ -1,5 +1,7 @@
 import pickle
 from concurrent.futures import ThreadPoolExecutor
+from decimal import Decimal
+from fractions import Fraction
 
 import pytest
 
@@ -376,8 +378,9 @@ def test_agree_large_and_negative(morph):
 def test_agree_errors(morph, word, number):
     with pytest.raises(FormNotFoundError, match=f"не согласуется с количеством {number}"):
         morph.analyze(word)[0].agree(number)
-    with pytest.raises(TypeError):
-        morph.analyze(word)[0].agree(2.5)
+    if word != "молоко":
+        with pytest.raises(FormNotFoundError, match=r"не согласуется с количеством 2\.5"):
+            morph.analyze(word)[0].agree(2.5)
 
 
 @pytest.mark.parametrize("word", ["мешаемый", "передох", "брызжет", "кошкою", "лесу"])
@@ -448,6 +451,24 @@ def test_female_surname_agreement(morph):
         "ивановых",
         "иванова",
     ]
+
+
+def test_agree_number_types(morph):
+    ruble = morph.analyze("рубль")[0]
+
+    class Count:
+        def __index__(self):
+            return 3
+
+    # Целое - всё, у чего есть __index__; дробное - родительный падеж единственного числа
+    assert ruble.agree(Count()) == "рубля"
+    assert [ruble.agree(n) for n in (1.5, Decimal("2.5"), Fraction(1, 2), 5.0)] == ["рубля"] * 4
+    days = morph.analyze("сутки")[0]
+    assert days.agree(1.5) == "суток"
+    with pytest.raises(TypeError, match="Количество должно быть числом, а не str"):
+        ruble.agree("5")
+    with pytest.raises(ValueError, match="конечным числом"):
+        ruble.agree(float("nan"))
 
 
 @pytest.mark.parametrize(
