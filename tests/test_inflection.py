@@ -469,6 +469,13 @@ def test_agree_number_types(morph):
         ruble.agree("5")
     with pytest.raises(ValueError, match="конечным числом"):
         ruble.agree(float("nan"))
+    # Decimal и Fraction без дробной части - целые, конечность - без перевода во float
+    integral = (Decimal("21"), Decimal(5), Fraction(10, 2), Decimal("5E+1"), Decimal("1E+400"))
+    assert [ruble.agree(n) for n in integral] == ["рубль", "рублей", "рублей", "рублей", "рублей"]
+    assert [ruble.agree(n) for n in (Decimal("5.00"), Fraction(10**400, 3))] == ["рубля"] * 2
+    for special in (Decimal("sNaN"), Decimal("-Infinity")):
+        with pytest.raises(ValueError, match="конечным числом"):
+            ruble.agree(special)
 
 
 @pytest.mark.parametrize(

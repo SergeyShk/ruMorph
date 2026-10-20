@@ -1,10 +1,12 @@
 //! Модуль Python `rumorph._rumorph`
 
+use std::cell::UnsafeCell;
 use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, PoisonError, Weak};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Weak};
 use std::time::SystemTime;
 
 use pyo3::create_exception;
@@ -154,6 +156,7 @@ impl Analysis {
     fn forms(&self, py: Python<'_>) -> PyResult<Vec<Analysis>> {
         self.analyzer
             .get()
+            .shared
             .dictionary
             .forms(&self.inner)
             .into_iter()
@@ -185,7 +188,7 @@ impl Analysis {
     ///     ('кошки', 'кошек')
     #[pyo3(signature = (**feats))]
     fn inflect(&self, feats: Option<&Bound<'_, PyDict>>) -> PyResult<String> {
-        let dictionary = &self.analyzer.get().dictionary;
+        let dictionary = &self.analyzer.get().shared.dictionary;
         let mut requested: Vec<(String, String)> = Vec::new();
         for (name, value) in feats.into_iter().flatten() {
             let name: String = name.extract()?;
@@ -236,16 +239,20 @@ impl Analysis {
     /// Описание:
     ///     Согласует существительное, прилагательное, местоименное прилагательное или причастие
     ///     с количеством в падеже разбора: «1 рубль», «2 рубля», «5 рублей», «о 2 рублях».
-    ///     Отрицательное количество согласуется как его модуль
+    ///     Отрицательное количество согласуется как его модуль, дробное - в родительном падеже
+    ///     единственного числа: «1,5 рубля», «о 2,5 рубля»
     ///
     /// Аргументы:
-    ///     number (int): Количество
+    ///     number (int | float | Decimal | Fraction): Количество; целое - любое число с __index__,
+    ///         а также Decimal и Fraction без дробной части
     ///
     /// Вывод:
     ///     str: Словоформа в написании словаря
     ///
     /// Исключения:
     ///     FormNotFoundError: Если слово не согласуется с количеством или у лексемы нет нужной формы
+    ///     TypeError: Если количество не число
+    ///     ValueError: Если количество - бесконечность или NaN
     ///
     /// Пример использования:
     ///     >>> from rumorph import Analyzer
@@ -253,7 +260,7 @@ impl Analysis {
     ///     >>> [f"{n} {ruble.agree(n)}" for n in (1, 2, 5, 21)]
     ///     ['1 рубль', '2 рубля', '5 рублей', '21 рубль']
     fn agree(&self, number: &Bound<'_, PyAny>) -> PyResult<String> {
-        let dictionary = &self.analyzer.get().dictionary;
+        let dictionary = &self.analyzer.get().shared.dictionary;
         let form = match count(number)? {
             Some(count) => dictionary.agree(&self.inner, count),
             None => dictionary.agree_fraction(&self.inner),
@@ -366,7 +373,7 @@ fn _analysis(py: Python<'_>, analyzer: Py<Analyzer>, state: AnalysisState) -> Py
             "Неизвестный источник разбора: {source}"
         )));
     };
-    let dictionary = &analyzer.get().dictionary;
+    let dictionary = &analyzer.get().shared.dictionary;
     let same = |analysis: &rumorph::Analysis| {
         let tag = &dictionary.ud_tags()[usize::from(analysis.ud)];
         analysis.word == word
@@ -396,34 +403,219 @@ fn _analysis(py: Python<'_>, analyzer: Py<Analyzer>, state: AnalysisState) -> Py
     Analyzer::to_py(py, &analyzer, inner)
 }
 
-/// Словари, загруженные в процессе: путь, размер и время изменения файла. Анализаторы с одним
-/// файлом словаря делят словарь, а разборы из pickle не загружают его еще раз; словарь
-/// освобождается вместе с последним анализатором
-type Loaded = (PathBuf, u64, Option<SystemTime>, Weak<rumorph::Dictionary>);
+/// Словарь и объекты его тегов UD: общие для анализаторов с одним файлом словаря
+struct Shared {
+    dictionary: rumorph::Dictionary,
+    /// Объекты тегов UD создаются при первом разборе с тегом: в тексте встречается малая доля тегов
+    ud: Vec<PyOnceLock<UdObjects>>,
+}
 
-static DICTIONARIES: Mutex<Vec<Loaded>> = Mutex::new(Vec::new());
-
-/// Словарь файла `path`: загруженный в процессе, если файл не изменился, иначе новый
-fn dictionary(path: &Path) -> Result<Arc<rumorph::Dictionary>, rumorph::Error> {
-    let metadata = std::fs::metadata(path)?;
-    if !metadata.is_file() {
-        return rumorph::Dictionary::open(path).map(Arc::new);
+impl Shared {
+    fn new(dictionary: rumorph::Dictionary) -> Self {
+        let ud = dictionary
+            .ud_tags()
+            .iter()
+            .map(|_| PyOnceLock::new())
+            .collect();
+        Shared { dictionary, ud }
     }
-    let (size, modified) = (metadata.len(), metadata.modified().ok());
-    let mut loaded = DICTIONARIES.lock().unwrap_or_else(PoisonError::into_inner);
-    loaded.retain(|(.., dictionary)| dictionary.strong_count() > 0);
-    if let Some(dictionary) = loaded
-        .iter()
-        .filter(|(known, known_size, known_modified, _)| {
-            known == path && (*known_size, *known_modified) == (size, modified)
+}
+
+/// Файл словаря: его идентичность, размер и время изменения (на случай перезаписи на месте),
+/// время создания (замена файлом с тем же размером и временем изменения)
+#[derive(Clone, PartialEq, Eq)]
+struct FileKey {
+    id: FileId,
+    size: u64,
+    modified: Option<SystemTime>,
+    created: Option<SystemTime>,
+}
+
+/// На Unix - устройство и номер файла: симлинки и «..» дают тот же файл, замена через rename -
+/// другой
+#[cfg(unix)]
+type FileId = (u64, u64);
+
+#[cfg(not(unix))]
+type FileId = PathBuf;
+
+#[cfg(unix)]
+fn file_id(_path: &Path, metadata: &std::fs::Metadata) -> Option<FileId> {
+    use std::os::unix::fs::MetadataExt;
+    Some((metadata.dev(), metadata.ino()))
+}
+
+#[cfg(not(unix))]
+fn file_id(path: &Path, _metadata: &std::fs::Metadata) -> Option<FileId> {
+    std::fs::canonicalize(path).ok()
+}
+
+impl FileKey {
+    /// Ключ обычного файла; у канала или устройства ключа нет: их словарь не делится
+    fn new(path: &Path, metadata: &std::fs::Metadata) -> Option<Self> {
+        if !metadata.is_file() {
+            return None;
+        }
+        Some(FileKey {
+            id: file_id(path, metadata)?,
+            size: metadata.len(),
+            modified: metadata.modified().ok(),
+            created: metadata.created().ok(),
         })
-        .find_map(|(.., dictionary)| dictionary.upgrade())
-    {
-        return Ok(dictionary);
     }
-    let dictionary = Arc::new(rumorph::Dictionary::open(path)?);
-    loaded.push((path.to_owned(), size, modified, Arc::downgrade(&dictionary)));
-    Ok(dictionary)
+}
+
+/// Словари, загруженные в процессе. Анализаторы с одним файлом словаря делят словарь, а разборы
+/// из pickle не загружают его еще раз; словарь освобождается вместе с последним анализатором.
+///
+/// Блокировка - свой флаг, а не `Mutex`: перед fork ее берет поток, который делает fork
+/// (`os.register_at_fork`), и снимает в обоих процессах. Иначе дочерний процесс может получить ее
+/// запертой потоком, которого в нем нет, и зависнуть на первом же анализаторе
+struct Dictionaries {
+    locked: AtomicBool,
+    entries: UnsafeCell<Vec<(FileKey, Slot)>>,
+}
+
+/// Словарь в списке загруженных
+enum Slot {
+    /// Словарь загружает другой поток: его ждут, а не загружают второй раз
+    Loading,
+    Loaded(Weak<Shared>),
+}
+
+// SAFETY: `entries` читается и меняется только под флагом `locked`
+unsafe impl Sync for Dictionaries {}
+
+static DICTIONARIES: Dictionaries = Dictionaries {
+    locked: AtomicBool::new(false),
+    entries: UnsafeCell::new(Vec::new()),
+};
+
+impl Dictionaries {
+    /// Флаг ждут без GIL, а под флагом нет обращений к Python: он снимается и тогда, когда поток
+    /// с GIL ждет его перед fork
+    fn lock(&self) {
+        while self
+            .locked
+            .compare_exchange_weak(false, true, Ordering::Acquire, Ordering::Relaxed)
+            .is_err()
+        {
+            std::thread::yield_now();
+        }
+    }
+
+    fn unlock(&self) {
+        self.locked.store(false, Ordering::Release);
+    }
+
+    /// Действие со списком словарей под флагом
+    fn with<T>(&self, action: impl FnOnce(&mut Vec<(FileKey, Slot)>) -> T) -> T {
+        struct Unlock<'a>(&'a Dictionaries);
+        impl Drop for Unlock<'_> {
+            fn drop(&mut self) {
+                self.0.unlock();
+            }
+        }
+        self.lock();
+        let _unlock = Unlock(self);
+        // SAFETY: флаг взят только этим потоком
+        action(unsafe { &mut *self.entries.get() })
+    }
+}
+
+/// Перед fork: флаг словарей берет поток, который делает fork
+#[pyfunction]
+fn _before_fork() {
+    DICTIONARIES.lock();
+}
+
+#[pyfunction]
+fn _after_fork_in_parent() {
+    DICTIONARIES.unlock();
+}
+
+/// В дочернем процессе нет потоков, которые загружали словари: их отметки снимаются
+#[pyfunction]
+fn _after_fork_in_child() {
+    DICTIONARIES.unlock();
+    DICTIONARIES.with(|entries| entries.retain(|(_, slot)| matches!(slot, Slot::Loaded(_))));
+}
+
+/// Что делать со словарем файла
+enum Lookup {
+    Found(Arc<Shared>),
+    Wait,
+    Load,
+}
+
+/// Отметка «загружается» у словаря, который загружает этот поток: при выходе - словарь
+/// или, если загрузка не удалась, снятие отметки (иначе другие потоки ждали бы вечно)
+struct Loading<'a> {
+    key: &'a FileKey,
+    shared: Option<Weak<Shared>>,
+}
+
+impl Drop for Loading<'_> {
+    fn drop(&mut self) {
+        DICTIONARIES.with(|entries| {
+            let Some(at) = entries
+                .iter()
+                .position(|(known, slot)| known == self.key && matches!(slot, Slot::Loading))
+            else {
+                return;
+            };
+            match self.shared.take() {
+                Some(shared) => entries[at].1 = Slot::Loaded(shared),
+                None => {
+                    entries.remove(at);
+                }
+            }
+        });
+    }
+}
+
+/// Словарь файла `path`: загруженный в процессе, если файл тот же и не изменился, иначе новый.
+/// Флаг словарей берется только на поиск и запись, загрузка идет без него
+fn dictionary(path: &Path) -> Result<Arc<Shared>, rumorph::Error> {
+    let Some(key) = FileKey::new(path, &std::fs::metadata(path)?) else {
+        return Ok(Arc::new(Shared::new(rumorph::Dictionary::open(path)?)));
+    };
+    loop {
+        let lookup = DICTIONARIES.with(|entries| {
+            entries.retain(|(_, slot)| match slot {
+                Slot::Loading => true,
+                Slot::Loaded(shared) => shared.strong_count() > 0,
+            });
+            let Some(at) = entries.iter().position(|(known, _)| *known == key) else {
+                entries.push((key.clone(), Slot::Loading));
+                return Lookup::Load;
+            };
+            match &entries[at].1 {
+                Slot::Loading => Lookup::Wait,
+                Slot::Loaded(shared) => match shared.upgrade() {
+                    Some(shared) => Lookup::Found(shared),
+                    // Последний анализатор удален после проверки выше
+                    None => {
+                        entries[at].1 = Slot::Loading;
+                        Lookup::Load
+                    }
+                },
+            }
+        });
+        match lookup {
+            Lookup::Found(shared) => return Ok(shared),
+            Lookup::Wait => std::thread::sleep(std::time::Duration::from_millis(1)),
+            Lookup::Load => {
+                let mut loading = Loading {
+                    key: &key,
+                    shared: None,
+                };
+                let shared = Arc::new(Shared::new(rumorph::Dictionary::open(path)?));
+                loading.shared = Some(Arc::downgrade(&shared));
+                return Ok(shared);
+            }
+        }
+    }
 }
 
 /// Восстановление анализатора из pickle: словарь берется из загруженных в процессе
@@ -455,9 +647,7 @@ fn _analyzer(py: Python<'_>, path: Option<PathBuf>) -> PyResult<Analyzer> {
 ///     [('стать', 0.975), ('сталь', 0.011)]
 #[pyclass(frozen, module = "rumorph")]
 struct Analyzer {
-    dictionary: Arc<rumorph::Dictionary>,
-    /// Объекты тегов UD создаются при первом разборе с тегом: в тексте встречается малая доля тегов
-    ud: Vec<PyOnceLock<UdObjects>>,
+    shared: Arc<Shared>,
     path: PathBuf,
     /// Путь задан явно: иначе pickle не сохраняет путь, и в другом окружении берется словарь его пакета
     explicit: bool,
@@ -519,6 +709,7 @@ impl Analyzer {
         let word = text(word)?;
         let analyzer = slf.clone().unbind();
         slf.get()
+            .shared
             .dictionary
             .analyze(&word)
             .into_iter()
@@ -551,7 +742,7 @@ impl Analyzer {
     ) -> PyResult<Vec<Vec<Analysis>>> {
         let (py, analyzer) = (slf.py(), slf.clone().unbind());
         let words = collect_words(words)?;
-        let dictionary = &slf.get().dictionary;
+        let dictionary = &slf.get().shared.dictionary;
         let mut result = Vec::with_capacity(words.len());
         for chunk in words.chunks(CHUNK) {
             let analyses = py.detach(|| {
@@ -602,7 +793,7 @@ impl Analyzer {
                 chunk
                     .iter()
                     .map(
-                        |word| match self.dictionary.analyze(word).into_iter().next() {
+                        |word| match self.shared.dictionary.analyze(word).into_iter().next() {
                             Some(analysis) => analysis.lemma,
                             None => word.to_lowercase(),
                         },
@@ -639,13 +830,14 @@ impl Analyzer {
     ///     >>> morph.is_known("Ежи"), morph.is_known("вайб")
     ///     (True, False)
     fn is_known(&self, word: &Bound<'_, PyAny>) -> PyResult<bool> {
-        Ok(self.dictionary.is_known(&text(word)?))
+        Ok(self.shared.dictionary.is_known(&text(word)?))
     }
 
     /// Разборы OpenCorpora до перевода в UD и слияния: написание, тег, начальная форма, вероятность
     /// (для проверки словаря)
     fn _opencorpora(&self, word: &str) -> Vec<(String, String, String, f64)> {
-        self.dictionary
+        self.shared
+            .dictionary
             .opencorpora(word)
             .into_iter()
             .map(|(spelling, tag, lemma, prob)| (spelling, tag.to_owned(), lemma, prob))
@@ -654,7 +846,7 @@ impl Analyzer {
 
     /// Описание источника словаря в JSON (для проверки словаря в тестах)
     fn _meta(&self) -> &str {
-        self.dictionary.meta()
+        self.shared.dictionary.meta()
     }
 
     fn __repr__(&self, py: Python<'_>) -> PyResult<String> {
@@ -674,17 +866,11 @@ impl Analyzer {
             Some(path) => std::path::absolute(&path).unwrap_or(path),
             None => default_path(py)?,
         };
-        let dictionary = py
+        let shared = py
             .detach(|| dictionary(&path))
             .map_err(|err| load_error(&path, err))?;
-        let ud = dictionary
-            .ud_tags()
-            .iter()
-            .map(|_| PyOnceLock::new())
-            .collect();
         Ok(Analyzer {
-            dictionary,
-            ud,
+            shared,
             path,
             explicit,
         })
@@ -697,8 +883,9 @@ impl Analyzer {
     ) -> PyResult<Analysis> {
         let this = analyzer.get();
         let number = usize::from(analysis.ud);
-        let ud = this.ud[number].get_or_try_init(py, || {
-            UdObjects::from_tag(py, &this.dictionary.ud_tags()[number])
+        let shared = &this.shared;
+        let ud = shared.ud[number].get_or_try_init(py, || {
+            UdObjects::from_tag(py, &shared.dictionary.ud_tags()[number])
         })?;
         Ok(Analysis {
             inner: analysis,
@@ -811,12 +998,12 @@ fn type_error(message: &str, value: &Bound<'_, PyAny>) -> PyErr {
     PyTypeError::new_err(format!("{message}, а не {name}"))
 }
 
-/// Количество для `agree`: целое - всё, у чего есть `__index__` (int, bool, numpy.int64), дробное
-/// (`None`) - float, Decimal и Fraction. Согласование зависит от двух последних цифр и от того,
-/// меньше ли количество 5, поэтому числа больше u64 сводятся к 100-199
+/// Количество для `agree`: целое - всё, у чего есть `__index__` (int, bool, numpy.int64),
+/// и `Decimal` или `Fraction` без дробной части, дробное (`None`) - остальные float, Decimal
+/// и Fraction. Согласование зависит от двух последних цифр и от того, меньше ли количество 5,
+/// поэтому числа больше u64 сводятся к 100-199
 fn count(number: &Bound<'_, PyAny>) -> PyResult<Option<u64>> {
     static INDEX: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
-    static FRACTIONAL: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
     let py = number.py();
     let integer = if number.is_instance_of::<PyInt>() {
         number.clone()
@@ -826,24 +1013,10 @@ fn count(number: &Bound<'_, PyAny>) -> PyResult<Option<u64>> {
         })?;
         match index.bind(py).call1((number,)) {
             Ok(integer) => integer,
-            Err(err) if err.is_instance_of::<PyTypeError>(py) => {
-                let fractional = FRACTIONAL.get_or_try_init(py, || {
-                    let real = py.import("numbers")?.getattr("Real")?;
-                    let decimal = py.import("decimal")?.getattr("Decimal")?;
-                    PyResult::Ok((real, decimal).into_pyobject(py)?.into_any().unbind())
-                })?;
-                if !number.is_instance(fractional.bind(py))? {
-                    return Err(type_error("Количество должно быть числом", number));
-                }
-                let value: f64 = number.call_method0("__float__")?.extract()?;
-                if !value.is_finite() {
-                    return Err(PyValueError::new_err(format!(
-                        "Количество должно быть конечным числом, а не {}",
-                        number.str()?
-                    )));
-                }
-                return Ok(None);
-            }
+            Err(err) if err.is_instance_of::<PyTypeError>(py) => match integral(number)? {
+                Some(integer) => integer,
+                None => return Ok(None),
+            },
             Err(err) => return Err(err),
         }
     };
@@ -859,6 +1032,62 @@ fn count(number: &Bound<'_, PyAny>) -> PyResult<Option<u64>> {
     }))
 }
 
+/// Целое значение количества без `__index__`: `Decimal` без знаков после запятой («21», но не
+/// «21.0») и `Fraction` со знаменателем 1; `None` - дробное количество. Конечность проверяется
+/// без перевода в float: «1E+400» - конечное целое
+fn integral<'py>(number: &Bound<'py, PyAny>) -> PyResult<Option<Bound<'py, PyAny>>> {
+    static TYPES: PyOnceLock<(Py<PyAny>, Py<PyAny>, Py<PyAny>)> = PyOnceLock::new();
+    let py = number.py();
+    let (decimal, rational, real) = TYPES.get_or_try_init(py, || {
+        let numbers = py.import("numbers")?;
+        PyResult::Ok((
+            py.import("decimal")?.getattr("Decimal")?.unbind(),
+            numbers.getattr("Rational")?.unbind(),
+            numbers.getattr("Real")?.unbind(),
+        ))
+    })?;
+    let infinite = || {
+        PyValueError::new_err(format!(
+            "Количество должно быть конечным числом, а не {}",
+            number
+                .str()
+                .map_or_else(|_| "?".into(), |text| text.to_string())
+        ))
+    };
+    if number.is_instance(decimal.bind(py))? {
+        if !number.call_method0("is_finite")?.is_truthy()? {
+            return Err(infinite());
+        }
+        let exponent: i64 = number
+            .call_method0("as_tuple")?
+            .getattr("exponent")?
+            .extract()?;
+        return (exponent >= 0)
+            .then(|| number.call_method0("__int__"))
+            .transpose();
+    }
+    if number.is_instance(rational.bind(py))? {
+        return if number.getattr("denominator")?.eq(1)? {
+            number.getattr("numerator").map(Some)
+        } else {
+            Ok(None)
+        };
+    }
+    if !number.is_instance(real.bind(py))? {
+        return Err(type_error("Количество должно быть числом", number));
+    }
+    // Число, которое не помещается во float, - конечное
+    match number
+        .call_method0("__float__")
+        .and_then(|value| value.extract::<f64>())
+    {
+        Ok(value) if !value.is_finite() => Err(infinite()),
+        Ok(_) => Ok(None),
+        Err(err) if err.is_instance_of::<PyOverflowError>(py) => Ok(None),
+        Err(err) => Err(err),
+    }
+}
+
 #[pymodule]
 fn _rumorph(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Analyzer>()?;
@@ -866,6 +1095,18 @@ fn _rumorph(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("FormNotFoundError", m.py().get_type::<FormNotFoundError>())?;
     m.add_function(wrap_pyfunction!(_analysis, m)?)?;
     m.add_function(wrap_pyfunction!(_analyzer, m)?)?;
+    let os = m.py().import("os")?;
+    // На Windows fork нет
+    if os.hasattr("register_at_fork")? {
+        let handlers = PyDict::new(m.py());
+        handlers.set_item("before", wrap_pyfunction!(_before_fork, m)?)?;
+        handlers.set_item(
+            "after_in_parent",
+            wrap_pyfunction!(_after_fork_in_parent, m)?,
+        )?;
+        handlers.set_item("after_in_child", wrap_pyfunction!(_after_fork_in_child, m)?)?;
+        os.call_method("register_at_fork", (), Some(&handlers))?;
+    }
     // Версия крейта в записи PEP 440: «0.1.0-dev.12» - «0.1.0.dev12»
     m.add(
         "__version__",
