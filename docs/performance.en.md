@@ -23,7 +23,7 @@ Thousands of words or analyses per second, more is better:
 | Import and dictionary loading | 24 ms | 31 ms | 31 ms |
 | Growth of process memory | 26 MB | 35 MB | 26 MB |
 
-It is enough to create the analyzer once: every new analyzer loads the dictionary again. `multiprocessing` and joblib processes each load the dictionary into their own memory.
+Analyzers with the same dictionary file in a process share the dictionary, while `multiprocessing` and joblib processes each load it into their own memory.
 
 ## How it was measured { #method }
 

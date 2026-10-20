@@ -4,7 +4,7 @@
 Analyzer(path=None)
 ```
 
-Morphological analyzer: for a word form it finds all [analyses](analysis.md) in the OpenCorpora dictionary - the initial form, the part of speech and the [Universal Dependencies](https://universaldependencies.org/) features - and orders them by probability. The dictionary is loaded when the analyzer is created, so it is enough to create the analyzer once and use it across the program.
+Morphological analyzer: for a word form it finds all [analyses](analysis.md) in the OpenCorpora dictionary - the initial form, the part of speech and the [Universal Dependencies](https://universaldependencies.org/) features - and orders them by probability. The dictionary is loaded when the first analyzer is created: analyzers with the same dictionary file in a process share it, so a new analyzer is created instantly.
 
 Exceptions:
 
@@ -191,7 +191,7 @@ The package dictionary is built from the [OpenCorpora](https://opencorpora.org) 
 
 ## Threads and processes { #parallel }
 
-One analyzer can be used from several threads: `analyze_many` and `lemmatize` release the GIL and process lists in parallel. The analyzer and analyses are pickled, so they work with `multiprocessing` and joblib: a process loads the dictionary once, however many analyses it receives.
+One analyzer can be used from several threads: `analyze_many` and `lemmatize` release the GIL and process lists in parallel. The analyzer and analyses are pickled, so they work with `multiprocessing` and joblib: a process loads the dictionary once, however many analyses it receives. Passing analyses between processes costs more than the analysis itself, so in processes it is better to get lemmas and analysis fields, and analyses in threads.
 
 === "Code"
 
