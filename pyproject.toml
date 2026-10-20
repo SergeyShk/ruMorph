@@ -50,6 +50,7 @@ manifest-path = "crates/rumorph-py/Cargo.toml"
 module-name = "rumorph._rumorph"
 python-source = "python"
 include = [{ path = "python/rumorph/data/ru.dict", format = ["sdist", "wheel"] }]
+sdist-generator = "git"
 
 [tool.uv]
 cache-keys = [
