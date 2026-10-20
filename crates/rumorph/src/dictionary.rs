@@ -156,6 +156,8 @@ pub struct Dictionary {
     rule_tags: rules::Tags,
     /// Номера частей речи и помет в `ud_codes`
     code_ids: HashMap<String, u16>,
+    /// Коды признаков и помет, которые `closest` проверяет у каждой формы
+    preferences: Preferences,
     features: BTreeMap<String, BTreeSet<String>>,
     prefixes: Vec<String>,
     suffixes: Vec<String>,
@@ -221,6 +223,15 @@ impl Dictionary {
                 .insert(value.clone());
         }
         let (ud_codes, code_ids) = codes(&ud_tags, &features);
+        let code = |name: &str, value: &str| feature_code(&features, name, value);
+        let preferences = Preferences {
+            infinitive: code("VerbForm", "Inf"),
+            finite: code("VerbForm", "Fin"),
+            short: code("Variant", "Short"),
+            animate: code("Animacy", "Anim"),
+            first_person: code("Person", "1"),
+            inclusive: code_ids.get("incl").copied(),
+        };
         let fst_error = |err: fst::Error| Error::Format(err.to_string());
         let words = Map::new(sections.words).map_err(fst_error)?;
         let probabilities = Map::new(sections.probabilities).map_err(fst_error)?;
@@ -239,6 +250,7 @@ impl Dictionary {
             ud_codes,
             rule_tags,
             code_ids,
+            preferences,
             features,
             prefixes: sections.prefixes,
             suffixes: sections.suffixes,
@@ -599,9 +611,10 @@ impl Dictionary {
             .collect::<Option<Vec<_>>>()?;
         let current = self.ud_codes.get(usize::from(analysis.ud))?;
         let mut wanted = current.values.clone();
+        let preferences = &self.preferences;
         // У инфинитива без запроса формы глагола желательна личная форма, а не причастие
         if let (Some((form_name, infinitive)), Some((_, finite))) =
-            (self.code("VerbForm", "Inf"), self.code("VerbForm", "Fin"))
+            (preferences.infinitive, preferences.finite)
             && wanted[form_name] == infinitive
             && required.iter().all(|&(name, _)| name != form_name)
         {
@@ -616,17 +629,16 @@ impl Dictionary {
                 labels.push(label);
             }
         }
-        let unwanted = |name: &str, value: &str, codes: &Codes| {
-            self.code(name, value)
+        let unwanted = |feature: Option<(usize, u16)>, codes: &Codes| {
+            feature
                 .is_some_and(|(index, code)| codes.values[index] == code && wanted[index] != code)
         };
-        let inclusive = self.code_ids.get("incl").copied();
-        let first_person = self.code("Person", "1");
         // Форма разбора с вариантом написания («листья» и «листы»): из равных берется ближайшая
         // по написанию
-        let twin = forms.iter().any(|&form| {
-            lexeme.ud(form) == analysis.ud && self.spell(lexeme, form) != analysis.word
-        });
+        let own = lexeme.affixes(analysis.entry.map_or(0, |entry| entry.form));
+        let twin = forms
+            .iter()
+            .any(|&form| lexeme.ud(form) == analysis.ud && lexeme.affixes(form) != own);
         // Оценка формы: общее с разбором, лишнее, общее начало написания
         type Score = (usize, Reverse<usize>, usize);
         let mut best: Option<(u16, Score)> = None;
@@ -653,11 +665,13 @@ impl Dictionary {
                 .iter()
                 .filter(|label| !labels.contains(label))
                 .count()
-                + usize::from(unwanted("Variant", "Short", codes))
-                + usize::from(unwanted("Animacy", "Anim", codes))
-                + usize::from(inclusive.is_some_and(|label| {
+                + usize::from(unwanted(preferences.short, codes))
+                + usize::from(unwanted(preferences.animate, codes))
+                + usize::from(preferences.inclusive.is_some_and(|label| {
                     codes.labels.contains(&label)
-                        && first_person.is_none_or(|(index, code)| wanted[index] != code)
+                        && preferences
+                            .first_person
+                            .is_none_or(|(index, code)| wanted[index] != code)
                 }));
             let common = if twin {
                 self.spell(lexeme, form)
@@ -678,13 +692,7 @@ impl Dictionary {
 
     /// Номер признака в `features` и код значения
     fn code(&self, name: &str, value: &str) -> Option<(usize, u16)> {
-        let (index, (_, values)) = self
-            .features
-            .iter()
-            .enumerate()
-            .find(|(_, (known, _))| *known == name)?;
-        let position = values.iter().position(|known| known == value)?;
-        Some((index, position as u16 + 1))
+        feature_code(&self.features, name, value)
     }
 
     /// Лексема разбора и номера ее форм с той же леммой по порядку
@@ -927,6 +935,31 @@ fn lookup_from<'f>(
         found.insert(0, (prefix + &key[start..], value));
     }
     found
+}
+
+/// Номер признака `name` в `features` и код значения `value`
+fn feature_code(
+    features: &BTreeMap<String, BTreeSet<String>>,
+    name: &str,
+    value: &str,
+) -> Option<(usize, u16)> {
+    let (index, (_, values)) = features
+        .iter()
+        .enumerate()
+        .find(|(_, (known, _))| *known == name)?;
+    let position = values.iter().position(|known| known == value)?;
+    Some((index, position as u16 + 1))
+}
+
+/// Признаки и пометы, которые `closest` берет, только если их просят, и личная форма
+/// для инфинитива
+struct Preferences {
+    infinitive: Option<(usize, u16)>,
+    finite: Option<(usize, u16)>,
+    short: Option<(usize, u16)>,
+    animate: Option<(usize, u16)>,
+    first_person: Option<(usize, u16)>,
+    inclusive: Option<u16>,
 }
 
 /// Совпадают ли написания с точностью до «е» на месте «ё»
