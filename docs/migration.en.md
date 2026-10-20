@@ -109,11 +109,12 @@ Some words get their part of speech by the SynTagRus conventions: the parentheti
 | `Name`, `Surn`, `Patr`, `Geox`, `Orgn`, `Trad` | `NameType`: `Giv`, `Sur`, `Pat`, `Geo`, `Com`, `Pro` |
 | `Supr` | `Degree=Sup` |
 | `Abbr` | `Abbr=Yes` |
+| `Abbr` and `Anum` together («1-го», «90-х») | `NumType=Ord`, `NumForm=Combi`, without `Abbr` |
 | `Poss` | `Poss=Yes` |
 | `Fixd` | `InflClass=Ind` |
 | `Apro` | the `DET` part of speech |
-| `Dmns`, `Ques` | `PronType` for pronouns, `labels` for other words |
-| `Anum`, `GNdr` | none |
+| `Dmns`, `Ques` («там», «где») | `PronType`: `Dem`, `Rel`, `Int` |
+| `Anum` on words («первый»), `GNdr` | none |
 | the rest: `Infr`, `Slng`, `Arch`, `Qual`, `tran`, `intr`, `V-oy` and others | `labels` |
 
 The `Voice` feature is present on all verb forms and `Degree` on all adjectives and adverbs, although in OpenCorpora only participles have voice grammemes and only superlatives and comparatives have degree.

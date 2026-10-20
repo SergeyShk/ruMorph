@@ -109,11 +109,12 @@ pip install rumorph
 | `Name`, `Surn`, `Patr`, `Geox`, `Orgn`, `Trad` | `NameType`: `Giv`, `Sur`, `Pat`, `Geo`, `Com`, `Pro` |
 | `Supr` | `Degree=Sup` |
 | `Abbr` | `Abbr=Yes` |
+| `Abbr` и `Anum` вместе («1-го», «90-х») | `NumType=Ord`, `NumForm=Combi`, без `Abbr` |
 | `Poss` | `Poss=Yes` |
 | `Fixd` | `InflClass=Ind` |
 | `Apro` | часть речи `DET` |
-| `Dmns`, `Ques` | у местоимений - `PronType`, у остальных слов - пометы `labels` |
-| `Anum`, `GNdr` | нет |
+| `Dmns`, `Ques` («там», «где») | `PronType`: `Dem`, `Rel`, `Int` |
+| `Anum` у слов («первый»), `GNdr` | нет |
 | остальные: `Infr`, `Slng`, `Arch`, `Qual`, `tran`, `intr`, `V-oy` и др. | пометы `labels` |
 
 Признак `Voice` есть у всех форм глагола, а `Degree` - у всех прилагательных и наречий, хотя в OpenCorpora граммемы залога есть только у причастий, а степени - только у превосходной и сравнительной.
