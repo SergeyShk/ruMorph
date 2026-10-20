@@ -38,11 +38,20 @@ def test_punctuation_and_symbols(morph, word, pos):
     [
         ("2026", "ADJ"),
         ("1812", "ADJ"),
+        ("1900", "ADJ"),
+        ("2000", "ADJ"),
+        ("1500", "NUM"),
+        ("2100", "NUM"),
         ("15", "NUM"),
         ("123456", "NUM"),
         ("3,14", "NUM"),
         ("1.5", "NUM"),
         ("-5", "NUM"),
+        ("10 000", "NUM"),
+        ("10\u00a0000", "NUM"),
+        ("17:04", "NUM"),
+        ("2/3", "NUM"),
+        ("01.02.2003", "NUM"),
     ],
 )
 def test_numbers(morph, word, first):
@@ -57,6 +66,19 @@ def test_numbers(morph, word, first):
         assert ordinal.feats == {"NumForm": "Digit", "NumType": "Ord"}
     else:
         assert len(analyses) == 1
+
+
+@pytest.mark.parametrize(("word", "feats"), [
+    ("2005-го", {"Case": "Gen", "Gender": "Masc", "Number": "Sing"}),
+    ("2005-ГО", {"Case": "Gen", "Gender": "Masc", "Number": "Sing"}),
+    ("2005-м", {"Case": "Loc", "Gender": "Masc", "Number": "Sing"}),
+    ("2010-е", {"Animacy": "Inan", "Case": "Acc", "Number": "Plur"}),
+    ("90-х", {"Case": "Gen", "Number": "Plur"}),
+])  # fmt: skip
+def test_numeral_with_ending_first(morph, word, feats):
+    first = morph.analyze(word)[0]
+    assert (first.word, first.pos) == (word, "ADJ")
+    assert first.feats == {**feats, "NumForm": "Combi", "NumType": "Ord"}
 
 
 def test_numeral_with_ending(morph):
@@ -81,6 +103,8 @@ def test_roman_numerals(morph):
         ("XX", "xx", "X", {"Foreign": "Yes"}),
     ]
     assert morph.analyze("I")[1].pos == "X"
+    # Одиночные «C», «L» и «X» чаще латиница, «V» - римское число
+    assert [morph.analyze(letter)[0].pos for letter in "CLXV"] == ["X", "X", "X", "ADJ"]
     # Не римское число - латиница
     assert summary(morph, "IIII") == [("IIII", "iiii", "X", {"Foreign": "Yes"})]
 
@@ -104,6 +128,7 @@ def test_initials(morph):
 
 def test_abbreviation_with_dot(morph):
     assert {(a.word, a.lemma, a.pos) for a in morph.analyze("им.")} == {("им.", "имя", "NOUN")}
+    assert {(a.word, a.lemma) for a in morph.analyze("Им.")} == {("Им.", "имя")}
     analyses = morph.analyze("т.")
     assert analyses[0].lemma == "так"
     assert math.isclose(sum(a.prob for a in analyses), 1.0)
@@ -118,6 +143,13 @@ def test_capitalized_abbreviation(morph):
     ]
     # Слово словаря капсом разбирается по словарю
     assert morph.analyze("МАМА")[0].source == "dictionary"
+
+
+@pytest.mark.parametrize(
+    "word", [" ", "\n", "\u00a0", "\u200b", "\ufeff", "\x00", "\u200d", "а б", "-\u00ad"]
+)
+def test_not_tokens(morph, word):
+    assert morph.analyze(word) == []
 
 
 def test_rule_analyses_without_lexeme(morph):

@@ -63,8 +63,8 @@ Numbers, punctuation, Latin words and abbreviations are analyzed by rules, their
 
 | Token | Analysis |
 |---|---|
-| punctuation, symbols `%`, `$`, `№` | `PUNCT`, `SYM` |
-| numbers in digits: «15», «3,14» | `NUM` with `NumForm=Digit`, `NumType=Card`; an integer may also be an ordinal `ADJ` with `NumType=Ord` - for 1000-2100 (years) this is the first analysis |
+| punctuation; symbols `%`, `$`, `№`, `−`, emoji | `PUNCT`; `SYM` |
+| numbers in digits: «15», «3,14», «10 000», «17:04» | `NUM` with `NumForm=Digit`, `NumType=Card`; an integer may also be an ordinal `ADJ` with `NumType=Ord` - for 1000-2100 (years), except round hundreds, this is the first analysis |
 | numbers with an ending: «2005-го», «5-ти» | an ordinal `ADJ` with the case and forms of «1-го», or a cardinal `NUM` |
 | Roman numerals: «XX» | an ordinal `ADJ` with `NumForm=Roman` |
 | Latin words: «iPhone» | `X` with `Foreign=Yes` |
@@ -72,7 +72,7 @@ Numbers, punctuation, Latin words and abbreviations are analyzed by rules, their
 | abbreviations with a dot: «т.», «им.» | the analyses of the dictionary abbreviation without the dot |
 | capitalized abbreviations: «НКО» | `PROPN` or `NOUN` with `Abbr=Yes` |
 
-The shares of ambiguous analyses come from the frequencies in SynTagRus. Unknown Cyrillic words are not analyzed yet: their list of analyses is empty.
+The shares of ambiguous analyses come from the frequencies in SynTagRus. A token with whitespace (except a number), a control or an invisible character gets no analyses. Unknown Cyrillic words are not analyzed yet: their list of analyses is empty.
 
 ## Lists of words { #lists }
 
