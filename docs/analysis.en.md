@@ -24,7 +24,7 @@ The dictionary loads in a few milliseconds when the analyzer is created. One ana
 
 | Field | Meaning |
 |---|---|
-| `word` | the word form as spelled in the dictionary: with the letter «ё» if the dictionary has it; for rule and guessed analyses - as in the text |
+| `word` | the word form as spelled in the dictionary: with the letter «ё» if the dictionary has it; for rule and guessed analyses - as in the text, but a guessed one takes «ё» from the ending of the dictionary form («пингвиненка» → «пингвинёнка») |
 | `lemma` | the normal form |
 | `pos` | the UD part of speech: `NOUN`, `VERB`, `ADJ`, `DET`, `ADP` and so on |
 | `feats` | the UD features as a dict `{"Case": "Gen", "Number": "Sing"}`; a new one each time, changing it does not change the analysis |
