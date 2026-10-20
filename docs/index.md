@@ -1,5 +1,7 @@
 # ruMorph
 
+![ruMorph](img/rumorph.svg)
+
 **ruMorph** - морфологический анализатор русского языка: ядро на Rust и API для Python. Для словоформы анализатор находит по словарю OpenCorpora варианты разбора - начальную форму (лемму), часть речи и признаки [Universal Dependencies](https://universaldependencies.org/) - упорядочивает их по вероятности и строит формы слова.
 
 !!! warning "Проект в разработке"

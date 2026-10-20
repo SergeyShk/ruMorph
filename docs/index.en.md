@@ -1,5 +1,7 @@
 # ruMorph
 
+![ruMorph](img/rumorph.svg)
+
 **ruMorph** is a morphological analyzer of Russian: a Rust core with a Python API. For a word form the analyzer finds its analyses in the OpenCorpora dictionary - the initial form (lemma), the part of speech and the [Universal Dependencies](https://universaldependencies.org/) features - orders them by probability and builds the forms of the word.
 
 !!! warning "Work in progress"
