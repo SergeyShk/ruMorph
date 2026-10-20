@@ -404,6 +404,17 @@ impl Dictionary {
     /// в словаре, у угаданного или разобранного по правилу проверяется только, что словоформа
     /// подходит к форме таблицы
     pub fn analysis(&self, word: &str, entry: Entry, source: Source) -> Option<Analysis> {
+        // Угаданное слово с частицей («выпивал-то»): форма - у первой части
+        if source == Source::Guess
+            && let Some((base, particle)) = parts::split_particle(word)
+            && self
+                .lexeme(entry.table, entry.form, &base.to_lowercase())
+                .is_some()
+        {
+            return self
+                .analysis(base, entry, source)
+                .map(|analysis| with_particle(analysis, particle));
+        }
         // Лемма - в нижнем регистре, как у угадывания; словоформа - как сохранена
         let lower = word.to_lowercase();
         let lexeme = self.lexeme(entry.table, entry.form, &lower)?;
