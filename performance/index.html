@@ -928,7 +928,7 @@
 </tr>
 </tbody>
 </table>
-<p>Анализатор достаточно создать один раз: каждый новый анализатор загружает словарь заново. Процессы <code>multiprocessing</code> и joblib загружают словарь каждый в своей памяти.</p>
+<p>Анализаторы с одним файлом словаря в процессе делят словарь, а процессы <code>multiprocessing</code> и joblib загружают его каждый в своей памяти.</p>
 <h2 id="method">Как измерено<a class="headerlink" href="#method" title="Permanent link">&para;</a></h2>
 <ul>
 <li>Компьютер - Apple M3 Pro, macOS 26, Python 3.11; ruMorph 0.1.0.dev9, pymorphy3 2.0.6 со словарем pymorphy3-dicts-ru 2.4.417150.4580142; <code>pymorphy3[fast]</code> - то же с расширением DAWG на C++.</li>

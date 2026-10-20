@@ -965,7 +965,7 @@
 <h1 id="analyzer">Analyzer<a class="headerlink" href="#analyzer" title="Permanent link">&para;</a></h1>
 <div class="signature highlight"><pre><span></span><code><span class="n">Analyzer</span><span class="p">(</span><span class="n">path</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
 </code></pre></div>
-<p>Morphological analyzer: for a word form it finds all <a href="../analysis/">analyses</a> in the OpenCorpora dictionary - the initial form, the part of speech and the <a href="https://universaldependencies.org/">Universal Dependencies</a> features - and orders them by probability. The dictionary is loaded when the analyzer is created, so it is enough to create the analyzer once and use it across the program.</p>
+<p>Morphological analyzer: for a word form it finds all <a href="../analysis/">analyses</a> in the OpenCorpora dictionary - the initial form, the part of speech and the <a href="https://universaldependencies.org/">Universal Dependencies</a> features - and orders them by probability. The dictionary is loaded when the first analyzer is created: analyzers with the same dictionary file in a process share it, so a new analyzer is created instantly.</p>
 <p>Exceptions:</p>
 <ul>
 <li><code>FileNotFoundError</code> - the dictionary file does not exist;</li>
@@ -1183,7 +1183,7 @@
 <h2 id="dictionary">Dictionary<a class="headerlink" href="#dictionary" title="Permanent link">&para;</a></h2>
 <p>The package dictionary is built from the <a href="https://opencorpora.org">OpenCorpora</a> dictionary: about 3.1 million word forms. The probabilities of analyses come from the OpenCorpora corpus: a word written with «е» instead of «ё» gets the frequencies of the spelling with «ё», and word forms missing from the corpus get equally probable analyses. The dictionary is distributed under the <a href="https://creativecommons.org/licenses/by-sa/3.0/">CC BY-SA 3.0</a> license.</p>
 <h2 id="parallel">Threads and processes<a class="headerlink" href="#parallel" title="Permanent link">&para;</a></h2>
-<p>One analyzer can be used from several threads: <code>analyze_many</code> and <code>lemmatize</code> release the GIL and process lists in parallel. The analyzer and analyses are pickled, so they work with <code>multiprocessing</code> and joblib: a process loads the dictionary once, however many analyses it receives.</p>
+<p>One analyzer can be used from several threads: <code>analyze_many</code> and <code>lemmatize</code> release the GIL and process lists in parallel. The analyzer and analyses are pickled, so they work with <code>multiprocessing</code> and joblib: a process loads the dictionary once, however many analyses it receives. Passing analyses between processes costs more than the analysis itself, so in processes it is better to get lemmas and analysis fields, and analyses in threads.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="6:2"><input checked="checked" id="__tabbed_6_1" name="__tabbed_6" type="radio" /><input id="__tabbed_6_2" name="__tabbed_6" type="radio" /><div class="tabbed-labels"><label for="__tabbed_6_1">Code</label><label for="__tabbed_6_2">Result</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">

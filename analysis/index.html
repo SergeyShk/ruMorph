@@ -863,7 +863,7 @@
 
 
 <h1 id="_1">Разбор словоформы<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h1>
-<p>Разбор - объект <code>Analysis</code>, который возвращают методы <a href="../analyzer/">анализатора</a> <code>analyze</code> и <code>analyze_many</code>: лемма, часть речи и признаки <a href="https://universaldependencies.org/">Universal Dependencies</a>, вероятность и источник разбора. Разборы неизменяемы; их можно сравнивать, класть в множества и сохранять через pickle. Формы слова по разбору дают методы <code>forms</code>, <code>inflect</code> и <code>agree</code> - см. <a href="../inflection/">Словоизменение</a>.</p>
+<p>Разбор - объект <code>Analysis</code>, который возвращают методы <a href="../analyzer/">анализатора</a> <code>analyze</code> и <code>analyze_many</code>: лемма, часть речи и признаки <a href="https://universaldependencies.org/">Universal Dependencies</a>, вероятность и источник разбора. Разборы неизменяемы; их можно сравнивать (вероятность в сравнении не участвует: разбор равен своей форме из <code>forms()</code>), класть в множества и сохранять через pickle. Формы слова по разбору дают методы <code>forms</code>, <code>inflect</code> и <code>agree</code> - см. <a href="../inflection/">Словоизменение</a>.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Код</label><label for="__tabbed_1_2">Результат</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">

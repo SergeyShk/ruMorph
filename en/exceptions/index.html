@@ -753,12 +753,12 @@
 <tr>
 <td style="text-align: left;"><code>ValueError</code></td>
 <td style="text-align: left;">-</td>
-<td style="text-align: left;">The feature or the value is not in the dictionary (<code>inflect</code>); the file is not a ruMorph dictionary or is damaged (<a href="../analyzer/"><code>Analyzer</code></a>)</td>
+<td style="text-align: left;">The feature or the value is not in the dictionary (<code>inflect</code>); the number is infinite or NaN (<code>agree</code>); the file is not a ruMorph dictionary or is damaged (<a href="../analyzer/"><code>Analyzer</code></a>)</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>TypeError</code></td>
 <td style="text-align: left;">-</td>
-<td style="text-align: left;">An argument of the wrong type: a word or a feature value that is not a string, a number that is not an integer, a dictionary path that is neither a string nor <code>PathLike</code>, a string instead of a collection of words (<a href="../analyzer/#analyze_many"><code>analyze_many</code></a>, <a href="../analyzer/#lemmatize"><code>lemmatize</code></a>)</td>
+<td style="text-align: left;">An argument of the wrong type: a word or a feature value that is not a string, a number argument that is not a number, a dictionary path that is neither a string nor <code>PathLike</code>, a string instead of a collection of words (<a href="../analyzer/#analyze_many"><code>analyze_many</code></a>, <a href="../analyzer/#lemmatize"><code>lemmatize</code></a>)</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>FileNotFoundError</code></td>
@@ -772,7 +772,7 @@
 </tr>
 </tbody>
 </table>
-<p>Exception messages are in Russian; <code>TypeError</code> messages about the type of an argument may be in English.</p>
+<p>Exception messages are in Russian.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Code</label><label for="__tabbed_1_2">Result</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">

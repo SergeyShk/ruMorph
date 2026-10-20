@@ -928,7 +928,7 @@
 </tr>
 </tbody>
 </table>
-<p>It is enough to create the analyzer once: every new analyzer loads the dictionary again. <code>multiprocessing</code> and joblib processes each load the dictionary into their own memory.</p>
+<p>Analyzers with the same dictionary file in a process share the dictionary, while <code>multiprocessing</code> and joblib processes each load it into their own memory.</p>
 <h2 id="method">How it was measured<a class="headerlink" href="#method" title="Permanent link">&para;</a></h2>
 <ul>
 <li>Computer - Apple M3 Pro, macOS 26, Python 3.11; ruMorph 0.1.0.dev9, pymorphy3 2.0.6 with the pymorphy3-dicts-ru 2.4.417150.4580142 dictionary; <code>pymorphy3[fast]</code> - the same with the C++ DAWG extension.</li>

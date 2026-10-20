@@ -863,7 +863,7 @@
 
 
 <h1 id="word-analysis">Word analysis<a class="headerlink" href="#word-analysis" title="Permanent link">&para;</a></h1>
-<p>An analysis is an <code>Analysis</code> object returned by the <code>analyze</code> and <code>analyze_many</code> methods of the <a href="../analyzer/">analyzer</a>: the lemma, the part of speech and the <a href="https://universaldependencies.org/">Universal Dependencies</a> features, the probability and the source of the analysis. Analyses are immutable; they can be compared, put into sets and pickled. The forms of a word are given by the <code>forms</code>, <code>inflect</code> and <code>agree</code> methods - see <a href="../inflection/">Inflection</a>.</p>
+<p>An analysis is an <code>Analysis</code> object returned by the <code>analyze</code> and <code>analyze_many</code> methods of the <a href="../analyzer/">analyzer</a>: the lemma, the part of speech and the <a href="https://universaldependencies.org/">Universal Dependencies</a> features, the probability and the source of the analysis. Analyses are immutable; they can be compared (the probability takes no part in the comparison: an analysis equals its form from <code>forms()</code>), put into sets and pickled. The forms of a word are given by the <code>forms</code>, <code>inflect</code> and <code>agree</code> methods - see <a href="../inflection/">Inflection</a>.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Code</label><label for="__tabbed_1_2">Result</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">

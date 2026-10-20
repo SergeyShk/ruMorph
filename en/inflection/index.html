@@ -969,7 +969,7 @@
 <p class="metric-meta"><code>agree</code> · <code>str</code></p>
 <div class="signature highlight"><pre><span></span><code><span class="n">agree</span><span class="p">(</span><span class="n">number</span><span class="p">)</span>
 </code></pre></div>
-<p>The form of a noun, an adjective, a pronominal adjective or a participle that agrees with a number. The case of the analysis is kept: «рублях» with 2 is «рублях» («о 2 рублях»), the accusative of animate nouns gives «вижу двух котов». Adjectives and nouns declined like adjectives agree by gender: «две новые», «два новых», «два учёных», «две столовые». After a number the counting form is taken: «5 вольт», «5 лет», «5 человек». Words without a singular take the plural: «1 сутки», «2 суток». Feminine surnames in -ова, -ина agree like adjectives: «две Ивановы», «пять Ивановых». A negative number agrees as its absolute value.</p>
+<p>The form of a noun, an adjective, a pronominal adjective or a participle that agrees with a number. The case of the analysis is kept: «рублях» with 2 is «рублях» («о 2 рублях»), the accusative of animate nouns gives «вижу двух котов». Adjectives and nouns declined like adjectives agree by gender: «две новые», «два новых», «два учёных», «две столовые». After a number the counting form is taken: «5 вольт», «5 лет», «5 человек». Words without a singular take the plural: «1 сутки», «2 суток». Feminine surnames in -ова, -ина agree like adjectives: «две Ивановы», «пять Ивановых». A negative number agrees as its absolute value, a fractional one («1,5», <code>Decimal("2.5")</code>, <code>Fraction(3, 2)</code>) takes the genitive singular in any case: «1,5 рубля», «о 2,5 рубля».</p>
 <table>
 <thead>
 <tr>
@@ -982,16 +982,17 @@
 <tbody>
 <tr>
 <td style="text-align: left;"><code>number</code></td>
-<td style="text-align: left;"><code>int</code></td>
+<td style="text-align: left;"><code>int</code> / <code>float</code> / <code>Decimal</code> / <code>Fraction</code></td>
 <td style="text-align: left;">-</td>
-<td style="text-align: left;">The number</td>
+<td style="text-align: left;">The number; an integer is any number with <code>__index__</code>, and also a <code>Decimal</code> or <code>Fraction</code> without a fractional part</td>
 </tr>
 </tbody>
 </table>
 <p>Exceptions:</p>
 <ul>
 <li><code>FormNotFoundError</code> - the word does not agree with numbers (a verb, an adverb) or the lexeme has no needed form («5 молока»);</li>
-<li><code>TypeError</code> - a number that is not an integer.</li>
+<li><code>TypeError</code> - a value that is not a number;</li>
+<li><code>ValueError</code> - infinity or NaN.</li>
 </ul>
 <div class="tabbed-set tabbed-alternate" data-tabs="3:2"><input checked="checked" id="__tabbed_3_1" name="__tabbed_3" type="radio" /><input id="__tabbed_3_2" name="__tabbed_3" type="radio" /><div class="tabbed-labels"><label for="__tabbed_3_1">Code</label><label for="__tabbed_3_2">Result</label></div>
 <div class="tabbed-content">

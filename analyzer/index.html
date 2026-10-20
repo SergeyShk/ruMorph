@@ -965,7 +965,7 @@
 <h1 id="_1">Анализатор<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h1>
 <div class="signature highlight"><pre><span></span><code><span class="n">Analyzer</span><span class="p">(</span><span class="n">path</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
 </code></pre></div>
-<p>Морфологический анализатор: для словоформы находит по словарю OpenCorpora все варианты <a href="../analysis/">разбора</a> - начальную форму, часть речи и признаки <a href="https://universaldependencies.org/">Universal Dependencies</a> - и упорядочивает их по вероятности. Словарь загружается при создании анализатора, поэтому достаточно создать анализатор один раз и пользоваться им во всей программе.</p>
+<p>Морфологический анализатор: для словоформы находит по словарю OpenCorpora все варианты <a href="../analysis/">разбора</a> - начальную форму, часть речи и признаки <a href="https://universaldependencies.org/">Universal Dependencies</a> - и упорядочивает их по вероятности. Словарь загружается при создании первого анализатора: анализаторы с тем же файлом словаря в процессе делят его, поэтому новый анализатор создается мгновенно.</p>
 <p>Исключения:</p>
 <ul>
 <li><code>FileNotFoundError</code> - нет файла словаря;</li>
@@ -1183,7 +1183,7 @@
 <h2 id="dictionary">Словарь<a class="headerlink" href="#dictionary" title="Permanent link">&para;</a></h2>
 <p>Словарь пакета собран из словаря <a href="https://opencorpora.org">OpenCorpora</a>: около 3,1 млн словоформ. Вероятности разборов взяты из корпуса OpenCorpora: у слова, написанного через «е» вместо «ё», - частоты написания с «ё», у словоформ, которых в корпусе нет, разборы равновероятны. Словарь распространяется по лицензии <a href="https://creativecommons.org/licenses/by-sa/3.0/">CC BY-SA 3.0</a>.</p>
 <h2 id="parallel">Потоки и процессы<a class="headerlink" href="#parallel" title="Permanent link">&para;</a></h2>
-<p>Один анализатор можно использовать из нескольких потоков: <code>analyze_many</code> и <code>lemmatize</code> отпускают GIL и разбирают списки параллельно. Анализатор и разборы сохраняются через pickle, поэтому работают с <code>multiprocessing</code> и joblib: процесс загружает словарь один раз, сколько бы разборов он ни получил.</p>
+<p>Один анализатор можно использовать из нескольких потоков: <code>analyze_many</code> и <code>lemmatize</code> отпускают GIL и разбирают списки параллельно. Анализатор и разборы сохраняются через pickle, поэтому работают с <code>multiprocessing</code> и joblib: процесс загружает словарь один раз, сколько бы разборов он ни получил. Передача разборов между процессами дороже самого разбора, поэтому в процессах лучше получать леммы и поля разборов, а разборы - в потоках.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="6:2"><input checked="checked" id="__tabbed_6_1" name="__tabbed_6" type="radio" /><input id="__tabbed_6_2" name="__tabbed_6" type="radio" /><div class="tabbed-labels"><label for="__tabbed_6_1">Код</label><label for="__tabbed_6_2">Результат</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
