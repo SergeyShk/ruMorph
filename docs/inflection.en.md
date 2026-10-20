@@ -107,7 +107,7 @@ Exceptions:
 agree(number)
 ```
 
-The form of a noun, an adjective, a pronominal adjective or a participle that agrees with a number. The case of the analysis is kept: «рублях» with 2 is «рублях» («о 2 рублях»), the accusative of animate nouns gives «вижу двух котов». Adjectives and nouns declined like adjectives agree by gender: «две новые», «два новых», «два учёных», «две столовые». After a number the counting form is taken: «5 вольт», «5 лет», «5 человек». Words without a singular take the plural: «1 сутки», «2 суток». Feminine surnames agree like adjectives: «две Ивановы», «пять Ивановых». A negative number agrees as its absolute value.
+The form of a noun, an adjective, a pronominal adjective or a participle that agrees with a number. The case of the analysis is kept: «рублях» with 2 is «рублях» («о 2 рублях»), the accusative of animate nouns gives «вижу двух котов». Adjectives and nouns declined like adjectives agree by gender: «две новые», «два новых», «два учёных», «две столовые». After a number the counting form is taken: «5 вольт», «5 лет», «5 человек». Words without a singular take the plural: «1 сутки», «2 суток». Feminine surnames in -ова, -ина agree like adjectives: «две Ивановы», «пять Ивановых». A negative number agrees as its absolute value.
 
 | Parameter | Type | Default | Description |
 | :-------- | :--- | :------ | :---------- |
