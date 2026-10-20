@@ -1,12 +1,21 @@
-"""У каждой русской страницы документации есть английская с теми же заголовками, якорями и ссылками"""
+"""
+У каждой русской страницы документации есть английская с теми же заголовками, якорями и ссылками;
+блоки сигнатур страниц совпадают с кодом
+"""
 
+import inspect
 import re
 from pathlib import Path
 
 import pytest
 
+import rumorph
+
 DOCS = Path(__file__).parents[1] / "docs"
 PAGES = sorted(path for path in DOCS.rglob("*.md") if not path.name.endswith(".en.md"))
+# Блок сигнатуры: ``` {.python .signature} с одним вызовом в одной строке
+SIGNATURE = re.compile(r"^``` \{\.python \.signature\}\n(\w+)\((.*)\)\n```$", re.MULTILINE)
+CLASSES = [rumorph.Analyzer, rumorph.Analysis]
 
 
 def anchors(text: str) -> set[str]:
@@ -26,8 +35,45 @@ def test_english_page(page):
     assert anchors(english_text) == anchors(russian_text)
     assert links(english_text) == links(russian_text)
     assert russian_text.count("\n## ") == english_text.count("\n## ")
+    assert SIGNATURE.findall(english_text) == SIGNATURE.findall(russian_text)
 
 
 def test_no_orphan_english_pages():
     english = {path.relative_to(DOCS) for path in DOCS.rglob("*.en.md")}
     assert english == {page.relative_to(DOCS).with_suffix(".en.md") for page in PAGES}
+
+
+def signature_text(target: object) -> str:
+    """Параметры так, как их пишет блок сигнатуры: без self и разделителя позиционных"""
+    parts = []
+    for param in inspect.signature(target).parameters.values():
+        if param.name == "self":
+            continue
+        if param.kind is param.VAR_KEYWORD:
+            parts.append(f"**{param.name}")
+        elif param.default is param.empty:
+            parts.append(param.name)
+        else:
+            parts.append(f"{param.name}={param.default!r}")
+    return ", ".join(parts)
+
+
+def target(name: str) -> object:
+    """Класс пакета или метод одного из его классов"""
+    if name in rumorph.__all__:
+        return getattr(rumorph, name)
+    methods = [vars(cls)[name] for cls in CLASSES if name in vars(cls)]
+    assert len(methods) == 1, f"{name}: метод не найден или неоднозначен"
+    return methods[0]
+
+
+def test_signatures_match_the_code():
+    found = set()
+    for page in PAGES:
+        for name, written in SIGNATURE.findall(page.read_text(encoding="utf-8")):
+            assert written == signature_text(target(name)), (
+                f"{page.relative_to(DOCS)}: {name}({written}) расходится с кодом"
+            )
+            found.add(name)
+    public = {name for cls in CLASSES for name in vars(cls) if callable(vars(cls)[name])}
+    assert found >= {"Analyzer"} | {name for name in public if not name.startswith("_")}
