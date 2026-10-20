@@ -44,14 +44,14 @@ impl Dictionary {
 
     /// Разборы по самому длинному окончанию слова, для которого в индексе есть подходящие формы,
     /// с числом словоформ словаря; словоформа разбора - как в тексте, лемма - в нижнем регистре.
-    /// Окончания в индексе записаны через «е»: «ё» суффикса формы подставляется в словоформу
+    /// Окончание через «е» находит и формы с «ё»: «ё» суффикса формы подставляется в словоформу
     fn guess_in(&self, index: GuessIndex, word: &str, lower: &str) -> Vec<(Analysis, u32)> {
         let bounds: Vec<usize> = lower.char_indices().map(|(at, _)| at).collect();
         for length in (1..=GuessIndex::MAX_ENDING.min(bounds.len().saturating_sub(1))).rev() {
-            let ending = lower[bounds[bounds.len() - length]..].replace('ё', "е");
+            let ending = &lower[bounds[bounds.len() - length]..];
             let Some(forms) = self
                 .guesses
-                .get(index.key(&ending))
+                .get(index.key(ending))
                 .and_then(|offset| self.guess_records_at(offset))
             else {
                 continue;
@@ -63,8 +63,6 @@ impl Dictionary {
                     let (table, form) = ((packed >> 16) as u16, packed as u16);
                     let (word, lower) = self.with_suffix(table, form, word, lower)?;
                     let lexeme = self.lexeme(table, form, &lower)?;
-                    // Основа слова как в тексте нужна, чтобы формы сохраняли заглавную букву
-                    self.lexeme(table, form, &word)?;
                     let analysis = Analysis {
                         word,
                         lemma: self.spell(&lexeme, lexeme.lemma_form(form)),
@@ -105,8 +103,21 @@ impl Dictionary {
         if !suffix.contains('ё') || !lower.ends_with(&suffix.replace('ё', "е")) {
             return None;
         }
-        // «е» и «ё» занимают одинаково байт, поэтому граница суффикса та же
-        let replace = |text: &str| [&text[..text.len() - suffix.len()], suffix].concat();
+        // «е» и «ё» занимают одинаково байт, поэтому граница суффикса та же; меняются только
+        // «е» на местах «ё», регистр остальных букв сохраняется
+        let replace = |text: &str| {
+            let start = text.len() - suffix.len();
+            let tail: String = text[start..]
+                .chars()
+                .zip(suffix.chars())
+                .map(|pair| match pair {
+                    ('е', 'ё') => 'ё',
+                    ('Е', 'ё') => 'Ё',
+                    (letter, _) => letter,
+                })
+                .collect();
+            [&text[..start], &tail].concat()
+        };
         Some((replace(word), replace(lower)))
     }
 

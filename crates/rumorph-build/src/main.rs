@@ -279,7 +279,8 @@ fn build(export: &Path, output: &Path) -> Result<(), Box<dyn Error>> {
     for (table, _) in &placed {
         *popularity.entry(*table).or_default() += 1;
     }
-    // Окончания - через «е»: в текстах «ё» часто пишут как «е»
+    // Окончание с «ё» хранится дважды: как в словаре и через «е», потому что в текстах «ё»
+    // часто пишут как «е»
     let mut guesses: HashMap<(GuessIndex, String), HashMap<Entry, u32>> = HashMap::new();
     for (number, line) in text.lines().enumerate() {
         let (word, records) = parse(number, line)?;
@@ -302,9 +303,17 @@ fn build(export: &Path, output: &Path) -> Result<(), Box<dyn Error>> {
             let spelling = line.split_once('\t').map_or(line, |(spelling, _)| spelling);
             let starts: Vec<usize> = spelling.char_indices().map(|(at, _)| at).collect();
             for length in 1..=GuessIndex::MAX_ENDING.min(starts.len().saturating_sub(1)) {
-                let ending = spelling[starts[starts.len() - length]..].replace('ё', "е");
+                let ending = &spelling[starts[starts.len() - length]..];
+                let plain = ending.replace('ё', "е");
+                if plain != ending {
+                    *guesses
+                        .entry((index, ending.to_owned()))
+                        .or_default()
+                        .entry(entry)
+                        .or_default() += 1;
+                }
                 *guesses
-                    .entry((index, ending))
+                    .entry((index, plain))
                     .or_default()
                     .entry(entry)
                     .or_default() += 1;

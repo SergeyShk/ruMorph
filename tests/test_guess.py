@@ -46,6 +46,11 @@ def test_capitalized_guess(morph):
     assert any(a.pos != "PROPN" for a in analyses)
 
 
+def test_yo_written_with_yo(morph):
+    # Слово через «ё» угадывается по окончанию с «ё»
+    assert [(a.word, a.lemma) for a in morph.analyze("кринжьё")][:1] == [("кринжьё", "кринжьё")]
+
+
 def test_yo_written_as_e(morph):
     for word in ("пингвиненка", "пингвинёнка"):
         first = morph.analyze(word)[0]
@@ -67,6 +72,9 @@ def test_capitalized_prefixed_forms(morph):
     assert not any(char.isupper() for word in words for char in word[1:])
     comparative = next(form for form in adjective.forms() if form.word == "Покринжовее")
     assert pickle.loads(pickle.dumps(comparative)) == comparative
+    # Формы формы с приставкой сохраняют заглавную букву
+    assert [form.word for form in comparative.forms()][:2] == ["Кринжовый", "Кринжового"]
+    assert comparative.inflect(Degree="Pos", Case="Gen") == "Кринжового"
 
 
 def test_guessed_inflection(morph):
