@@ -682,9 +682,11 @@ pub fn convert(tag: &str, lemma: &str) -> Ud {
     if pos == "SCONJ" && (lemma == "чтобы" || lemma == "чтоб") {
         feats.insert("Mood", "Cnd");
     }
+    let mut extra_labels = Vec::new();
     if lemma == "быть" && feats.get("Tense") == Some(&"Fut") {
-        // SynTagRus: «будет», «будут» - Tense=Pres
+        // SynTagRus: «будет», «будут» - Tense=Pres; помета futr отличает их от «есть», «суть»
         feats.insert("Tense", "Pres");
+        extra_labels.push("futr".to_string());
     }
     if oc == "PRCL" && PARTICLE_PRONOUNS.contains(&lemma) {
         feats.extend([
@@ -758,7 +760,6 @@ pub fn convert(tag: &str, lemma: &str) -> Ud {
             feats.remove(name);
         }
     }
-    let mut extra_labels = Vec::new();
     if pos == "ADJ" {
         for &(grammeme, name) in ADJECTIVE_LABELS {
             if g(grammeme) && feats.remove(name).is_some() {
@@ -965,14 +966,6 @@ mod tests {
             (
                 "VERB".into(),
                 "Aspect=Perf|Mood=Ind|Number=Plur|Tense=Past|VerbForm=Fin|Voice=Mid".into(),
-                vec!["intr".into()]
-            )
-        );
-        assert_eq!(
-            summary("VERB,impf,intr sing,3per,futr,indc", "быть"),
-            (
-                "AUX".into(),
-                "Mood=Ind|Number=Sing|Person=3|Tense=Pres|VerbForm=Fin|Voice=Act".into(),
                 vec!["intr".into()]
             )
         );
@@ -1207,6 +1200,20 @@ mod tests {
                 vec!["incl".into(), "intr".into()]
             )
         );
+    }
+
+    #[test]
+    fn future_of_be() {
+        // SynTagRus: «будет» - Tense=Pres; помета futr отличает его от «есть»
+        assert_eq!(
+            summary("VERB,impf,intr sing,3per,futr,indc", "быть"),
+            (
+                "AUX".into(),
+                "Mood=Ind|Number=Sing|Person=3|Tense=Pres|VerbForm=Fin|Voice=Act".into(),
+                vec!["futr".into(), "intr".into()]
+            )
+        );
+        assert!(summary("VERB,impf,intr sing,3per,pres,indc", "быть").2 == ["intr"]);
     }
 
     #[test]

@@ -13,6 +13,8 @@ mod guess;
 mod parts;
 mod rules;
 
+use parts::with_particle;
+
 /// Откуда взят разбор
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Source {
@@ -416,6 +418,13 @@ impl Dictionary {
     ///
     /// Формы, которые совпали в написании, части речи и признаках, сливаются, как в `analyze`
     pub fn forms(&self, analysis: &Analysis) -> Vec<Analysis> {
+        if let Some((base, particle)) = self.without_particle(analysis) {
+            return self
+                .forms(&base)
+                .into_iter()
+                .map(|form| with_particle(form, &particle))
+                .collect();
+        }
         if let Some(lower) = self.lowercased(analysis) {
             return self
                 .forms(&lower)
@@ -448,6 +457,11 @@ impl Dictionary {
     /// Форма лексемы с признаками `feats`; из подходящих - ближайшая к разбору по части речи,
     /// остальным признакам и пометам, при равенстве - первая в парадигме
     pub fn inflect(&self, analysis: &Analysis, feats: &[(&str, &str)]) -> Option<Analysis> {
+        if let Some((base, particle)) = self.without_particle(analysis) {
+            return self
+                .inflect(&base, feats)
+                .map(|form| with_particle(form, &particle));
+        }
         if let Some(lower) = self.lowercased(analysis) {
             return self
                 .inflect(&lower, feats)
@@ -476,6 +490,11 @@ impl Dictionary {
     /// родительного падежа множественного числа берется счетная («5 вольт»). У слов без
     /// единственного числа («сутки») берется множественное: «1 сутки», «2 суток»
     pub fn agree(&self, analysis: &Analysis, number: u64) -> Option<Analysis> {
+        if let Some((base, particle)) = self.without_particle(analysis) {
+            return self
+                .agree(&base, number)
+                .map(|form| with_particle(form, &particle));
+        }
         if let Some(lower) = self.lowercased(analysis) {
             return self
                 .agree(&lower, number)
@@ -495,9 +514,11 @@ impl Dictionary {
         };
         let (lexeme, forms) = self.lexeme_forms(analysis)?;
         let nominal = matches!(tag.pos.as_str(), "NOUN" | "PROPN");
+        // Женские фамилии («Иванова») склоняются как краткие прилагательные: «две Ивановы»
+        let female_surname = feat("NameType") == Some("Sur") && feat("Gender") == Some("Fem");
         let adjectival = matches!(tag.pos.as_str(), "ADJ" | "DET")
             || feat("VerbForm") == Some("Part")
-            || (nominal && self.adjectival_declension(&lexeme, &forms));
+            || (nominal && (female_surname || self.adjectival_declension(&lexeme, &forms)));
         if !adjectival && !nominal {
             return None;
         }
@@ -559,9 +580,11 @@ impl Dictionary {
     }
 
     /// Форма из `forms` с признаками `feats`, ближайшая к разбору: больше общих с ним части речи,
-    /// признаков и помет, а также желательных помет `prefer`, затем меньше лишних помет и краткой
-    /// формы, если ее не просили («кошкой», а не «кошкою»; «мешаемый», а не «мешаем»), затем
-    /// раньше в парадигме - поэтому без рода и числа берется мужской род единственного числа
+    /// признаков и помет, а также желательных помет `prefer`, затем меньше лишних помет и того,
+    /// чего не просили, - краткой формы, одушевленности, инклюзива («кошкой», а не «кошкою»;
+    /// «новый», а не «нового»; «сделай», а не «сделаем»), затем ближе по написанию к разбору,
+    /// если у его формы есть вариант написания («листьев», а не «листов»), затем раньше
+    /// в парадигме - поэтому без рода и числа берется мужской род единственного числа
     fn closest(
         &self,
         analysis: &Analysis,
@@ -576,6 +599,14 @@ impl Dictionary {
             .collect::<Option<Vec<_>>>()?;
         let current = self.ud_codes.get(usize::from(analysis.ud))?;
         let mut wanted = current.values.clone();
+        // У инфинитива без запроса формы глагола желательна личная форма, а не причастие
+        if let (Some((form_name, infinitive)), Some((_, finite))) =
+            (self.code("VerbForm", "Inf"), self.code("VerbForm", "Fin"))
+            && wanted[form_name] == infinitive
+            && required.iter().all(|&(name, _)| name != form_name)
+        {
+            wanted[form_name] = finite;
+        }
         for &(name, value) in &required {
             wanted[name] = value;
         }
@@ -585,8 +616,20 @@ impl Dictionary {
                 labels.push(label);
             }
         }
-        let short = self.code("Variant", "Short");
-        let mut best: Option<(u16, (usize, Reverse<usize>))> = None;
+        let unwanted = |name: &str, value: &str, codes: &Codes| {
+            self.code(name, value)
+                .is_some_and(|(index, code)| codes.values[index] == code && wanted[index] != code)
+        };
+        let inclusive = self.code_ids.get("incl").copied();
+        let first_person = self.code("Person", "1");
+        // Форма разбора с вариантом написания («листья» и «листы»): из равных берется ближайшая
+        // по написанию
+        let twin = forms.iter().any(|&form| {
+            lexeme.ud(form) == analysis.ud && self.spell(lexeme, form) != analysis.word
+        });
+        // Оценка формы: общее с разбором, лишнее, общее начало написания
+        type Score = (usize, Reverse<usize>, usize);
+        let mut best: Option<(u16, Score)> = None;
         for &form in forms {
             let codes = &self.ud_codes[usize::from(lexeme.ud(form))];
             if required
@@ -610,10 +653,22 @@ impl Dictionary {
                 .iter()
                 .filter(|label| !labels.contains(label))
                 .count()
-                + usize::from(short.is_some_and(|(name, value)| {
-                    codes.values[name] == value && wanted[name] != value
+                + usize::from(unwanted("Variant", "Short", codes))
+                + usize::from(unwanted("Animacy", "Anim", codes))
+                + usize::from(inclusive.is_some_and(|label| {
+                    codes.labels.contains(&label)
+                        && first_person.is_none_or(|(index, code)| wanted[index] != code)
                 }));
-            let score = (same, Reverse(extra));
+            let common = if twin {
+                self.spell(lexeme, form)
+                    .chars()
+                    .zip(analysis.word.chars())
+                    .take_while(|(a, b)| a == b)
+                    .count()
+            } else {
+                0
+            };
+            let score = (same, Reverse(extra), common);
             if best.is_none_or(|(_, top)| score > top) {
                 best = Some((form, score));
             }
@@ -1341,6 +1396,11 @@ mod tests {
             Some("коту")
         );
         assert_eq!(inflect("кот", &[]).as_deref(), Some("кот"));
+        // Одушевленность, которой нет ни в разборе, ни в запросе, не выбирается: «новые», а не «новых»
+        assert_eq!(
+            inflect("новые", &[("Case", "Acc")]).as_deref(),
+            Some("новые")
+        );
         assert_eq!(inflect("кот", &[("Tense", "Past")]), None);
         assert_eq!(inflect("сутки", &[("Number", "Sing")]), None);
         assert_eq!(

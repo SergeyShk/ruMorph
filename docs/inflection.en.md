@@ -17,7 +17,7 @@ The word forms are spelled as in the dictionary: lowercase and with «ё» where
 forms()
 ```
 
-The forms of the lexeme in dictionary order - analyses like those of `analyze`, with probability 1. Form variants differ in labels: «кошкою» has `V-oy`, the second locative «в лесу» has `loc2` (its `Case=Loc` feature is the same as in «о лесе»).
+The forms of the lexeme in dictionary order - analyses like those of `analyze`, with probability 1. Form variants differ in labels: «кошкою» has `V-oy`, the second locative «в лесу» has `loc2` (its `Case=Loc` feature is the same as in «о лесе»): «лес» with `inflect(Case="Loc")` gives «лесе», and «лесу» is chosen from `forms()` by the `loc2` label.
 
 === "Code"
 
@@ -63,7 +63,7 @@ The forms of the lexeme in dictionary order - analyses like those of `analyze`, 
 inflect(**feats)
 ```
 
-The form of the lexeme with the given UD features. Features that are not given are kept where possible: «кошка» in the genitive is «кошки», not «кошек». The short form is chosen only when asked for (`Variant="Short"`).
+The form of the lexeme with the given UD features. Features that are not given are kept where possible: «кошка» in the genitive is «кошки», not «кошек». The short form, the animate accusative («нового») and the inclusive imperative («сделаем») are chosen only when asked for: `Variant="Short"`, `Animacy="Anim"`, `Person="1"`. The future of «быть» is the forms with the `futr` label: «будет» in the plural is «будут».
 
 | Parameter | Type | Default | Description |
 | :-------- | :--- | :------ | :---------- |
@@ -107,7 +107,7 @@ Exceptions:
 agree(number)
 ```
 
-The form of a noun, an adjective, a pronominal adjective or a participle that agrees with a number. The case of the analysis is kept: «рублях» with 2 is «рублях» («о 2 рублях»), the accusative of animate nouns gives «вижу двух котов». Adjectives and nouns declined like adjectives agree by gender: «две новые», «два новых», «два учёных», «две столовые». After a number the counting form is taken: «5 вольт», «5 лет», «5 человек». Words without a singular take the plural: «1 сутки», «2 суток». A negative number agrees as its absolute value.
+The form of a noun, an adjective, a pronominal adjective or a participle that agrees with a number. The case of the analysis is kept: «рублях» with 2 is «рублях» («о 2 рублях»), the accusative of animate nouns gives «вижу двух котов». Adjectives and nouns declined like adjectives agree by gender: «две новые», «два новых», «два учёных», «две столовые». After a number the counting form is taken: «5 вольт», «5 лет», «5 человек». Words without a singular take the plural: «1 сутки», «2 суток». Feminine surnames agree like adjectives: «две Ивановы», «пять Ивановых». A negative number agrees as its absolute value.
 
 | Parameter | Type | Default | Description |
 | :-------- | :--- | :------ | :---------- |

@@ -73,9 +73,17 @@ def test_particle_chain(morph):
 def test_capitalized_forms(morph):
     pin = morph.analyze("ПИН-КОДОВ")[0]
     assert pin.inflect(Case="Dat") == "ПИН-КОДАМ"
-    # У разбора с частицей форм нет: только он сам
+
+
+def test_particle_forms(morph):
+    # Формы слова с частицей - формы первой части с той же частицей
     particle = morph.analyze("этакому-то")[0]
-    assert [form.word for form in particle.forms()] == ["этакому-то"]
+    assert particle.lemma == "этакий-то"
+    assert {"этакий-то", "этакого-то", "этакому-то"} <= {form.word for form in particle.forms()}
+    assert morph.analyze("смотри-ка")[0].inflect(Number="Plur") == "смотрите-ка"
+    assert morph.analyze("Смотри-КА")[0].inflect(Number="Plur") == "Смотрите-КА"
+    # Повторы разборов слова с частицей сливаются
+    assert len(morph.analyze("орешь-то")) == 1
 
 
 def test_hyphenated_forms(morph):

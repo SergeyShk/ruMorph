@@ -406,3 +406,45 @@ def test_threads(morph):
             pool.map(lambda word: [form.word for form in morph.analyze(word)[0].forms()], words)
         )
     assert results == [[form.word for form in morph.analyze(word)[0].forms()] for word in words]
+
+
+@pytest.mark.parametrize(
+    ("word", "feats", "form"),
+    [
+        # Повелительное без лица - 2-е лицо, а не инклюзив «сделаем»
+        ("сделать", {"Mood": "Imp"}, "сделай"),
+        ("сделать", {"Mood": "Imp", "Number": "Plur"}, "сделайте"),
+        ("пойти", {"Mood": "Imp", "Person": "1", "Number": "Plur"}, "пойдёмте"),
+        ("быть", {"Mood": "Imp"}, "будь"),
+        # Без запроса одушевленности - неодушевленный винительный
+        ("новый", {"Case": "Acc"}, "новый"),
+        ("новые", {"Case": "Acc"}, "новые"),
+        ("кот", {"Case": "Acc"}, "кота"),
+        # Будущее «быть»: формы с пометой futr
+        ("буду", {"Person": "3"}, "будет"),
+        # Вариант написания исходной формы
+        ("листья", {"Case": "Gen"}, "листьев"),
+        ("листы", {"Case": "Gen"}, "листов"),
+        ("человек", {"Case": "Dat", "Number": "Plur"}, "людям"),
+        # От инфинитива без запроса формы глагола - личная форма, а не причастие
+        ("достигнуть", {"Tense": "Past"}, "достиг"),
+    ],
+)
+def test_inflect_prefers_requested(morph, word, feats, form):
+    assert morph.analyze(word)[0].inflect(**feats) == form
+
+
+def test_future_of_be(morph):
+    future = next(a for a in morph.analyze("будет") if a.feats.get("Mood") == "Ind")
+    assert "futr" in future.labels
+    assert future.inflect(Number="Plur") == "будут"
+
+
+def test_female_surname_agreement(morph):
+    female = next(a for a in morph.analyze("Иванова") if a.feats.get("Gender") == "Fem")
+    assert [female.agree(n) for n in (1, 2, 5, 21)] == [
+        "иванова",
+        "ивановы",
+        "ивановых",
+        "иванова",
+    ]
