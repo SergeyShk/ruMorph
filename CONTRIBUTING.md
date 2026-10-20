@@ -50,9 +50,9 @@ make docs-build  # mkdocs build --strict, если менялась докуме
 - `crates/rumorph-build/` - сборка словаря из выгрузки pymorphy3-dicts-ru и перевод тегов OpenCorpora в UD (`ud.rs`).
 - `crates/rumorph-py/` - модуль Python `rumorph._rumorph` на PyO3.
 - `python/rumorph/` - пакет Python поверх модуля; `data/ru.dict` - собранный словарь.
-- `scripts/` - выгрузка словаря pymorphy3-dicts-ru.
+- `scripts/` - выгрузка словаря pymorphy3-dicts-ru и проверка установленного пакета перед публикацией.
 - `tests/` - тесты пакета Python; `tests/test_pymorphy.py` сверяет разборы с pymorphy3 на частых словоформах, `tests/test_docs.py` - два языка документации.
 - `docs/` - документация MkDocs (Material), `mkdocs.yml` - навигация и перевод ее на английский.
 - `.github/workflows/` - CI (`ci.yml`), публикация (`publish.yml`: словарь собирается один раз и входит в колеса для Linux, macOS и Windows и в исходники), документация (`docs.yml`).
 
-Версия пакета хранится в `pyproject.toml` и в `Cargo.toml` в записи semver (`0.1.0.dev1` - `0.1.0-dev.1`), их совпадение проверяет тест; релизы выпускаются через GitHub Release, изменения описываются в его заметках, отдельного файла CHANGELOG нет.
+Версия пакета хранится в `pyproject.toml` и в `Cargo.toml` в записи semver (`0.1.0.dev1` - `0.1.0-dev.1`), их совпадение проверяет тест. Тег версии запускает `publish.yml`: колеса и исходники собираются один раз, проверяются на всех платформах и публикуются на TestPyPI, а не предварительная версия затем после подтверждения в окружении `pypi` - на PyPI. Изменения описываются в заметках GitHub Release, отдельного файла CHANGELOG нет.

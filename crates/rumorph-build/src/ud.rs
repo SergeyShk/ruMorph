@@ -555,6 +555,28 @@ const CONSUMED: &[&str] = &[
     "Orgn", "Trad", "Abbr", "Poss", "Supr", "Anum", "Apro",
 ];
 
+/// Граммемы OpenCorpora, которые становятся пометами
+const LABEL_GRAMMEMES: &[&str] = &[
+    "Adjx", "Af-p", "Anph", "Arch", "Cmp2", "Coll", "Coun", "Dist", "Dmns", "Erro", "Fimp", "Fixd",
+    "Hypo", "Impe", "Impx", "Infr", "Inmx", "Litr", "Ms-f", "Pltm", "Prdx", "Prnt", "Qual", "Ques",
+    "Sgtm", "Slng", "Subx", "V-be", "V-bi", "V-ej", "V-en", "V-ey", "V-ie", "V-oy", "V-sh", "Vpre",
+    "excl", "incl", "intr", "loc2", "tran",
+];
+
+/// Граммемы тега OpenCorpora, которых перевод не знает: неизвестная часть речи становится `X`,
+/// неизвестная граммема - пометой
+pub fn unknown_grammemes(tag: &str) -> Vec<&str> {
+    tag.split([',', ' '])
+        .filter(|g| !g.is_empty())
+        .enumerate()
+        .filter(|&(at, g)| {
+            !OPENCORPORA_POS.contains(&g)
+                && (at == 0 || !(CONSUMED.contains(&g) || LABEL_GRAMMEMES.contains(&g)))
+        })
+        .map(|(_, g)| g)
+        .collect()
+}
+
 /// Перевод тега OpenCorpora и леммы разбора в часть речи, признаки и пометы UD
 pub fn convert(tag: &str, lemma: &str) -> Ud {
     let grammemes: Vec<&str> = tag.split([',', ' ']).filter(|g| !g.is_empty()).collect();
@@ -1317,6 +1339,13 @@ mod tests {
         assert_eq!(pronoun("весь", "ADJF,Subx,Apro inan,plur,accs"), None);
         assert_eq!(pronoun("тот", "ADJF,Subx,Apro masc,sing,gent"), None);
         assert_eq!(pronoun("этот", "ADJF,Apro neut,sing,gent"), None);
+    }
+
+    #[test]
+    fn unknown_grammemes_are_reported() {
+        assert!(unknown_grammemes("NOUN,anim,masc,Sgtm sing,nomn").is_empty());
+        assert!(unknown_grammemes("VERB,impf,tran plur,pres,indc").is_empty());
+        assert_eq!(unknown_grammemes("ABCD,Xyzw sing,nomn"), ["ABCD", "Xyzw"]);
     }
 
     #[test]

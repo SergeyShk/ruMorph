@@ -67,6 +67,18 @@ fn build(export: &Path, output: &Path) -> Result<(), Box<dyn Error>> {
         strings("prefixes.json")?,
         strings("suffixes.json")?,
     );
+    let unknown: BTreeSet<&str> = tags
+        .iter()
+        .flat_map(|tag| ud::unknown_grammemes(tag))
+        .collect();
+    if !unknown.is_empty() {
+        let list: Vec<&str> = unknown.into_iter().collect();
+        eprintln!(
+            "rumorph-build: предупреждение: неизвестные граммемы OpenCorpora {} - часть речи \
+             переводится в X, граммема - в помету",
+            list.join(", ")
+        );
+    }
     let mut builder = Builder::new(tags.clone(), prefixes.clone(), suffixes.clone());
     builder.meta(read("meta.json")?);
     // Парадигмы по формам: новые парадигмы (объединенные лексемы, копии форм) не повторяются
