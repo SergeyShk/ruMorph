@@ -9,6 +9,7 @@ nav:
       - Установка: installation.md
       - Авторы: authors.md
     - Разбор словоформ: analysis.md
+    - Словоизменение: inflection.md
 
 theme:
   name: material
@@ -46,6 +47,7 @@ plugins:
             Установка: Installation
             Авторы: Authors
             Разбор словоформ: Word analysis
+            Словоизменение: Inflection
 
 extra:
   social:

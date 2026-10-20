@@ -490,12 +490,13 @@ const OPENCORPORA_POS: &[&str] = &[
     "PRED", "PREP", "CONJ", "PRCL", "INTJ",
 ];
 
-/// Граммемы, которые переходят в признаки UD (остальные лексические граммемы становятся пометами)
+/// Граммемы, которые переходят в признаки UD (остальные граммемы становятся пометами);
+/// второй предложный («в лесу») - `Case=Loc` с пометой `loc2`, чтобы отличать его от «о лесе»
 const CONSUMED: &[&str] = &[
     "anim", "inan", "masc", "femn", "neut", "ms-f", "GNdr", "sing", "plur", "nomn", "gent", "datv",
-    "accs", "ablt", "loct", "voct", "gen1", "gen2", "acc2", "loc1", "loc2", "perf", "impf", "1per",
-    "2per", "3per", "pres", "past", "futr", "indc", "impr", "actv", "pssv", "Name", "Surn", "Patr",
-    "Geox", "Orgn", "Trad", "Abbr", "Poss", "Supr", "Anum", "Apro",
+    "accs", "ablt", "loct", "voct", "gen1", "gen2", "acc2", "loc1", "perf", "impf", "1per", "2per",
+    "3per", "pres", "past", "futr", "indc", "impr", "actv", "pssv", "Name", "Surn", "Patr", "Geox",
+    "Orgn", "Trad", "Abbr", "Poss", "Supr", "Anum", "Apro",
 ];
 
 /// Перевод тега OpenCorpora и леммы разбора в часть речи, признаки и пометы UD
@@ -741,6 +742,18 @@ pub fn lemma_form(tag: &str, lemma: &str, word: &str) -> Option<LemmaForm> {
     }
 }
 
+/// Счетные формы родительного падежа множественного числа без пометы `Coun` в OpenCorpora
+const COUNTING_FORMS: &[(&str, &str)] = &[("год", "лет"), ("человек", "человек")];
+
+/// Нужна ли форме помета `Coun`, которой нет в OpenCorpora: «5 лет», «5 человек»
+pub fn counting_form(tag: &str, lemma: &str, word: &str) -> bool {
+    let grammemes: Vec<&str> = tag.split([',', ' ']).collect();
+    COUNTING_FORMS.contains(&(lemma, word))
+        && grammemes.contains(&"plur")
+        && grammemes.contains(&"gent")
+        && !grammemes.contains(&"Coun")
+}
+
 /// Часть леммы, от которой зависит перевод: сама лемма для слов из списков, «ся» для возвратных
 /// глаголов, иначе пустая строка; разборы с одним тегом и классом леммы переводятся одинаково
 pub fn lemma_class(lemma: &str) -> &str {
@@ -810,7 +823,7 @@ mod tests {
             feats,
             "Animacy=Inan|Case=Loc|Gender=Masc|NameType=Geo|Number=Sing"
         );
-        assert!(labels.is_empty());
+        assert_eq!(labels, ["loc2"]);
         assert_eq!(
             summary("NOUN,anim,ms-f,Infr sing,gen2", "сирота").1,
             "Animacy=Anim|Case=Par|Gender=Masc|Number=Sing"
@@ -1057,6 +1070,22 @@ mod tests {
         ] {
             assert_eq!(convert(tag, lemma), convert(tag, lemma_class(lemma)));
         }
+    }
+
+    #[test]
+    fn counting_forms() {
+        assert!(counting_form("NOUN,inan,masc plur,gent", "год", "лет"));
+        assert!(!counting_form("NOUN,inan,masc plur,gent", "год", "годов"));
+        assert!(!counting_form(
+            "NOUN,anim,masc sing,nomn",
+            "человек",
+            "человек"
+        ));
+        assert!(counting_form(
+            "NOUN,anim,masc plur,gent",
+            "человек",
+            "человек"
+        ));
     }
 
     #[test]
