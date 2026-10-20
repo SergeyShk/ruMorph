@@ -107,7 +107,6 @@ def test_numeral_with_ending(morph):
     assert summary(morph, "5-ти") == [
         ("5-ти", "5", "NUM", {"NumForm": "Digit", "NumType": "Card"})
     ]
-    assert morph.analyze("10-летний") == []
 
 
 def test_roman_numerals(morph):

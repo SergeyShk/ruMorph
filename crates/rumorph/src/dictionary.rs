@@ -9,6 +9,7 @@ use crate::format::{self, Sections};
 use crate::{Entry, Error};
 
 mod guess;
+mod parts;
 mod rules;
 
 /// Откуда взят разбор
@@ -19,7 +20,8 @@ pub enum Source {
     /// Токена нет в словаре, разбор - по правилу: число, знак, латиница, римское число, инициал,
     /// аббревиатура или сокращение с точкой
     Rule,
-    /// Слова нет в словаре, разбор угадан по окончанию
+    /// Слова нет в словаре, разбор угадан: по частям слова через дефис или с приставкой
+    /// либо по окончанию
     Guess,
 }
 
@@ -264,7 +266,8 @@ impl Dictionary {
     /// Разборы OpenCorpora, которые совпали в написании, лемме, части речи и признаках UD,
     /// сливаются в один с суммой вероятностей и пометами более вероятного. Токен, которого нет
     /// в словаре, разбирается по правилам (`Source::Rule`), а незнакомое слово кириллицей
-    /// угадывается по окончанию (`Source::Guess`)
+    /// угадывается (`Source::Guess`): слово через дефис - по последней части, слово с известной
+    /// приставкой - по слову без нее, остальное - по окончанию
     pub fn analyze(&self, word: &str) -> Vec<Analysis> {
         let mut analyses = self.merge(self.candidates(word));
         if !analyses.is_empty() {
@@ -272,6 +275,10 @@ impl Dictionary {
             return analyses;
         }
         let analyses = self.rules(word);
+        if !analyses.is_empty() {
+            return analyses;
+        }
+        let analyses = self.parts(word);
         if !analyses.is_empty() {
             return analyses;
         }

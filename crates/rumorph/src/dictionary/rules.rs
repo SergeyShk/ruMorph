@@ -1,5 +1,5 @@
 //! Разбор токенов, которых нет в словаре: числа, знаки, латиница, римские числа, инициалы,
-//! аббревиатуры и сокращения с точкой. Части речи и признаки - по соглашениям SynTagRus,
+//! аббревиатуры, сокращения с точкой и наречия вида «по-русски». Части речи и признаки - по соглашениям SynTagRus,
 //! доли неоднозначных разборов - по частотам в его обучающей части
 
 use super::{Analysis, Dictionary, Source, UdTag};
@@ -57,6 +57,7 @@ pub(super) struct Tags {
     surname: u16,
     organization: u16,
     abbreviation: u16,
+    adverb: u16,
 }
 
 impl Tags {
@@ -92,6 +93,7 @@ impl Tags {
             surname: tag("PROPN", &abbreviated("Sur")),
             organization: tag("PROPN", &abbreviated("Com")),
             abbreviation: tag("NOUN", &[("Abbr", "Yes")]),
+            adverb: tag("ADV", &[("Degree", "Pos")]),
         }
     }
 }
@@ -143,6 +145,15 @@ impl Dictionary {
         }
         if let Some(analyses) = self.numeral_with_ending(word) {
             return analyses;
+        }
+        // Наречия «по-бурятски», «по-молодому», «по-лисьи»
+        if let Some(rest) = lower.strip_prefix("по-")
+            && rest.chars().all(cyrillic)
+            && ["ски", "цки", "ому", "ему", "ьи"]
+                .iter()
+                .any(|ending| rest.ends_with(ending))
+        {
+            return self.shares(word, &[(&lower, tags.adverb, 1.0)]);
         }
         if roman(word) {
             let (ordinal, foreign) = ROMAN_LETTERS
