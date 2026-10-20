@@ -117,7 +117,7 @@ Some words get their part of speech by the SynTagRus conventions: the parentheti
 | `Anum` on words («первый»), `GNdr` | none |
 | the rest: `Infr`, `Slng`, `Arch`, `Qual`, `tran`, `intr`, `V-oy` and others | `labels` |
 
-The `Voice` feature is present on all verb forms and `Degree` on all adjectives and adverbs, although in OpenCorpora only participles have voice grammemes and only superlatives and comparatives have degree.
+The `Voice` feature is present on all verb forms and `Degree` on all adverbs and on adjectives except ordinals written in Arabic or Roman numerals («1-го», «2026», «XX»), although in OpenCorpora only participles have voice grammemes and only superlatives and comparatives have degree.
 
 ## Differences in behavior { #differences }
 
