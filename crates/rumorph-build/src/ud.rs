@@ -660,8 +660,9 @@ pub fn convert(tag: &str, lemma: &str) -> Ud {
         }
     }
     if g("Abbr") && g("Anum") {
-        // Порядковые из цифр (90-х) - NumType=Ord, а не сокращения
+        // Порядковые из цифр (90-х) - NumType=Ord, а не сокращения, и без степени
         feats.remove("Abbr");
+        feats.remove("Degree");
         feats.insert("NumType", "Ord");
         feats.insert("NumForm", "Combi");
     }
@@ -969,7 +970,7 @@ mod tests {
         );
         assert_eq!(
             summary("ADJF,Abbr,Anum plur,gent", "90-й").1,
-            "Case=Gen|Degree=Pos|NumForm=Combi|NumType=Ord|Number=Plur"
+            "Case=Gen|NumForm=Combi|NumType=Ord|Number=Plur"
         );
         assert_eq!(
             summary("NOUN,inan,femn,Abbr,Fixd,Geox sing,gent", "рф").1,
@@ -1001,7 +1002,7 @@ mod tests {
         );
         assert_eq!(
             feats("ADJF,Abbr,Anum plur,gent", "90-й"),
-            "Case=Gen|Degree=Pos|NumForm=Combi|NumType=Ord|Number=Plur"
+            "Case=Gen|NumForm=Combi|NumType=Ord|Number=Plur"
         );
         let (_, kino, labels) = summary("NOUN,inan,neut,Fixd sing,gent", "кино");
         assert_eq!(

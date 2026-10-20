@@ -77,7 +77,8 @@ impl UdObjects {
 ///     Разборы неизменяемы; их можно сравнивать, класть в множества и сохранять через pickle
 ///
 /// Атрибуты:
-///     word (str): Словоформа в написании словаря: с буквой «ё», если она есть в словаре
+///     word (str): Словоформа в написании словаря: с буквой «ё», если она есть в словаре; у разборов
+///         по правилам - как в тексте
 ///     lemma (str): Начальная форма
 ///     pos (str): Часть речи UD: NOUN, VERB, ADJ, DET, ADP и т. д.
 ///     feats (dict[str, str]): Признаки UD: {"Case": "Gen", "Number": "Sing"}; каждый раз новый
@@ -85,7 +86,9 @@ impl UdObjects {
 ///     labels (frozenset[str]): Пометы словаря без аналога в UD: Infr (разговорное), Arch
 ///         (устаревшее), Qual (качественное) и т. д.
 ///     prob (float): Вероятность разбора; сумма по всем разборам словоформы равна 1
-///     source (str): Откуда взят разбор: "dictionary" - словоформа есть в словаре
+///     source (str): Откуда взят разбор: "dictionary" - словоформа есть в словаре, "rule" - токена
+///         нет в словаре, разбор по правилу (число, знак, латиница, римское число, инициал,
+///         аббревиатура, сокращение с точкой)
 ///
 /// Пример использования:
 ///     >>> from rumorph import Analyzer
@@ -319,8 +322,7 @@ impl Analysis {
             self.ud.labels.clone(),
             self.inner.prob,
             self.inner.source.as_str().to_owned(),
-            self.inner.table,
-            self.inner.form,
+            self.inner.entry.map(|entry| (entry.table, entry.form)),
         );
         Ok((restore, (self.analyzer.clone_ref(py), state)))
     }
@@ -339,8 +341,7 @@ type AnalysisState = (
     String,
     f64,
     String,
-    u16,
-    u16,
+    Option<(u16, u16)>,
 );
 
 /// Восстановление разбора из pickle: по сохраненным таблице и форме, если словарь тот же,
@@ -348,8 +349,11 @@ type AnalysisState = (
 /// вероятность берется сохраненная
 #[pyfunction]
 fn _analysis(py: Python<'_>, analyzer: Py<Analyzer>, state: AnalysisState) -> PyResult<Analysis> {
-    let (word, lemma, pos, feats, labels, prob, source, table, form) = state;
-    if source != rumorph::Source::Dictionary.as_str() {
+    let (word, lemma, pos, feats, labels, prob, source, entry) = state;
+    if ![rumorph::Source::Dictionary, rumorph::Source::Rule]
+        .iter()
+        .any(|known| known.as_str() == source)
+    {
         return Err(PyValueError::new_err(format!(
             "Неизвестный источник разбора: {source}"
         )));
@@ -358,13 +362,14 @@ fn _analysis(py: Python<'_>, analyzer: Py<Analyzer>, state: AnalysisState) -> Py
     let same = |analysis: &rumorph::Analysis| {
         let tag = &dictionary.ud_tags()[usize::from(analysis.ud)];
         analysis.word == word
+            && analysis.source.as_str() == source
             && analysis.lemma == lemma
             && tag.pos == pos
             && tag.feats_string() == feats
             && tag.labels.join(",") == labels
     };
-    let found = dictionary
-        .analysis(&word, table, form)
+    let found = entry
+        .and_then(|(table, form)| dictionary.analysis(&word, table, form))
         .filter(|analysis| same(analysis))
         .or_else(|| {
             dictionary
@@ -472,7 +477,9 @@ impl Analyzer {
     /// Разборы словоформы
     ///
     /// Описание:
-    ///     Разборы идут по убыванию вероятности. Для слова, которого нет в словаре, список пуст
+    ///     Разборы идут по убыванию вероятности. Токен, которого нет в словаре, разбирается
+    ///     по правилам (числа, знаки, латиница, сокращения); незнакомое слово кириллицей
+    ///     дает пустой список
     ///
     /// Аргументы:
     ///     word (str): Словоформа
@@ -540,8 +547,8 @@ impl Analyzer {
     /// Леммы списка словоформ
     ///
     /// Описание:
-    ///     Лемма самого вероятного разбора; слово, которого нет в словаре, возвращается
-    ///     в нижнем регистре. Разбор идет без GIL
+    ///     Лемма самого вероятного разбора; токен без разборов возвращается в нижнем регистре.
+    ///     Разбор идет без GIL
     ///
     /// Аргументы:
     ///     words (Iterable[str]): Словоформы

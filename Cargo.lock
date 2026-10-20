@@ -121,14 +121,14 @@ dependencies = [
 
 [[package]]
 name = "rumorph"
-version = "0.1.0-dev.5"
+version = "0.1.0-dev.6"
 dependencies = [
  "fst",
 ]
 
 [[package]]
 name = "rumorph-build"
-version = "0.1.0-dev.5"
+version = "0.1.0-dev.6"
 dependencies = [
  "rumorph",
  "serde_json",
@@ -136,7 +136,7 @@ dependencies = [
 
 [[package]]
 name = "rumorph-py"
-version = "0.1.0-dev.5"
+version = "0.1.0-dev.6"
 dependencies = [
  "pyo3",
  "rumorph",

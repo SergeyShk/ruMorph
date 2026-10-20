@@ -5,20 +5,26 @@ use std::path::Path;
 use fst::Map;
 use fst::raw::{Fst, Node, Output};
 
-use crate::Error;
 use crate::format::{self, Sections};
+use crate::{Entry, Error};
+
+mod rules;
 
 /// Откуда взят разбор
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Source {
     /// Словоформа есть в словаре
     Dictionary,
+    /// Токена нет в словаре, разбор - по правилу: число, знак, латиница, римское число, инициал,
+    /// аббревиатура или сокращение с точкой
+    Rule,
 }
 
 impl Source {
     pub fn as_str(self) -> &'static str {
         match self {
             Source::Dictionary => "dictionary",
+            Source::Rule => "rule",
         }
     }
 }
@@ -80,14 +86,13 @@ pub struct Analysis {
     pub lemma: String,
     /// Номер тега UD в `Dictionary::ud_tags`
     pub ud: u16,
-    /// Номер тега OpenCorpora в `Dictionary::tags`
-    pub tag: u16,
+    /// Номер тега OpenCorpora в `Dictionary::tags`; у разборов по правилам его может не быть
+    pub tag: Option<u16>,
     /// Вероятность разбора; сумма по всем разборам словоформы равна 1
     pub prob: f64,
     pub source: Source,
-    /// Номер таблицы словоизменения и номер формы в ее парадигме
-    pub table: u16,
-    pub form: u16,
+    /// Форма таблицы словоизменения; у разборов без лексемы (число, знак, латиница) ее нет
+    pub entry: Option<Entry>,
 }
 
 /// Тег UD для подбора формы: часть речи, коды значений признаков из `Dictionary::features`
@@ -100,6 +105,7 @@ struct Codes {
 
 /// Лексема: формы парадигмы с общей основой и их пары «форма леммы, тег UD» из таблицы
 struct Lexeme<'a> {
+    table: u16,
     /// Номера суффиксов, тегов и префиксов форм тремя блоками
     forms: &'a [u16],
     /// `(форма леммы << 16) | тег UD` каждой формы
@@ -138,6 +144,7 @@ pub struct Dictionary {
     /// Номер пары «часть речи, признаки» тега UD: разборы, которые отличаются только пометами, сливаются
     ud_core: Vec<u16>,
     ud_codes: Vec<Codes>,
+    rule_tags: rules::Tags,
     /// Номера частей речи и помет в `ud_codes`
     code_ids: HashMap<String, u16>,
     features: BTreeMap<String, BTreeSet<String>>,
@@ -164,13 +171,14 @@ impl Dictionary {
     pub fn from_bytes(data: &[u8]) -> Result<Self, Error> {
         let sections = format::read(data)?;
         check_paradigms(&sections)?;
-        let ud_tags = sections
+        let mut ud_tags = sections
             .ud_tags
             .iter()
             .map(|line| UdTag::parse(line))
             .collect::<Option<Vec<_>>>()
             .ok_or_else(|| Error::Format("неверный тег UD".into()))?;
         let table_offsets = check_tables(&sections, ud_tags.len())?;
+        let rule_tags = rules::Tags::add(&mut ud_tags);
         let mut cores: HashMap<(&str, String), u16> = HashMap::new();
         let ud_core = ud_tags
             .iter()
@@ -203,6 +211,7 @@ impl Dictionary {
             ud_tags,
             ud_core,
             ud_codes,
+            rule_tags,
             code_ids,
             features,
             prefixes: sections.prefixes,
@@ -244,9 +253,15 @@ impl Dictionary {
     /// Разборы словоформы по убыванию вероятности; регистр не важен, «е» может обозначать «ё»
     ///
     /// Разборы OpenCorpora, которые совпали в написании, лемме, части речи и признаках UD,
-    /// сливаются в один с суммой вероятностей и пометами более вероятного
+    /// сливаются в один с суммой вероятностей и пометами более вероятного. Токен, которого нет
+    /// в словаре, разбирается по правилам (`Source::Rule`)
     pub fn analyze(&self, word: &str) -> Vec<Analysis> {
-        self.merge(self.candidates(word))
+        let mut analyses = self.merge(self.candidates(word));
+        if analyses.is_empty() {
+            return self.rules(word);
+        }
+        self.reweight_numerals(&mut analyses);
+        analyses
     }
 
     /// Разборы словаря до слияния с вероятностями P(тег | словоформа); без частот вероятности нулевые
@@ -262,12 +277,11 @@ impl Dictionary {
                 analyses.push(Analysis {
                     lemma: self.spell(&lexeme, lexeme.lemma_form(form)),
                     ud: lexeme.ud(form),
-                    tag: lexeme.tag(form),
+                    tag: Some(lexeme.tag(form)),
                     word: spelling.clone(),
                     prob: 0.0,
                     source: Source::Dictionary,
-                    table,
-                    form,
+                    entry: Some(Entry { table, form }),
                 });
             }
         }
@@ -284,12 +298,13 @@ impl Dictionary {
         analyses
             .into_iter()
             .filter_map(|analysis| {
-                let lexeme = self.lexeme(analysis.table, analysis.form, &analysis.word)?;
+                let entry = analysis.entry?;
+                let lexeme = self.lexeme(entry.table, entry.form, &analysis.word)?;
                 let lemma = self.spell(&lexeme, 0);
                 let prob = if uniform { share } else { analysis.prob };
                 Some((
                     analysis.word,
-                    self.tags[analysis.tag as usize].as_str(),
+                    self.tags[usize::from(analysis.tag?)].as_str(),
                     lemma,
                     prob,
                 ))
@@ -340,11 +355,10 @@ impl Dictionary {
             word: word.to_owned(),
             lemma: self.spell(&lexeme, lexeme.lemma_form(form)),
             ud: lexeme.ud(form),
-            tag: lexeme.tag(form),
+            tag: Some(lexeme.tag(form)),
             prob: 1.0,
             source: Source::Dictionary,
-            table,
-            form,
+            entry: Some(Entry { table, form }),
         })
     }
 
@@ -352,6 +366,15 @@ impl Dictionary {
     ///
     /// Формы, которые совпали в написании, части речи и признаках, сливаются, как в `analyze`
     pub fn forms(&self, analysis: &Analysis) -> Vec<Analysis> {
+        if let Some(lower) = self.lowercased(analysis) {
+            return self.forms(&lower);
+        }
+        if analysis.entry.is_none() {
+            return vec![Analysis {
+                prob: 1.0,
+                ..analysis.clone()
+            }];
+        }
         let Some((lexeme, forms)) = self.lexeme_forms(analysis) else {
             return Vec::new();
         };
@@ -371,6 +394,19 @@ impl Dictionary {
     /// Форма лексемы с признаками `feats`; из подходящих - ближайшая к разбору по части речи,
     /// остальным признакам и пометам, при равенстве - первая в парадигме
     pub fn inflect(&self, analysis: &Analysis, feats: &[(&str, &str)]) -> Option<Analysis> {
+        if let Some(lower) = self.lowercased(analysis) {
+            return self.inflect(&lower, feats);
+        }
+        if analysis.entry.is_none() {
+            let tag = self.ud_tags.get(usize::from(analysis.ud))?;
+            let own = feats
+                .iter()
+                .all(|&(name, value)| tag.feats.iter().any(|(n, v)| n == name && v == value));
+            return own.then(|| Analysis {
+                prob: 1.0,
+                ..analysis.clone()
+            });
+        }
         let (lexeme, forms) = self.lexeme_forms(analysis)?;
         let form = self.closest(analysis, &lexeme, &forms, feats, &[])?;
         Some(self.form(analysis, &lexeme, form))
@@ -384,6 +420,9 @@ impl Dictionary {
     /// родительного падежа множественного числа берется счетная («5 вольт»). У слов без
     /// единственного числа («сутки») берется множественное: «1 сутки», «2 суток»
     pub fn agree(&self, analysis: &Analysis, number: u64) -> Option<Analysis> {
+        if let Some(lower) = self.lowercased(analysis) {
+            return self.agree(&lower, number);
+        }
         let tag = self.ud_tags.get(usize::from(analysis.ud))?;
         let feat = |name: &str| {
             tag.feats
@@ -537,8 +576,9 @@ impl Dictionary {
 
     /// Лексема разбора и номера ее форм с той же леммой по порядку
     fn lexeme_forms<'a>(&'a self, analysis: &'a Analysis) -> Option<(Lexeme<'a>, Vec<u16>)> {
-        let lexeme = self.lexeme(analysis.table, analysis.form, &analysis.word)?;
-        let own = lexeme.lemma_form(analysis.form);
+        let entry = analysis.entry?;
+        let lexeme = self.lexeme(entry.table, entry.form, &analysis.word)?;
+        let own = lexeme.lemma_form(entry.form);
         // Лемма формы та же, если ее форма леммы пишется так же
         let (prefix, suffix) = lexeme.affixes(own);
         let (prefix, suffix) = (&self.prefixes[prefix], &self.suffixes[suffix]);
@@ -555,6 +595,24 @@ impl Dictionary {
         Some((lexeme, forms))
     }
 
+    /// Разбор со словоформой в нижнем регистре, если лексема строится только по ней («2005-ГО»)
+    fn lowercased(&self, analysis: &Analysis) -> Option<Analysis> {
+        let entry = analysis.entry?;
+        if self
+            .lexeme(entry.table, entry.form, &analysis.word)
+            .is_some()
+        {
+            return None;
+        }
+        let word = analysis.word.to_lowercase();
+        (word != analysis.word && self.lexeme(entry.table, entry.form, &word).is_some()).then(
+            || Analysis {
+                word,
+                ..analysis.clone()
+            },
+        )
+    }
+
     /// Лексема словоформы `word` - формы `form` таблицы `table`
     fn lexeme<'a>(&'a self, table: u16, form: u16, word: &'a str) -> Option<Lexeme<'a>> {
         let start = *self.table_offsets.get(usize::from(table))? as usize;
@@ -564,6 +622,7 @@ impl Dictionary {
             return None;
         }
         let mut lexeme = Lexeme {
+            table,
             forms,
             cells,
             stem: "",
@@ -592,11 +651,13 @@ impl Dictionary {
             word: self.spell(lexeme, form),
             lemma: analysis.lemma.clone(),
             ud: lexeme.ud(form),
-            tag: lexeme.tag(form),
+            tag: Some(lexeme.tag(form)),
             prob: 1.0,
-            source: Source::Dictionary,
-            table: analysis.table,
-            form,
+            source: analysis.source,
+            entry: Some(Entry {
+                table: lexeme.table,
+                form,
+            }),
         }
     }
 
@@ -651,7 +712,7 @@ impl Dictionary {
                 .as_chunks::<2>()
                 .0
                 .iter()
-                .find(|[known, _]| *known == u32::from(tag))
+                .find(|[known, _]| Some(*known) == tag.map(u32::from))
                 .map_or(0.0, |[_, millionths]| f64::from(*millionths));
             analyses[i].prob = prob / share;
             total += analyses[i].prob;
@@ -909,7 +970,7 @@ mod tests {
     fn summary(analyses: &[Analysis]) -> Vec<(&str, &str, u16)> {
         analyses
             .iter()
-            .map(|a| (a.word.as_str(), a.lemma.as_str(), a.tag))
+            .map(|a| (a.word.as_str(), a.lemma.as_str(), a.tag.unwrap()))
             .collect()
     }
 
@@ -1418,7 +1479,7 @@ mod tests {
         let summary: Vec<(String, u16, f64)> = dict
             .analyze("алеше")
             .into_iter()
-            .map(|a| (a.word, a.tag, (a.prob * 1000.0).round() / 1000.0))
+            .map(|a| (a.word, a.tag.unwrap(), (a.prob * 1000.0).round() / 1000.0))
             .collect();
         assert_eq!(
             summary,
@@ -1443,7 +1504,7 @@ mod tests {
         let dict = Dictionary::from_bytes(&builder.build().unwrap()).unwrap();
         for word in ["ещё", "еще"] {
             let analyses = dict.analyze(word);
-            let tags: Vec<u16> = analyses.iter().map(|a| a.tag).collect();
+            let tags: Vec<u16> = analyses.iter().map(|a| a.tag.unwrap()).collect();
             assert_eq!(tags, [1, 0], "{word}");
             assert!((analyses[0].prob - 0.75).abs() < 1e-12, "{word}");
         }
