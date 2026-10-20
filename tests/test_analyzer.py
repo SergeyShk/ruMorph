@@ -87,7 +87,7 @@ def test_uniform_without_frequencies(morph):
     assert probs == [1 / len(probs)] * len(probs)
 
 
-@pytest.mark.parametrize("word", ["вайб", "", "ежж", "hello"])
+@pytest.mark.parametrize("word", ["вайб", "", "ежж", "Вайбы"])
 def test_unknown_word(morph, word):
     assert morph.analyze(word) == []
     assert not morph.is_known(word)
@@ -231,7 +231,7 @@ def test_pickle(morph):
     restored_analysis = rumorph._rumorph._analysis(morph, (*state[:5], 0.5, *state[6:]))
     assert (restored_analysis.prob, restored_analysis.inflect(Case="Gen")) == (0.5, "ежа")
     # Таблица и форма из другого словаря: разбор находится по написанию, лемме и тегу
-    assert rumorph._rumorph._analysis(morph, (*state[:7], 0, 0)) == hedgehog
+    assert rumorph._rumorph._analysis(morph, (*state[:7], (0, 0))) == hedgehog
     with pytest.raises(ValueError, match="Неизвестный источник"):
         rumorph._rumorph._analysis(morph, (*state[:6], "guess", *state[7:]))
     with pytest.raises(ValueError, match="В словаре нет разбора"):

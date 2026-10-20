@@ -24,15 +24,15 @@ The dictionary loads in a few milliseconds when the analyzer is created. One ana
 
 | Field | Meaning |
 |---|---|
-| `word` | the word form as spelled in the dictionary: with the letter «ё» if the dictionary has it |
+| `word` | the word form as spelled in the dictionary: with the letter «ё» if the dictionary has it; for rule analyses - as in the text |
 | `lemma` | the normal form |
 | `pos` | the UD part of speech: `NOUN`, `VERB`, `ADJ`, `DET`, `ADP` and so on |
 | `feats` | the UD features as a dict `{"Case": "Gen", "Number": "Sing"}`; a new one each time, changing it does not change the analysis |
 | `labels` | dictionary labels without a UD feature, as a `frozenset`: `{"Infr"}` (informal) |
 | `prob` | the probability of the analysis; it sums to 1 over all analyses of the word form |
-| `source` | where the analysis comes from: `"dictionary"` - the word form is in the dictionary |
+| `source` | where the analysis comes from: `"dictionary"` - the word form is in the dictionary, `"rule"` - the token is not in the dictionary and is analyzed by a rule (see [below](#rules)) |
 
-Case does not matter, and the letter «е» may stand for «ё»: `analyze("ЕЖ")` returns the analyses of the word form «ёж». For a word that is not in the dictionary the list is empty.
+Case does not matter, and the letter «е» may stand for «ё»: `analyze("ЕЖ")` returns the analyses of the word form «ёж».
 
 ## Parts of speech and features { #ud }
 
@@ -50,6 +50,30 @@ Lemmas follow SynTagRus too: feminine surnames and patronymics keep the feminine
 
 The `labels` are the [OpenCorpora](https://opencorpora.org/dict.php?act=gram) grammemes that have no UD feature: style (`Infr`, `Slng`, `Arch`), qualitative adjective (`Qual`), parenthetical word (`Prnt`), transitivity (`tran`, `intr`), whether the speaker is included in an imperative (`incl` - «пойдемте», `excl` - «иди»), the second locative (`loc2` - «в лесу») and others.
 
+## Tokens outside the dictionary { #rules }
+
+Numbers, punctuation, Latin words and abbreviations are analyzed by rules, their `source` is `"rule"`:
+
+``` python
+>>> [(a.lemma, a.pos, a.feats["NumType"], round(a.prob, 2)) for a in morph.analyze("2026")]
+[('2026', 'ADJ', 'Ord', 0.94), ('2026', 'NUM', 'Card', 0.06)]
+>>> [(a.lemma, a.pos, a.feats["Case"]) for a in morph.analyze("2005-го")][:1]
+[('2005-й', 'ADJ', 'Gen')]
+```
+
+| Token | Analysis |
+|---|---|
+| punctuation, symbols `%`, `$`, `№` | `PUNCT`, `SYM` |
+| numbers in digits: «15», «3,14» | `NUM` with `NumForm=Digit`, `NumType=Card`; an integer may also be an ordinal `ADJ` with `NumType=Ord` - for 1000-2100 (years) this is the first analysis |
+| numbers with an ending: «2005-го», «5-ти» | an ordinal `ADJ` with the case and forms of «1-го», or a cardinal `NUM` |
+| Roman numerals: «XX» | an ordinal `ADJ` with `NumForm=Roman` |
+| Latin words: «iPhone» | `X` with `Foreign=Yes` |
+| initials: «А.» | `PROPN` with `Abbr=Yes`: a given name, a patronymic or a surname |
+| abbreviations with a dot: «т.», «им.» | the analyses of the dictionary abbreviation without the dot |
+| capitalized abbreviations: «НКО» | `PROPN` or `NOUN` with `Abbr=Yes` |
+
+The shares of ambiguous analyses come from the frequencies in SynTagRus. Unknown Cyrillic words are not analyzed yet: their list of analyses is empty.
+
 ## Lists of words { #lists }
 
 `analyze_many` analyzes a collection of word forms, and `lemmatize` returns the lemmas of their most probable analyses:
@@ -59,7 +83,7 @@ The `labels` are the [OpenCorpora](https://opencorpora.org/dict.php?act=gram) gr
 ['мы', 'стать', 'друг']
 ```
 
-`lemmatize` returns a word that is not in the dictionary in lower case. Both methods accept any collection of words - a list, a tuple, a generator - and analyze it without the GIL: several threads sharing one analyzer run in parallel.
+`lemmatize` returns a token without analyses in lower case. Both methods accept any collection of words - a list, a tuple, a generator - and analyze it without the GIL: several threads sharing one analyzer run in parallel.
 
 ## Dictionary { #dictionary }
 
