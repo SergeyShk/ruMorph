@@ -139,7 +139,10 @@ def test_initials(morph):
     ]
     assert {a.pos for a in analyses} == {"PROPN"}
     assert {a.feats["Abbr"] for a in analyses} == {"Yes"}
-    assert morph.analyze("Ъ.") == []
+    assert [a.pos for a in morph.analyze("Ъ.")] == ["X"]
+    # Заглавная буква без точки - тоже инициал
+    initial = morph.analyze("Х")[0]
+    assert (initial.lemma, initial.feats["NameType"]) == ("х", "Giv")
 
 
 def test_abbreviation_with_dot(morph):
@@ -149,7 +152,7 @@ def test_abbreviation_with_dot(morph):
     assert analyses[0].lemma == "так"
     assert math.isclose(sum(a.prob for a in analyses), 1.0)
     assert all(a.feats["Abbr"] == "Yes" for a in analyses)
-    assert morph.analyze("вайб.") == []
+    assert [a.pos for a in morph.analyze("вайб.")] == ["X"]
 
 
 def test_capitalized_abbreviation(morph):
@@ -192,3 +195,29 @@ def test_lemmatize(morph):
     assert morph.lemmatize(["В", "2008", "г.", "Apple", "выпустила", "iPhone", ",", "а", "НКО", "—", "нет"]) == [
         "в", "2008", "г", "apple", "выпустить", "iphone", ",", "а", "нко", "—", "нет",
     ]  # fmt: skip
+
+
+@pytest.mark.parametrize(
+    ("word", "lemma", "pos", "feats"),
+    [
+        ("1990-2000", "1990-2000", "NUM", {"NumType": "Card"}),
+        ("37–38", "37–38", "NUM", {"NumType": "Card"}),
+        ("10-15-го", "10-15-й", "ADJ", {"NumType": "Ord", "Case": "Gen"}),
+        ("20-30-е", "20-30-й", "ADJ", {"NumType": "Ord"}),
+        ("1840–1860-х", "1840–1860-й", "ADJ", {"NumType": "Ord", "Number": "Plur"}),
+        ("5-6-ти", "5-6", "NUM", {"NumType": "Card"}),
+        ("XIX-го", "XIX", "ADJ", {"NumForm": "Roman"}),
+        ("II-III", "II-III", "ADJ", {"NumForm": "Roman"}),
+        ("xix", "xix", "ADJ", {"NumForm": "Roman"}),
+    ],
+)
+def test_ranges_and_roman(morph, word, lemma, pos, feats):
+    analysis = morph.analyze(word)[0]
+    assert (analysis.lemma, analysis.pos) == (lemma, pos)
+    assert feats.items() <= analysis.feats.items()
+
+
+def test_two_letter_roman(morph):
+    # «CV», «XL» - чаще латинские сокращения, «XIV» - римское число
+    assert morph.analyze("CV")[0].pos == "X"
+    assert morph.analyze("XIV")[0].pos == "ADJ"

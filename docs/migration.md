@@ -87,7 +87,7 @@ pip install rumorph
 | `PRCL` | `PART` |
 | `INTJ` | `INTJ` |
 
-Отдельные слова получают часть речи по соглашениям SynTagRus: вводные «однако», «например» - `ADV`, «бы» - `AUX` и т. д. (см. [Части речи и признаки](analysis.md#ud)). Токены вне словаря: `NUMB` - `NUM` с `NumForm=Digit`, `ROMN` - `ADJ` с `NumForm=Roman`, `LATN` - `X` с `Foreign=Yes`, `PNCT` - `PUNCT` или `SYM` (см. [Токены вне словаря](analysis.md#rules)).
+Отдельные слова получают часть речи по соглашениям SynTagRus: вводные «однако», «например» - `ADV`, «бы» - `AUX` и т. д. (см. [Части речи и признаки](analysis.md#ud)). Токены вне словаря: `NUMB` - `NUM` с `NumForm=Digit`, `ROMN` - `ADJ` с `NumForm=Roman`, `LATN` - `X` с `Foreign=Yes`, `PNCT` - `PUNCT` или `SYM`, `UNKN` - `X` без признаков (см. [Токены вне словаря](analysis.md#rules)).
 
 ## Граммемы { #grammemes }
 

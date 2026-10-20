@@ -61,16 +61,17 @@ Numbers, punctuation, Latin words and abbreviations are analyzed by rules, their
 | Token | Analysis |
 | :---- | :------- |
 | punctuation; symbols `%`, `$`, `№`, `−`, emoji | `PUNCT`; `SYM` |
-| numbers in digits: «15», «3,14», «10 000», «17:04» | `NUM` with `NumForm=Digit`, `NumType=Card`; an integer may also be an ordinal `ADJ` with `NumType=Ord` - for 1000-2100 (years), except round hundreds, this is the first analysis |
-| numbers with an ending: «2005-го», «5-ти» | an ordinal `ADJ` with the case and forms of «1-го», or a cardinal `NUM` |
-| Roman numerals: «XX» | an ordinal `ADJ` with `NumForm=Roman` |
+| numbers in digits and ranges: «15», «3,14», «10 000», «17:04», «1990-2000» | `NUM` with `NumForm=Digit`, `NumType=Card`; an integer may also be an ordinal `ADJ` with `NumType=Ord` - for 1000-2100 (years), except round hundreds, this is the first analysis, and 1900 and 2000 are years too |
+| numbers and ranges with an ending: «2005-го», «10-15-го», «5-ти» | an ordinal `ADJ` with the case and forms of «1-го», or a cardinal `NUM` |
+| Roman numerals and ranges: «XX», «XIX-го», «II-III» | an ordinal `ADJ` with `NumForm=Roman` |
 | Latin words: «iPhone» | `X` with `Foreign=Yes` |
-| initials: «А.» | `PROPN` with `Abbr=Yes`: a given name, a patronymic or a surname |
+| initials: «А.», «А» | `PROPN` with `Abbr=Yes`: a given name, a patronymic or a surname |
 | abbreviations with a dot: «т.», «им.» | the analyses of the dictionary abbreviation without the dot |
-| capitalized abbreviations: «НКО» | `PROPN` or `NOUN` with `Abbr=Yes` |
+| capitalized abbreviations: «НКО» | `PROPN` or `NOUN` with `Abbr=Yes`; a long word in capitals («ЧАТБОТАМИ») is also guessed as an ordinary word |
 | adverbs «по-бурятски», «по-молодому» | `ADV` with `Degree=Pos` |
+| other tokens: «км/ч», «РосПил» | `X` without features, the lemma is the token in lowercase |
 
-The shares of ambiguous analyses come from the frequencies in SynTagRus.
+The shares of ambiguous analyses come from the frequencies in SynTagRus. The letters «й» and «ё» in decomposed Unicode and the non-breaking hyphen are converted to the usual ones.
 
 === "Code"
 
@@ -88,9 +89,9 @@ The shares of ambiguous analyses come from the frequencies in SynTagRus.
 
 ## Unknown words { #guess }
 
-The analyses of a Cyrillic word that is not in the dictionary are guessed by its ending: the analyzer takes the forms of dictionary words with the same ending - their part of speech, features and inflection. Their `source` is `"guess"`. A lowercase word is guessed as a common word, a capitalized word mostly as a proper noun: a surname, a given name, a place. Words in mixed case («ЗуМер») are not guessed.
+The analyses of a Cyrillic word that is not in the dictionary are guessed by its ending: the analyzer takes the forms of dictionary words with the same ending - their part of speech, features and inflection. Their `source` is `"guess"`. A lowercase word is guessed as a common word, a capitalized word mostly as a proper noun: a surname, a given name, a place, and a word in «-ский» mostly as an adjective. An abbreviation with an ending («МЭРТа») is guessed like a capitalized word.
 
-A hyphenated word is analyzed by its last part: «крэш-тестов» - «крэш-тест», «Мак-Киннона» - «мак-киннон»; if the last part is a particle («сколь-нибудь»), by the first one. A word with a known prefix - «эко», «анти», «супер», «микро» and others - is analyzed by the dictionary word without it: «экодомов» - «экодом». These analyses are guessed too.
+A hyphenated word is analyzed by its last part: «крэш-тестов» - «крэш-тест», «IT-компании» - «it-компания»; if the last part is a particle («сколь-нибудь»), by the first one. If both parts inflect, the lemma is made of the lemmas of the parts: «дивана-кровати» - «диван-кровать». A word with a known prefix - «эко», «анти», «супер», «микро» and others - is analyzed by the dictionary word without it: «экодомов» - «экодом». These analyses are guessed too.
 
 A guessed analysis has forms, and `forms`, `inflect` and `agree` work with it; the forms keep the capital letters: «Мак-Киннона» in the dative is «Мак-Киннону», «ПИН-КОДОВ» is «ПИН-КОДАМ». A word with a particle inflects by its first part: «смотри-ка» in the plural is «смотрите-ка».
 

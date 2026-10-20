@@ -101,10 +101,34 @@ def test_uniform_without_frequencies(morph):
     assert probs == [1 / len(probs)] * len(probs)
 
 
-@pytest.mark.parametrize("word", ["", "ежж1", "ВаЙб", "∂x"])
+@pytest.mark.parametrize("word", ["ежж1", "ВаЙб", "∂x", "км/ч", "РосПил"])
 def test_unknown_word(morph, word):
-    assert morph.analyze(word) == []
+    # Токен, который не разобрали ни словарь, ни правила, ни угадывание, - X без признаков
+    analyses = morph.analyze(word)
+    assert [(a.pos, a.lemma, a.source, dict(a.feats)) for a in analyses] == [
+        ("X", word.lower(), "rule", {})
+    ]
     assert not morph.is_known(word)
+
+
+@pytest.mark.parametrize("word", ["", " ", "кот кот", "\x00", "кот\u200b"])
+def test_not_a_token(morph, word):
+    assert morph.analyze(word) == []
+
+
+@pytest.mark.parametrize(
+    ("word", "normal"),
+    [
+        ("мои\u0306", "мой"),
+        ("е\u0308ж", "ёж"),
+        ("во\u2011вторых", "во-вторых"),
+        ("какой\u2010то", "какой-то"),
+    ],
+)
+def test_normalized_input(morph, word, normal):
+    # Разложенные «й» и «ё» (NFD) и неразрывный дефис - как обычное написание
+    assert morph.analyze(word) == morph.analyze(normal)
+    assert morph.is_known(word)
 
 
 def test_is_known(morph):
