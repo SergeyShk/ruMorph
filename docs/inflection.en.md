@@ -80,7 +80,8 @@ Exceptions:
     ``` python
     cat.inflect(Case="Gen"), cat.inflect(Case="Gen", Number="Plur")
     verb = morph.analyze("читал")[0]
-    verb.inflect(Gender="Fem"), verb.inflect(Tense="Pres", Person="3", Number="Plur"), verb.inflect(VerbForm="Inf")
+    verb.inflect(Gender="Fem"), verb.inflect(VerbForm="Inf")
+    verb.inflect(Tense="Pres", Person="3", Number="Plur")
     morph.analyze("новый")[0].inflect(Degree="Cmp")
     ```
 
@@ -88,7 +89,8 @@ Exceptions:
 
     ```
     ('кошки', 'кошек')
-    ('читала', 'читают', 'читать')
+    ('читала', 'читать')
+    'читают'
     'новее'
     ```
 
