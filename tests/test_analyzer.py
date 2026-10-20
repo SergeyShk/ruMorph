@@ -226,11 +226,13 @@ def test_pickle(morph):
     assert pickle.loads(pickle.dumps(Analyzer(str(morph.path)))).path == morph.path
     # Разборы из разных pickle используют один восстановленный анализатор, а не грузят словарь заново
     assert pickle.loads(pickle.dumps(morph)) is restored
-    feats = "Animacy=Anim|Case=Nom|Gender=Masc|Number=Sing"
-    state = ("ёж", "ёж", "NOUN", feats, "", 0.5, "dictionary")
-    restored_analysis = rumorph._rumorph._analysis(morph, state)
+    hedgehog = morph.analyze("ёж")[0]
+    _, (_, state) = hedgehog.__reduce__()
+    restored_analysis = rumorph._rumorph._analysis(morph, (*state[:5], 0.5, *state[6:]))
     assert (restored_analysis.prob, restored_analysis.inflect(Case="Gen")) == (0.5, "ежа")
+    # Таблица и форма из другого словаря: разбор находится по написанию, лемме и тегу
+    assert rumorph._rumorph._analysis(morph, (*state[:7], 0, 0)) == hedgehog
     with pytest.raises(ValueError, match="Неизвестный источник"):
-        rumorph._rumorph._analysis(morph, (*state[:-1], "guess"))
+        rumorph._rumorph._analysis(morph, (*state[:6], "guess", *state[7:]))
     with pytest.raises(ValueError, match="В словаре нет разбора"):
-        rumorph._rumorph._analysis(morph, ("ёж", "ёж", "NOUN", "Case", "", 1.0, "dictionary"))
+        rumorph._rumorph._analysis(morph, (*state[:3], "Case", *state[4:]))

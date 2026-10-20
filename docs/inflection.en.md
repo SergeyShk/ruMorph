@@ -35,7 +35,7 @@ The lexeme is defined by the lemma, so it follows the UD lemma conventions: the 
 'новее'
 ```
 
-Features that are not given are kept where possible: «кошка» in the genitive is «кошки», not «кошек». If the lexeme has no form with these features, `inflect` raises `FormNotFoundError`, a subclass of `LookupError`; if the feature or the value is not in the dictionary (a typo like `Case="Genitive"`), it raises `ValueError` with the list of valid values.
+Features that are not given are kept where possible: «кошка» in the genitive is «кошки», not «кошек». The short form is chosen only when asked for (`Variant="Short"`). If the lexeme has no form with these features, `inflect` raises `FormNotFoundError`, a subclass of `LookupError`; if the feature or the value is not in the dictionary (a typo like `Case="Genitive"`), it raises `ValueError` with the list of valid values.
 
 ## Agreement with a number { #agree }
 
@@ -47,6 +47,6 @@ Features that are not given are kept where possible: «кошка» in the genit
 ['1 рубль', '2 рубля', '5 рублей', '21 рубль']
 ```
 
-The case of the analysis is kept: «рублях» with 2 is «рублях» («о 2 рублях»), the accusative of animate nouns gives «вижу двух котов». Adjectives agree by gender: «две новые», «два новых». Words without a singular take the plural: «1 сутки», «2 суток». If the needed form does not exist («5 молока») or the word does not agree with numbers (a verb, an adverb), `agree` raises `FormNotFoundError`.
+The case of the analysis is kept: «рублях» with 2 is «рублях» («о 2 рублях»), the accusative of animate nouns gives «вижу двух котов». Adjectives and nouns declined like adjectives agree by gender: «две новые», «два новых», «два учёных», «две столовые». After a number the counting form is taken: «5 вольт», «5 лет», «5 человек». Words without a singular take the plural: «1 сутки», «2 суток». If the needed form does not exist («5 молока») or the word does not agree with numbers (a verb, an adverb), `agree` raises `FormNotFoundError`.
 
 The word forms of `forms`, `inflect` and `agree` are spelled as in the dictionary: lowercase and with the letter «ё» where the dictionary has it.

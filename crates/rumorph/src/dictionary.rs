@@ -98,8 +98,16 @@ struct Codes {
     labels: Vec<u16>,
 }
 
+/// Формы лексемы разбора: лексемы его таблицы и слитых с ним разборов, формы - пары
+/// «номер лексемы, номер формы в ее парадигме» по порядку
+struct LexemeForms<'a> {
+    lexemes: Vec<Lexeme<'a>>,
+    forms: Vec<(u16, u16)>,
+}
+
 /// Лексема: формы парадигмы с общей основой и их пары «форма леммы, тег UD» из таблицы
 struct Lexeme<'a> {
+    table: u16,
     /// Номера суффиксов, тегов и префиксов форм тремя блоками
     forms: &'a [u16],
     /// `(форма леммы << 16) | тег UD` каждой формы
@@ -138,6 +146,8 @@ pub struct Dictionary {
     /// Номер пары «часть речи, признаки» тега UD: разборы, которые отличаются только пометами, сливаются
     ud_core: Vec<u16>,
     ud_codes: Vec<Codes>,
+    /// Номера частей речи и помет в `ud_codes`
+    code_ids: HashMap<String, u16>,
     features: BTreeMap<String, BTreeSet<String>>,
     prefixes: Vec<String>,
     suffixes: Vec<String>,
@@ -185,7 +195,7 @@ impl Dictionary {
                 .or_default()
                 .insert(value.clone());
         }
-        let ud_codes = codes(&ud_tags, &features);
+        let (ud_codes, code_ids) = codes(&ud_tags, &features);
         let fst_error = |err: fst::Error| Error::Format(err.to_string());
         let words = Map::new(sections.words).map_err(fst_error)?;
         let probabilities = Map::new(sections.probabilities).map_err(fst_error)?;
@@ -201,6 +211,7 @@ impl Dictionary {
             ud_tags,
             ud_core,
             ud_codes,
+            code_ids,
             features,
             prefixes: sections.prefixes,
             suffixes: sections.suffixes,
@@ -320,38 +331,68 @@ impl Dictionary {
         merged
     }
 
+    /// Разбор словоформы `word` как формы `form` таблицы `table`, если он есть в словаре;
+    /// вероятность - 1 (для восстановления сохраненного разбора)
+    pub fn analysis(&self, word: &str, table: u16, form: u16) -> Option<Analysis> {
+        let entry = (u32::from(table) << 16) | u32::from(form);
+        if !self
+            .words
+            .get(word)
+            .and_then(|offset| self.records_at(offset))?
+            .contains(&entry)
+        {
+            return None;
+        }
+        let lexeme = self.lexeme(table, form, word)?;
+        Some(Analysis {
+            word: word.to_owned(),
+            lemma: self.spell(&lexeme, lexeme.lemma_form(form)),
+            ud: lexeme.ud(form),
+            tag: lexeme.tag(form),
+            prob: 1.0,
+            source: Source::Dictionary,
+            table,
+            form,
+        })
+    }
+
     /// Формы лексемы разбора в порядке парадигмы: формы с той же леммой, вероятность каждой - 1
     ///
-    /// Формы, которые совпали в написании, части речи и признаках, сливаются, как в `analyze`
+    /// У слитого разбора («мешать» переходный и непереходный) лексема объединяет формы всех
+    /// слитых; формы, которые совпали в написании, части речи и признаках, сливаются, как в `analyze`
     pub fn forms(&self, analysis: &Analysis) -> Vec<Analysis> {
-        let Some((lexeme, forms)) = self.lexeme_of(analysis) else {
-            return Vec::new();
-        };
-        let mut seen = HashSet::new();
-        forms
-            .into_iter()
-            .filter(|&form| {
-                seen.insert((
-                    lexeme.affixes(form),
-                    self.ud_core[usize::from(lexeme.ud(form))],
-                ))
-            })
-            .map(|form| self.form(analysis, &lexeme, form))
-            .collect()
+        let LexemeForms { lexemes, forms } = self.lexeme_forms(analysis);
+        // В одной лексеме одинаковое написание - одинаковые префикс и суффикс
+        let (mut affixes, mut words) = (HashSet::new(), HashSet::new());
+        let mut result = Vec::with_capacity(forms.len());
+        for (index, form) in forms {
+            let lexeme = &lexemes[usize::from(index)];
+            let core = self.ud_core[usize::from(lexeme.ud(form))];
+            if lexemes.len() == 1 && !affixes.insert((lexeme.affixes(form), core)) {
+                continue;
+            }
+            let analysis = self.form(analysis, lexeme, form);
+            if lexemes.len() == 1 || words.insert((analysis.word.clone(), core)) {
+                result.push(analysis);
+            }
+        }
+        result
     }
 
     /// Форма лексемы с признаками `feats`; из подходящих - ближайшая к разбору по части речи,
     /// остальным признакам и пометам, при равенстве - первая в парадигме
     pub fn inflect(&self, analysis: &Analysis, feats: &[(&str, &str)]) -> Option<Analysis> {
-        let (lexeme, forms) = self.lexeme_of(analysis)?;
-        let form = self.closest(analysis, &lexeme, &forms, feats)?;
-        Some(self.form(analysis, &lexeme, form))
+        let forms = self.lexeme_forms(analysis);
+        let (index, form) = self.closest(analysis, &forms, feats, &[])?;
+        Some(self.form(analysis, &forms.lexemes[usize::from(index)], form))
     }
 
     /// Форма, согласованная с количеством `number`: «1 рубль», «2 рубля», «5 рублей»
     ///
     /// Согласуются существительные, прилагательные, местоименные прилагательные и причастия
-    /// в любом падеже: «о 2 рублях», «вижу двух котов», «две новые книги». У слов без
+    /// в любом падеже: «о 2 рублях», «вижу двух котов», «две новые книги». Существительные
+    /// с адъективным склонением согласуются как прилагательные («два учёных»), из форм
+    /// родительного падежа множественного числа берется счетная («5 вольт»). У слов без
     /// единственного числа («сутки») берется множественное: «1 сутки», «2 суток»
     pub fn agree(&self, analysis: &Analysis, number: u64) -> Option<Analysis> {
         let tag = self.ud_tags.get(usize::from(analysis.ud))?;
@@ -366,9 +407,12 @@ impl Dictionary {
             "Par" => "Gen",
             case => case,
         };
-        let adjectival =
-            matches!(tag.pos.as_str(), "ADJ" | "DET") || feat("VerbForm") == Some("Part");
-        if !adjectival && !matches!(tag.pos.as_str(), "NOUN" | "PROPN") {
+        let forms = self.lexeme_forms(analysis);
+        let nominal = matches!(tag.pos.as_str(), "NOUN" | "PROPN");
+        let adjectival = matches!(tag.pos.as_str(), "ADJ" | "DET")
+            || feat("VerbForm") == Some("Part")
+            || (nominal && self.adjectival_declension(&forms));
+        if !adjectival && !nominal {
             return None;
         }
         let one = number % 10 == 1 && number % 100 != 11;
@@ -383,37 +427,64 @@ impl Dictionary {
             vec![&sing, &plur]
         } else if !matches!(case, "Nom" | "Acc") {
             vec![&plur]
-        } else if adjectival {
-            if few && feat("Gender") == Some("Fem") && !animate {
-                vec![&plur_inanimate, &plur]
-            } else {
-                vec![&gen_plur]
-            }
-        } else if few && case == "Acc" && animate && number < 5 {
-            // «вижу двух котов», но «вижу двадцать два кота»
-            vec![&plur]
-        } else if few {
+        } else if case == "Acc" && animate && (adjectival || (few && number < 5)) {
+            // «вижу двух котов», «вижу двадцать два учёных», но «вижу двадцать два кота»
+            vec![&gen_plur]
+        } else if adjectival && few && feat("Gender") == Some("Fem") {
+            vec![&plur_inanimate, &plur]
+        } else if few && !adjectival {
             vec![&gen_sing, &gen_plur]
         } else {
             vec![&gen_plur]
         };
-        let (lexeme, forms) = self.lexeme_of(analysis)?;
-        let form = targets
+        let counting: Vec<u16> = self.code_ids.get("Coun").copied().into_iter().collect();
+        let (index, form) = targets
             .into_iter()
-            .find_map(|feats| self.closest(analysis, &lexeme, &forms, feats))?;
-        Some(self.form(analysis, &lexeme, form))
+            .find_map(|feats| self.closest(analysis, &forms, feats, &counting))?;
+        Some(self.form(analysis, &forms.lexemes[usize::from(index)], form))
+    }
+
+    /// Склоняется ли существительное как прилагательное («учёный», «столовая», «Толстой»):
+    /// по окончаниям именительного и родительного падежей единственного числа
+    fn adjectival_declension(&self, forms: &LexemeForms) -> bool {
+        let ends = |case: &str, endings: &[&str]| {
+            let Some(required) = [("Case", case), ("Number", "Sing")]
+                .into_iter()
+                .map(|(name, value)| self.code(name, value))
+                .collect::<Option<Vec<_>>>()
+            else {
+                return false;
+            };
+            forms
+                .forms
+                .iter()
+                .map(|&(index, form)| (&forms.lexemes[usize::from(index)], form))
+                .find(|(lexeme, form)| {
+                    let codes = &self.ud_codes[usize::from(lexeme.ud(*form))];
+                    required
+                        .iter()
+                        .all(|&(name, value)| codes.values[name] == value)
+                })
+                .is_some_and(|(lexeme, form)| {
+                    let word = self.spell(lexeme, form);
+                    endings.iter().any(|ending| word.ends_with(ending))
+                })
+        };
+        ends("Nom", &["ый", "ий", "ой", "ое", "ее", "ая", "яя"])
+            && ends("Gen", &["ого", "его", "ой", "ей"])
     }
 
     /// Форма из `forms` с признаками `feats`, ближайшая к разбору: больше общих с ним части речи,
-    /// признаков и помет, затем меньше лишних помет («кошкой», а не «кошкою»), затем раньше
-    /// в парадигме - поэтому без рода и числа берется мужской род единственного числа
+    /// признаков и помет, а также желательных помет `prefer`, затем меньше лишних помет и краткой
+    /// формы, если ее не просили («кошкой», а не «кошкою»; «мешаемый», а не «мешаем»), затем
+    /// раньше в парадигме - поэтому без рода и числа берется мужской род единственного числа
     fn closest(
         &self,
         analysis: &Analysis,
-        lexeme: &Lexeme,
-        forms: &[u16],
+        forms: &LexemeForms,
         feats: &[(&str, &str)],
-    ) -> Option<u16> {
+        prefer: &[u16],
+    ) -> Option<(u16, u16)> {
         let required = feats
             .iter()
             .map(|&(name, value)| self.code(name, value))
@@ -423,9 +494,16 @@ impl Dictionary {
         for &(name, value) in &required {
             wanted[name] = value;
         }
-        let mut best: Option<(u16, (usize, Reverse<usize>))> = None;
-        for &form in forms {
-            let codes = &self.ud_codes[usize::from(lexeme.ud(form))];
+        let mut labels = current.labels.clone();
+        for &label in prefer {
+            if !labels.contains(&label) {
+                labels.push(label);
+            }
+        }
+        let short = self.code("Variant", "Short");
+        let mut best: Option<(usize, (usize, Reverse<usize>))> = None;
+        for (position, &(index, form)) in forms.forms.iter().enumerate() {
+            let codes = &self.ud_codes[usize::from(forms.lexemes[usize::from(index)].ud(form))];
             if required
                 .iter()
                 .any(|&(name, value)| codes.values[name] != value)
@@ -437,8 +515,7 @@ impl Dictionary {
                 .zip(&codes.values)
                 .filter(|&(wanted, value)| *wanted != 0 && wanted == value)
                 .count()
-                + current
-                    .labels
+                + labels
                     .iter()
                     .filter(|label| codes.labels.contains(label))
                     .count()
@@ -446,14 +523,17 @@ impl Dictionary {
             let extra = codes
                 .labels
                 .iter()
-                .filter(|label| !current.labels.contains(label))
-                .count();
+                .filter(|label| !labels.contains(label))
+                .count()
+                + usize::from(short.is_some_and(|(name, value)| {
+                    codes.values[name] == value && wanted[name] != value
+                }));
             let score = (same, Reverse(extra));
             if best.is_none_or(|(_, top)| score > top) {
-                best = Some((form, score));
+                best = Some((position, score));
             }
         }
-        best.map(|(form, _)| form)
+        best.map(|(position, _)| forms.forms[position])
     }
 
     /// Номер признака в `features` и код значения
@@ -467,22 +547,58 @@ impl Dictionary {
         Some((index, position as u16 + 1))
     }
 
-    /// Лексема разбора и номера ее форм с той же леммой по порядку
-    fn lexeme_of<'a>(&'a self, analysis: &'a Analysis) -> Option<(Lexeme<'a>, Vec<u16>)> {
-        let lexeme = self.lexeme(analysis.table, analysis.form, &analysis.word)?;
-        let own = lexeme.lemma_form(analysis.form);
-        let (prefix, suffix) = lexeme.affixes(own);
-        let (prefix, suffix) = (&self.prefixes[prefix], &self.suffixes[suffix]);
-        let forms = (0..lexeme.cells.len() as u16)
-            .filter(|&form| {
-                let lemma_form = lexeme.lemma_form(form);
-                let (other_prefix, other_suffix) = lexeme.affixes(lemma_form);
-                lemma_form == own
-                    || (self.prefixes[other_prefix] == *prefix
-                        && self.suffixes[other_suffix] == *suffix)
-            })
-            .collect();
-        Some((lexeme, forms))
+    /// Формы лексемы разбора по порядку: формы его таблицы с той же леммой, затем формы таблиц
+    /// слитых с ним разборов той же словоформы
+    fn lexeme_forms<'a>(&'a self, analysis: &'a Analysis) -> LexemeForms<'a> {
+        let own = (u32::from(analysis.table) << 16) | u32::from(analysis.form);
+        let merged = self
+            .words
+            .get(&analysis.word)
+            .and_then(|offset| self.records_at(offset))
+            .unwrap_or_default();
+        let core = self.ud_core.get(usize::from(analysis.ud)).copied();
+        let mut result = LexemeForms {
+            lexemes: Vec::new(),
+            forms: Vec::new(),
+        };
+        for entry in
+            std::iter::once(own).chain(merged.iter().copied().filter(|&entry| entry != own))
+        {
+            let (table, form) = ((entry >> 16) as u16, entry as u16);
+            let Some(lexeme) = self.lexeme(table, form, &analysis.word) else {
+                continue;
+            };
+            let lemma_form = lexeme.lemma_form(form);
+            if result
+                .lexemes
+                .iter()
+                .any(|known| known.table == table && known.stem == lexeme.stem)
+                || (entry != own
+                    && (Some(self.ud_core[usize::from(lexeme.ud(form))]) != core
+                        || self.spell(&lexeme, lemma_form) != analysis.lemma))
+            {
+                continue;
+            }
+            // Лемма формы та же, если ее форма леммы пишется так же
+            let (prefix, suffix) = lexeme.affixes(lemma_form);
+            let (prefix, suffix) = (&self.prefixes[prefix], &self.suffixes[suffix]);
+            let index = result.lexemes.len() as u16;
+            result.forms.extend(
+                (0..lexeme.cells.len() as u16)
+                    .filter(|&other| {
+                        let other_lemma = lexeme.lemma_form(other);
+                        if other_lemma == lemma_form {
+                            return true;
+                        }
+                        let (other_prefix, other_suffix) = lexeme.affixes(other_lemma);
+                        self.prefixes[other_prefix] == *prefix
+                            && self.suffixes[other_suffix] == *suffix
+                    })
+                    .map(|other| (index, other)),
+            );
+            result.lexemes.push(lexeme);
+        }
+        result
     }
 
     /// Лексема словоформы `word` - формы `form` таблицы `table`
@@ -494,6 +610,7 @@ impl Dictionary {
             return None;
         }
         let mut lexeme = Lexeme {
+            table,
             forms,
             cells,
             stem: "",
@@ -525,7 +642,7 @@ impl Dictionary {
             tag: lexeme.tag(form),
             prob: 1.0,
             source: Source::Dictionary,
-            table: analysis.table,
+            table: lexeme.table,
             form,
         }
     }
@@ -725,8 +842,11 @@ fn check_tables(sections: &Sections, ud_count: usize) -> Result<Vec<u32>, Error>
     Ok(offsets)
 }
 
-/// Коды тегов UD для подбора формы
-fn codes(ud_tags: &[UdTag], features: &BTreeMap<String, BTreeSet<String>>) -> Vec<Codes> {
+/// Коды тегов UD для подбора формы и номера частей речи и помет
+fn codes(
+    ud_tags: &[UdTag],
+    features: &BTreeMap<String, BTreeSet<String>>,
+) -> (Vec<Codes>, HashMap<String, u16>) {
     let mut values: HashMap<(&str, &str), (usize, u16)> = HashMap::new();
     for (index, (name, known)) in features.iter().enumerate() {
         for (position, value) in known.iter().enumerate() {
@@ -739,7 +859,7 @@ fn codes(ud_tags: &[UdTag], features: &BTreeMap<String, BTreeSet<String>>) -> Ve
         let next = ids.len() as u16;
         *ids.entry(item).or_insert(next)
     };
-    ud_tags
+    let codes = ud_tags
         .iter()
         .map(|tag| {
             let mut codes = vec![0; features.len()];
@@ -753,7 +873,12 @@ fn codes(ud_tags: &[UdTag], features: &BTreeMap<String, BTreeSet<String>>) -> Ve
                 labels: tag.labels.iter().map(|label| id(label)).collect(),
             }
         })
-        .collect()
+        .collect();
+    let ids = ids
+        .into_iter()
+        .map(|(item, id)| (item.to_owned(), id))
+        .collect();
+    (codes, ids)
 }
 
 #[cfg(test)]
@@ -883,7 +1008,7 @@ mod tests {
     /// Формы лексемы: окончание и признаки UD
     type Forms = Vec<(&'static str, String)>;
 
-    /// Лексемы «кот», «сутки», «молоко», «новый» и «нести»
+    /// Лексемы «кот», «учёный», «сутки», «молоко», «новый» и «нести»
     fn lexicon() -> Dictionary {
         const NOUN: [&str; 12] = [
             "Case=Nom|Number=Sing",
@@ -915,6 +1040,16 @@ mod tests {
                     "Anim",
                     [
                         "", "а", "у", "а", "ом", "е", "ы", "ов", "ам", "ов", "ами", "ах",
+                    ],
+                ),
+            ),
+            (
+                "NOUN",
+                "учён",
+                noun(
+                    "Anim",
+                    [
+                        "ый", "ого", "ому", "ого", "ым", "ом", "ые", "ых", "ым", "ых", "ыми", "ых",
                     ],
                 ),
             ),
@@ -1131,6 +1266,69 @@ mod tests {
         );
         assert_eq!(agree(&dict.analyze("новую")[0], &[2]), words(&["новые"]));
         assert_eq!(agree(&dict.analyze("нести")[0], &[2]), words(&["-"]));
+        // Существительное с адъективным склонением согласуется как прилагательное
+        assert_eq!(
+            agree(&dict.analyze("учёный")[0], &[1, 2, 5, 22]),
+            words(&["учёный", "учёных", "учёных", "учёных"])
+        );
+        assert_eq!(
+            agree(&find(&dict, "учёного", "Case=Acc|Number=Sing"), &[2, 22]),
+            words(&["учёных", "учёных"])
+        );
+        assert_eq!(agree(&dict.analyze("кот")[0], &[22]), words(&["кота"]));
+    }
+
+    #[test]
+    fn merged_analyses_share_forms() {
+        // «мешать» непереходный и переходный - один разбор, причастие есть только у переходного
+        let mut builder = Builder::new(
+            vec!["INFN".into(), "VERB".into(), "PRTF".into()],
+            vec![String::new()],
+            vec!["ть".into(), "л".into(), "емый".into()],
+        );
+        let infinitive = builder.add_ud_tag("VERB", "VerbForm=Inf", &[]).unwrap();
+        let past = builder
+            .add_ud_tag("VERB", "Tense=Past|VerbForm=Fin", &[])
+            .unwrap();
+        let participle = builder
+            .add_ud_tag("VERB", "VerbForm=Part|Voice=Pass", &[])
+            .unwrap();
+        let intransitive = builder.add_paradigm(&[(0, 0, 0), (1, 1, 0)]).unwrap();
+        let intransitive = builder
+            .add_table(intransitive, &[(0, infinitive), (0, past)])
+            .unwrap();
+        let transitive = builder
+            .add_paradigm(&[(0, 0, 0), (1, 1, 0), (2, 2, 0)])
+            .unwrap();
+        let transitive = builder
+            .add_table(transitive, &[(0, infinitive), (0, past), (0, participle)])
+            .unwrap();
+        builder
+            .add_word("мешать", &[entry(intransitive, 0), entry(transitive, 0)])
+            .unwrap();
+        builder
+            .add_word("мешал", &[entry(intransitive, 1), entry(transitive, 1)])
+            .unwrap();
+        builder
+            .add_word("мешаемый", &[entry(transitive, 2)])
+            .unwrap();
+        let dict = Dictionary::from_bytes(&builder.build().unwrap()).unwrap();
+        let analyses = dict.analyze("мешать");
+        assert_eq!(analyses.len(), 1);
+        let words: Vec<String> = dict
+            .forms(&analyses[0])
+            .into_iter()
+            .map(|form| form.word)
+            .collect();
+        assert_eq!(words, ["мешать", "мешал", "мешаемый"]);
+        let found = dict.inflect(&analyses[0], &[("Voice", "Pass")]).unwrap();
+        assert_eq!((found.word.as_str(), found.table), ("мешаемый", transitive));
+        assert_eq!(
+            dict.analysis("мешаемый", found.table, found.form),
+            Some(found)
+        );
+        assert_eq!(dict.analysis("мешаемый", intransitive, 1), None);
+        assert_eq!(dict.analysis("мешал", transitive, 2), None);
     }
 
     #[test]

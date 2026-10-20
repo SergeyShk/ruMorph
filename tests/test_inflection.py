@@ -28,6 +28,10 @@ def test_forms(morph):
     }
     assert forms[5].labels == {"V-oy"}
     assert len(analysis(morph, "читать").forms()) == 132
+    # Слитый разбор: формы переходного и непереходного «мешать»
+    assert (
+        len(analysis(morph, "мешать").forms()) == len(analysis(morph, "мешаемый").forms()) == 132
+    )
 
 
 @pytest.mark.parametrize(
@@ -77,6 +81,14 @@ def test_forms_round_trip(morph, word):
         ("читал", {"VerbForm": "Fin"}, {"VerbForm": "Inf"}, "читать"),
         ("читал", {"VerbForm": "Fin"}, {"VerbForm": "Conv"}, "читав"),
         ("читать", {}, {"VerbForm": "Part", "Tense": "Pres", "Case": "Dat"}, "читающему"),
+        # Слитые переходный и непереходный «мешать»: причастие есть только у переходного
+        ("мешать", {}, {"VerbForm": "Part", "Voice": "Pass", "Tense": "Pres"}, "мешаемый"),
+        (
+            "мешать",
+            {},
+            {"VerbForm": "Part", "Voice": "Pass", "Tense": "Pres", "Variant": "Short"},
+            "мешаем",
+        ),
         ("красивый", {}, {"Gender": "Fem"}, "красивая"),
         ("красивый", {}, {"Degree": "Cmp"}, "красивее"),
         ("красивый", {}, {"Variant": "Short", "Gender": "Fem"}, "красива"),
@@ -206,6 +218,137 @@ def test_inflect_errors(morph):
             ],
         ),
         ("кино", {}, ["кино"] * 10),
+        # Существительные с адъективным склонением согласуются как прилагательные
+        (
+            "учёный",
+            {},
+            [
+                "учёных",
+                "учёный",
+                "учёных",
+                "учёных",
+                "учёных",
+                "учёных",
+                "учёный",
+                "учёных",
+                "учёных",
+                "учёных",
+            ],
+        ),
+        (
+            "учёного",
+            {"Case": "Acc"},
+            [
+                "учёных",
+                "учёного",
+                "учёных",
+                "учёных",
+                "учёных",
+                "учёных",
+                "учёного",
+                "учёных",
+                "учёных",
+                "учёных",
+            ],
+        ),
+        (
+            "столовая",
+            {},
+            [
+                "столовых",
+                "столовая",
+                "столовые",
+                "столовых",
+                "столовых",
+                "столовых",
+                "столовая",
+                "столовые",
+                "столовых",
+                "столовые",
+            ],
+        ),
+        (
+            "Толстой",
+            {},
+            [
+                "толстых",
+                "толстой",
+                "толстых",
+                "толстых",
+                "толстых",
+                "толстых",
+                "толстой",
+                "толстых",
+                "толстых",
+                "толстых",
+            ],
+        ),
+        (
+            "Иванов",
+            {"Case": "Nom"},
+            [
+                "ивановых",
+                "иванов",
+                "иванова",
+                "ивановых",
+                "ивановых",
+                "ивановых",
+                "иванов",
+                "иванова",
+                "ивановых",
+                "иванова",
+            ],
+        ),
+        # Счетная форма родительного падежа множественного числа
+        (
+            "вольт",
+            {"Case": "Nom"},
+            [
+                "вольт",
+                "вольт",
+                "вольта",
+                "вольт",
+                "вольт",
+                "вольт",
+                "вольт",
+                "вольта",
+                "вольт",
+                "вольта",
+            ],
+        ),
+        ("год", {}, ["лет", "год", "года", "лет", "лет", "лет", "год", "года", "лет", "года"]),
+        (
+            "человек",
+            {},
+            [
+                "человек",
+                "человек",
+                "человека",
+                "человек",
+                "человек",
+                "человек",
+                "человек",
+                "человека",
+                "человек",
+                "человека",
+            ],
+        ),
+        (
+            "человека",
+            {"Case": "Acc"},
+            [
+                "человек",
+                "человека",
+                "человек",
+                "человек",
+                "человек",
+                "человек",
+                "человека",
+                "человека",
+                "человек",
+                "человека",
+            ],
+        ),
     ],
 )
 def test_agree(morph, word, feats, expected):
@@ -215,9 +358,12 @@ def test_agree(morph, word, feats, expected):
 
 def test_agree_large_and_negative(morph):
     ruble = analysis(morph, "рубль")
-    assert [ruble.agree(number) for number in (-1, -2, 10**30 + 1, 10**30 + 12)] == [
-        "рубль", "рубля", "рубль", "рублей",
+    numbers = (-1, -2, 10**30 + 1, 10**30 + 12, 10**40 + 2, -(10**40) - 5, 2**127 - 1)
+    assert [ruble.agree(number) for number in numbers] == [
+        "рубль", "рубля", "рубль", "рублей", "рубля", "рублей", "рублей",
     ]  # fmt: skip
+    with pytest.raises(FormNotFoundError, match=f"количеством {10**40 + 5}"):
+        analysis(morph, "молоко").agree(10**40 + 5)
 
 
 @pytest.mark.parametrize(
@@ -228,6 +374,16 @@ def test_agree_errors(morph, word, number):
         morph.analyze(word)[0].agree(number)
     with pytest.raises(TypeError):
         morph.analyze(word)[0].agree(2.5)
+
+
+@pytest.mark.parametrize("word", ["мешаемый", "передох", "кошкою", "лесу"])
+def test_pickled_forms(morph, word):
+    forms = morph.analyze(word)[0].forms()
+    restored = pickle.loads(pickle.dumps(forms))
+    assert restored == forms
+    assert [[form.word for form in item.forms()] for item in restored] == [
+        [form.word for form in item.forms()] for item in forms
+    ]
 
 
 def test_pickled_analysis_inflects(morph):

@@ -742,6 +742,18 @@ pub fn lemma_form(tag: &str, lemma: &str, word: &str) -> Option<LemmaForm> {
     }
 }
 
+/// Счетные формы родительного падежа множественного числа без пометы `Coun` в OpenCorpora
+const COUNTING_FORMS: &[(&str, &str)] = &[("год", "лет"), ("человек", "человек")];
+
+/// Нужна ли форме помета `Coun`, которой нет в OpenCorpora: «5 лет», «5 человек»
+pub fn counting_form(tag: &str, lemma: &str, word: &str) -> bool {
+    let grammemes: Vec<&str> = tag.split([',', ' ']).collect();
+    COUNTING_FORMS.contains(&(lemma, word))
+        && grammemes.contains(&"plur")
+        && grammemes.contains(&"gent")
+        && !grammemes.contains(&"Coun")
+}
+
 /// Часть леммы, от которой зависит перевод: сама лемма для слов из списков, «ся» для возвратных
 /// глаголов, иначе пустая строка; разборы с одним тегом и классом леммы переводятся одинаково
 pub fn lemma_class(lemma: &str) -> &str {
@@ -1058,6 +1070,22 @@ mod tests {
         ] {
             assert_eq!(convert(tag, lemma), convert(tag, lemma_class(lemma)));
         }
+    }
+
+    #[test]
+    fn counting_forms() {
+        assert!(counting_form("NOUN,inan,masc plur,gent", "год", "лет"));
+        assert!(!counting_form("NOUN,inan,masc plur,gent", "год", "годов"));
+        assert!(!counting_form(
+            "NOUN,anim,masc sing,nomn",
+            "человек",
+            "человек"
+        ));
+        assert!(counting_form(
+            "NOUN,anim,masc plur,gent",
+            "человек",
+            "человек"
+        ));
     }
 
     #[test]

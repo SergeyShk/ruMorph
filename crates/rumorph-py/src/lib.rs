@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use pyo3::create_exception;
-use pyo3::exceptions::{PyLookupError, PyOSError, PyTypeError, PyValueError};
+use pyo3::exceptions::{PyLookupError, PyOSError, PyOverflowError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::sync::PyOnceLock;
 use pyo3::types::{PyDict, PyFloat, PyFrozenSet, PyString};
@@ -240,10 +240,19 @@ impl Analysis {
     ///     >>> ruble = Analyzer().analyze("рубль")[0]
     ///     >>> [f"{n} {ruble.agree(n)}" for n in (1, 2, 5, 21)]
     ///     ['1 рубль', '2 рубля', '5 рублей', '21 рубль']
-    fn agree(&self, number: i128) -> PyResult<String> {
-        // Согласование зависит от двух последних цифр и от того, меньше ли количество 5
-        let count = number.unsigned_abs();
-        let count = u64::try_from(count).unwrap_or(100 + (count % 100) as u64);
+    fn agree(&self, number: &Bound<'_, PyAny>) -> PyResult<String> {
+        // Согласование зависит от двух последних цифр и от того, меньше ли количество 5,
+        // поэтому числа больше u64 сводятся к 100-199
+        let count = match number.extract::<i128>() {
+            Ok(number) => {
+                let count = number.unsigned_abs();
+                u64::try_from(count).unwrap_or(100 + (count % 100) as u64)
+            }
+            Err(err) if err.is_instance_of::<PyOverflowError>(number.py()) => {
+                100 + number.abs()?.rem(100)?.extract::<u64>()?
+            }
+            Err(err) => return Err(err),
+        };
         self.analyzer
             .get()
             .dictionary
@@ -251,8 +260,11 @@ impl Analysis {
             .map(|form| form.word)
             .ok_or_else(|| {
                 FormNotFoundError::new_err(format!(
-                    "Слово «{}» не согласуется с количеством {number}",
-                    self.inner.word
+                    "Слово «{}» не согласуется с количеством {}",
+                    self.inner.word,
+                    number
+                        .str()
+                        .map_or_else(|_| count.to_string(), |text| text.to_string())
                 ))
             })
     }
@@ -307,6 +319,8 @@ impl Analysis {
             self.ud.labels.clone(),
             self.inner.prob,
             self.inner.source.as_str().to_owned(),
+            self.inner.table,
+            self.inner.form,
         );
         Ok((restore, (self.analyzer.clone_ref(py), state)))
     }
@@ -315,29 +329,52 @@ impl Analysis {
 /// Функция восстановления объекта из pickle и ее аргументы
 type Reduced<'py, Args> = PyResult<(Bound<'py, PyAny>, Args)>;
 
-/// Поля разбора для pickle: слово, лемма, часть речи, признаки, пометы, вероятность, источник
-type AnalysisState = (String, String, String, String, String, f64, String);
+/// Поля разбора для pickle: слово, лемма, часть речи, признаки, пометы, вероятность, источник,
+/// таблица словоизменения и форма в ней
+type AnalysisState = (
+    String,
+    String,
+    String,
+    String,
+    String,
+    f64,
+    String,
+    u16,
+    u16,
+);
 
-/// Восстановление разбора из pickle: разбор ищется в словаре заново, чтобы восстановить
-/// его форму в парадигме; вероятность берется сохраненная
+/// Восстановление разбора из pickle: по сохраненным таблице и форме, если словарь тот же,
+/// иначе - среди разборов слова с теми же леммой, частью речи, признаками и пометами;
+/// вероятность берется сохраненная
 #[pyfunction]
 fn _analysis(py: Python<'_>, analyzer: Py<Analyzer>, state: AnalysisState) -> PyResult<Analysis> {
-    let (word, lemma, pos, feats, _labels, prob, source) = state;
+    let (word, lemma, pos, feats, labels, prob, source, table, form) = state;
     if source != rumorph::Source::Dictionary.as_str() {
         return Err(PyValueError::new_err(format!(
             "Неизвестный источник разбора: {source}"
         )));
     }
     let dictionary = &analyzer.get().dictionary;
-    let Some(mut inner) = dictionary.analyze(&word).into_iter().find(|analysis| {
+    let same = |analysis: &rumorph::Analysis| {
         let tag = &dictionary.ud_tags()[usize::from(analysis.ud)];
         analysis.word == word
             && analysis.lemma == lemma
             && tag.pos == pos
             && tag.feats_string() == feats
-    }) else {
+            && tag.labels.join(",") == labels
+    };
+    let found = dictionary
+        .analysis(&word, table, form)
+        .filter(|analysis| same(analysis))
+        .or_else(|| {
+            dictionary
+                .analyze(&word)
+                .into_iter()
+                .find(|analysis| same(analysis))
+        });
+    let Some(mut inner) = found else {
         return Err(PyValueError::new_err(format!(
-            "В словаре нет разбора «{word}» с леммой «{lemma}», частью речи {pos} и признаками «{feats}»"
+            "В словаре нет разбора «{word}» с леммой «{lemma}», частью речи {pos}, признаками «{feats}» и пометами «{labels}»"
         )));
     };
     inner.prob = prob;

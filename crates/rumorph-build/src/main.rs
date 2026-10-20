@@ -57,7 +57,7 @@ fn build(export: &Path, output: &Path) -> Result<(), Box<dyn Error>> {
 
     // Тег UD и признак «местоимение без PronType» по тегу OpenCorpora и классу леммы;
     // таблица словоизменения - по парадигме и основе лексемы
-    let mut ud_numbers: HashMap<(u16, String), (u16, bool)> = HashMap::new();
+    let mut ud_numbers: HashMap<(u16, String, bool), (u16, bool)> = HashMap::new();
     let mut tables: HashMap<(u16, String), u16> = HashMap::new();
     let mut untyped_pronouns = BTreeSet::new();
     for (number, line) in read("words.tsv")?.lines().enumerate() {
@@ -120,11 +120,16 @@ fn build(export: &Path, output: &Path) -> Result<(), Box<dyn Error>> {
                 // Перевод зависит от леммы UD: у «лучшей» это «лучший», а не «хороший» формы 0
                 let ud_lemma = spell(stem, lemma_form);
                 let class = ud::lemma_class(&ud_lemma).to_owned();
-                let key = (layout[count + form], class);
+                let counting = ud::counting_form(tag, &ud_lemma, &word);
+                let key = (layout[count + form], class, counting);
                 let (ud, untyped) = match ud_numbers.get(&key) {
                     Some(&value) => value,
                     None => {
-                        let converted = ud::convert(tag, &key.1);
+                        let mut converted = ud::convert(tag, &key.1);
+                        if counting {
+                            converted.labels.push("Coun".into());
+                            converted.labels.sort();
+                        }
                         let labels: Vec<&str> =
                             converted.labels.iter().map(String::as_str).collect();
                         let ud = builder.add_ud_tag(
