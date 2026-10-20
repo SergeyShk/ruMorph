@@ -2,7 +2,7 @@
 
 mod ud;
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::error::Error;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -55,7 +55,9 @@ fn build(export: &Path, output: &Path) -> Result<(), Box<dyn Error>> {
         builder.add_paradigm(&forms)?;
     }
 
-    let mut ud_numbers: HashMap<(u16, String), u16> = HashMap::new();
+    // Тег UD и признак «местоимение без PronType» по тегу OpenCorpora и классу леммы
+    let mut ud_numbers: HashMap<(u16, String), (u16, bool)> = HashMap::new();
+    let mut untyped_pronouns = BTreeSet::new();
     for (number, line) in read("words.tsv")?.lines().enumerate() {
         let invalid = || format!("words.tsv:{}: неверная строка {line:?}", number + 1);
         let (word, records) = line.split_once('\t').ok_or_else(invalid)?;
@@ -110,8 +112,8 @@ fn build(export: &Path, output: &Path) -> Result<(), Box<dyn Error>> {
             let ud_lemma = [prefix, stem, suffix].concat();
             let class = ud::lemma_class(&ud_lemma).to_owned();
             let key = (layout[count + usize::from(form)], class);
-            let ud = match ud_numbers.get(&key) {
-                Some(&ud) => ud,
+            let (ud, untyped) = match ud_numbers.get(&key) {
+                Some(&value) => value,
                 None => {
                     let converted = ud::convert(tag, &key.1);
                     let labels: Vec<&str> = converted.labels.iter().map(String::as_str).collect();
@@ -120,10 +122,15 @@ fn build(export: &Path, output: &Path) -> Result<(), Box<dyn Error>> {
                         &ud::feats_string(&converted.feats),
                         &labels,
                     )?;
-                    ud_numbers.insert(key, ud);
-                    ud
+                    let untyped = matches!(converted.pos, "PRON" | "DET")
+                        && !converted.feats.contains_key("PronType");
+                    ud_numbers.insert(key, (ud, untyped));
+                    (ud, untyped)
                 }
             };
+            if untyped {
+                untyped_pronouns.insert(format!("{ud_lemma} ({tag})"));
+            }
             let lemma_form = lemma_form as u16;
             entries.push(Entry {
                 paradigm,
@@ -144,6 +151,12 @@ fn build(export: &Path, output: &Path) -> Result<(), Box<dyn Error>> {
         let tag = tag.parse().map_err(|_| invalid())?;
         let millionths = millionths.parse().map_err(|_| invalid())?;
         builder.add_probability(word, tag, millionths)?;
+    }
+
+    // В SynTagRus у каждого местоимения и местоименного прилагательного есть PronType
+    if !untyped_pronouns.is_empty() {
+        let list: Vec<&str> = untyped_pronouns.iter().map(String::as_str).collect();
+        return Err(format!("местоимения без PronType: {}", list.join(", ")).into());
     }
 
     let data = builder.build()?;
