@@ -171,9 +171,10 @@ impl Dictionary {
                 &[(word, tags.roman, ordinal), (&lower, tags.foreign, foreign)],
             );
         }
-        // Римские в нижнем регистре («xix») и диапазоны римских («II-III», «III–IV»)
+        // Римские в нижнем регистре («xix») и диапазоны римских («II-III», «III–IV»); строчные
+        // с «c», «l» («ci», «cl») - латинские слова
         let upper = word.to_uppercase();
-        if chars.len() > 1 && chars.iter().all(|c| c.is_lowercase()) && roman(&upper) {
+        if chars.len() > 1 && chars.iter().all(|c| "ivx".contains(*c)) && roman(&upper) {
             return self.shares(
                 word,
                 &[(word, tags.roman, 1.0), (&lower, tags.foreign, 1.0)],
@@ -283,8 +284,12 @@ impl Dictionary {
         if ending.is_empty() || !ending.chars().all(cyrillic) {
             return None;
         }
-        // Римское с окончанием («XIX-го») - порядковое римское
-        if roman(digits) {
+        // Римское с порядковым окончанием («XIX-го»), но не буква со словом («X-хромосома»)
+        if roman(digits)
+            && !self
+                .candidates(&format!("1-{}", ending.to_lowercase()))
+                .is_empty()
+        {
             return Some(self.shares(word, &[(digits, self.rule_tags.roman, 1.0)]));
         }
         // Слева число или диапазон чисел: «2005-го», «10-15-го», «1840–1860-х»

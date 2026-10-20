@@ -1026,7 +1026,7 @@ fn normalized_input(word: &str) -> Option<String> {
             (None, c) => normal.push(c),
         }
     }
-    Some(normal)
+    (normal != word).then_some(normal)
 }
 
 /// Совпадают ли написания с точностью до «е» на месте «ё»

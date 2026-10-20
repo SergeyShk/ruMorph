@@ -131,6 +131,13 @@ def test_normalized_input(morph, word, normal):
     assert morph.is_known(word)
 
 
+@pytest.mark.parametrize("word", ["Ma\u0308dchen", "і\u0308жак", "у\u0306", "\u0306"])
+def test_combining_mark_elsewhere(morph, word):
+    # Знак не после «и» или «е» ничего не составляет: слово разбирается как есть
+    assert morph.analyze(word)
+    assert morph.lemmatize(["кот", word])[0] == "кот"
+
+
 def test_is_known(morph):
     assert morph.is_known("Ежи")
     assert morph.is_known("СТАЛИ")

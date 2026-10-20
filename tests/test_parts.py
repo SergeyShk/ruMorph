@@ -70,6 +70,33 @@ def test_particle_chain(morph):
     assert [a.pos for a in morph.analyze("кто" + "-то" * 12000)] == ["X"]
 
 
+def test_stretched_particle_chain(morph):
+    # Протяжка и частица («да-то-о-то-о») не вызывают друг друга без конца
+    assert morph.analyze("да" + "-то-о" * 12000)
+
+
+@pytest.mark.parametrize(
+    ("word", "lemma", "pos"),
+    [
+        # Протянутая буква - междометие, а без него - не слово
+        ("А-а", "а", "INTJ"),
+        ("Ш-ш", "ш-ш", "X"),
+        # Заикание на несколько букв
+        ("Д-д-да", "да", "PART"),
+        ("В-в-ваше", "ваш", "DET"),
+        # Составные междометия
+        ("Ой-ой", "ой-ой", "INTJ"),
+        ("Н-да", "н-да", "INTJ"),
+        # Первая часть в начальной форме, а не в родительном множественного
+        ("поп-песен", "поп-песня", "NOUN"),
+        ("тест-пилотов", "тест-пилот", "NOUN"),
+    ],
+)
+def test_stretched_and_compound(morph, word, lemma, pos):
+    first = morph.analyze(word)[0]
+    assert (first.lemma, first.pos) == (lemma, pos)
+
+
 def test_capitalized_forms(morph):
     pin = morph.analyze("ПИН-КОДОВ")[0]
     assert pin.inflect(Case="Dat") == "ПИН-КОДАМ"

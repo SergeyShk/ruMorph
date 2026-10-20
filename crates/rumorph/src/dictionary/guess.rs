@@ -38,6 +38,9 @@ impl Dictionary {
         let abbreviation_with_ending = capitals >= 2
             && (1..=3).contains(&(chars.len() - capitals))
             && chars[capitals..].iter().all(|c| c.is_lowercase());
+        // Лемма такой аббревиатуры - ее заглавная часть («КВНу» - «квн», а не «квна»)
+        let stem: Option<String> =
+            abbreviation_with_ending.then(|| lower.chars().take(capitals).collect());
         let proper = if adjectival(&lower) {
             ADJECTIVAL_PROPER_SHARE
         } else {
@@ -56,7 +59,7 @@ impl Dictionary {
         let mut analyses = Vec::new();
         for &(index, share) in indexes {
             let found: Vec<(Analysis, f64)> = self
-                .guess_in(index, word, &lower)
+                .guess_in(index, word, &lower, stem.as_deref())
                 .into_iter()
                 .map(|(analysis, count)| {
                     let weight = match index {
@@ -82,8 +85,15 @@ impl Dictionary {
 
     /// Разборы по самому длинному окончанию слова, для которого в индексе есть подходящие формы,
     /// с числом словоформ словаря; словоформа разбора - как в тексте, лемма - в нижнем регистре.
-    /// Окончание через «е» находит и формы с «ё»: «ё» суффикса формы подставляется в словоформу
-    fn guess_in(&self, index: GuessIndex, word: &str, lower: &str) -> Vec<(Analysis, u32)> {
+    /// Окончание через «е» находит и формы с «ё»: «ё» суффикса формы подставляется в словоформу.
+    /// С основой `stem` берутся только разборы с леммой, равной ей
+    fn guess_in(
+        &self,
+        index: GuessIndex,
+        word: &str,
+        lower: &str,
+        stem: Option<&str>,
+    ) -> Vec<(Analysis, u32)> {
         let bounds: Vec<usize> = lower.char_indices().map(|(at, _)| at).collect();
         for length in (1..=GuessIndex::MAX_ENDING.min(bounds.len().saturating_sub(1))).rev() {
             let ending = &lower[bounds[bounds.len() - length]..];
@@ -103,8 +113,10 @@ impl Dictionary {
                     let lexeme = self.lexeme(table, form, &lower)?;
                     let lemma = self.spell(&lexeme, lexeme.lemma_form(form));
                     // Основа без гласной («тов» - «т», «Лем» - «лй») - не образец, а совпадение
-                    if !lemma.chars().any(vowel) {
-                        return None;
+                    match stem {
+                        Some(stem) if lemma != stem => return None,
+                        None if !lemma.chars().any(vowel) => return None,
+                        _ => {}
                     }
                     let analysis = Analysis {
                         word,

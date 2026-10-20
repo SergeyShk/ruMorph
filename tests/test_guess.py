@@ -132,9 +132,14 @@ def test_long_capitals(morph):
     assert morph.analyze("НКО")[0].feats["Abbr"] == "Yes"
 
 
-def test_abbreviation_with_ending(morph):
+@pytest.mark.parametrize(
+    ("word", "lemma"), [("МЭРТа", "мэрт"), ("КВНу", "квн"), ("ГАПов", "гап"), ("МУПы", "муп")]
+)
+def test_abbreviation_with_ending(morph, word, lemma):
+    # Лемма - заглавная часть, даже без гласной
+    assert morph.analyze(word)[0].lemma == lemma
     analysis = morph.analyze("МЭРТа")[0]
-    assert (analysis.lemma, analysis.pos, analysis.feats["Case"]) == ("мэрт", "PROPN", "Gen")
+    assert (analysis.pos, analysis.feats["Case"]) == ("PROPN", "Gen")
 
 
 def test_no_vowelless_lemma(morph):
