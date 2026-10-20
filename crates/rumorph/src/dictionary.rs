@@ -1,5 +1,6 @@
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::io::Read;
 use std::path::Path;
 
 use fst::Map;
@@ -172,12 +173,26 @@ pub struct Dictionary {
 impl Dictionary {
     /// Читает словарь из файла
     pub fn open(path: impl AsRef<Path>) -> Result<Self, Error> {
-        Self::from_bytes(&std::fs::read(path)?)
+        let mut file = std::fs::File::open(path)?;
+        let metadata = file.metadata()?;
+        if !metadata.is_file() {
+            // У канала, устройства или каталога размер в метаданных - не длина потока
+            let mut data = Vec::new();
+            file.read_to_end(&mut data)?;
+            return Self::from_bytes(&data);
+        }
+        Self::from_sections(format::read_from(
+            std::io::BufReader::new(file),
+            metadata.len(),
+        )?)
     }
 
     /// Читает словарь из байтов файла словаря
     pub fn from_bytes(data: &[u8]) -> Result<Self, Error> {
-        let sections = format::read(data)?;
+        Self::from_sections(format::read(data)?)
+    }
+
+    fn from_sections(sections: Sections) -> Result<Self, Error> {
         check_paradigms(&sections)?;
         let mut ud_tags = sections
             .ud_tags
@@ -1820,6 +1835,28 @@ mod tests {
         assert!(dict.analyze("ежаа").is_empty());
         assert!(!dict.is_known("вайб"));
         assert!(dict.is_known("Еж"));
+    }
+
+    #[test]
+    fn open_reads_file() {
+        let path = std::env::temp_dir().join(format!("rumorph-{}.dict", std::process::id()));
+        std::fs::write(&path, dictionary_bytes()).unwrap();
+        let dict = Dictionary::open(&path).unwrap();
+        std::fs::remove_file(&path).unwrap();
+        assert_eq!(dict.word_count(), dictionary().word_count());
+        assert_eq!(
+            summary(&dict.analyze("ежа")),
+            summary(&dictionary().analyze("ежа"))
+        );
+    }
+
+    #[test]
+    fn open_reports_directory_as_io_error() {
+        let path = std::env::temp_dir().join(format!("rumorph-dir-{}", std::process::id()));
+        std::fs::create_dir(&path).unwrap();
+        let result = Dictionary::open(&path);
+        std::fs::remove_dir(&path).unwrap();
+        assert!(matches!(result, Err(Error::Io(_))));
     }
 
     #[test]

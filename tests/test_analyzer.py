@@ -2,7 +2,9 @@ import copy
 import errno
 import json
 import math
+import os
 import pickle
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -41,6 +43,18 @@ def test_directory_instead_of_dictionary(tmp_path):
     with pytest.raises((IsADirectoryError, PermissionError)) as error:
         Analyzer(tmp_path)
     assert error.value.filename == str(tmp_path)
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="именованные каналы есть только в POSIX")
+def test_dictionary_from_pipe(morph, tmp_path):
+    pipe = tmp_path / "ru.dict"
+    os.mkfifo(pipe)
+    writer = threading.Thread(target=pipe.write_bytes, args=(morph.path.read_bytes(),))
+    writer.start()
+    try:
+        assert Analyzer(pipe).lemmatize(["стали"]) == ["стать"]
+    finally:
+        writer.join()
 
 
 @pytest.mark.parametrize("content", [b"", b"not a dictionary", b"RUMORPH\x00\x01\x00\x00\x00"])
