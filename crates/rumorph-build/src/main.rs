@@ -33,6 +33,18 @@ type Records = Vec<(u16, u16, String)>;
 /// Лексема выгрузки: парадигма, основа и пары «форма леммы, тег UD» ее форм
 type SourceLexeme = (u16, String, Vec<(u16, u16)>);
 
+/// Ключ перевода в UD: тег OpenCorpora, класс леммы, счетная форма и вид аббревиатуры
+type UdKey = (u16, String, bool, Option<Abbreviation>);
+
+/// Аббревиатура, у которой признаки UD отличаются от тега OpenCorpora
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+enum Abbreviation {
+    /// Сокращение слова внутри его лексемы («им» в лексеме «имя»): без падежа, числа и рода
+    WordForm,
+    /// Склоняемая аббревиатура («вуз», «МИД»): Abbr - помета, как в SynTagRus
+    Declinable,
+}
+
 /// Варианты служебных слов, у которых в SynTagRus лемма основного слова: часть речи OpenCorpora,
 /// вариант и основное слово. Лексема варианта объединяется с лексемой основного слова
 const VARIANT_LEMMAS: &[(&str, &str, &str)] = &[
@@ -140,21 +152,34 @@ fn build(export: &Path, output: &Path) -> Result<(), Box<dyn Error>> {
             entries.retain(|entry| grammemes(entry)[0] != "PRED");
         }
         // При равных вероятностях несовершенный вид раньше совершенного: «использовать» в SynTagRus чаще НСВ
+        // Разборы глагола стоят группой на месте его первого разбора
         let lemma = |&(paradigm, _, ref stem): &(u16, u16, String)| spell(paradigm, stem, 0);
-        let imperfective: Vec<String> = entries
+        let lemmas: Vec<String> = entries.iter().map(lemma).collect();
+        let imperfective: Vec<&String> = lemmas
             .iter()
-            .filter(|entry| grammemes(entry).contains(&"impf"))
-            .map(lemma)
+            .zip(&entries)
+            .filter(|(_, entry)| grammemes(entry).contains(&"impf"))
+            .map(|(lemma, _)| lemma)
             .collect();
-        entries.sort_by_key(|entry| {
-            grammemes(entry).contains(&"perf") && imperfective.contains(&lemma(entry))
-        });
+        let keys: Vec<(usize, bool)> = entries
+            .iter()
+            .zip(&lemmas)
+            .map(|(entry, lemma)| {
+                let first = lemmas.iter().position(|known| known == lemma).unwrap_or(0);
+                let perfective =
+                    grammemes(entry).contains(&"perf") && imperfective.contains(&lemma);
+                (first, perfective)
+            })
+            .collect();
+        let mut order: Vec<usize> = (0..entries.len()).collect();
+        order.sort_by_key(|&i| keys[i]);
+        let entries: Vec<_> = order.into_iter().map(|i| entries[i].clone()).collect();
         Ok((word.to_owned(), entries))
     };
 
     // Лексема выгрузки - парадигма и основа; у каждой формы - форма леммы и тег UD. Тег UD
     // и признак «местоимение без PronType» - по тегу OpenCorpora и классу леммы
-    let mut ud_numbers: HashMap<(u16, String, bool, bool), (u16, bool)> = HashMap::new();
+    let mut ud_numbers: HashMap<UdKey, (u16, bool)> = HashMap::new();
     // Номер пары «часть речи, признаки» тега UD: разборы с одинаковыми ею и леммой сливаются
     let (mut ud_cores, mut core_numbers): (Vec<usize>, HashMap<String, usize>) = Default::default();
     // Индекс угадывания по тегу UD: имена собственные, нарицательные слова открытых классов
@@ -240,9 +265,16 @@ fn build(export: &Path, output: &Path) -> Result<(), Box<dyn Error>> {
                             .map_or_else(|| spell(paradigm, &stem, lemma_form), str::to_owned);
                         let class = ud::lemma_class(&ud_lemma).to_owned();
                         let counting = ud::counting_form(tag, &ud_lemma, &word);
-                        // Сокращение слова внутри его лексемы («им» в лексеме «имя»)
-                        let abbreviated = tag.contains("Abbr") && !tag_of(0).contains("Abbr");
-                        let key = (layout[count + form], class, counting, abbreviated);
+                        // Сокращение существительного внутри его лексемы («им» в лексеме «имя»)
+                        // и склоняемая аббревиатура («вуз»: Abbr и у формы 0, без Fixd)
+                        let noun_abbreviation = tag.starts_with("NOUN") && tag.contains("Abbr");
+                        let abbreviation = match (noun_abbreviation, tag_of(0).contains("Abbr")) {
+                            (false, _) => None,
+                            (true, false) => Some(Abbreviation::WordForm),
+                            (true, true) if !tag.contains("Fixd") => Some(Abbreviation::Declinable),
+                            (true, true) => None,
+                        };
+                        let key = (layout[count + form], class, counting, abbreviation);
                         let (ud, untyped) = match ud_numbers.get(&key) {
                             Some(&value) => value,
                             None => {
@@ -251,8 +283,14 @@ fn build(export: &Path, output: &Path) -> Result<(), Box<dyn Error>> {
                                     converted.labels.push("Coun".into());
                                     converted.labels.sort();
                                 }
-                                if abbreviated {
-                                    ud::strip_abbreviation(&mut converted);
+                                match abbreviation {
+                                    Some(Abbreviation::WordForm) => {
+                                        ud::strip_abbreviation(&mut converted)
+                                    }
+                                    Some(Abbreviation::Declinable) => {
+                                        ud::abbreviation_label(&mut converted)
+                                    }
+                                    None => {}
                                 }
                                 let labels: Vec<&str> =
                                     converted.labels.iter().map(String::as_str).collect();

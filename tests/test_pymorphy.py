@@ -16,6 +16,12 @@ def pymorphy():
 
 
 @pytest.fixture(scope="module")
+def unsorted():
+    """pymorphy3 без оценки вероятностей: разборы в порядке словаря"""
+    return pymorphy3.MorphAnalyzer(probability_estimator_cls=None)
+
+
+@pytest.fixture(scope="module")
 def words(pymorphy):
     """Частые неоднозначные словоформы с частотами разборов, их варианты с «е» вместо «ё» и с заглавной"""
     frequent = sorted(
@@ -55,9 +61,21 @@ def changed_by_build(parses):
 
 
 def dictionary_order(parses):
-    """Порядок словаря: несовершенный вид раньше совершенного того же глагола"""
-    imperfective = {parse.normal_form for parse in parses if "impf" in parse.tag}
-    return sorted(parses, key=lambda p: "perf" in p.tag and p.normal_form in imperfective)
+    """Порядок словаря: в записи каждого написания разборы одной леммы - группой на месте
+    первого из них, несовершенный вид раньше совершенного"""
+    imperfective = {(p.word, p.normal_form) for p in parses if "impf" in p.tag}
+    first = {}
+    for number, parse in enumerate(parses):
+        first.setdefault(parse.word, number)
+        first.setdefault((parse.word, parse.normal_form), number)
+    return sorted(
+        parses,
+        key=lambda p: (
+            first[p.word],
+            first[(p.word, p.normal_form)],
+            "perf" in p.tag and (p.word, p.normal_form) in imperfective,
+        ),
+    )
 
 
 def expected_order(pymorphy, word, parses):
@@ -87,7 +105,7 @@ def expected_order(pymorphy, word, parses):
     return sorted(pairs, key=lambda pair: -pair[1])
 
 
-def test_same_analyses(pymorphy, words):
+def test_same_analyses(pymorphy, unsorted, words):
     """Разборы OpenCorpora до перевода в UD: словоформа, тег, начальная форма и вероятность"""
     morph = Analyzer()
     checked = Counter()
@@ -104,7 +122,7 @@ def test_same_analyses(pymorphy, words):
         assert sorted(item[:3] for item in ours) == sorted(theirs), word
         checked["same analyses"] += 1
         if len({tag for _, tag, _, _ in ours}) == len(ours):
-            expected = expected_order(pymorphy, word, parses)
+            expected = expected_order(pymorphy, word, unsorted.parse(word))
             assert [item[:3] for item in ours] == [
                 (p.word, str(p.tag), p.normal_form) for p, _ in expected
             ], word

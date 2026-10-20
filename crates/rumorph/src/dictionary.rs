@@ -388,19 +388,27 @@ impl Dictionary {
     /// в словаре, у угаданного или разобранного по правилу проверяется только, что словоформа
     /// подходит к форме таблицы
     pub fn analysis(&self, word: &str, entry: Entry, source: Source) -> Option<Analysis> {
-        let packed = (u32::from(entry.table) << 16) | u32::from(entry.form);
-        if source == Source::Dictionary
-            && !self
-                .words
-                .get(word)
-                .and_then(|offset| self.records_at(offset))?
-                .contains(&packed)
-        {
-            return None;
-        }
         // Лемма - в нижнем регистре, как у угадывания; словоформа - как сохранена
         let lower = word.to_lowercase();
         let lexeme = self.lexeme(entry.table, entry.form, &lower)?;
+        if source == Source::Dictionary {
+            // Запись словоформы ссылается на эту форму или на форму той же таблицы с тем же
+            // написанием и тегом: копии форм («ивановы» в женской лексеме) записей не имеют
+            let same = |packed: u32| {
+                let form = packed as u16;
+                (packed >> 16) as u16 == entry.table
+                    && (form == entry.form
+                        || (lexeme.affixes(form) == lexeme.affixes(entry.form)
+                            && lexeme.tag(form) == lexeme.tag(entry.form)))
+            };
+            let records = self
+                .words
+                .get(word)
+                .and_then(|offset| self.records_at(offset))?;
+            if !records.iter().any(|&packed| same(packed)) {
+                return None;
+            }
+        }
         Some(Analysis {
             word: word.to_owned(),
             lemma: self.spell(&lexeme, lexeme.lemma_form(entry.form)),
@@ -767,8 +775,8 @@ impl Dictionary {
     /// разбора в словаре («еще» - частоты «ещё»); вероятность тега делится поровну между разборами
     /// с этим тегом и той же таблицей частот и нормируется. Без частот вероятности остаются
     /// нулевыми: равные доли раздает `merge` после слияния. Если частоты есть только у части
-    /// написаний («совершённого», но не «совершенного»), доли разных написаний несравнимы
-    /// и все разборы получают равные доли
+    /// написаний («совершённого», но не «совершенного»), разбор написания без частот получает
+    /// среднюю долю разборов с частотами
     fn assign_probabilities(&self, word: &str, analyses: &mut [Analysis]) {
         let input = self.probabilities_for(word);
         let mut tables: Vec<Option<&[u32]>> = Vec::with_capacity(analyses.len());
