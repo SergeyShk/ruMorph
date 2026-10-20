@@ -16,6 +16,8 @@
         <link rel="prev" href="../authors/">
       
       
+        <link rel="next" href="../inflection/">
+      
       
         
           <link rel="alternate" href="./" hreflang="ru">
@@ -254,6 +256,25 @@
     
   
   Разбор словоформ
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../inflection/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Словоизменение
 
       </a>
     </li>
@@ -575,6 +596,33 @@
   
 
     
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../inflection/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Словоизменение
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
   </ul>
 </nav>
                   </div>
@@ -682,7 +730,7 @@
 <div class="highlight"><pre><span></span><code><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">rumorph</span><span class="w"> </span><span class="kn">import</span> <span class="n">Analyzer</span>
 <span class="o">&gt;&gt;&gt;</span> <span class="n">morph</span> <span class="o">=</span> <span class="n">Analyzer</span><span class="p">()</span>
 </code></pre></div>
-<p>Словарь загружается при создании анализатора за несколько миллисекунд. Достаточно создать анализатор один раз и пользоваться им во всей программе, в том числе из нескольких потоков. По умолчанию берется словарь из пакета, другой файл словаря передается аргументом <code>path</code>. Анализатор и разборы сохраняются через pickle, поэтому работают с multiprocessing и joblib: в другом процессе словарь загружается заново.</p>
+<p>Словарь загружается при создании анализатора за несколько миллисекунд. Достаточно создать анализатор один раз и пользоваться им во всей программе, в том числе из нескольких потоков. По умолчанию берется словарь из пакета, другой файл словаря передается аргументом <code>path</code>. Анализатор и разборы сохраняются через pickle, поэтому работают с multiprocessing и joblib: другой процесс загружает словарь один раз, сколько бы разборов он ни получил.</p>
 <h2 id="analyze">Разборы словоформы<a class="headerlink" href="#analyze" title="Permanent link">&para;</a></h2>
 <p><code>analyze</code> возвращает разборы словоформы по убыванию вероятности:</p>
 <div class="highlight"><pre><span></span><code><span class="o">&gt;&gt;&gt;</span> <span class="k">for</span> <span class="n">analysis</span> <span class="ow">in</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"стали"</span><span class="p">)[:</span><span class="mi">2</span><span class="p">]:</span>
@@ -739,8 +787,8 @@
 <li>предлоги - <code>ADP</code>, сочинительные союзы - <code>CCONJ</code>, подчинительные - <code>SCONJ</code>, частицы - <code>PART</code>.</li>
 </ul>
 <p>Признаки: падеж, число, род, одушевленность, лицо, время, вид, наклонение, залог, форма глагола, степень, краткая форма (<code>Variant=Short</code>), тип имени собственного (<code>NameType</code>), сокращение (<code>Abbr</code>), притяжательность (<code>Poss</code>), тип числительного (<code>NumType</code>) и его запись (<code>NumForm</code>), тип местоимения и местоименного наречия (<code>PronType</code>: «там» - <code>Dem</code>, «где» - <code>Rel</code>, «никогда» - <code>Neg</code>), возвратность (<code>Reflex</code>), несклоняемость (<code>InflClass=Ind</code>), отрицание (<code>Polarity=Neg</code>).</p>
-<p>Леммы тоже следуют SynTagRus: у женских фамилий и отчеств лемма в женском роде («Ивановой» - «иванова»), превосходная степень остается превосходной («важнейшей» - «важнейший»), «денег» - «деньги». Если несколько разборов OpenCorpora в UD совпадают (союз и наречие «так»), они объединены в один, их вероятности сложены.</p>
-<p>Пометы <code>labels</code> - граммемы <a href="https://opencorpora.org/dict.php?act=gram">OpenCorpora</a>, для которых в UD нет признака: стиль (<code>Infr</code>, <code>Slng</code>, <code>Arch</code>), качественное прилагательное (<code>Qual</code>), вводное слово (<code>Prnt</code>), переходность (<code>tran</code>, <code>intr</code>), включенность говорящего в повелительном наклонении (<code>incl</code> - «пойдемте», <code>excl</code> - «иди») и другие.</p>
+<p>Леммы тоже следуют SynTagRus: у женских фамилий и отчеств лемма в женском роде («Ивановой» - «иванова»), превосходная степень остается превосходной («важнейшей» - «важнейший»), «денег» - «деньги». Если несколько разборов OpenCorpora в UD совпадают (союз и наречие «так»), они объединены в один, их вероятности сложены. Формы слова по разбору дают методы <code>forms</code>, <code>inflect</code> и <code>agree</code> - см. <a href="../inflection/">Словоизменение</a>.</p>
+<p>Пометы <code>labels</code> - граммемы <a href="https://opencorpora.org/dict.php?act=gram">OpenCorpora</a>, для которых в UD нет признака: стиль (<code>Infr</code>, <code>Slng</code>, <code>Arch</code>), качественное прилагательное (<code>Qual</code>), вводное слово (<code>Prnt</code>), переходность (<code>tran</code>, <code>intr</code>), включенность говорящего в повелительном наклонении (<code>incl</code> - «пойдемте», <code>excl</code> - «иди»), второй предложный падеж (<code>loc2</code> - «в лесу») и другие.</p>
 <h2 id="lists">Списки слов<a class="headerlink" href="#lists" title="Permanent link">&para;</a></h2>
 <p><code>analyze_many</code> разбирает набор словоформ, <code>lemmatize</code> возвращает леммы их самых вероятных разборов:</p>
 <div class="highlight"><pre><span></span><code><span class="o">&gt;&gt;&gt;</span> <span class="n">morph</span><span class="o">.</span><span class="n">lemmatize</span><span class="p">([</span><span class="s2">"Мы"</span><span class="p">,</span> <span class="s2">"стали"</span><span class="p">,</span> <span class="s2">"друзьями"</span><span class="p">])</span>

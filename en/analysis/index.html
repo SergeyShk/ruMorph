@@ -16,6 +16,8 @@
         <link rel="prev" href="../authors/">
       
       
+        <link rel="next" href="../inflection/">
+      
       
         
           <link rel="alternate" href="../../analysis/" hreflang="ru">
@@ -254,6 +256,25 @@
     
   
   Word analysis
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../inflection/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Inflection
 
       </a>
     </li>
@@ -575,6 +596,33 @@
   
 
     
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../inflection/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Inflection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
   </ul>
 </nav>
                   </div>
@@ -682,7 +730,7 @@
 <div class="highlight"><pre><span></span><code><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">rumorph</span><span class="w"> </span><span class="kn">import</span> <span class="n">Analyzer</span>
 <span class="o">&gt;&gt;&gt;</span> <span class="n">morph</span> <span class="o">=</span> <span class="n">Analyzer</span><span class="p">()</span>
 </code></pre></div>
-<p>The dictionary loads in a few milliseconds when the analyzer is created. One analyzer is enough for the whole program, including several threads. By default the dictionary from the package is used; another dictionary file is passed as the <code>path</code> argument. The analyzer and the analyses can be pickled, so they work with multiprocessing and joblib: another process loads the dictionary again.</p>
+<p>The dictionary loads in a few milliseconds when the analyzer is created. One analyzer is enough for the whole program, including several threads. By default the dictionary from the package is used; another dictionary file is passed as the <code>path</code> argument. The analyzer and the analyses can be pickled, so they work with multiprocessing and joblib: another process loads the dictionary once, however many analyses it receives.</p>
 <h2 id="analyze">Analyses of a word form<a class="headerlink" href="#analyze" title="Permanent link">&para;</a></h2>
 <p><code>analyze</code> returns the analyses of a word form in order of decreasing probability:</p>
 <div class="highlight"><pre><span></span><code><span class="o">&gt;&gt;&gt;</span> <span class="k">for</span> <span class="n">analysis</span> <span class="ow">in</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"стали"</span><span class="p">)[:</span><span class="mi">2</span><span class="p">]:</span>
@@ -739,8 +787,8 @@
 <li>prepositions are <code>ADP</code>, coordinating conjunctions <code>CCONJ</code>, subordinating ones <code>SCONJ</code>, particles <code>PART</code>.</li>
 </ul>
 <p>Features: case, number, gender, animacy, person, tense, aspect, mood, voice, verb form, degree, the short form (<code>Variant=Short</code>), the type of a proper name (<code>NameType</code>), abbreviation (<code>Abbr</code>), possessiveness (<code>Poss</code>), the type of a numeral (<code>NumType</code>) and how it is written (<code>NumForm</code>), the type of a pronoun or pronominal adverb (<code>PronType</code>: «там» - <code>Dem</code>, «где» - <code>Rel</code>, «никогда» - <code>Neg</code>), reflexivity (<code>Reflex</code>), indeclinability (<code>InflClass=Ind</code>), negation (<code>Polarity=Neg</code>).</p>
-<p>Lemmas follow SynTagRus too: feminine surnames and patronymics keep the feminine lemma («Ивановой» - «иванова»), superlatives stay superlative («важнейшей» - «важнейший»), «денег» - «деньги». When several OpenCorpora analyses coincide in UD (the conjunction and the adverb «так»), they are merged into one with the sum of their probabilities.</p>
-<p>The <code>labels</code> are the <a href="https://opencorpora.org/dict.php?act=gram">OpenCorpora</a> grammemes that have no UD feature: style (<code>Infr</code>, <code>Slng</code>, <code>Arch</code>), qualitative adjective (<code>Qual</code>), parenthetical word (<code>Prnt</code>), transitivity (<code>tran</code>, <code>intr</code>), whether the speaker is included in an imperative (<code>incl</code> - «пойдемте», <code>excl</code> - «иди») and others.</p>
+<p>Lemmas follow SynTagRus too: feminine surnames and patronymics keep the feminine lemma («Ивановой» - «иванова»), superlatives stay superlative («важнейшей» - «важнейший»), «денег» - «деньги». When several OpenCorpora analyses coincide in UD (the conjunction and the adverb «так»), they are merged into one with the sum of their probabilities. The forms of a word are given by the <code>forms</code>, <code>inflect</code> and <code>agree</code> methods of the analysis - see <a href="../inflection/">Inflection</a>.</p>
+<p>The <code>labels</code> are the <a href="https://opencorpora.org/dict.php?act=gram">OpenCorpora</a> grammemes that have no UD feature: style (<code>Infr</code>, <code>Slng</code>, <code>Arch</code>), qualitative adjective (<code>Qual</code>), parenthetical word (<code>Prnt</code>), transitivity (<code>tran</code>, <code>intr</code>), whether the speaker is included in an imperative (<code>incl</code> - «пойдемте», <code>excl</code> - «иди»), the second locative (<code>loc2</code> - «в лесу») and others.</p>
 <h2 id="lists">Lists of words<a class="headerlink" href="#lists" title="Permanent link">&para;</a></h2>
 <p><code>analyze_many</code> analyzes a collection of word forms, and <code>lemmatize</code> returns the lemmas of their most probable analyses:</p>
 <div class="highlight"><pre><span></span><code><span class="o">&gt;&gt;&gt;</span> <span class="n">morph</span><span class="o">.</span><span class="n">lemmatize</span><span class="p">([</span><span class="s2">"Мы"</span><span class="p">,</span> <span class="s2">"стали"</span><span class="p">,</span> <span class="s2">"друзьями"</span><span class="p">])</span>

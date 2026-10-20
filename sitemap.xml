@@ -22,6 +22,13 @@
         <xhtml:link rel="alternate" hreflang="en" href="https://sergeyshk.github.io/ruMorph/en/authors/"/>
     </url>
     <url>
+        <loc>https://sergeyshk.github.io/ruMorph/inflection/</loc>
+        <lastmod>2026-10-20</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="ru" href="https://sergeyshk.github.io/ruMorph/inflection/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://sergeyshk.github.io/ruMorph/en/inflection/"/>
+    </url>
+    <url>
         <loc>https://sergeyshk.github.io/ruMorph/installation/</loc>
         <lastmod>2026-10-20</lastmod>
         <changefreq>daily</changefreq>
@@ -48,6 +55,13 @@
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="en" href="https://sergeyshk.github.io/ruMorph/en/authors/"/>
         <xhtml:link rel="alternate" hreflang="ru" href="https://sergeyshk.github.io/ruMorph/authors/"/>
+    </url>
+    <url>
+        <loc>https://sergeyshk.github.io/ruMorph/en/inflection/</loc>
+        <lastmod>2026-10-20</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://sergeyshk.github.io/ruMorph/en/inflection/"/>
+        <xhtml:link rel="alternate" hreflang="ru" href="https://sergeyshk.github.io/ruMorph/inflection/"/>
     </url>
     <url>
         <loc>https://sergeyshk.github.io/ruMorph/en/installation/</loc>
