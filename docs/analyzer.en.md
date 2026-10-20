@@ -34,7 +34,7 @@ Exceptions:
 | :-------- | :--- | :------ | :---------- |
 | `path` | `str` / `PathLike` | `None` | Path to the dictionary file; by default, the dictionary from the package |
 
-The object keeps the dictionary path in `path` of type `Path`, read-only.
+The object keeps the dictionary path in `path` of type `Path`, read-only. A dictionary is trusted data, like code: loading rejects a damaged file but not every deliberately crafted one, so dictionaries from untrusted sources should not be loaded.
 
 ## Methods
 
