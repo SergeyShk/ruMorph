@@ -13,7 +13,7 @@ use pyo3::create_exception;
 use pyo3::exceptions::{PyLookupError, PyOSError, PyOverflowError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::sync::PyOnceLock;
-use pyo3::types::{PyDict, PyFloat, PyFrozenSet, PyInt, PyString};
+use pyo3::types::{PyDict, PyFloat, PyFrozenSet, PyInt, PyString, PyTuple};
 
 /// Сколько слов `analyze_many` и `lemmatize` разбирают за раз без GIL: между кусками
 /// переводятся результаты и проверяется Ctrl+C
@@ -1058,13 +1058,37 @@ fn integral<'py>(number: &Bound<'py, PyAny>) -> PyResult<Option<Bound<'py, PyAny
         if !number.call_method0("is_finite")?.is_truthy()? {
             return Err(infinite());
         }
-        let exponent: i64 = number
-            .call_method0("as_tuple")?
-            .getattr("exponent")?
-            .extract()?;
-        return (exponent >= 0)
-            .then(|| number.call_method0("__int__"))
-            .transpose();
+        let parts = number.call_method0("as_tuple")?;
+        let exponent: i64 = parts.getattr("exponent")?.extract()?;
+        if exponent < 0 {
+            return Ok(None);
+        }
+        // Не через int: с большим порядком перевод квадратичный и держит GIL. Целое - цифры
+        // коэффициента и `exponent` нулей, согласованию нужны две последние цифры и то,
+        // меньше ли количество 100
+        let digits = parts.getattr("digits")?.cast_into::<PyTuple>()?;
+        let count = digits.len();
+        let digit = |from_end: usize| -> PyResult<u64> {
+            if from_end < count {
+                digits.get_item(count - 1 - from_end)?.extract()
+            } else {
+                Ok(0)
+            }
+        };
+        let (tens, ones) = match exponent {
+            0 => (digit(1)?, digit(0)?),
+            1 => (digit(0)?, 0),
+            _ => (0, 0),
+        };
+        let last = tens * 10 + ones;
+        let value = if count == 1 && digit(0)? == 0 {
+            0
+        } else if count as i64 + exponent > 2 {
+            100 + last
+        } else {
+            last
+        };
+        return Ok(Some(PyInt::new(py, value).into_any()));
     }
     if number.is_instance(rational.bind(py))? {
         return if number.getattr("denominator")?.eq(1)? {
