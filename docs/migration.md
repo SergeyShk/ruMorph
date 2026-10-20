@@ -94,10 +94,12 @@ pip install rumorph
 | OpenCorpora | UD |
 | :---------- | :- |
 | `nomn`, `gent`, `datv`, `accs`, `ablt`, `loct`, `voct` | `Case`: `Nom`, `Gen`, `Dat`, `Acc`, `Ins`, `Loc`, `Voc` |
+| `gen1`, `acc2`, `loc1` | `Case`: `Gen`, `Acc`, `Loc` |
 | `gen2` («стакан чаю») | `Case=Par` |
 | `loc2` («в лесу») | `Case=Loc` с пометой `loc2` |
 | `sing`, `plur` | `Number`: `Sing`, `Plur` |
 | `masc`, `femn`, `neut` | `Gender`: `Masc`, `Fem`, `Neut` |
+| `ms-f` («сирота») | `Gender=Masc` |
 | `anim`, `inan` | `Animacy`: `Anim`, `Inan` |
 | `1per`, `2per`, `3per` | `Person`: `1`, `2`, `3` |
 | `pres`, `past`, `futr` | `Tense`: `Pres`, `Past`, `Fut` |
@@ -109,6 +111,9 @@ pip install rumorph
 | `Abbr` | `Abbr=Yes` |
 | `Poss` | `Poss=Yes` |
 | `Fixd` | `InflClass=Ind` |
+| `Apro` | часть речи `DET` |
+| `Dmns`, `Ques` | у местоимений - `PronType`, у остальных слов - пометы `labels` |
+| `Anum`, `GNdr` | нет |
 | остальные: `Infr`, `Slng`, `Arch`, `Qual`, `tran`, `intr`, `V-oy` и др. | пометы `labels` |
 
 Признак `Voice` есть у всех форм глагола, а `Degree` - у всех прилагательных и наречий, хотя в OpenCorpora граммемы залога есть только у причастий, а степени - только у превосходной и сравнительной.

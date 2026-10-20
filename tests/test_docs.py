@@ -15,7 +15,11 @@ DOCS = Path(__file__).parents[1] / "docs"
 PAGES = sorted(path for path in DOCS.rglob("*.md") if not path.name.endswith(".en.md"))
 # Блок сигнатуры: ``` {.python .signature} с одним вызовом в одной строке
 SIGNATURE = re.compile(r"^``` \{\.python \.signature\}\n(\w+)\((.*)\)\n```$", re.MULTILINE)
-CLASSES = [rumorph.Analyzer, rumorph.Analysis]
+CLASSES = [
+    value
+    for name in rumorph.__all__
+    if isinstance(value := getattr(rumorph, name), type) and not issubclass(value, BaseException)
+]
 
 
 def anchors(text: str) -> set[str]:
@@ -46,10 +50,17 @@ def test_no_orphan_english_pages():
 def signature_text(target: object) -> str:
     """Параметры так, как их пишет блок сигнатуры: без self и разделителя позиционных"""
     parts = []
+    keyword_only = False
     for param in inspect.signature(target).parameters.values():
         if param.name == "self":
             continue
-        if param.kind is param.VAR_KEYWORD:
+        if param.kind is param.KEYWORD_ONLY and not keyword_only:
+            parts.append("*")
+            keyword_only = True
+        if param.kind is param.VAR_POSITIONAL:
+            parts.append(f"*{param.name}")
+            keyword_only = True
+        elif param.kind is param.VAR_KEYWORD:
             parts.append(f"**{param.name}")
         elif param.default is param.empty:
             parts.append(param.name)
@@ -75,5 +86,11 @@ def test_signatures_match_the_code():
                 f"{page.relative_to(DOCS)}: {name}({written}) расходится с кодом"
             )
             found.add(name)
-    public = {name for cls in CLASSES for name in vars(cls) if callable(vars(cls)[name])}
-    assert found >= {"Analyzer"} | {name for name in public if not name.startswith("_")}
+    # Сигнатура нужна классу с конструктором и каждому публичному методу
+    required = {cls.__name__ for cls in CLASSES if "__new__" in vars(cls)} | {
+        name
+        for cls in CLASSES
+        for name, value in vars(cls).items()
+        if callable(value) and not name.startswith("_")
+    }
+    assert found >= required, f"нет блоков сигнатур: {sorted(required - found)}"

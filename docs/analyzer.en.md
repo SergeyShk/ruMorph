@@ -10,7 +10,8 @@ Exceptions:
 
 - `FileNotFoundError` - the dictionary file does not exist;
 - `OSError` - the dictionary file cannot be read: no access, the path points to a directory;
-- `ValueError` - the file is not a ruMorph dictionary or is damaged.
+- `ValueError` - the file is not a ruMorph dictionary or is damaged;
+- `TypeError` - a path that is neither a string nor `PathLike`.
 
 === "Code"
 
@@ -48,11 +49,15 @@ The object keeps the dictionary path in `path` of type `Path`, read-only.
 analyze(word)
 ```
 
-Analyses of the word form in descending order of probability; the probabilities sum to 1. Case does not matter, and the letter «е» may stand for «ё»: `analyze("ЕЖ")` returns the analyses of the word form «ёж». A token that is not in the dictionary - a number, a symbol, a Latin word, an abbreviation - is analyzed [by rules](analysis.md#rules), and the analyses of an unknown Cyrillic word are [guessed](analysis.md#guess) from its ending and parts. A token with a space (except a number with space-separated digit groups), a control or an invisible character gets no analyses: the list is empty.
+Analyses of the word form in descending order of probability; the probabilities sum to 1. Case does not matter, and the letter «е» may stand for «ё»: `analyze("ЕЖ")` returns the analyses of the word form «ёж». A token that is not in the dictionary - a number, a symbol, a Latin word, an abbreviation - is analyzed [by rules](analysis.md#rules), and the analyses of an unknown Cyrillic word are [guessed](analysis.md#guess) from its ending and parts.
 
 | Parameter | Type | Default | Description |
 | :-------- | :--- | :------ | :---------- |
 | `word` | `str` | - | Word form |
+
+Exceptions:
+
+- `TypeError` - a word that is not a string.
 
 === "Code"
 
@@ -86,7 +91,7 @@ Analyses of the word form in descending order of probability; the probabilities 
 analyze_many(words)
 ```
 
-Analyses of each word form, as with [`analyze`](#analyze). Analysis runs without the GIL, so several threads with one analyzer process their lists in parallel; on a list the method is faster than `analyze` in a loop.
+Analyses of each word form, as with [`analyze`](#analyze); on a list the method is faster than `analyze` in a loop.
 
 | Parameter | Type | Default | Description |
 | :-------- | :--- | :------ | :---------- |
@@ -121,7 +126,7 @@ Exceptions:
 lemmatize(words)
 ```
 
-Lemmas of the most probable analyses of the word forms; a token without analyses is returned in lowercase. Like `analyze_many`, it runs without the GIL.
+Lemmas of the most probable analyses of the word forms; a token without analyses is returned in lowercase.
 
 | Parameter | Type | Default | Description |
 | :-------- | :--- | :------ | :---------- |
@@ -161,6 +166,10 @@ Whether the word form is in the dictionary; as with `analyze`, case and «е» i
 | Parameter | Type | Default | Description |
 | :-------- | :--- | :------ | :---------- |
 | `word` | `str` | - | Word form |
+
+Exceptions:
+
+- `TypeError` - a word that is not a string.
 
 === "Code"
 

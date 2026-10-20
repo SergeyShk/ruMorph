@@ -2,7 +2,7 @@
 
 Every [analysis](analysis.md) knows its lexeme - all forms of the word with the same lemma. From an analysis you can get the list of forms, the form with given UD features or the form that agrees with a number. The lexeme is defined by the lemma, so it follows the UD lemma conventions: the lexeme of «Ивановой» is the feminine forms of the surname «Иванова», the lexeme of «важнейшего» is the superlative forms.
 
-The word forms are spelled as in the dictionary: lowercase and with «ё» where the dictionary has it. The forms of a [guessed](analysis.md#guess) word keep its capital letters: «Мак-Киннона» in the dative is «Мак-Киннону».
+The word forms are spelled as in the dictionary: lowercase and with «ё» where the dictionary has it; the forms of guessed words are described in [Unknown words](analysis.md#guess).
 
 ## Methods
 
@@ -17,7 +17,7 @@ The word forms are spelled as in the dictionary: lowercase and with «ё» where
 forms()
 ```
 
-The forms of the lexeme in dictionary order - analyses like those of `analyze`, with probability 1. Form variants differ in labels: «кошкою» has `V-oy`, the second locative «в лесу» has `loc2` (its `Case=Loc` feature is the same as in «о лесе»). A guessed analysis with a particle («сколь-нибудь») has no forms: `forms` gives only the analysis itself.
+The forms of the lexeme in dictionary order - analyses like those of `analyze`, with probability 1. Form variants differ in labels: «кошкою» has `V-oy`, the second locative «в лесу» has `loc2` (its `Case=Loc` feature is the same as in «о лесе»).
 
 === "Code"
 
@@ -115,7 +115,8 @@ The form of a noun, an adjective, a pronominal adjective or a participle that ag
 
 Exceptions:
 
-- `FormNotFoundError` - the word does not agree with numbers (a verb, an adverb) or the lexeme has no needed form («5 молока»).
+- `FormNotFoundError` - the word does not agree with numbers (a verb, an adverb) or the lexeme has no needed form («5 молока»);
+- `TypeError` - a number that is not an integer.
 
 === "Code"
 

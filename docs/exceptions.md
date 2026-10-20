@@ -6,11 +6,11 @@
 | :--------- | :--------------- | :---------------- |
 | `FormNotFoundError` | `LookupError` | У лексемы нет формы с запрошенными признаками ([`inflect`](inflection.md#inflect)) или формы, согласованной с количеством, либо слово не согласуется с количеством ([`agree`](inflection.md#agree)) |
 | `ValueError` | - | Признака или значения нет в словаре (`inflect`); файл не словарь ruMorph или поврежден ([`Analyzer`](analyzer.md)) |
-| `TypeError` | - | Строка вместо набора слов или слово, которое не строка ([`analyze_many`](analyzer.md#analyze_many), [`lemmatize`](analyzer.md#lemmatize)); значение признака, которое не строка (`inflect`) |
+| `TypeError` | - | Аргумент не того типа: слово или значение признака не строка, количество не целое число, путь к словарю не строка и не `PathLike`, строка вместо набора слов ([`analyze_many`](analyzer.md#analyze_many), [`lemmatize`](analyzer.md#lemmatize)) |
 | `FileNotFoundError` | `OSError` | Нет файла словаря (`Analyzer`) |
 | `PermissionError`, `IsADirectoryError` и др. | `OSError` | Файл словаря не читается (`Analyzer`) |
 
-Сообщения исключений - на русском.
+Сообщения исключений - на русском; сообщения `TypeError` о типе аргумента бывают на английском.
 
 === "Код"
 

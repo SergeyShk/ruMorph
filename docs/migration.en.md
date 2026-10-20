@@ -94,10 +94,12 @@ Some words get their part of speech by the SynTagRus conventions: the parentheti
 | OpenCorpora | UD |
 | :---------- | :- |
 | `nomn`, `gent`, `datv`, `accs`, `ablt`, `loct`, `voct` | `Case`: `Nom`, `Gen`, `Dat`, `Acc`, `Ins`, `Loc`, `Voc` |
+| `gen1`, `acc2`, `loc1` | `Case`: `Gen`, `Acc`, `Loc` |
 | `gen2` («стакан чаю») | `Case=Par` |
 | `loc2` («в лесу») | `Case=Loc` with the `loc2` label |
 | `sing`, `plur` | `Number`: `Sing`, `Plur` |
 | `masc`, `femn`, `neut` | `Gender`: `Masc`, `Fem`, `Neut` |
+| `ms-f` («сирота») | `Gender=Masc` |
 | `anim`, `inan` | `Animacy`: `Anim`, `Inan` |
 | `1per`, `2per`, `3per` | `Person`: `1`, `2`, `3` |
 | `pres`, `past`, `futr` | `Tense`: `Pres`, `Past`, `Fut` |
@@ -109,6 +111,9 @@ Some words get their part of speech by the SynTagRus conventions: the parentheti
 | `Abbr` | `Abbr=Yes` |
 | `Poss` | `Poss=Yes` |
 | `Fixd` | `InflClass=Ind` |
+| `Apro` | the `DET` part of speech |
+| `Dmns`, `Ques` | `PronType` for pronouns, `labels` for other words |
+| `Anum`, `GNdr` | none |
 | the rest: `Infr`, `Slng`, `Arch`, `Qual`, `tran`, `intr`, `V-oy` and others | `labels` |
 
 The `Voice` feature is present on all verb forms and `Degree` on all adjectives and adverbs, although in OpenCorpora only participles have voice grammemes and only superlatives and comparatives have degree.

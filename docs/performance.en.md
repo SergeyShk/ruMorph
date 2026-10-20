@@ -16,8 +16,6 @@ Thousands of words or analyses per second, more is better:
 | Agreement with a number: `agree(5)`, `make_agree_with_number(5)` | 1,270 | 85 | 86 |
 | Forms of the lexeme: `forms()`, `lexeme` | 56 | 32 | 32 |
 
-`lemmatize` is faster than `analyze` because it does not create analysis objects, and in 4 threads lemmatization is 2.5 times faster than in one.
-
 ## Loading and memory { #memory }
 
 | | ruMorph | pymorphy3 | pymorphy3[fast] |
