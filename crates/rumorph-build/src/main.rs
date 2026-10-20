@@ -300,8 +300,10 @@ fn build(export: &Path, output: &Path) -> Result<(), Box<dyn Error>> {
                                     let next = core_numbers.len();
                                     let core = format!("{}\t{feats}", converted.pos);
                                     ud_cores.push(*core_numbers.entry(core).or_insert(next));
+                                    let abbreviation = converted.feats.contains_key("Abbr")
+                                        || converted.labels.iter().any(|label| label == "Abbr");
                                     ud_guesses.push(match converted.pos {
-                                        _ if converted.feats.contains_key("Abbr") => None,
+                                        _ if abbreviation => None,
                                         "PROPN" => Some(GuessIndex::Proper),
                                         "NOUN" | "ADJ" | "VERB" | "ADV" => Some(GuessIndex::Common),
                                         _ => None,
