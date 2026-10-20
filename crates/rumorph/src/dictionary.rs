@@ -1,5 +1,6 @@
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::io::Read;
 use std::path::Path;
 
 use fst::Map;
@@ -172,9 +173,18 @@ pub struct Dictionary {
 impl Dictionary {
     /// Читает словарь из файла
     pub fn open(path: impl AsRef<Path>) -> Result<Self, Error> {
-        let file = std::fs::File::open(path)?;
-        let size = file.metadata()?.len();
-        Self::from_sections(format::read_from(std::io::BufReader::new(file), size)?)
+        let mut file = std::fs::File::open(path)?;
+        let metadata = file.metadata()?;
+        if !metadata.is_file() {
+            // У канала, устройства или каталога размер в метаданных - не длина потока
+            let mut data = Vec::new();
+            file.read_to_end(&mut data)?;
+            return Self::from_bytes(&data);
+        }
+        Self::from_sections(format::read_from(
+            std::io::BufReader::new(file),
+            metadata.len(),
+        )?)
     }
 
     /// Читает словарь из байтов файла словаря
@@ -1838,6 +1848,15 @@ mod tests {
             summary(&dict.analyze("ежа")),
             summary(&dictionary().analyze("ежа"))
         );
+    }
+
+    #[test]
+    fn open_reports_directory_as_io_error() {
+        let path = std::env::temp_dir().join(format!("rumorph-dir-{}", std::process::id()));
+        std::fs::create_dir(&path).unwrap();
+        let result = Dictionary::open(&path);
+        std::fs::remove_dir(&path).unwrap();
+        assert!(matches!(result, Err(Error::Io(_))));
     }
 
     #[test]

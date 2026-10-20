@@ -136,14 +136,15 @@ impl<R: Read> Stream<R> {
     /// Секция чисел по `N` байт: читается кусками сразу в массив, без байтовой копии секции
     fn numbers<const N: usize, T>(&mut self, decode: fn([u8; N]) -> T) -> Result<Vec<T>, Error> {
         const CHUNK: usize = 1 << 16;
+        let truncated = || Error::Format("файл обрезан".into());
         let len = u64::from_le_bytes(self.take(8)?.try_into().unwrap());
+        if len > self.left {
+            return Err(truncated());
+        }
         if len % N as u64 != 0 {
             return Err(Error::Format(format!("длина секции не кратна {N}")));
         }
-        if len > self.left {
-            return Err(Error::Format("файл обрезан".into()));
-        }
-        let mut values = Vec::with_capacity(len as usize / N);
+        let mut values = Vec::with_capacity(usize::try_from(len).map_err(|_| truncated())? / N);
         let mut left = len;
         while left > 0 {
             let chunk = self.take(left.min(CHUNK as u64))?;
@@ -280,10 +281,17 @@ mod tests {
             at += 8 + len;
         }
         let len = u64::from_le_bytes(data[at..at + 8].try_into().unwrap());
-        data[at..at + 8].copy_from_slice(&(len - 1).to_le_bytes());
-        data.remove(at + 8);
-        let err = read(&data).err().unwrap();
+        let mut corrupted = data.clone();
+        corrupted[at..at + 8].copy_from_slice(&(len - 1).to_le_bytes());
+        corrupted.remove(at + 8);
+        let err = read(&corrupted).err().unwrap();
         assert!(err.to_string().contains("не кратна 2"));
+        // Длина больше остатка файла - обрезанный файл, даже если она не кратна размеру числа
+        for huge in [u64::MAX, u64::MAX - 1] {
+            data[at..at + 8].copy_from_slice(&huge.to_le_bytes());
+            let err = read(&data).err().unwrap();
+            assert!(err.to_string().contains("файл обрезан"), "{huge}: {err}");
+        }
     }
 
     #[test]
