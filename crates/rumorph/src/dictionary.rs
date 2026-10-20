@@ -939,9 +939,11 @@ impl Dictionary {
     /// сначала точное совпадение, затем варианты с «ё» по позициям слева направо
     fn lookup(&self, key: &str) -> Vec<(String, u64)> {
         let fst = self.words.as_fst();
-        // Свой стек, а не рекурсия: глубина - число «е», у которых в автомате есть ветка с «ё»
-        let mut stack = vec![(String::new(), 0, fst.root(), Output::zero())];
-        let mut found = Vec::new();
+        let (spelling, variants) = lookup_from(fst, "", key, 0, fst.root(), Output::zero());
+        let mut found: Vec<_> = spelling.into_iter().collect();
+        // Свой стек, а не рекурсия: глубина - число «е», у которых в автомате есть ветка с «ё».
+        // У большинства слов вариантов нет, и стек не заводится
+        let mut stack: Vec<_> = variants.into_iter().rev().collect();
         while let Some((prefix, start, node, output)) = stack.pop() {
             let (spelling, variants) = lookup_from(fst, &prefix, key, start, node, output);
             found.extend(spelling);
@@ -957,6 +959,7 @@ type Search<'f> = (String, usize, Node<'f>, Output);
 
 /// Поиск продолжения `key` с позиции `start` от узла `node`: словоформа без новых «ё»,
 /// если она есть, и состояния поиска с «ё» на месте каждой следующей «е» слева направо
+#[inline(always)]
 fn lookup_from<'f>(
     fst: &'f Fst<Vec<u8>>,
     prefix: &str,
