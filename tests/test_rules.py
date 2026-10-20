@@ -49,6 +49,8 @@ def test_punctuation_and_symbols(morph, word, pos):
         ("-5", "NUM"),
         ("10 000", "NUM"),
         ("10\u00a0000", "NUM"),
+        ("10\u2009000", "NUM"),
+        ("10\u2007000", "NUM"),
         ("17:04", "NUM"),
         ("2/3", "NUM"),
         ("01.02.2003", "NUM"),
@@ -74,6 +76,8 @@ def test_numbers(morph, word, first):
     ("2005-м", {"Case": "Loc", "Gender": "Masc", "Number": "Sing"}),
     ("2010-е", {"Animacy": "Inan", "Case": "Acc", "Number": "Plur"}),
     ("90-х", {"Case": "Gen", "Number": "Plur"}),
+    ("90-е", {"Animacy": "Inan", "Case": "Acc", "Number": "Plur"}),
+    ("1-го", {"Case": "Gen", "Gender": "Masc", "Number": "Sing"}),
 ])  # fmt: skip
 def test_numeral_with_ending_first(morph, word, feats):
     first = morph.analyze(word)[0]
@@ -89,6 +93,10 @@ def test_numeral_with_ending(morph):
     assert "Gen" in {a.feats["Case"] for a in analyses}
     assert [form.word for form in analyses[0].forms()][:3] == ["2005-й", "2005-го", "2005-му"]
     assert analyses[0].inflect(Case="Loc", Gender="Masc") == "2005-м"
+    # Окончание заглавными: формы строятся по словоформе в нижнем регистре
+    upper = morph.analyze("2005-ГО")[0]
+    assert [form.word for form in upper.forms()][:2] == ["2005-й", "2005-го"]
+    assert (upper.inflect(Case="Dat"), upper.inflect()) == ("2005-му", "2005-го")
     assert {a.lemma for a in morph.analyze("1990-х")} == {"1990-й"}
     # Короткое окончание без образца - количественное
     assert summary(morph, "5-ти") == [

@@ -256,12 +256,12 @@ impl Dictionary {
     /// сливаются в один с суммой вероятностей и пометами более вероятного. Токен, которого нет
     /// в словаре, разбирается по правилам (`Source::Rule`)
     pub fn analyze(&self, word: &str) -> Vec<Analysis> {
-        let analyses = self.merge(self.candidates(word));
+        let mut analyses = self.merge(self.candidates(word));
         if analyses.is_empty() {
-            self.rules(word)
-        } else {
-            analyses
+            return self.rules(word);
         }
+        self.reweight_numerals(&mut analyses);
+        analyses
     }
 
     /// Разборы словаря до слияния с вероятностями P(тег | словоформа); без частот вероятности нулевые
@@ -366,6 +366,9 @@ impl Dictionary {
     ///
     /// Формы, которые совпали в написании, части речи и признаках, сливаются, как в `analyze`
     pub fn forms(&self, analysis: &Analysis) -> Vec<Analysis> {
+        if let Some(lower) = self.lowercased(analysis) {
+            return self.forms(&lower);
+        }
         if analysis.entry.is_none() {
             return vec![Analysis {
                 prob: 1.0,
@@ -391,6 +394,9 @@ impl Dictionary {
     /// Форма лексемы с признаками `feats`; из подходящих - ближайшая к разбору по части речи,
     /// остальным признакам и пометам, при равенстве - первая в парадигме
     pub fn inflect(&self, analysis: &Analysis, feats: &[(&str, &str)]) -> Option<Analysis> {
+        if let Some(lower) = self.lowercased(analysis) {
+            return self.inflect(&lower, feats);
+        }
         if analysis.entry.is_none() {
             let tag = self.ud_tags.get(usize::from(analysis.ud))?;
             let own = feats
@@ -414,6 +420,9 @@ impl Dictionary {
     /// родительного падежа множественного числа берется счетная («5 вольт»). У слов без
     /// единственного числа («сутки») берется множественное: «1 сутки», «2 суток»
     pub fn agree(&self, analysis: &Analysis, number: u64) -> Option<Analysis> {
+        if let Some(lower) = self.lowercased(analysis) {
+            return self.agree(&lower, number);
+        }
         let tag = self.ud_tags.get(usize::from(analysis.ud))?;
         let feat = |name: &str| {
             tag.feats
@@ -584,6 +593,24 @@ impl Dictionary {
             })
             .collect();
         Some((lexeme, forms))
+    }
+
+    /// Разбор со словоформой в нижнем регистре, если лексема строится только по ней («2005-ГО»)
+    fn lowercased(&self, analysis: &Analysis) -> Option<Analysis> {
+        let entry = analysis.entry?;
+        if self
+            .lexeme(entry.table, entry.form, &analysis.word)
+            .is_some()
+        {
+            return None;
+        }
+        let word = analysis.word.to_lowercase();
+        (word != analysis.word && self.lexeme(entry.table, entry.form, &word).is_some()).then(
+            || Analysis {
+                word,
+                ..analysis.clone()
+            },
+        )
     }
 
     /// Лексема словоформы `word` - формы `form` таблицы `table`

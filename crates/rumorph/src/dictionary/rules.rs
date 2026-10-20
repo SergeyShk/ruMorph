@@ -9,9 +9,6 @@ const SYMBOLS: &[char] = &[
     '%', '‰', '$', '£', '¥', '°', '+', '=', '±', '×', '÷', '§', '©', '®',
 ];
 
-/// Невидимые символы: токен из них или с ними (кроме чисел с пробелом) - не слово
-const INVISIBLE: &[char] = &['\u{00AD}', '\u{200B}', '\u{2060}', '\u{FEFF}'];
-
 /// Порядковые из цифр с окончанием в обучающей части SynTagRus: падеж, род, число,
 /// одушевленность и сколько раз встретились; доля разбора по образцу - число плюс один
 const NUMERAL_FEATS: &[(&str, &str, &str, &str, f64)] = &[
@@ -131,7 +128,7 @@ impl Dictionary {
         }
         if chars
             .iter()
-            .any(|&c| c.is_whitespace() || c.is_control() || INVISIBLE.contains(&c))
+            .any(|&c| c.is_whitespace() || c.is_control() || invisible(c))
             || chars.iter().all(|&c| joiner(c))
         {
             return Vec::new();
@@ -252,8 +249,31 @@ impl Dictionary {
             analyses.sort_by(|a, b| b.prob.total_cmp(&a.prob));
             return Some(analyses);
         }
-        (ending.chars().count() <= 3)
+        // Окончание заглавными без образца («5-Б») - не падежное
+        (ending.chars().count() <= 3 && ending.chars().all(char::is_lowercase))
             .then(|| self.shares(word, &[(digits, self.rule_tags.cardinal, 1.0)]))
+    }
+
+    /// Словарные порядковые из цифр («90-е») получают те же доли по SynTagRus, что и разобранные
+    /// по образцу: частот OpenCorpora у них нет или они мало что говорят
+    pub(super) fn reweight_numerals(&self, analyses: &mut [Analysis]) {
+        let combi = |analysis: &Analysis| {
+            self.ud_tags[usize::from(analysis.ud)]
+                .feats
+                .iter()
+                .any(|(name, value)| name == "NumForm" && value == "Combi")
+        };
+        if !analyses.iter().all(combi) {
+            return;
+        }
+        for analysis in analyses.iter_mut() {
+            analysis.prob = self.numeral_weight(analysis.ud);
+        }
+        let total: f64 = analyses.iter().map(|analysis| analysis.prob).sum();
+        for analysis in analyses.iter_mut() {
+            analysis.prob /= total;
+        }
+        analyses.sort_by(|a, b| b.prob.total_cmp(&a.prob));
     }
 
     /// Доля разбора порядкового из цифр по его падежу, роду, числу и одушевленности
@@ -328,6 +348,35 @@ fn symbol(c: char) -> bool {
         )
 }
 
+/// Символ форматирования (категория Unicode Cf): мягкий перенос, нулевые пробелы и соединители,
+/// метки направления текста, BOM; кроме соединителя ZWJ, который бывает внутри эмодзи
+fn invisible(c: char) -> bool {
+    matches!(
+        c,
+        '\u{00AD}'
+            | '\u{0600}'..='\u{0605}'
+            | '\u{061C}'
+            | '\u{06DD}'
+            | '\u{070F}'
+            | '\u{08E2}'
+            | '\u{180E}'
+            | '\u{200B}'..='\u{200C}'
+            | '\u{200E}'..='\u{200F}'
+            | '\u{202A}'..='\u{202E}'
+            | '\u{2060}'..='\u{2064}'
+            | '\u{2066}'..='\u{206F}'
+            | '\u{FEFF}'
+            | '\u{FFF9}'..='\u{FFFB}'
+            | '\u{110BD}'
+            | '\u{110CD}'
+            | '\u{13430}'..='\u{1343F}'
+            | '\u{1BCA0}'..='\u{1BCA3}'
+            | '\u{1D173}'..='\u{1D17A}'
+            | '\u{E0001}'
+            | '\u{E0020}'..='\u{E007F}'
+    )
+}
+
 /// Невидимая часть составного эмодзи: соединитель и селекторы вариантов
 fn joiner(c: char) -> bool {
     matches!(c, '\u{200D}' | '\u{FE00}'..='\u{FE0F}')
@@ -338,7 +387,9 @@ fn joiner(c: char) -> bool {
 fn number(word: &str) -> Option<bool> {
     let unsigned = word.strip_prefix(['+', '-', '−']).unwrap_or(word);
     unsigned
-        .split([',', '.', ':', '/', ' ', '\u{A0}', '\u{202F}'])
+        .split([
+            ',', '.', ':', '/', ' ', '\u{A0}', '\u{2007}', '\u{2009}', '\u{202F}',
+        ])
         .all(|group| !group.is_empty() && group.bytes().all(|b| b.is_ascii_digit()))
         .then(|| unsigned == word && unsigned.bytes().all(|b| b.is_ascii_digit()))
 }
@@ -391,6 +442,8 @@ mod tests {
         assert_eq!(number("1.5"), Some(false));
         assert_eq!(number("10 000"), Some(false));
         assert_eq!(number("10\u{A0}000"), Some(false));
+        assert_eq!(number("10\u{2009}000"), Some(false));
+        assert_eq!(number("10\u{2007}000"), Some(false));
         assert_eq!(number("17:04"), Some(false));
         assert_eq!(number("2/3"), Some(false));
         assert_eq!(number("01.02.2003"), Some(false));
