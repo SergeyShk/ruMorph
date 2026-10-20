@@ -881,7 +881,7 @@
 <p class="metric-meta"><code>forms</code> · <code>list[Analysis]</code></p>
 <div class="signature highlight"><pre><span></span><code><span class="n">forms</span><span class="p">()</span>
 </code></pre></div>
-<p>The forms of the lexeme in dictionary order - analyses like those of <code>analyze</code>, with probability 1. Form variants differ in labels: «кошкою» has <code>V-oy</code>, the second locative «в лесу» has <code>loc2</code> (its <code>Case=Loc</code> feature is the same as in «о лесе»).</p>
+<p>The forms of the lexeme in dictionary order - analyses like those of <code>analyze</code>, with probability 1. Form variants differ in labels: «кошкою» has <code>V-oy</code>, the second locative «в лесу» has <code>loc2</code> (its <code>Case=Loc</code> feature is the same as in «о лесе»): «лес» with <code>inflect(Case="Loc")</code> gives «лесе», and «лесу» is chosen from <code>forms()</code> by the <code>loc2</code> label.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Code</label><label for="__tabbed_1_2">Result</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
@@ -919,7 +919,7 @@
 <p class="metric-meta"><code>inflect</code> · <code>str</code></p>
 <div class="signature highlight"><pre><span></span><code><span class="n">inflect</span><span class="p">(</span><span class="o">**</span><span class="n">feats</span><span class="p">)</span>
 </code></pre></div>
-<p>The form of the lexeme with the given UD features. Features that are not given are kept where possible: «кошка» in the genitive is «кошки», not «кошек». The short form is chosen only when asked for (<code>Variant="Short"</code>).</p>
+<p>The form of the lexeme with the given UD features. Features that are not given are kept where possible: «кошка» in the genitive is «кошки», not «кошек». The short form, the animate accusative («нового») and the inclusive imperative («сделаем») are chosen only when asked for: <code>Variant="Short"</code>, <code>Animacy="Anim"</code>, <code>Person="1"</code>. The future of «быть» in SynTagRus is <code>Tense=Pres</code> with the <code>futr</code> label: «будет» in the plural is «будут», while <code>inflect(Tense="Fut")</code> of «быть» raises <code>FormNotFoundError</code> - the future is taken from <code>forms()</code> by the <code>futr</code> label.</p>
 <table>
 <thead>
 <tr>
@@ -969,7 +969,7 @@
 <p class="metric-meta"><code>agree</code> · <code>str</code></p>
 <div class="signature highlight"><pre><span></span><code><span class="n">agree</span><span class="p">(</span><span class="n">number</span><span class="p">)</span>
 </code></pre></div>
-<p>The form of a noun, an adjective, a pronominal adjective or a participle that agrees with a number. The case of the analysis is kept: «рублях» with 2 is «рублях» («о 2 рублях»), the accusative of animate nouns gives «вижу двух котов». Adjectives and nouns declined like adjectives agree by gender: «две новые», «два новых», «два учёных», «две столовые». After a number the counting form is taken: «5 вольт», «5 лет», «5 человек». Words without a singular take the plural: «1 сутки», «2 суток». A negative number agrees as its absolute value.</p>
+<p>The form of a noun, an adjective, a pronominal adjective or a participle that agrees with a number. The case of the analysis is kept: «рублях» with 2 is «рублях» («о 2 рублях»), the accusative of animate nouns gives «вижу двух котов». Adjectives and nouns declined like adjectives agree by gender: «две новые», «два новых», «два учёных», «две столовые». After a number the counting form is taken: «5 вольт», «5 лет», «5 человек». Words without a singular take the plural: «1 сутки», «2 суток». Feminine surnames in -ова, -ина agree like adjectives: «две Ивановы», «пять Ивановых». A negative number agrees as its absolute value.</p>
 <table>
 <thead>
 <tr>
