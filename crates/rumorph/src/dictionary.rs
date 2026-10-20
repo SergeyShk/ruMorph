@@ -8,6 +8,7 @@ use fst::raw::{Fst, Node, Output};
 use crate::format::{self, Sections};
 use crate::{Entry, Error};
 
+mod guess;
 mod rules;
 
 /// Откуда взят разбор
@@ -18,6 +19,8 @@ pub enum Source {
     /// Токена нет в словаре, разбор - по правилу: число, знак, латиница, римское число, инициал,
     /// аббревиатура или сокращение с точкой
     Rule,
+    /// Слова нет в словаре, разбор угадан по окончанию
+    Guess,
 }
 
 impl Source {
@@ -25,6 +28,7 @@ impl Source {
         match self {
             Source::Dictionary => "dictionary",
             Source::Rule => "rule",
+            Source::Guess => "guess",
         }
     }
 }
@@ -159,6 +163,8 @@ pub struct Dictionary {
     records: Vec<u32>,
     probabilities: Map<Vec<u8>>,
     probability_records: Vec<u32>,
+    guesses: Map<Vec<u8>>,
+    guess_records: Vec<u32>,
 }
 
 impl Dictionary {
@@ -199,8 +205,9 @@ impl Dictionary {
         let fst_error = |err: fst::Error| Error::Format(err.to_string());
         let words = Map::new(sections.words).map_err(fst_error)?;
         let probabilities = Map::new(sections.probabilities).map_err(fst_error)?;
+        let guesses = Map::new(sections.guesses).map_err(fst_error)?;
         // Поврежденный автомат грузится без ошибок, но паникует при обходе
-        for map in [&words, &probabilities] {
+        for map in [&words, &probabilities, &guesses] {
             map.as_fst().verify().map_err(fst_error)?;
         }
         Ok(Dictionary {
@@ -222,6 +229,8 @@ impl Dictionary {
             table_offsets,
             records: sections.records,
             probability_records: sections.probability_records,
+            guesses,
+            guess_records: sections.guess_records,
         })
     }
 
@@ -254,14 +263,19 @@ impl Dictionary {
     ///
     /// Разборы OpenCorpora, которые совпали в написании, лемме, части речи и признаках UD,
     /// сливаются в один с суммой вероятностей и пометами более вероятного. Токен, которого нет
-    /// в словаре, разбирается по правилам (`Source::Rule`)
+    /// в словаре, разбирается по правилам (`Source::Rule`), а незнакомое слово кириллицей
+    /// угадывается по окончанию (`Source::Guess`)
     pub fn analyze(&self, word: &str) -> Vec<Analysis> {
         let mut analyses = self.merge(self.candidates(word));
-        if analyses.is_empty() {
-            return self.rules(word);
+        if !analyses.is_empty() {
+            self.reweight_numerals(&mut analyses);
+            return analyses;
         }
-        self.reweight_numerals(&mut analyses);
-        analyses
+        let analyses = self.rules(word);
+        if !analyses.is_empty() {
+            return analyses;
+        }
+        self.guess(word)
     }
 
     /// Разборы словаря до слияния с вероятностями P(тег | словоформа); без частот вероятности нулевые
@@ -338,27 +352,32 @@ impl Dictionary {
         merged
     }
 
-    /// Разбор словоформы `word` как формы `form` таблицы `table`, если он есть в словаре;
-    /// вероятность - 1 (для восстановления сохраненного разбора)
-    pub fn analysis(&self, word: &str, table: u16, form: u16) -> Option<Analysis> {
-        let entry = (u32::from(table) << 16) | u32::from(form);
-        if !self
-            .words
-            .get(word)
-            .and_then(|offset| self.records_at(offset))?
-            .contains(&entry)
+    /// Разбор словоформы `word` как формы `entry` таблицы словоизменения с источником `source`;
+    /// вероятность - 1 (для восстановления сохраненного разбора). Словарный разбор должен быть
+    /// в словаре, у угаданного или разобранного по правилу проверяется только, что словоформа
+    /// подходит к форме таблицы
+    pub fn analysis(&self, word: &str, entry: Entry, source: Source) -> Option<Analysis> {
+        let packed = (u32::from(entry.table) << 16) | u32::from(entry.form);
+        if source == Source::Dictionary
+            && !self
+                .words
+                .get(word)
+                .and_then(|offset| self.records_at(offset))?
+                .contains(&packed)
         {
             return None;
         }
-        let lexeme = self.lexeme(table, form, word)?;
+        // Лемма - в нижнем регистре, как у угадывания; словоформа - как сохранена
+        let lower = word.to_lowercase();
+        let lexeme = self.lexeme(entry.table, entry.form, &lower)?;
         Some(Analysis {
             word: word.to_owned(),
-            lemma: self.spell(&lexeme, lexeme.lemma_form(form)),
-            ud: lexeme.ud(form),
-            tag: Some(lexeme.tag(form)),
+            lemma: self.spell(&lexeme, lexeme.lemma_form(entry.form)),
+            ud: lexeme.ud(entry.form),
+            tag: Some(lexeme.tag(entry.form)),
             prob: 1.0,
-            source: Source::Dictionary,
-            entry: Some(Entry { table, form }),
+            source,
+            entry: Some(entry),
         })
     }
 
@@ -367,7 +386,11 @@ impl Dictionary {
     /// Формы, которые совпали в написании, части речи и признаках, сливаются, как в `analyze`
     pub fn forms(&self, analysis: &Analysis) -> Vec<Analysis> {
         if let Some(lower) = self.lowercased(analysis) {
-            return self.forms(&lower);
+            return self
+                .forms(&lower)
+                .into_iter()
+                .map(|form| capitalized_like(&analysis.word, form))
+                .collect();
         }
         if analysis.entry.is_none() {
             return vec![Analysis {
@@ -395,7 +418,9 @@ impl Dictionary {
     /// остальным признакам и пометам, при равенстве - первая в парадигме
     pub fn inflect(&self, analysis: &Analysis, feats: &[(&str, &str)]) -> Option<Analysis> {
         if let Some(lower) = self.lowercased(analysis) {
-            return self.inflect(&lower, feats);
+            return self
+                .inflect(&lower, feats)
+                .map(|form| capitalized_like(&analysis.word, form));
         }
         if analysis.entry.is_none() {
             let tag = self.ud_tags.get(usize::from(analysis.ud))?;
@@ -421,7 +446,9 @@ impl Dictionary {
     /// единственного числа («сутки») берется множественное: «1 сутки», «2 суток»
     pub fn agree(&self, analysis: &Analysis, number: u64) -> Option<Analysis> {
         if let Some(lower) = self.lowercased(analysis) {
-            return self.agree(&lower, number);
+            return self
+                .agree(&lower, number)
+                .map(|form| capitalized_like(&analysis.word, form));
         }
         let tag = self.ud_tags.get(usize::from(analysis.ud))?;
         let feat = |name: &str| {
@@ -647,8 +674,23 @@ impl Dictionary {
 
     /// Разбор формы лексемы разбора `analysis`
     fn form(&self, analysis: &Analysis, lexeme: &Lexeme, form: u16) -> Analysis {
+        let (prefix, suffix) = lexeme.affixes(form);
+        let prefix = self.prefixes[prefix].as_str();
+        let mut stem = lexeme.stem.chars();
+        // У слова с заглавной буквы заглавной становится приставка формы: «Покринжовее»
+        let word = match (prefix.chars().next(), stem.next()) {
+            (Some(head), Some(first)) if first.is_uppercase() => [
+                head.to_uppercase().to_string().as_str(),
+                &prefix[head.len_utf8()..],
+                first.to_lowercase().to_string().as_str(),
+                stem.as_str(),
+                self.suffixes[suffix].as_str(),
+            ]
+            .concat(),
+            _ => self.spell(lexeme, form),
+        };
         Analysis {
-            word: self.spell(lexeme, form),
+            word,
             lemma: analysis.lemma.clone(),
             ud: lexeme.ud(form),
             tag: Some(lexeme.tag(form)),
@@ -823,6 +865,20 @@ fn check_paradigms(sections: &Sections) -> Result<(), Error> {
     Ok(())
 }
 
+/// Форма с заглавной первой буквой, если с нее начинается слово, от которого строились формы
+/// в нижнем регистре («Покринжовее» → «Кринжового»)
+fn capitalized_like(original: &str, form: Analysis) -> Analysis {
+    let upper = original.chars().next().is_some_and(char::is_uppercase);
+    let mut letters = form.word.chars();
+    match letters.next() {
+        Some(first) if upper && first.is_lowercase() => Analysis {
+            word: first.to_uppercase().chain(letters).collect(),
+            ..form
+        },
+        _ => form,
+    }
+}
+
 /// Таблицы словоизменения ссылаются на существующие парадигмы, формы и теги UD; вывод - начала таблиц
 fn check_tables(sections: &Sections, ud_count: usize) -> Result<Vec<u32>, Error> {
     let invalid = |msg: &str| Err(Error::Format(msg.into()));
@@ -898,7 +954,7 @@ fn codes(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Builder, Entry};
+    use crate::{Builder, Entry, GuessIndex};
 
     const TAGS: [&str; 6] = [
         "NOUN,anim,masc sing,nomn",
@@ -1336,9 +1392,242 @@ mod tests {
         }
         let found = dict.inflect(&analyses[0], &[("Voice", "Pass")]).unwrap();
         assert_eq!(found.word, "мешаемый");
-        assert_eq!(dict.analysis("мешаемый", table, 4), Some(found));
-        assert_eq!(dict.analysis("мешаемый", table, 1), None);
-        assert_eq!(dict.analysis("мешал", table, 4), None);
+        let analysis = |word: &str, form: u16, source: Source| {
+            dict.analysis(word, Entry { table, form }, source)
+        };
+        assert_eq!(analysis("мешаемый", 4, Source::Dictionary), Some(found));
+        assert_eq!(analysis("мешаемый", 1, Source::Dictionary), None);
+        assert_eq!(analysis("мешал", 4, Source::Dictionary), None);
+        // Угаданному разбору словоформа в словаре не нужна
+        let guessed = analysis("Зашаемый", 4, Source::Guess).unwrap();
+        assert_eq!(
+            (guessed.lemma.as_str(), guessed.source),
+            ("зашать", Source::Guess)
+        );
+        assert_eq!(analysis("Зашаемый", 4, Source::Dictionary), None);
+    }
+
+    /// Словарь для угадывания: нарицательное «кот» (кот, кота) и фамилия «петров» (петров, петрова)
+    fn guessing() -> Dictionary {
+        let mut builder = Builder::new(
+            vec!["NOUN,nomn".into(), "NOUN,gent".into()],
+            vec![String::new()],
+            vec![String::new(), "а".into()],
+        );
+        let nominative = builder.add_ud_tag("NOUN", "Case=Nom", &[]).unwrap();
+        let genitive = builder.add_ud_tag("NOUN", "Case=Gen", &[]).unwrap();
+        let surname = builder
+            .add_ud_tag("PROPN", "Case=Gen|NameType=Sur", &[])
+            .unwrap();
+        let surname_nominative = builder
+            .add_ud_tag("PROPN", "Case=Nom|NameType=Sur", &[])
+            .unwrap();
+        let paradigm = builder.add_paradigm(&[(0, 0, 0), (1, 1, 0)]).unwrap();
+        let common = builder
+            .add_table(paradigm, &[(0, nominative), (0, genitive)])
+            .unwrap();
+        let proper = builder
+            .add_table(paradigm, &[(0, surname_nominative), (0, surname)])
+            .unwrap();
+        builder.add_word("кот", &[entry(common, 0)]).unwrap();
+        builder.add_word("кота", &[entry(common, 1)]).unwrap();
+        builder.add_word("петров", &[entry(proper, 0)]).unwrap();
+        builder.add_word("петрова", &[entry(proper, 1)]).unwrap();
+        builder
+            .add_guesses(GuessIndex::Common, "а", &[(entry(common, 1), 5)])
+            .unwrap();
+        builder
+            .add_guesses(GuessIndex::Common, "ова", &[(entry(common, 1), 1)])
+            .unwrap();
+        builder
+            .add_guesses(GuessIndex::Proper, "ова", &[(entry(proper, 1), 3)])
+            .unwrap();
+        Dictionary::from_bytes(&builder.build().unwrap()).unwrap()
+    }
+
+    #[test]
+    fn guess_by_longest_ending() {
+        let dict = guessing();
+        let analyses = dict.analyze("зумова");
+        let summary: Vec<(&str, &str, Source)> = analyses
+            .iter()
+            .map(|a| (a.word.as_str(), a.lemma.as_str(), a.source))
+            .collect();
+        assert_eq!(summary, [("зумова", "зумов", Source::Guess)]);
+        assert_eq!(dict.ud_tags()[usize::from(analyses[0].ud)].pos, "NOUN");
+        assert_eq!(dict.analyze("зума")[0].lemma, "зум");
+        assert!(dict.analyze("зумы").is_empty());
+        assert!(dict.analyze("зумова1").is_empty());
+    }
+
+    #[test]
+    fn capitalized_guess_prefers_proper_nouns() {
+        let dict = guessing();
+        let analyses = dict.analyze("Зумова");
+        let summary: Vec<(&str, &str, &str)> = analyses
+            .iter()
+            .map(|a| {
+                let tag = &dict.ud_tags()[usize::from(a.ud)];
+                (a.word.as_str(), a.lemma.as_str(), tag.pos.as_str())
+            })
+            .collect();
+        assert_eq!(
+            summary,
+            [("Зумова", "зумов", "PROPN"), ("Зумова", "зумов", "NOUN")]
+        );
+        assert!((analyses[0].prob - 0.89).abs() < 1e-12);
+        // Формы угаданного слова сохраняют заглавную букву
+        let forms: Vec<String> = dict
+            .forms(&analyses[0])
+            .into_iter()
+            .map(|form| form.word)
+            .collect();
+        assert_eq!(forms, ["Зумов", "Зумова"]);
+        assert!(dict.analyze("ЗуМова").is_empty());
+    }
+
+    #[test]
+    fn guess_with_yo_in_suffix() {
+        // «котёнок» - суффикс с «ё», «баранка» - с «е»; окончание через «е» находит обе, но первой
+        // идет «баранка», окончание с «ё» - только «котёнок»
+        let mut builder = Builder::new(
+            vec!["NOUN,nomn".into(), "NOUN,gent".into()],
+            vec![String::new()],
+            vec!["ёнок".into(), "ёнка".into(), "енка".into()],
+        );
+        let nominative = builder.add_ud_tag("NOUN", "Case=Nom", &[]).unwrap();
+        let genitive = builder.add_ud_tag("NOUN", "Case=Gen", &[]).unwrap();
+        let young = builder.add_paradigm(&[(0, 0, 0), (1, 1, 0)]).unwrap();
+        let young = builder
+            .add_table(young, &[(0, nominative), (0, genitive)])
+            .unwrap();
+        let plain = builder.add_paradigm(&[(2, 0, 0)]).unwrap();
+        let plain = builder.add_table(plain, &[(0, nominative)]).unwrap();
+        builder.add_word("котёнок", &[entry(young, 0)]).unwrap();
+        builder.add_word("котёнка", &[entry(young, 1)]).unwrap();
+        builder.add_word("баренка", &[entry(plain, 0)]).unwrap();
+        builder
+            .add_guesses(
+                GuessIndex::Common,
+                "енка",
+                &[(entry(plain, 0), 5), (entry(young, 1), 3)],
+            )
+            .unwrap();
+        builder
+            .add_guesses(GuessIndex::Common, "ёнка", &[(entry(young, 1), 3)])
+            .unwrap();
+        builder
+            .add_guesses(GuessIndex::Common, "нка", &[(entry(young, 1), 3)])
+            .unwrap();
+        let dict = Dictionary::from_bytes(&builder.build().unwrap()).unwrap();
+        let summary = |word: &str| -> Vec<(String, String)> {
+            dict.analyze(word)
+                .into_iter()
+                .map(|a| (a.word, a.lemma))
+                .collect()
+        };
+        assert_eq!(
+            summary("слонёнка"),
+            [("слонёнка".to_string(), "слонёнок".to_string())]
+        );
+        let written_with_e = summary("слоненка");
+        assert_eq!(
+            written_with_e[1],
+            ("слонёнка".to_string(), "слонёнок".to_string())
+        );
+        let forms: Vec<String> = dict
+            .forms(&dict.analyze("слонёнка")[0])
+            .into_iter()
+            .map(|form| form.word)
+            .collect();
+        assert_eq!(forms, ["слонёнок", "слонёнка"]);
+        // Суффикс на все слово: регистр букв сохраняется, меняется только «е» на месте «ё»
+        let whole = dict.analyze("Енка");
+        assert_eq!(
+            (whole[0].word.as_str(), whole[0].lemma.as_str()),
+            ("Ёнка", "ёнок")
+        );
+        let forms: Vec<String> = dict
+            .forms(&whole[0])
+            .into_iter()
+            .map(|form| form.word)
+            .collect();
+        assert_eq!(forms, ["Ёнок", "Ёнка"]);
+    }
+
+    #[test]
+    fn capitalized_guess_with_prefixed_form() {
+        // Сравнительная степень с приставкой «по»: «Покринжовее», а не «поКринжовее»
+        let mut builder = Builder::new(
+            vec!["ADJF".into(), "COMP".into()],
+            vec![String::new(), "по".into()],
+            vec!["ый".into(), "ее".into()],
+        );
+        let positive = builder.add_ud_tag("ADJ", "Degree=Pos", &[]).unwrap();
+        let comparative = builder.add_ud_tag("ADJ", "Degree=Cmp", &[]).unwrap();
+        let paradigm = builder.add_paradigm(&[(0, 0, 0), (1, 1, 1)]).unwrap();
+        let table = builder
+            .add_table(paradigm, &[(0, positive), (0, comparative)])
+            .unwrap();
+        builder.add_word("новый", &[entry(table, 0)]).unwrap();
+        builder.add_word("поновее", &[entry(table, 1)]).unwrap();
+        builder
+            .add_guesses(GuessIndex::Common, "ый", &[(entry(table, 0), 3)])
+            .unwrap();
+        let dict = Dictionary::from_bytes(&builder.build().unwrap()).unwrap();
+        let analysis = &dict.analyze("Кринжовый")[0];
+        let forms: Vec<String> = dict
+            .forms(analysis)
+            .into_iter()
+            .map(|form| form.word)
+            .collect();
+        assert_eq!(forms, ["Кринжовый", "Покринжовее"]);
+        let comparative = dict.inflect(analysis, &[("Degree", "Cmp")]).unwrap();
+        assert_eq!(comparative.word, "Покринжовее");
+        let entry = comparative.entry.unwrap();
+        let restored = dict.analysis("Покринжовее", entry, Source::Guess).unwrap();
+        assert_eq!(restored.lemma, "кринжовый");
+        // Формы формы с приставкой: заглавная первая буква сохраняется
+        let forms: Vec<String> = dict
+            .forms(&restored)
+            .into_iter()
+            .map(|form| form.word)
+            .collect();
+        assert_eq!(forms, ["Кринжовый", "Покринжовее"]);
+        let positive = dict.inflect(&restored, &[("Degree", "Pos")]).unwrap();
+        assert_eq!(positive.word, "Кринжовый");
+    }
+
+    #[test]
+    fn broken_guess_records_give_no_guesses() {
+        let data = guessing_bytes();
+        assert_eq!(
+            Dictionary::from_bytes(&data).unwrap().analyze("зума")[0].lemma,
+            "зума"
+        );
+        // Нулевое число словоформ в поврежденном файле не дает вероятности NaN
+        for records in [vec![9, 0], vec![1, 0x0007_0000, 2], vec![1, 0, 0], vec![]] {
+            let mut sections = format::read(&data).unwrap();
+            sections.guess_records = records;
+            let dict = Dictionary::from_bytes(&format::write(&sections)).unwrap();
+            assert!(dict.analyze("зума").is_empty());
+        }
+    }
+
+    /// Словарь с одним окончанием для угадывания
+    fn guessing_bytes() -> Vec<u8> {
+        let mut builder = Builder::new(
+            vec!["NOUN".into()],
+            vec![String::new()],
+            vec![String::new(), "а".into()],
+        );
+        builder.add_ud_tag("NOUN", "", &[]).unwrap();
+        let table = lexeme_table(&mut builder, &[(1, 0, 0)]);
+        builder.add_word("кота", &[entry(table, 0)]).unwrap();
+        builder
+            .add_guesses(GuessIndex::Common, "а", &[(entry(table, 0), 2)])
+            .unwrap();
+        builder.build().unwrap()
     }
 
     #[test]
@@ -1543,6 +1832,8 @@ mod tests {
             records: vec![],
             probabilities: fst::MapBuilder::memory().into_inner().unwrap(),
             probability_records: vec![],
+            guesses: fst::MapBuilder::memory().into_inner().unwrap(),
+            guess_records: vec![],
         }
     }
 

@@ -87,7 +87,7 @@ def test_uniform_without_frequencies(morph):
     assert probs == [1 / len(probs)] * len(probs)
 
 
-@pytest.mark.parametrize("word", ["вайб", "", "ежж", "Вайбы"])
+@pytest.mark.parametrize("word", ["", "ежж1", "ВаЙб", "∂x"])
 def test_unknown_word(morph, word):
     assert morph.analyze(word) == []
     assert not morph.is_known(word)
@@ -106,8 +106,8 @@ def test_analyze_many(morph):
 
 
 def test_lemmatize(morph):
-    words = ["Мы", "стали", "друзьями", "в", "ВАЙБЕ"]
-    assert morph.lemmatize(words) == ["мы", "стать", "друг", "в", "вайбе"]
+    words = ["Мы", "стали", "друзьями", "в", "ВАЙБЕ", "ковиде"]
+    assert morph.lemmatize(words) == ["мы", "стать", "друг", "в", "вайбе", "ковид"]
     assert morph.lemmatize(iter(words)) == morph.lemmatize(words)
 
 
@@ -233,6 +233,6 @@ def test_pickle(morph):
     # Таблица и форма из другого словаря: разбор находится по написанию, лемме и тегу
     assert rumorph._rumorph._analysis(morph, (*state[:7], (0, 0))) == hedgehog
     with pytest.raises(ValueError, match="Неизвестный источник"):
-        rumorph._rumorph._analysis(morph, (*state[:6], "guess", *state[7:]))
+        rumorph._rumorph._analysis(morph, (*state[:6], "corpus", *state[7:]))
     with pytest.raises(ValueError, match="В словаре нет разбора"):
         rumorph._rumorph._analysis(morph, (*state[:3], "Case", *state[4:]))

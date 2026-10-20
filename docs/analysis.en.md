@@ -24,13 +24,13 @@ The dictionary loads in a few milliseconds when the analyzer is created. One ana
 
 | Field | Meaning |
 |---|---|
-| `word` | the word form as spelled in the dictionary: with the letter «ё» if the dictionary has it; for rule analyses - as in the text |
+| `word` | the word form as spelled in the dictionary: with the letter «ё» if the dictionary has it; for rule and guessed analyses - as in the text, but a guessed one takes «ё» from the ending of the dictionary form («пингвиненка» → «пингвинёнка») |
 | `lemma` | the normal form |
 | `pos` | the UD part of speech: `NOUN`, `VERB`, `ADJ`, `DET`, `ADP` and so on |
 | `feats` | the UD features as a dict `{"Case": "Gen", "Number": "Sing"}`; a new one each time, changing it does not change the analysis |
 | `labels` | dictionary labels without a UD feature, as a `frozenset`: `{"Infr"}` (informal) |
 | `prob` | the probability of the analysis; it sums to 1 over all analyses of the word form |
-| `source` | where the analysis comes from: `"dictionary"` - the word form is in the dictionary, `"rule"` - the token is not in the dictionary and is analyzed by a rule (see [below](#rules)) |
+| `source` | where the analysis comes from: `"dictionary"` - the word form is in the dictionary, `"rule"` - the token is not in the dictionary and is analyzed by a rule (see [below](#rules)), `"guess"` - the analysis of an unknown word is guessed (see [below](#guess)) |
 
 Case does not matter, and the letter «е» may stand for «ё»: `analyze("ЕЖ")` returns the analyses of the word form «ёж».
 
@@ -72,7 +72,21 @@ Numbers, punctuation, Latin words and abbreviations are analyzed by rules, their
 | abbreviations with a dot: «т.», «им.» | the analyses of the dictionary abbreviation without the dot |
 | capitalized abbreviations: «НКО» | `PROPN` or `NOUN` with `Abbr=Yes` |
 
-The shares of ambiguous analyses come from the frequencies in SynTagRus. A token with whitespace (except a number), a control or an invisible character gets no analyses. Unknown Cyrillic words are not analyzed yet: their list of analyses is empty.
+The shares of ambiguous analyses come from the frequencies in SynTagRus. A token with whitespace (except a number), a control or an invisible character gets no analyses.
+
+## Unknown words { #guess }
+
+The analyses of a Cyrillic word that is not in the dictionary are guessed by its ending: the analyzer takes the forms of dictionary words with the same ending - their part of speech, features and inflection. Their `source` is `"guess"`:
+
+``` python
+>>> [(a.lemma, a.pos, a.feats["Case"], round(a.prob, 2)) for a in morph.analyze("чатботу")][:2]
+[('чатбот', 'NOUN', 'Dat', 0.44), ('чатбота', 'NOUN', 'Acc', 0.4)]
+>>> guess = morph.analyze("Мартова")[0]
+>>> guess.lemma, guess.pos, guess.feats["NameType"], guess.inflect(Case="Dat")
+('мартов', 'PROPN', 'Sur', 'Мартову')
+```
+
+A lowercase word is guessed as a common word, a capitalized word mostly as a proper noun: a surname, a given name, a place. A guessed analysis has forms, and `forms`, `inflect` and `agree` work with it; the forms keep the capital letter. Hyphenated words and words in mixed case («ЗуМер») are not guessed yet.
 
 ## Lists of words { #lists }
 

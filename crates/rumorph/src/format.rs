@@ -3,7 +3,7 @@
 use crate::Error;
 
 const MAGIC: &[u8; 8] = b"RUMORPH\0";
-const VERSION: u32 = 3;
+const VERSION: u32 = 4;
 
 /// Содержимое словаря в том виде, в каком оно лежит в файле
 pub(crate) struct Sections {
@@ -29,6 +29,10 @@ pub(crate) struct Sections {
     pub probabilities: Vec<u8>,
     /// Списки частот: длина, затем пары «тег, P(тег | словоформа) в миллионных долях»
     pub probability_records: Vec<u32>,
+    /// Автомат «индекс и окончание - начало списка в `guess_records`» для угадывания
+    pub guesses: Vec<u8>,
+    /// Списки форм для угадывания: длина, затем пары `(таблица << 16) | форма`, число словоформ
+    pub guess_records: Vec<u32>,
 }
 
 pub(crate) fn write(sections: &Sections) -> Vec<u8> {
@@ -50,6 +54,8 @@ pub(crate) fn write(sections: &Sections) -> Vec<u8> {
     section(&u32_bytes(&sections.records));
     section(&sections.probabilities);
     section(&u32_bytes(&sections.probability_records));
+    section(&sections.guesses);
+    section(&u32_bytes(&sections.guess_records));
     out
 }
 
@@ -80,6 +86,8 @@ pub(crate) fn read(data: &[u8]) -> Result<Sections, Error> {
         records: u32_vec(reader.section()?)?,
         probabilities: reader.section()?.to_vec(),
         probability_records: u32_vec(reader.section()?)?,
+        guesses: reader.section()?.to_vec(),
+        guess_records: u32_vec(reader.section()?)?,
     };
     if reader.pos != data.len() {
         return Err(Error::Format("лишние данные после последней секции".into()));
@@ -199,6 +207,8 @@ mod tests {
             records: vec![1, 0],
             probabilities: vec![],
             probability_records: vec![],
+            guesses: vec![],
+            guess_records: vec![],
         }
     }
 
@@ -223,9 +233,9 @@ mod tests {
     #[test]
     fn rejects_other_version() {
         let mut data = write(&sample());
-        data[MAGIC.len()..MAGIC.len() + 4].copy_from_slice(&2u32.to_le_bytes());
+        data[MAGIC.len()..MAGIC.len() + 4].copy_from_slice(&3u32.to_le_bytes());
         let err = read(&data).err().unwrap();
-        assert!(err.to_string().contains("версия формата 2"));
+        assert!(err.to_string().contains("версия формата 3"));
     }
 
     #[test]
