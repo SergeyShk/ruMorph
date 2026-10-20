@@ -1,5 +1,7 @@
 //! Бинарный формат словаря: сигнатура, версия формата и секции «длина u64 + данные», числа little-endian
 
+use std::io::{ErrorKind, Read};
+
 use crate::Error;
 
 const MAGIC: &[u8; 8] = b"RUMORPH\0";
@@ -59,40 +61,98 @@ pub(crate) fn write(sections: &Sections) -> Vec<u8> {
     out
 }
 
+/// Словарь из байтов в памяти
 pub(crate) fn read(data: &[u8]) -> Result<Sections, Error> {
-    if data.get(..MAGIC.len()) != Some(MAGIC.as_slice()) {
+    read_from(data, data.len() as u64)
+}
+
+/// Словарь из потока длиной `size` байт: секции читаются по одной, без копии всего файла
+/// в памяти; длина секции больше остатка потока - ошибка формата, а не огромная аллокация
+pub(crate) fn read_from(input: impl Read, size: u64) -> Result<Sections, Error> {
+    let mut stream = Stream { input, left: size };
+    let signature = match stream.take(MAGIC.len() as u64) {
+        Err(Error::Io(err)) => return Err(Error::Io(err)),
+        signature => signature.ok(),
+    };
+    if signature.as_deref() != Some(MAGIC.as_slice()) {
         return Err(Error::Format("нет сигнатуры словаря ruMorph".into()));
     }
-    let mut reader = Reader {
-        data,
-        pos: MAGIC.len(),
-    };
-    let version = u32::from_le_bytes(reader.take(4)?.try_into().unwrap());
+    let version = u32::from_le_bytes(stream.take(4)?.try_into().unwrap());
     if version != VERSION {
         return Err(Error::Format(format!(
             "версия формата {version}, поддерживается {VERSION}"
         )));
     }
     let sections = Sections {
-        meta: utf8(reader.section()?)?,
-        tags: strings(reader.section()?)?,
-        ud_tags: strings(reader.section()?)?,
-        prefixes: strings(reader.section()?)?,
-        suffixes: strings(reader.section()?)?,
-        paradigm_offsets: u32_vec(reader.section()?)?,
-        paradigms: u16_vec(reader.section()?)?,
-        tables: u32_vec(reader.section()?)?,
-        words: reader.section()?.to_vec(),
-        records: u32_vec(reader.section()?)?,
-        probabilities: reader.section()?.to_vec(),
-        probability_records: u32_vec(reader.section()?)?,
-        guesses: reader.section()?.to_vec(),
-        guess_records: u32_vec(reader.section()?)?,
+        meta: utf8(&stream.section()?)?,
+        tags: strings(&stream.section()?)?,
+        ud_tags: strings(&stream.section()?)?,
+        prefixes: strings(&stream.section()?)?,
+        suffixes: strings(&stream.section()?)?,
+        paradigm_offsets: stream.numbers::<4, _>(u32::from_le_bytes)?,
+        paradigms: stream.numbers::<2, _>(u16::from_le_bytes)?,
+        tables: stream.numbers::<4, _>(u32::from_le_bytes)?,
+        words: stream.section()?,
+        records: stream.numbers::<4, _>(u32::from_le_bytes)?,
+        probabilities: stream.section()?,
+        probability_records: stream.numbers::<4, _>(u32::from_le_bytes)?,
+        guesses: stream.section()?,
+        guess_records: stream.numbers::<4, _>(u32::from_le_bytes)?,
     };
-    if reader.pos != data.len() {
+    if stream.left != 0 {
         return Err(Error::Format("лишние данные после последней секции".into()));
     }
     Ok(sections)
+}
+
+/// Поток с известным остатком длины
+struct Stream<R> {
+    input: R,
+    left: u64,
+}
+
+impl<R: Read> Stream<R> {
+    fn take(&mut self, len: u64) -> Result<Vec<u8>, Error> {
+        let truncated = || Error::Format("файл обрезан".into());
+        if len > self.left {
+            return Err(truncated());
+        }
+        let mut bytes = vec![0; usize::try_from(len).map_err(|_| truncated())?];
+        self.input
+            .read_exact(&mut bytes)
+            .map_err(|err| match err.kind() {
+                ErrorKind::UnexpectedEof => truncated(),
+                _ => Error::Io(err),
+            })?;
+        self.left -= len;
+        Ok(bytes)
+    }
+
+    fn section(&mut self) -> Result<Vec<u8>, Error> {
+        let len = u64::from_le_bytes(self.take(8)?.try_into().unwrap());
+        self.take(len)
+    }
+
+    /// Секция чисел по `N` байт: читается кусками сразу в массив, без байтовой копии секции
+    fn numbers<const N: usize, T>(&mut self, decode: fn([u8; N]) -> T) -> Result<Vec<T>, Error> {
+        const CHUNK: usize = 1 << 16;
+        let len = u64::from_le_bytes(self.take(8)?.try_into().unwrap());
+        if len % N as u64 != 0 {
+            return Err(Error::Format(format!("длина секции не кратна {N}")));
+        }
+        if len > self.left {
+            return Err(Error::Format("файл обрезан".into()));
+        }
+        let mut values = Vec::with_capacity(len as usize / N);
+        let mut left = len;
+        while left > 0 {
+            let chunk = self.take(left.min(CHUNK as u64))?;
+            let (items, _) = chunk.as_chunks::<N>();
+            values.extend(items.iter().map(|&item| decode(item)));
+            left -= chunk.len() as u64;
+        }
+        Ok(values)
+    }
 }
 
 struct Reader<'a> {
@@ -110,12 +170,6 @@ impl<'a> Reader<'a> {
         let bytes = &self.data[self.pos..end];
         self.pos = end;
         Ok(bytes)
-    }
-
-    fn section(&mut self) -> Result<&'a [u8], Error> {
-        let len = u64::from_le_bytes(self.take(8)?.try_into().unwrap());
-        let len = usize::try_from(len).map_err(|_| Error::Format("файл обрезан".into()))?;
-        self.take(len)
     }
 }
 
@@ -167,28 +221,6 @@ fn u32_bytes(values: &[u32]) -> Vec<u8> {
         .collect()
 }
 
-fn u16_vec(bytes: &[u8]) -> Result<Vec<u16>, Error> {
-    let (chunks, rest) = bytes.as_chunks::<2>();
-    if !rest.is_empty() {
-        return Err(Error::Format("длина секции не кратна 2".into()));
-    }
-    Ok(chunks
-        .iter()
-        .map(|chunk| u16::from_le_bytes(*chunk))
-        .collect())
-}
-
-fn u32_vec(bytes: &[u8]) -> Result<Vec<u32>, Error> {
-    let (chunks, rest) = bytes.as_chunks::<4>();
-    if !rest.is_empty() {
-        return Err(Error::Format("длина секции не кратна 4".into()));
-    }
-    Ok(chunks
-        .iter()
-        .map(|chunk| u32::from_le_bytes(*chunk))
-        .collect())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -222,6 +254,47 @@ mod tests {
         assert_eq!(read_back.tables, sample().tables);
         assert_eq!(read_back.words, sample().words);
         assert_eq!(read_back.records, sample().records);
+    }
+
+    #[test]
+    fn reads_stream_by_sections() {
+        let data = write(&sample());
+        let read_back = read_from(data.as_slice(), data.len() as u64).unwrap();
+        assert_eq!(read_back.records, sample().records);
+        // Длина секции больше остатка - ошибка формата, а не аллокация на эту длину
+        let mut huge = data[..MAGIC.len() + 4].to_vec();
+        huge.extend_from_slice(&u64::MAX.to_le_bytes());
+        let err = read_from(huge.as_slice(), huge.len() as u64).err().unwrap();
+        assert!(err.to_string().contains("файл обрезан"));
+    }
+
+    #[test]
+    fn rejects_numbers_of_wrong_length() {
+        let mut sections = sample();
+        sections.paradigms = vec![0, 0, 0];
+        let mut data = write(&sections);
+        // Секция парадигм идет седьмой: укорачиваем ее длину на байт и убираем этот байт
+        let mut at = MAGIC.len() + 4;
+        for _ in 0..6 {
+            let len = u64::from_le_bytes(data[at..at + 8].try_into().unwrap()) as usize;
+            at += 8 + len;
+        }
+        let len = u64::from_le_bytes(data[at..at + 8].try_into().unwrap());
+        data[at..at + 8].copy_from_slice(&(len - 1).to_le_bytes());
+        data.remove(at + 8);
+        let err = read(&data).err().unwrap();
+        assert!(err.to_string().contains("не кратна 2"));
+    }
+
+    #[test]
+    fn passes_io_errors() {
+        struct Broken;
+        impl Read for Broken {
+            fn read(&mut self, _: &mut [u8]) -> std::io::Result<usize> {
+                Err(std::io::Error::other("диск"))
+            }
+        }
+        assert!(matches!(read_from(Broken, 100), Err(Error::Io(_))));
     }
 
     #[test]

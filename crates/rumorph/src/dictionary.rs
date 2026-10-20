@@ -172,12 +172,17 @@ pub struct Dictionary {
 impl Dictionary {
     /// Читает словарь из файла
     pub fn open(path: impl AsRef<Path>) -> Result<Self, Error> {
-        Self::from_bytes(&std::fs::read(path)?)
+        let file = std::fs::File::open(path)?;
+        let size = file.metadata()?.len();
+        Self::from_sections(format::read_from(std::io::BufReader::new(file), size)?)
     }
 
     /// Читает словарь из байтов файла словаря
     pub fn from_bytes(data: &[u8]) -> Result<Self, Error> {
-        let sections = format::read(data)?;
+        Self::from_sections(format::read(data)?)
+    }
+
+    fn from_sections(sections: Sections) -> Result<Self, Error> {
         check_paradigms(&sections)?;
         let mut ud_tags = sections
             .ud_tags
@@ -1820,6 +1825,19 @@ mod tests {
         assert!(dict.analyze("ежаа").is_empty());
         assert!(!dict.is_known("вайб"));
         assert!(dict.is_known("Еж"));
+    }
+
+    #[test]
+    fn open_reads_file() {
+        let path = std::env::temp_dir().join(format!("rumorph-{}.dict", std::process::id()));
+        std::fs::write(&path, dictionary_bytes()).unwrap();
+        let dict = Dictionary::open(&path).unwrap();
+        std::fs::remove_file(&path).unwrap();
+        assert_eq!(dict.word_count(), dictionary().word_count());
+        assert_eq!(
+            summary(&dict.analyze("ежа")),
+            summary(&dictionary().analyze("ежа"))
+        );
     }
 
     #[test]
