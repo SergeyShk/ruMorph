@@ -123,6 +123,11 @@ def test_roman_numerals(morph):
     assert [morph.analyze(letter)[0].pos for letter in "CLXV"] == ["X", "X", "X", "ADJ"]
     # Не римское число - латиница
     assert summary(morph, "IIII") == [("IIII", "iiii", "X", {"Foreign": "Yes"})]
+    # Строчные с «c» и «l» - латинские слова
+    assert [morph.analyze(word)[0].pos for word in ("ci", "cl", "xix")] == ["X", "X", "ADJ"]
+    # Латинская буква со словом через дефис - не римское порядковое
+    assert all(a.feats.get("NumForm") != "Roman" for a in morph.analyze("X-хромосома"))
+    assert morph.analyze("XIX-го")[0].feats["NumForm"] == "Roman"
 
 
 @pytest.mark.parametrize("word", ["iPhone", "and", "TW600", "e-mail", "O'Neil"])

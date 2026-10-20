@@ -73,7 +73,7 @@ const PREFIXES: &[&str] = &[
 ];
 
 /// Части речи последней части слова через дефис: служебные слова и буквы - не части сложного слова
-const HYPHENATED_CLASSES: &[&str] = &["NOUN", "PROPN", "ADJ", "VERB", "ADV", "NUM", "X"];
+const HYPHENATED_CLASSES: &[&str] = &["NOUN", "PROPN", "ADJ", "VERB", "ADV", "NUM", "INTJ", "X"];
 
 /// Части речи, которые образуются с приставками
 const OPEN_CLASSES: &[&str] = &["NOUN", "ADJ", "VERB", "ADV"];
@@ -144,13 +144,27 @@ impl Dictionary {
         {
             end = shorter.len();
         }
-        // Заикание («Н-нет», «Д-да») - разбор последней части
-        let stutter = left_lower.chars().count() == 1 && right_lower.starts_with(left_lower);
+        // Заикание («Н-нет», «Д-д-да») - разбор последней части
+        let mut letters = left_lower.split('-');
+        let stutter = letters.next().is_some_and(|first| {
+            first.chars().count() == 1
+                && letters.all(|letter| letter == first)
+                && right_lower.starts_with(first)
+        });
         if stretched || stutter {
             let part = if stretched { &left[..end] } else { right };
-            let analyses = self
-                .analyze(part)
+            // Часть с дефисом - только из словаря: иначе протяжка и частица («да-то-о-то-о»)
+            // вызывают друг друга без конца
+            let found = if part.contains('-') {
+                self.merge(self.candidates(part))
+            } else {
+                self.analyze(part)
+            };
+            // Протянутая буква - междометие («А-а»), а не союз или сокращение («Ш-ш»)
+            let letter = stretched && part.chars().count() == 1;
+            let analyses = found
                 .into_iter()
+                .filter(|analysis| !letter || self.ud_tags[usize::from(analysis.ud)].pos == "INTJ")
                 .map(|analysis| Analysis {
                     word: word.to_owned(),
                     source: Source::Guess,
@@ -177,6 +191,7 @@ impl Dictionary {
                 if let Some(first) = left_analyses
                     .iter()
                     .find(|first| self.inflected_together(first, &analysis))
+                    .filter(|first| !self.rarer_than_lemma(first, &left_analyses))
                 {
                     return Some(Analysis {
                         word: word.to_owned(),
@@ -232,6 +247,16 @@ impl Dictionary {
             && names
                 .iter()
                 .all(|name| feat(first_tag, name) == feat(last_tag, name))
+    }
+
+    /// У первой части есть более вероятное нарицательное существительное в начальной форме:
+    /// «поп» в «поп-песен» - «поп», а не «попа» в родительном множественного
+    fn rarer_than_lemma(&self, first: &Analysis, left_analyses: &[Analysis]) -> bool {
+        let noun = |analysis: &Analysis| self.ud_tags[usize::from(analysis.ud)].pos == "NOUN";
+        noun(first)
+            && left_analyses
+                .iter()
+                .any(|other| noun(other) && other.lemma == other.word && other.prob > first.prob)
     }
 
     /// Угаданный разбор слова с частицей через дефис («смотри-ка») без частицы и частица
