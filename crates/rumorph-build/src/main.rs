@@ -55,8 +55,10 @@ fn build(export: &Path, output: &Path) -> Result<(), Box<dyn Error>> {
         builder.add_paradigm(&forms)?;
     }
 
-    // Тег UD и признак «местоимение без PronType» по тегу OpenCorpora и классу леммы
+    // Тег UD и признак «местоимение без PronType» по тегу OpenCorpora и классу леммы;
+    // таблица словоизменения - по парадигме и основе лексемы
     let mut ud_numbers: HashMap<(u16, String), (u16, bool)> = HashMap::new();
+    let mut tables: HashMap<(u16, String), u16> = HashMap::new();
     let mut untyped_pronouns = BTreeSet::new();
     for (number, line) in read("words.tsv")?.lines().enumerate() {
         let invalid = || format!("words.tsv:{}: неверная строка {line:?}", number + 1);
@@ -78,66 +80,72 @@ fn build(export: &Path, output: &Path) -> Result<(), Box<dyn Error>> {
                     suffixes[layout[form] as usize].as_str(),
                 )
             };
+            let spell = |stem: &str, form: usize| {
+                let (prefix, suffix) = affixes(form);
+                [prefix, stem, suffix].concat()
+            };
             let tag_of = |form: usize| tags[layout[count + form] as usize].as_str();
             let (prefix, suffix) = affixes(form.into());
             let stem = word
                 .strip_prefix(prefix)
                 .and_then(|rest| rest.strip_suffix(suffix))
                 .ok_or_else(invalid)?;
-            let (prefix, suffix) = affixes(0);
-            let lemma = [prefix, stem, suffix].concat();
-            let tag = tag_of(form.into());
-            let lemma_form = match ud::lemma_form(tag, &lemma, word) {
-                Some(ud::LemmaForm::Own) => usize::from(form),
-                Some(ud::LemmaForm::With(target)) => (0..count)
-                    .filter(|&candidate| {
-                        let grammemes: Vec<&str> = tag_of(candidate).split([',', ' ']).collect();
-                        target.iter().all(|grammeme| grammemes.contains(grammeme))
-                    })
-                    .max_by_key(|&candidate| {
-                        let (prefix, suffix) = affixes(candidate);
-                        let spelling = [prefix, stem, suffix].concat();
-                        let common = spelling
-                            .chars()
-                            .zip(word.chars())
-                            .take_while(|(a, b)| a == b)
-                            .count();
-                        (common, std::cmp::Reverse(candidate))
-                    })
-                    .unwrap_or(0),
-                None => 0,
-            };
-            // Перевод зависит от леммы UD: у «лучшей» это «лучший», а не «хороший» формы 0
-            let (prefix, suffix) = affixes(lemma_form);
-            let ud_lemma = [prefix, stem, suffix].concat();
-            let class = ud::lemma_class(&ud_lemma).to_owned();
-            let key = (layout[count + usize::from(form)], class);
-            let (ud, untyped) = match ud_numbers.get(&key) {
-                Some(&value) => value,
-                None => {
-                    let converted = ud::convert(tag, &key.1);
-                    let labels: Vec<&str> = converted.labels.iter().map(String::as_str).collect();
-                    let ud = builder.add_ud_tag(
-                        converted.pos,
-                        &ud::feats_string(&converted.feats),
-                        &labels,
-                    )?;
-                    let untyped = matches!(converted.pos, "PRON" | "DET")
-                        && !converted.feats.contains_key("PronType");
-                    ud_numbers.insert(key, (ud, untyped));
-                    (ud, untyped)
-                }
-            };
-            if untyped {
-                untyped_pronouns.insert(format!("{ud_lemma} ({tag})"));
+            if let Some(&table) = tables.get(&(paradigm, stem.to_owned())) {
+                entries.push(Entry { table, form });
+                continue;
             }
-            let lemma_form = lemma_form as u16;
-            entries.push(Entry {
-                paradigm,
-                form,
-                lemma_form,
-                ud,
-            });
+            let lemma = spell(stem, 0);
+            let mut cells = Vec::with_capacity(count);
+            for form in 0..count {
+                let (word, tag) = (spell(stem, form), tag_of(form));
+                let lemma_form = match ud::lemma_form(tag, &lemma, &word) {
+                    Some(ud::LemmaForm::Own) => form,
+                    Some(ud::LemmaForm::With(target)) => (0..count)
+                        .filter(|&candidate| {
+                            let grammemes: Vec<&str> =
+                                tag_of(candidate).split([',', ' ']).collect();
+                            target.iter().all(|grammeme| grammemes.contains(grammeme))
+                        })
+                        .max_by_key(|&candidate| {
+                            let common = spell(stem, candidate)
+                                .chars()
+                                .zip(word.chars())
+                                .take_while(|(a, b)| a == b)
+                                .count();
+                            (common, std::cmp::Reverse(candidate))
+                        })
+                        .unwrap_or(0),
+                    None => 0,
+                };
+                // Перевод зависит от леммы UD: у «лучшей» это «лучший», а не «хороший» формы 0
+                let ud_lemma = spell(stem, lemma_form);
+                let class = ud::lemma_class(&ud_lemma).to_owned();
+                let key = (layout[count + form], class);
+                let (ud, untyped) = match ud_numbers.get(&key) {
+                    Some(&value) => value,
+                    None => {
+                        let converted = ud::convert(tag, &key.1);
+                        let labels: Vec<&str> =
+                            converted.labels.iter().map(String::as_str).collect();
+                        let ud = builder.add_ud_tag(
+                            converted.pos,
+                            &ud::feats_string(&converted.feats),
+                            &labels,
+                        )?;
+                        let untyped = matches!(converted.pos, "PRON" | "DET")
+                            && !converted.feats.contains_key("PronType");
+                        ud_numbers.insert(key, (ud, untyped));
+                        (ud, untyped)
+                    }
+                };
+                if untyped {
+                    untyped_pronouns.insert(format!("{ud_lemma} ({tag})"));
+                }
+                cells.push((lemma_form as u16, ud));
+            }
+            let table = builder.add_table(paradigm, &cells)?;
+            tables.insert((paradigm, stem.to_owned()), table);
+            entries.push(Entry { table, form });
         }
         builder.add_word(word, &entries)?;
     }
@@ -166,10 +174,11 @@ fn build(export: &Path, output: &Path) -> Result<(), Box<dyn Error>> {
     }
     fs::write(output, &data).map_err(|err| format!("{}: {err}", output.display()))?;
     eprintln!(
-        "{}: {} словоформ, {} тегов UD, {:.1} МБ, {:.1} с",
+        "{}: {} словоформ, {} тегов UD, {} таблиц словоизменения, {:.1} МБ, {:.1} с",
         output.display(),
         dictionary.word_count(),
         dictionary.ud_tags().len(),
+        tables.values().collect::<BTreeSet<_>>().len(),
         data.len() as f64 / 1e6,
         started.elapsed().as_secs_f64()
     );

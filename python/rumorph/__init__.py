@@ -6,7 +6,7 @@
 
 from importlib.metadata import PackageNotFoundError, version
 
-from ._rumorph import Analysis, Analyzer
+from ._rumorph import Analysis, Analyzer, FormNotFoundError
 
 try:
     __version__ = version("rumorph")
@@ -17,4 +17,4 @@ __description__ = """Быстрый морфологический анализ�
 __author__ = "Шкарин Сергей"
 __author_email__ = "kouki.sergey@gmail.com"
 
-__all__ = ["Analysis", "Analyzer", "__version__"]
+__all__ = ["Analysis", "Analyzer", "FormNotFoundError", "__version__"]

@@ -9,7 +9,7 @@ The analyzer finds every analysis of a word form in the OpenCorpora dictionary -
 >>> morph = Analyzer()
 ```
 
-The dictionary loads in a few milliseconds when the analyzer is created. One analyzer is enough for the whole program, including several threads. By default the dictionary from the package is used; another dictionary file is passed as the `path` argument. The analyzer and the analyses can be pickled, so they work with multiprocessing and joblib: another process loads the dictionary again.
+The dictionary loads in a few milliseconds when the analyzer is created. One analyzer is enough for the whole program, including several threads. By default the dictionary from the package is used; another dictionary file is passed as the `path` argument. The analyzer and the analyses can be pickled, so they work with multiprocessing and joblib: another process loads the dictionary once, however many analyses it receives.
 
 ## Analyses of a word form { #analyze }
 
@@ -46,9 +46,9 @@ Parts of speech and features follow [Universal Dependencies](https://universalde
 
 Features: case, number, gender, animacy, person, tense, aspect, mood, voice, verb form, degree, the short form (`Variant=Short`), the type of a proper name (`NameType`), abbreviation (`Abbr`), possessiveness (`Poss`), the type of a numeral (`NumType`) and how it is written (`NumForm`), the type of a pronoun or pronominal adverb (`PronType`: «там» - `Dem`, «где» - `Rel`, «никогда» - `Neg`), reflexivity (`Reflex`), indeclinability (`InflClass=Ind`), negation (`Polarity=Neg`).
 
-Lemmas follow SynTagRus too: feminine surnames and patronymics keep the feminine lemma («Ивановой» - «иванова»), superlatives stay superlative («важнейшей» - «важнейший»), «денег» - «деньги». When several OpenCorpora analyses coincide in UD (the conjunction and the adverb «так»), they are merged into one with the sum of their probabilities.
+Lemmas follow SynTagRus too: feminine surnames and patronymics keep the feminine lemma («Ивановой» - «иванова»), superlatives stay superlative («важнейшей» - «важнейший»), «денег» - «деньги». When several OpenCorpora analyses coincide in UD (the conjunction and the adverb «так»), they are merged into one with the sum of their probabilities. The forms of a word are given by the `forms`, `inflect` and `agree` methods of the analysis - see [Inflection](inflection.md).
 
-The `labels` are the [OpenCorpora](https://opencorpora.org/dict.php?act=gram) grammemes that have no UD feature: style (`Infr`, `Slng`, `Arch`), qualitative adjective (`Qual`), parenthetical word (`Prnt`), transitivity (`tran`, `intr`), whether the speaker is included in an imperative (`incl` - «пойдемте», `excl` - «иди») and others.
+The `labels` are the [OpenCorpora](https://opencorpora.org/dict.php?act=gram) grammemes that have no UD feature: style (`Infr`, `Slng`, `Arch`), qualitative adjective (`Qual`), parenthetical word (`Prnt`), transitivity (`tran`, `intr`), whether the speaker is included in an imperative (`incl` - «пойдемте», `excl` - «иди»), the second locative (`loc2` - «в лесу») and others.
 
 ## Lists of words { #lists }
 

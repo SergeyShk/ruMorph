@@ -224,9 +224,13 @@ def test_pickle(morph):
     assert restored.path == morph.path
     assert restored.lemmatize(["стали"]) == ["стать"]
     assert pickle.loads(pickle.dumps(Analyzer(str(morph.path)))).path == morph.path
-    state = ("ёж", "ёж", "NOUN", "Case=Nom", "", 1.0, "dictionary")
-    assert rumorph._rumorph._analysis(state).feats == {"Case": "Nom"}
+    # Разборы из разных pickle используют один восстановленный анализатор, а не грузят словарь заново
+    assert pickle.loads(pickle.dumps(morph)) is restored
+    feats = "Animacy=Anim|Case=Nom|Gender=Masc|Number=Sing"
+    state = ("ёж", "ёж", "NOUN", feats, "", 0.5, "dictionary")
+    restored_analysis = rumorph._rumorph._analysis(morph, state)
+    assert (restored_analysis.prob, restored_analysis.inflect(Case="Gen")) == (0.5, "ежа")
     with pytest.raises(ValueError, match="Неизвестный источник"):
-        rumorph._rumorph._analysis((*state[:-1], "guess"))
-    with pytest.raises(ValueError, match="Неверные признаки"):
-        rumorph._rumorph._analysis(("ёж", "ёж", "NOUN", "Case", "", 1.0, "dictionary"))
+        rumorph._rumorph._analysis(morph, (*state[:-1], "guess"))
+    with pytest.raises(ValueError, match="В словаре нет разбора"):
+        rumorph._rumorph._analysis(morph, ("ёж", "ёж", "NOUN", "Case", "", 1.0, "dictionary"))

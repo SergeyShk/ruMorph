@@ -5,10 +5,18 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use pyo3::exceptions::{PyOSError, PyTypeError, PyValueError};
+use pyo3::create_exception;
+use pyo3::exceptions::{PyLookupError, PyOSError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::sync::PyOnceLock;
-use pyo3::types::{PyDict, PyFloat, PyFrozenSet, PyString, PyType};
+use pyo3::types::{PyDict, PyFloat, PyFrozenSet, PyString};
+
+create_exception!(
+    rumorph,
+    FormNotFoundError,
+    PyLookupError,
+    "У лексемы нет формы с запрошенными признаками или формы, согласованной с количеством"
+);
 
 /// Часть речи, признаки и пометы UD в текстовом виде: для сравнения, хэша, repr и pickle
 #[derive(PartialEq, Eq, Hash)]
@@ -86,24 +94,169 @@ impl UdObjects {
 ///     ('стать', 'VERB', 'Past', ['intr'])
 #[pyclass(frozen, module = "rumorph")]
 struct Analysis {
-    #[pyo3(get)]
-    word: String,
-    #[pyo3(get)]
-    lemma: String,
+    /// Разбор ядра: его таблица словоизменения и форма дают остальные формы лексемы
+    inner: rumorph::Analysis,
     #[pyo3(get)]
     pos: Py<PyString>,
     feats: Py<PyDict>,
     #[pyo3(get)]
     labels: Py<PyFrozenSet>,
-    #[pyo3(get)]
-    prob: f64,
-    #[pyo3(get)]
-    source: &'static str,
     ud: Arc<UdText>,
+    analyzer: Py<Analyzer>,
 }
 
 #[pymethods]
 impl Analysis {
+    #[getter]
+    fn word(&self) -> &str {
+        &self.inner.word
+    }
+
+    #[getter]
+    fn lemma(&self) -> &str {
+        &self.inner.lemma
+    }
+
+    #[getter]
+    fn prob(&self) -> f64 {
+        self.inner.prob
+    }
+
+    #[getter]
+    fn source(&self) -> &'static str {
+        self.inner.source.as_str()
+    }
+
+    /// Формы лексемы
+    ///
+    /// Описание:
+    ///     Формы с той же леммой в порядке словаря; вероятность каждой формы - 1
+    ///
+    /// Вывод:
+    ///     list[Analysis]: Формы лексемы
+    ///
+    /// Пример использования:
+    ///     >>> from rumorph import Analyzer
+    ///     >>> [form.word for form in Analyzer().analyze("ёж")[0].forms()][:6]
+    ///     ['ёж', 'ежа', 'ежу', 'ежа', 'ежом', 'еже']
+    fn forms(&self, py: Python<'_>) -> PyResult<Vec<Analysis>> {
+        self.analyzer
+            .get()
+            .dictionary
+            .forms(&self.inner)
+            .into_iter()
+            .map(|form| Analyzer::to_py(py, &self.analyzer, form))
+            .collect()
+    }
+
+    /// Форма слова с заданными признаками
+    ///
+    /// Описание:
+    ///     Ищет среди форм лексемы форму с заданными признаками UD; остальные признаки
+    ///     по возможности сохраняются: «кошка» в родительном падеже - «кошки», а не «кошек»
+    ///
+    /// Аргументы:
+    ///     **feats (str): Признаки UD и их значения: Case="Gen", Number="Plur"
+    ///
+    /// Вывод:
+    ///     str: Словоформа в написании словаря
+    ///
+    /// Исключения:
+    ///     FormNotFoundError: Если у лексемы нет формы с такими признаками
+    ///     ValueError: Если такого признака или значения нет в словаре
+    ///     TypeError: Если значение признака не строка
+    ///
+    /// Пример использования:
+    ///     >>> from rumorph import Analyzer
+    ///     >>> cat = Analyzer().analyze("кошка")[0]
+    ///     >>> cat.inflect(Case="Gen"), cat.inflect(Case="Gen", Number="Plur")
+    ///     ('кошки', 'кошек')
+    #[pyo3(signature = (**feats))]
+    fn inflect(&self, feats: Option<&Bound<'_, PyDict>>) -> PyResult<String> {
+        let dictionary = &self.analyzer.get().dictionary;
+        let mut requested: Vec<(String, String)> = Vec::new();
+        for (name, value) in feats.into_iter().flatten() {
+            let name: String = name.extract()?;
+            let Ok(value) = value.cast::<PyString>() else {
+                return Err(PyTypeError::new_err(format!(
+                    "Значение признака {name} должно быть строкой, а не {}",
+                    value.get_type().name()?
+                )));
+            };
+            let value = value.to_str()?.to_owned();
+            let Some(values) = dictionary.features().get(&name) else {
+                return Err(PyValueError::new_err(format!(
+                    "Неизвестный признак UD: {name}; есть {}",
+                    join(dictionary.features().keys())
+                )));
+            };
+            if !values.contains(&value) {
+                return Err(PyValueError::new_err(format!(
+                    "Неизвестное значение признака {name}: {value}; есть {}",
+                    join(values)
+                )));
+            }
+            requested.push((name, value));
+        }
+        requested.sort();
+        let pairs: Vec<(&str, &str)> = requested
+            .iter()
+            .map(|(name, value)| (name.as_str(), value.as_str()))
+            .collect();
+        dictionary
+            .inflect(&self.inner, &pairs)
+            .map(|form| form.word)
+            .ok_or_else(|| {
+                let feats: Vec<String> = requested
+                    .iter()
+                    .map(|(name, value)| format!("{name}={value}"))
+                    .collect();
+                FormNotFoundError::new_err(format!(
+                    "У слова «{}» нет формы {}",
+                    self.inner.word,
+                    feats.join("|")
+                ))
+            })
+    }
+
+    /// Форма слова, согласованная с количеством
+    ///
+    /// Описание:
+    ///     Согласует существительное, прилагательное, местоименное прилагательное или причастие
+    ///     с количеством в падеже разбора: «1 рубль», «2 рубля», «5 рублей», «о 2 рублях».
+    ///     Отрицательное количество согласуется как его модуль
+    ///
+    /// Аргументы:
+    ///     number (int): Количество
+    ///
+    /// Вывод:
+    ///     str: Словоформа в написании словаря
+    ///
+    /// Исключения:
+    ///     FormNotFoundError: Если слово не согласуется с количеством или у лексемы нет нужной формы
+    ///
+    /// Пример использования:
+    ///     >>> from rumorph import Analyzer
+    ///     >>> ruble = Analyzer().analyze("рубль")[0]
+    ///     >>> [f"{n} {ruble.agree(n)}" for n in (1, 2, 5, 21)]
+    ///     ['1 рубль', '2 рубля', '5 рублей', '21 рубль']
+    fn agree(&self, number: i128) -> PyResult<String> {
+        // Согласование зависит от двух последних цифр и от того, меньше ли количество 5
+        let count = number.unsigned_abs();
+        let count = u64::try_from(count).unwrap_or(100 + (count % 100) as u64);
+        self.analyzer
+            .get()
+            .dictionary
+            .agree(&self.inner, count)
+            .map(|form| form.word)
+            .ok_or_else(|| {
+                FormNotFoundError::new_err(format!(
+                    "Слово «{}» не согласуется с количеством {number}",
+                    self.inner.word
+                ))
+            })
+    }
+
     #[getter]
     fn feats<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         self.feats.bind(py).copy()
@@ -112,89 +265,103 @@ impl Analysis {
     fn __repr__(&self, py: Python<'_>) -> PyResult<String> {
         Ok(format!(
             "Analysis(word={}, lemma={}, pos={}, feats={}, labels={}, prob={}, source={})",
-            py_repr(py, &self.word)?,
-            py_repr(py, &self.lemma)?,
+            py_repr(py, &self.inner.word)?,
+            py_repr(py, &self.inner.lemma)?,
             py_repr(py, &self.ud.pos)?,
             py_repr(py, &self.ud.feats)?,
             py_repr(py, &self.ud.labels)?,
-            PyFloat::new(py, self.prob).repr()?,
-            py_repr(py, self.source)?
+            PyFloat::new(py, self.inner.prob).repr()?,
+            py_repr(py, self.inner.source.as_str())?
         ))
     }
 
     fn __eq__(&self, other: &Bound<'_, Self>) -> bool {
         let other = other.get();
-        self.word == other.word
-            && self.lemma == other.lemma
-            && self.prob == other.prob
-            && self.source == other.source
+        self.inner.word == other.inner.word
+            && self.inner.lemma == other.inner.lemma
+            && self.inner.prob == other.inner.prob
+            && self.inner.source == other.inner.source
             && self.ud == other.ud
     }
 
     fn __hash__(&self) -> u64 {
         let mut hasher = DefaultHasher::new();
         (
-            &self.word,
-            &self.lemma,
-            self.prob.to_bits(),
-            self.source,
+            &self.inner.word,
+            &self.inner.lemma,
+            self.inner.prob.to_bits(),
+            self.inner.source.as_str(),
             &self.ud,
         )
             .hash(&mut hasher);
         hasher.finish()
     }
 
-    fn __reduce__<'py>(&self, py: Python<'py>) -> PyResult<(Bound<'py, PyAny>, (AnalysisState,))> {
+    fn __reduce__<'py>(&self, py: Python<'py>) -> Reduced<'py, (Py<Analyzer>, AnalysisState)> {
         let restore = py.import("rumorph._rumorph")?.getattr("_analysis")?;
         let state = (
-            self.word.clone(),
-            self.lemma.clone(),
+            self.inner.word.clone(),
+            self.inner.lemma.clone(),
             self.ud.pos.clone(),
             self.ud.feats.clone(),
             self.ud.labels.clone(),
-            self.prob,
-            self.source.to_owned(),
+            self.inner.prob,
+            self.inner.source.as_str().to_owned(),
         );
-        Ok((restore, (state,)))
+        Ok((restore, (self.analyzer.clone_ref(py), state)))
     }
 }
+
+/// Функция восстановления объекта из pickle и ее аргументы
+type Reduced<'py, Args> = PyResult<(Bound<'py, PyAny>, Args)>;
 
 /// Поля разбора для pickle: слово, лемма, часть речи, признаки, пометы, вероятность, источник
 type AnalysisState = (String, String, String, String, String, f64, String);
 
-/// Восстановление разбора из pickle
+/// Восстановление разбора из pickle: разбор ищется в словаре заново, чтобы восстановить
+/// его форму в парадигме; вероятность берется сохраненная
 #[pyfunction]
-fn _analysis(py: Python<'_>, state: AnalysisState) -> PyResult<Analysis> {
-    let (word, lemma, pos, feats, labels, prob, source) = state;
-    let source = match source.as_str() {
-        "dictionary" => rumorph::Source::Dictionary.as_str(),
-        _ => {
-            return Err(PyValueError::new_err(format!(
-                "Неизвестный источник разбора: {source}"
-            )));
-        }
+fn _analysis(py: Python<'_>, analyzer: Py<Analyzer>, state: AnalysisState) -> PyResult<Analysis> {
+    let (word, lemma, pos, feats, _labels, prob, source) = state;
+    if source != rumorph::Source::Dictionary.as_str() {
+        return Err(PyValueError::new_err(format!(
+            "Неизвестный источник разбора: {source}"
+        )));
+    }
+    let dictionary = &analyzer.get().dictionary;
+    let Some(mut inner) = dictionary.analyze(&word).into_iter().find(|analysis| {
+        let tag = &dictionary.ud_tags()[usize::from(analysis.ud)];
+        analysis.word == word
+            && analysis.lemma == lemma
+            && tag.pos == pos
+            && tag.feats_string() == feats
+    }) else {
+        return Err(PyValueError::new_err(format!(
+            "В словаре нет разбора «{word}» с леммой «{lemma}», частью речи {pos} и признаками «{feats}»"
+        )));
     };
-    let feats = feats
-        .split('|')
-        .filter(|feat| !feat.is_empty())
-        .map(|feat| feat.split_once('='))
-        .collect::<Option<Vec<_>>>()
-        .ok_or_else(|| PyValueError::new_err(format!("Неверные признаки UD: {feats}")))?;
-    let labels: Vec<&str> = labels
-        .split(',')
-        .filter(|label| !label.is_empty())
-        .collect();
-    let ud = UdObjects::new(py, &pos, &feats, &labels)?;
-    Ok(Analysis {
-        word,
-        lemma,
-        pos: ud.pos,
-        feats: ud.feats,
-        labels: ud.labels,
-        prob,
-        source,
-        ud: ud.text,
-    })
+    inner.prob = prob;
+    Analyzer::to_py(py, &analyzer, inner)
+}
+
+/// Анализаторы, восстановленные из pickle: один на словарь в процессе, а не на каждый объект
+static RESTORED: PyOnceLock<Py<PyDict>> = PyOnceLock::new();
+
+/// Восстановление анализатора из pickle
+#[pyfunction]
+fn _analyzer(py: Python<'_>, path: Option<PathBuf>) -> PyResult<Py<Analyzer>> {
+    let restored = RESTORED
+        .get_or_init(py, || PyDict::new(py).unbind())
+        .bind(py);
+    let key = path.clone().into_pyobject(py)?;
+    if let Some(analyzer) = restored.get_item(&key)? {
+        return Ok(analyzer.cast_into::<Analyzer>()?.unbind());
+    }
+    let analyzer = Py::new(py, Analyzer::new(py, path)?)?;
+    Ok(restored
+        .call_method1("setdefault", (key, analyzer))?
+        .cast_into::<Analyzer>()?
+        .unbind())
 }
 
 /// Морфологический анализатор
@@ -254,10 +421,9 @@ impl Analyzer {
         })
     }
 
-    fn __reduce__<'py>(slf: &Bound<'py, Self>) -> (Bound<'py, PyType>, (Option<PathBuf>,)) {
-        let analyzer = slf.get();
-        let path = analyzer.explicit.then(|| analyzer.path.clone());
-        (slf.get_type(), (path,))
+    fn __reduce__<'py>(&self, py: Python<'py>) -> Reduced<'py, (Option<PathBuf>,)> {
+        let restore = py.import("rumorph._rumorph")?.getattr("_analyzer")?;
+        Ok((restore, (self.explicit.then(|| self.path.clone()),)))
     }
 
     /// Путь к файлу словаря
@@ -281,11 +447,13 @@ impl Analyzer {
     ///     >>> from rumorph import Analyzer
     ///     >>> [(analysis.lemma, analysis.pos, analysis.feats.get("Case")) for analysis in Analyzer().analyze("Стали")][:3]
     ///     [('стать', 'VERB', None), ('сталь', 'NOUN', 'Gen'), ('сталь', 'NOUN', 'Nom')]
-    fn analyze(&self, py: Python<'_>, word: &str) -> PyResult<Vec<Analysis>> {
-        self.dictionary
+    fn analyze(slf: &Bound<'_, Self>, word: &str) -> PyResult<Vec<Analysis>> {
+        let analyzer = slf.clone().unbind();
+        slf.get()
+            .dictionary
             .analyze(word)
             .into_iter()
-            .map(|analysis| self.to_py(py, analysis))
+            .map(|analysis| Self::to_py(slf.py(), &analyzer, analysis))
             .collect()
     }
 
@@ -309,12 +477,12 @@ impl Analyzer {
     ///     >>> [len(analyses) for analyses in Analyzer().analyze_many(["мама", "мыла", "раму", "вайб"])]
     ///     [1, 4, 2, 0]
     fn analyze_many(
-        &self,
-        py: Python<'_>,
+        slf: &Bound<'_, Self>,
         words: &Bound<'_, PyAny>,
     ) -> PyResult<Vec<Vec<Analysis>>> {
+        let (py, analyzer) = (slf.py(), slf.clone().unbind());
         let words = collect_words(words)?;
-        let dictionary = Arc::clone(&self.dictionary);
+        let dictionary = Arc::clone(&slf.get().dictionary);
         let analyses = py.detach(move || {
             words
                 .iter()
@@ -326,7 +494,7 @@ impl Analyzer {
             .map(|analyses| {
                 analyses
                     .into_iter()
-                    .map(|analysis| self.to_py(py, analysis))
+                    .map(|analysis| Self::to_py(py, &analyzer, analysis))
                     .collect()
             })
             .collect()
@@ -406,22 +574,33 @@ impl Analyzer {
 }
 
 impl Analyzer {
-    fn to_py(&self, py: Python<'_>, analysis: rumorph::Analysis) -> PyResult<Analysis> {
+    fn to_py(
+        py: Python<'_>,
+        analyzer: &Py<Analyzer>,
+        analysis: rumorph::Analysis,
+    ) -> PyResult<Analysis> {
+        let this = analyzer.get();
         let number = usize::from(analysis.ud);
-        let ud = self.ud[number].get_or_try_init(py, || {
-            UdObjects::from_tag(py, &self.dictionary.ud_tags()[number])
+        let ud = this.ud[number].get_or_try_init(py, || {
+            UdObjects::from_tag(py, &this.dictionary.ud_tags()[number])
         })?;
         Ok(Analysis {
-            word: analysis.word,
-            lemma: analysis.lemma,
+            inner: analysis,
             pos: ud.pos.clone_ref(py),
             feats: ud.feats.clone_ref(py),
             labels: ud.labels.clone_ref(py),
-            prob: analysis.prob,
-            source: analysis.source.as_str(),
             ud: Arc::clone(&ud.text),
+            analyzer: analyzer.clone_ref(py),
         })
     }
+}
+
+fn join<'a>(values: impl IntoIterator<Item = &'a String>) -> String {
+    values
+        .into_iter()
+        .map(String::as_str)
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 fn py_repr(py: Python<'_>, value: &str) -> PyResult<String> {
@@ -481,6 +660,8 @@ fn collect_words(words: &Bound<'_, PyAny>) -> PyResult<Vec<String>> {
 fn _rumorph(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Analyzer>()?;
     m.add_class::<Analysis>()?;
+    m.add("FormNotFoundError", m.py().get_type::<FormNotFoundError>())?;
     m.add_function(wrap_pyfunction!(_analysis, m)?)?;
+    m.add_function(wrap_pyfunction!(_analyzer, m)?)?;
     Ok(())
 }

@@ -490,12 +490,13 @@ const OPENCORPORA_POS: &[&str] = &[
     "PRED", "PREP", "CONJ", "PRCL", "INTJ",
 ];
 
-/// Граммемы, которые переходят в признаки UD (остальные лексические граммемы становятся пометами)
+/// Граммемы, которые переходят в признаки UD (остальные граммемы становятся пометами);
+/// второй предложный («в лесу») - `Case=Loc` с пометой `loc2`, чтобы отличать его от «о лесе»
 const CONSUMED: &[&str] = &[
     "anim", "inan", "masc", "femn", "neut", "ms-f", "GNdr", "sing", "plur", "nomn", "gent", "datv",
-    "accs", "ablt", "loct", "voct", "gen1", "gen2", "acc2", "loc1", "loc2", "perf", "impf", "1per",
-    "2per", "3per", "pres", "past", "futr", "indc", "impr", "actv", "pssv", "Name", "Surn", "Patr",
-    "Geox", "Orgn", "Trad", "Abbr", "Poss", "Supr", "Anum", "Apro",
+    "accs", "ablt", "loct", "voct", "gen1", "gen2", "acc2", "loc1", "perf", "impf", "1per", "2per",
+    "3per", "pres", "past", "futr", "indc", "impr", "actv", "pssv", "Name", "Surn", "Patr", "Geox",
+    "Orgn", "Trad", "Abbr", "Poss", "Supr", "Anum", "Apro",
 ];
 
 /// Перевод тега OpenCorpora и леммы разбора в часть речи, признаки и пометы UD
@@ -810,7 +811,7 @@ mod tests {
             feats,
             "Animacy=Inan|Case=Loc|Gender=Masc|NameType=Geo|Number=Sing"
         );
-        assert!(labels.is_empty());
+        assert_eq!(labels, ["loc2"]);
         assert_eq!(
             summary("NOUN,anim,ms-f,Infr sing,gen2", "сирота").1,
             "Animacy=Anim|Case=Par|Gender=Masc|Number=Sing"
