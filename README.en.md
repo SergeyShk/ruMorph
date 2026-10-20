@@ -20,7 +20,7 @@
 **ruMorph** is a morphological analyzer of Russian: a Rust core with a Python API. For a word form the analyzer finds its analyses in the OpenCorpora dictionary - the normal form (lemma), the part of speech and the grammatical features - and orders them by probability.
 
 > [!WARNING]
-> Work in progress: so far the analyzer analyzes and inflects the word forms of the dictionary - the lemma, the UD part of speech and features, the probability, the forms of a word; numbers, punctuation, Latin words and abbreviations are analyzed by rules, unknown words are guessed by their ending, by the parts of a hyphenated word and by the word without a prefix. Versions `0.1.0.devN` are published on TestPyPI.
+> Work in progress: versions `0.1.0.devN` are published on TestPyPI, the API may change before the 0.1.0 release.
 
 ## Installation
 
@@ -47,7 +47,7 @@ Wheels are built for Linux, macOS and Windows; on other platforms building from 
 ('кошек', 'рублей')
 ```
 
-See the [Word analysis](https://sergeyshk.github.io/ruMorph/en/analysis/) and [Inflection](https://sergeyshk.github.io/ruMorph/en/inflection/) pages for more.
+See the [Analyzer](https://sergeyshk.github.io/ruMorph/en/analyzer/), [Word analysis](https://sergeyshk.github.io/ruMorph/en/analysis/) and [Inflection](https://sergeyshk.github.io/ruMorph/en/inflection/) pages for more. Moving from pymorphy2 and pymorphy3 is covered on the [Migrating from pymorphy](https://sergeyshk.github.io/ruMorph/en/migration/) page, speed and memory compared with pymorphy3 - on the [Speed and memory](https://sergeyshk.github.io/ruMorph/en/performance/) page.
 
 ## Development
 
