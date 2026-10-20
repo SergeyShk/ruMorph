@@ -1014,7 +1014,7 @@
 <p class="metric-meta"><code>analyze</code> · <code>list[Analysis]</code></p>
 <div class="signature highlight"><pre><span></span><code><span class="n">analyze</span><span class="p">(</span><span class="n">word</span><span class="p">)</span>
 </code></pre></div>
-<p>Analyses of the word form in descending order of probability; the probabilities sum to 1. Case does not matter, and the letter «е» may stand for «ё»: <code>analyze("ЕЖ")</code> returns the analyses of the word form «ёж». A token that is not in the dictionary - a number, a symbol, a Latin word, an abbreviation - is analyzed <a href="../analysis/#rules">by rules</a>, and the analyses of an unknown Cyrillic word are <a href="../analysis/#guess">guessed</a> from its ending and parts.</p>
+<p>Analyses of the word form in descending order of probability; the probabilities sum to 1. Case does not matter, and the letter «е» may stand for «ё»: <code>analyze("ЕЖ")</code> returns the analyses of the word form «ёж». A token that is not in the dictionary - a number, a symbol, a Latin word, an abbreviation - is analyzed <a href="../analysis/#rules">by rules</a>, and the analyses of an unknown Cyrillic word are <a href="../analysis/#guess">guessed</a> from its ending and parts. A token without spaces and invisible characters gets at least one analysis: if nothing fits, <code>X</code> without features.</p>
 <table>
 <thead>
 <tr>

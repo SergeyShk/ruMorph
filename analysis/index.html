@@ -962,15 +962,15 @@
 <td style="text-align: left;"><code>PUNCT</code>; <code>SYM</code></td>
 </tr>
 <tr>
-<td style="text-align: left;">числа цифрами: «15», «3,14», «10 000», «17:04»</td>
-<td style="text-align: left;"><code>NUM</code> с <code>NumForm=Digit</code>, <code>NumType=Card</code>; целое число может быть и порядковым <code>ADJ</code> с <code>NumType=Ord</code> - у чисел 1000-2100 (годы), кроме круглых сотен, это первый разбор</td>
+<td style="text-align: left;">числа цифрами и диапазоны: «15», «3,14», «10 000», «17:04», «1990-2000»</td>
+<td style="text-align: left;"><code>NUM</code> с <code>NumForm=Digit</code>, <code>NumType=Card</code>; целое число может быть и порядковым <code>ADJ</code> с <code>NumType=Ord</code> - у чисел 1000-2100 (годы), кроме круглых сотен, это первый разбор, а 1900 и 2000 - тоже годы</td>
 </tr>
 <tr>
-<td style="text-align: left;">числа с окончанием: «2005-го», «5-ти»</td>
+<td style="text-align: left;">числа и диапазоны с окончанием: «2005-го», «10-15-го», «5-ти»</td>
 <td style="text-align: left;">порядковое <code>ADJ</code> с падежом и формами, как у «1-го», или количественное <code>NUM</code></td>
 </tr>
 <tr>
-<td style="text-align: left;">римские числа: «XX»</td>
+<td style="text-align: left;">римские числа и диапазоны: «XX», «XIX-го», «II-III»</td>
 <td style="text-align: left;">порядковое <code>ADJ</code> с <code>NumForm=Roman</code></td>
 </tr>
 <tr>
@@ -978,7 +978,7 @@
 <td style="text-align: left;"><code>X</code> с <code>Foreign=Yes</code></td>
 </tr>
 <tr>
-<td style="text-align: left;">инициалы: «А.»</td>
+<td style="text-align: left;">инициалы: «А.», «А»</td>
 <td style="text-align: left;"><code>PROPN</code> с <code>Abbr=Yes</code>: имя, отчество или фамилия</td>
 </tr>
 <tr>
@@ -987,15 +987,19 @@
 </tr>
 <tr>
 <td style="text-align: left;">аббревиатуры капсом: «НКО»</td>
-<td style="text-align: left;"><code>PROPN</code> или <code>NOUN</code> с <code>Abbr=Yes</code></td>
+<td style="text-align: left;"><code>PROPN</code> или <code>NOUN</code> с <code>Abbr=Yes</code>; длинное слово капсом («ЧАТБОТАМИ») еще и угадывается как обычное</td>
 </tr>
 <tr>
 <td style="text-align: left;">наречия «по-бурятски», «по-молодому»</td>
 <td style="text-align: left;"><code>ADV</code> с <code>Degree=Pos</code></td>
 </tr>
+<tr>
+<td style="text-align: left;">прочие токены: «км/ч», «РосПил»</td>
+<td style="text-align: left;"><code>X</code> без признаков, лемма - токен в нижнем регистре</td>
+</tr>
 </tbody>
 </table>
-<p>Доли неоднозначных разборов взяты из частот в SynTagRus.</p>
+<p>Доли неоднозначных разборов взяты из частот в SynTagRus. Буквы «й» и «ё» в разложенной записи Unicode и неразрывный дефис приводятся к обычным.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="2:2"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Код</label><label for="__tabbed_2_2">Результат</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
@@ -1011,8 +1015,8 @@
 </div>
 </div>
 <h2 id="guess">Незнакомые слова<a class="headerlink" href="#guess" title="Permanent link">&para;</a></h2>
-<p>Разборы слова кириллицей, которого нет в словаре, анализатор угадывает по окончанию: берет формы словарных слов с тем же окончанием - их часть речи, признаки и словоизменение. <code>source</code> у таких разборов - <code>"guess"</code>. Слово в нижнем регистре угадывается как нарицательное, слово с заглавной буквы - в основном как имя собственное: фамилия, имя, топоним. Слова в смешанном регистре («ЗуМер») не угадываются.</p>
-<p>Слово через дефис разбирается по последней части: «крэш-тестов» - «крэш-тест», «Мак-Киннона» - «мак-киннон»; если последняя часть - частица («сколь-нибудь»), то по первой. Слово с известной приставкой - «эко», «анти», «супер», «микро» и другими - разбирается по словарному слову без нее: «экодомов» - «экодом». Такие разборы тоже угаданные.</p>
+<p>Разборы слова кириллицей, которого нет в словаре, анализатор угадывает по окончанию: берет формы словарных слов с тем же окончанием - их часть речи, признаки и словоизменение. <code>source</code> у таких разборов - <code>"guess"</code>. Слово в нижнем регистре угадывается как нарицательное, слово с заглавной буквы - в основном как имя собственное: фамилия, имя, топоним, а слово на «-ский» - в основном как прилагательное. Аббревиатура с окончанием («МЭРТа») угадывается, как слово с заглавной.</p>
+<p>Слово через дефис разбирается по последней части: «крэш-тестов» - «крэш-тест», «IT-компании» - «it-компания»; если последняя часть - частица («сколь-нибудь»), то по первой. Если изменяются обе части, лемма - из лемм частей: «дивана-кровати» - «диван-кровать», форм у такого разбора нет. Слово с известной приставкой - «эко», «анти», «супер», «микро» и другими - разбирается по словарному слову без нее: «экодомов» - «экодом». Такие разборы тоже угаданные.</p>
 <p>У угаданного разбора есть формы, с ним работают <code>forms</code>, <code>inflect</code> и <code>agree</code>; формы сохраняют заглавные буквы: «Мак-Киннона» в дательном - «Мак-Киннону», «ПИН-КОДОВ» - «ПИН-КОДАМ». Слово с частицей изменяется по первой части: «смотри-ка» во множественном числе - «смотрите-ка».</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="3:2"><input checked="checked" id="__tabbed_3_1" name="__tabbed_3" type="radio" /><input id="__tabbed_3_2" name="__tabbed_3" type="radio" /><div class="tabbed-labels"><label for="__tabbed_3_1">Код</label><label for="__tabbed_3_2">Результат</label></div>
 <div class="tabbed-content">
