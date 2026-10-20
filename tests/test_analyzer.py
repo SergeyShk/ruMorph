@@ -4,7 +4,9 @@ import json
 import math
 import os
 import pickle
+import shutil
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -392,6 +394,73 @@ def test_pickle(morph):
         rumorph._rumorph._analysis(morph, (*state[:6], "corpus", *state[7:]))
     with pytest.raises(ValueError, match="В словаре нет разбора"):
         rumorph._rumorph._analysis(morph, (*state[:3], "Case", *state[4:]))
+
+
+def test_pickled_analyses_share_tag_objects(morph):
+    # Анализатор из pickle берет словарь и объекты тегов из загруженных в процессе
+    first = morph.analyze("стали")[0]
+    assert all(pickle.loads(pickle.dumps(first)).labels is first.labels for _ in range(3))
+
+
+def test_same_file_by_other_path(morph, tmp_path):
+    # Тот же файл через «..» или симлинк не загружается еще раз
+    labels = morph.analyze("стали")[0].labels
+    paths = [morph.path.parent / ".." / morph.path.parent.name / morph.path.name]
+    link = tmp_path / "link.dict"
+    try:
+        link.symlink_to(morph.path)
+        paths.append(link)
+    except OSError:
+        pass
+    for path in paths:
+        assert Analyzer(path).analyze("стали")[0].labels is labels
+
+
+def test_replaced_file_is_loaded_again(morph, tmp_path):
+    # Файл, замененный другим с тем же размером и временем изменения, читается заново
+    path = tmp_path / "ru.dict"
+    shutil.copy(morph.path, path)
+    old = Analyzer(path)
+    stat = path.stat()
+    new = tmp_path / "new.dict"
+    new.write_bytes(bytes(stat.st_size))
+    os.utime(new, ns=(stat.st_atime_ns, stat.st_mtime_ns))
+    new.replace(path)
+    with pytest.raises(ValueError, match="неверный формат словаря"):
+        Analyzer(path)
+    assert old.lemmatize(["стали"]) == ["стать"]
+
+
+@pytest.mark.skipif(not hasattr(os, "fork"), reason="нет fork")
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
+def test_fork_while_loading(morph, tmp_path):
+    # Процесс, созданный fork, пока другой поток загружает словарь, не зависает на анализаторе
+    path = tmp_path / "ru.dict"
+    shutil.copy(morph.path, path)
+    stop = threading.Event()
+
+    def load():
+        while not stop.is_set():
+            Analyzer(path)
+
+    thread = threading.Thread(target=load)
+    thread.start()
+    try:
+        for _ in range(5):
+            time.sleep(0.02)
+            pid = os.fork()
+            if pid == 0:
+                os._exit(0 if Analyzer(path).lemmatize(["стали"]) == ["стать"] else 1)
+            deadline = time.monotonic() + 30
+            while (done := os.waitpid(pid, os.WNOHANG))[0] == 0 and time.monotonic() < deadline:
+                time.sleep(0.01)
+            if done[0] == 0:
+                os.kill(pid, 9)
+                os.waitpid(pid, 0)
+            assert done[0] == pid and os.waitstatus_to_exitcode(done[1]) == 0
+    finally:
+        stop.set()
+        thread.join()
 
 
 def test_relative_path_pickles(morph, tmp_path, monkeypatch):
