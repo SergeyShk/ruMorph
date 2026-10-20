@@ -152,3 +152,10 @@ def test_pickled_parts(morph):
 def test_particle_forms_of_dictionary_words(morph, word, forms):
     # Частица после словарного слова: формы строятся по первой части, а не по целому слову
     assert [form.word for form in morph.analyze(word)[0].forms()][:3] == forms
+
+
+@pytest.mark.parametrize("word", ["выпивал-то", "Иванова-то", "смотри-ка"])
+def test_particle_forms_pickle(morph, word):
+    forms = [form for analysis in morph.analyze(word) for form in analysis.forms()]
+    assert forms
+    assert pickle.loads(pickle.dumps(forms)) == forms

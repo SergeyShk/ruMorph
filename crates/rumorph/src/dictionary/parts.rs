@@ -164,11 +164,8 @@ impl Dictionary {
             return None;
         }
         let entry = analysis.entry?;
-        let (base, particle) = analysis.word.rsplit_once('-')?;
+        let (base, particle) = split_particle(&analysis.word)?;
         let lower = particle.to_lowercase();
-        if !PARTICLES.contains(&lower.as_str()) {
-            return None;
-        }
         self.lexeme(entry.table, entry.form, &base.to_lowercase())?;
         let lemma = analysis.lemma.strip_suffix(&lower)?.strip_suffix('-')?;
         let base = Analysis {
@@ -253,6 +250,14 @@ fn with_yo(text: &str, spelled: &str) -> String {
             (letter, _) => letter,
         })
         .collect()
+}
+
+/// Слово с частицей через дефис: первая часть и частица в написании слова
+pub(super) fn split_particle(word: &str) -> Option<(&str, &str)> {
+    let (base, particle) = word.rsplit_once('-')?;
+    PARTICLES
+        .contains(&particle.to_lowercase().as_str())
+        .then_some((base, particle))
 }
 
 /// Форма слова с частицей `particle` через дефис: «смотрите» - «смотрите-ка»
