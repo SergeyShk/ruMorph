@@ -619,8 +619,13 @@ pub fn convert(tag: &str, lemma: &str) -> Ud {
         || (pos == "VERB" && !verbal_pos);
     if oc == "PRED" || (exception && uninflected) {
         // Признаки OpenCorpora другой части речи не переходят: «плохо» - ADV без времени, «мало» - без падежа;
-        // у «нечего», «нечем» (NPRO → VERB) падеж в SynTagRus остается
-        let case = feats.get("Case").copied().filter(|_| oc == "NPRO");
+        // у «нечего», «нечем» (NPRO → VERB) падеж в SynTagRus остается, винительного у них нет:
+        // «некого» - родительный
+        let case = feats
+            .get("Case")
+            .copied()
+            .filter(|_| oc == "NPRO")
+            .map(|case| if case == "Acc" { "Gen" } else { case });
         feats.clear();
         feats.extend(case.map(|case| ("Case", case)));
     }
@@ -1257,6 +1262,8 @@ mod tests {
             feats("NPRO,neut sing,gent", "нечего"),
             "Case=Gen|Polarity=Neg"
         );
+        // Винительного у «некого» в SynTagRus нет: родительный, как у «нечего»
+        assert_eq!(feats("NPRO accs", "некого"), "Case=Gen|Polarity=Neg");
         // «некогда» - наречие «когда-то» без отрицания, предикатив - с отрицанием
         assert_eq!(feats("ADVB", "некогда"), "Degree=Pos|PronType=Ind");
         assert_eq!(feats("PRED,pres", "некогда"), "Polarity=Neg");

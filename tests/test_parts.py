@@ -169,3 +169,12 @@ def test_hyphenated_lemmas(morph, word, lemma, pos):
 def test_both_parts_inflected_have_no_forms(morph):
     sofa = morph.analyze("дивана-кровати")[0]
     assert [form.word for form in sofa.forms()] == ["дивана-кровати"]
+
+
+@pytest.mark.parametrize(
+    ("word", "forms"),
+    [("кот-то", ["кот-то", "кота-то", "коту-то"]), ("это-то", ["это-то", "этого-то", "этому-то"])],
+)
+def test_particle_forms_of_dictionary_words(morph, word, forms):
+    # Частица после словарного слова: формы строятся по первой части, а не по целому слову
+    assert [form.word for form in morph.analyze(word)[0].forms()][:3] == forms
