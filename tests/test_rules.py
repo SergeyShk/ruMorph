@@ -119,8 +119,8 @@ def test_roman_numerals(morph):
         ("XX", "xx", "X", {"Foreign": "Yes"}),
     ]
     assert morph.analyze("I")[1].pos == "X"
-    # Одиночные «C», «L» и «X» чаще латиница, «V» - римское число
-    assert [morph.analyze(letter)[0].pos for letter in "CLXV"] == ["X", "X", "X", "ADJ"]
+    # Одиночные «C» и «L» чаще латиница, «X» и «V» - римское число
+    assert [morph.analyze(letter)[0].pos for letter in "CLXV"] == ["X", "X", "ADJ", "ADJ"]
     # Не римское число - латиница
     assert summary(morph, "IIII") == [("IIII", "iiii", "X", {"Foreign": "Yes"})]
     # Строчные с «c» и «l» - латинские слова

@@ -155,7 +155,7 @@ Analysis(word='стали', lemma='стать', pos='VERB', feats='Aspect=Perf|M
 
 >>> morph = Analyzer()
 >>> [(a.lemma, a.pos, a.feats["NumType"], round(a.prob, 2)) for a in morph.analyze("2026")]
-[('2026', 'ADJ', 'Ord', 0.94), ('2026', 'NUM', 'Card', 0.06)]
+[('2026', 'ADJ', 'Ord', 0.98), ('2026', 'NUM', 'Card', 0.02)]
 >>> [(a.lemma, a.pos, a.feats["Case"]) for a in morph.analyze("2005-го")][:1]
 [('2005-й', 'ADJ', 'Gen')]
 >>> [(a.pos, a.feats, a.source) for a in morph.analyze("iPhone")]
