@@ -963,7 +963,7 @@
 </div>
 <div class="tabbed-block">
 <div class="highlight"><pre><span></span><code>['мы', 'стать', 'друг']
-[('стать', 'VERB', None, 0.975), ('сталь', 'NOUN', 'Gen', 0.011)]
+[('стать', 'VERB', None, 0.988), ('сталь', 'NOUN', 'Gen', 0.005)]
 ('кошек', 'рублей')
 </code></pre></div>
 </div>
@@ -973,7 +973,7 @@
 <summary>Project structure</summary>
 <ul>
 <li><strong>crates/rumorph</strong> - the Rust core of the analyzer: dictionary format, building, analysis and inflection</li>
-<li><strong>crates/rumorph-build</strong> - building the dictionary from the pymorphy3-dicts-ru export and converting OpenCorpora tags to UD</li>
+<li><strong>crates/rumorph-build</strong> - building the dictionary from the pymorphy3-dicts-ru export, converting OpenCorpora tags to UD and frequencies of analyses from UD treebanks</li>
 <li><strong>crates/rumorph-dict-ru</strong> - the crate with the dictionary for <code>rumorph</code> on crates.io</li>
 <li><strong>crates/rumorph-py</strong> - the Python module <code>rumorph._rumorph</code> on PyO3</li>
 <li><strong>python/rumorph</strong> - the Python package</li>
