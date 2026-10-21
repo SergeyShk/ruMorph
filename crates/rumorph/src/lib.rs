@@ -16,14 +16,16 @@
 //! ```
 //!
 //! Features: `bundled` (по умолчанию) - словарь OpenCorpora из крейта `rumorph-dict-ru`,
-//! `build` - сборка своих словарей (`Builder`)
+//! `build` - сборка своих словарей (`Builder`), `cli` - команда `rumorph`
+//! (`cargo install rumorph --features cli`)
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 mod alphabet;
 #[cfg(any(test, feature = "build"))]
 mod builder;
+/// Команда `rumorph`: не часть API крейта
 #[cfg(feature = "cli")]
-#[cfg_attr(docsrs, doc(cfg(feature = "cli")))]
+#[doc(hidden)]
 pub mod cli;
 mod dictionary;
 mod error;

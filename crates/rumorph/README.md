@@ -28,23 +28,39 @@ rumorph = "0.2"
 ```rust
 use rumorph::Dictionary;
 
-let dictionary = Dictionary::bundled()?;
-let analysis = &dictionary.analyze("стали")[0];
-let tag = dictionary.ud_tag(analysis.ud).unwrap();
-assert_eq!((analysis.lemma.as_str(), tag.pos()), ("стать", "VERB"));
-assert_eq!(tag.feat("Tense"), Some("Past"));
+fn main() -> Result<(), rumorph::Error> {
+    let dictionary = Dictionary::bundled()?;
+    let analysis = &dictionary.analyze("стали")[0];
+    let tag = dictionary.ud_tag(analysis.ud).unwrap();
+    assert_eq!((analysis.lemma.as_str(), tag.pos()), ("стать", "VERB"));
+    assert_eq!(tag.feat("Tense"), Some("Past"));
 
-let cat = &dictionary.analyze("кошка")[0];
-assert_eq!(dictionary.inflect(cat, &[("Case", "Gen")]).unwrap().word, "кошки");
-let ruble = &dictionary.analyze("рубль")[0];
-assert_eq!(dictionary.agree(ruble, 5).unwrap().word, "рублей");
-# Ok::<(), rumorph::Error>(())
+    let cat = &dictionary.analyze("кошка")[0];
+    assert_eq!(dictionary.inflect(cat, &[("Case", "Gen")]).unwrap().word, "кошки");
+    let ruble = &dictionary.analyze("рубль")[0];
+    assert_eq!(dictionary.agree(ruble, 5).unwrap().word, "рублей");
+    Ok(())
+}
 ```
+
+Словарь загружается и проверяется при каждом вызове `Dictionary::bundled` и `Dictionary::open`:
+создайте его один раз и разбирайте им весь текст, в том числе из нескольких потоков.
+
+## Команда rumorph
+
+```bash
+cargo install rumorph --features cli
+echo "Мы стали друзьями в ковиде." | rumorph -f conllu
+```
+
+Команда пишет леммы, части речи и признаки UD в форматах `lemmas`, `conllu`, `tsv` и `jsonl`;
+параметры - в [документации](https://sergeyshk.github.io/ruMorph/cli/).
 
 ## Features
 
 - `bundled` (по умолчанию) - словарь из крейта `rumorph-dict-ru`: `Dictionary::bundled`.
 - `build` - сборка своих словарей: `Builder`.
+- `cli` - команда `rumorph`.
 
 ## Лицензия
 
