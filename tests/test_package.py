@@ -38,6 +38,10 @@ def test_crate_version():
     with (ROOT / "pyproject.toml").open("rb") as file:
         package = tomllib.load(file)["project"]["version"]
     assert crate == re.sub(r"\.dev(\d+)$", r"-dev.\1", package)
+    # Формат словаря меняется вместе с ядром: rumorph требует словарь своей версии
+    with (ROOT / "crates" / "rumorph" / "Cargo.toml").open("rb") as file:
+        dictionary = tomllib.load(file)["dependencies"]["rumorph-dict-ru"]["version"]
+    assert dictionary == f"={crate}"
 
 
 def test_extension():

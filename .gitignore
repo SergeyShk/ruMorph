@@ -10,6 +10,7 @@ target/
 python/rumorph/*.so
 python/rumorph/*.pyd
 python/rumorph/data/*.dict
+crates/rumorph-dict-ru/ru.dict
 
 # Окружения
 .venv/

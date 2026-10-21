@@ -15,4 +15,4 @@ crate-type = ["cdylib"]
 
 [dependencies]
 pyo3 = { version = "0.30.1", features = ["abi3-py311"] }
-rumorph = { path = "../rumorph" }
+rumorph = { path = "../rumorph", default-features = false }

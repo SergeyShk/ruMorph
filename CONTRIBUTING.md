@@ -46,7 +46,8 @@ make docs-build  # mkdocs build --strict, если менялась докуме
 
 ## Как устроен репозиторий
 
-- `crates/rumorph/` - ядро анализатора на Rust: формат словаря, сборка и разбор.
+- `crates/rumorph/` - ядро анализатора на Rust: формат словаря, сборка (feature `build`) и разбор; публикуется на crates.io.
+- `crates/rumorph-dict-ru/` - крейт со словарем для `rumorph` (feature `bundled`): файл словаря в git не хранится, `build.rs` берет `python/rumorph/data/ru.dict`, а без него собирает крейт с пустым словарем.
 - `crates/rumorph-build/` - сборка словаря из выгрузки pymorphy3-dicts-ru и перевод тегов OpenCorpora в UD (`ud.rs`).
 - `crates/rumorph-py/` - модуль Python `rumorph._rumorph` на PyO3.
 - `python/rumorph/` - пакет Python поверх модуля; `data/ru.dict` - собранный словарь.
@@ -55,4 +56,4 @@ make docs-build  # mkdocs build --strict, если менялась докуме
 - `docs/` - документация MkDocs (Material), `mkdocs.yml` - навигация и перевод ее на английский.
 - `.github/workflows/` - CI (`ci.yml`), публикация (`publish.yml`: словарь собирается один раз и входит в колеса для Linux, macOS и Windows и в исходники), документация (`docs.yml`).
 
-Версия пакета хранится в `pyproject.toml` и в `Cargo.toml` в записи semver (`0.1.0.dev1` - `0.1.0-dev.1`), их совпадение проверяет тест. Тег версии запускает `publish.yml`: колеса и исходники собираются один раз, проверяются на всех платформах и публикуются на TestPyPI, а версия без `.devN` затем - на PyPI. Изменения описываются в заметках GitHub Release, отдельного файла CHANGELOG нет.
+Версия пакета хранится в `pyproject.toml` и в `Cargo.toml` в записи semver (`0.1.0.dev1` - `0.1.0-dev.1`); зависимость `rumorph` от `rumorph-dict-ru` закреплена той же версией (`=0.1.0-dev.1`). Их совпадение проверяет тест. Тег версии запускает `publish.yml`: колеса и исходники собираются один раз, проверяются на всех платформах и публикуются на TestPyPI, а версия без `.devN` затем - на PyPI и крейтами на crates.io. Изменения описываются в заметках GitHub Release, отдельного файла CHANGELOG нет.

@@ -69,11 +69,11 @@ endif
 
 test: deps dictionary ## Запустить тесты
 	uv run pytest
-	cargo test -p $(PACKAGE) -p rumorph-build
+	cargo test -p $(PACKAGE) -p rumorph-build -p rumorph-dict-ru
 
 test-cov: deps dictionary ## Запустить тесты с проверкой покрытия
 	uv run pytest --cov $(PACKAGE)
-	cargo test -p $(PACKAGE) -p rumorph-build
+	cargo test -p $(PACKAGE) -p rumorph-build -p rumorph-dict-ru
 
 clean: clean-build clean-pyc clean-test ## Удалить все артефакты, кроме сборки Rust
 	rm -f .coverage coverage.xml

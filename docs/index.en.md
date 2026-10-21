@@ -97,6 +97,7 @@ Prebuilt wheels and building from source are described on the [Installation](ins
 
     *   **crates/rumorph** - the Rust core of the analyzer: dictionary format, building, analysis and inflection
     *   **crates/rumorph-build** - building the dictionary from the pymorphy3-dicts-ru export and converting OpenCorpora tags to UD
+    *   **crates/rumorph-dict-ru** - the crate with the dictionary for `rumorph` on crates.io
     *   **crates/rumorph-py** - the Python module `rumorph._rumorph` on PyO3
     *   **python/rumorph** - the Python package
     *   **scripts** - exporting the pymorphy3-dicts-ru dictionary

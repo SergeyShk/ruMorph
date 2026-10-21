@@ -4,38 +4,8 @@ use fst::MapBuilder;
 
 use crate::Error;
 use crate::alphabet::{Alphabet, MAX_KEY, yo_order};
+use crate::dictionary::{Entry, GuessIndex};
 use crate::format::{self, MAX_SPELLINGS, Sections, WordValue};
-
-/// Индекс угадывания незнакомых слов по окончанию
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum GuessIndex {
-    /// Нарицательные слова
-    Common,
-    /// Имена собственные: для слов с заглавной буквы
-    Proper,
-}
-
-impl GuessIndex {
-    /// Наибольшая длина окончания в буквах
-    pub const MAX_ENDING: usize = 5;
-
-    /// Первый байт ключа окончания в автомате угадывания
-    pub(crate) fn byte(self) -> u8 {
-        match self {
-            GuessIndex::Common => 0,
-            GuessIndex::Proper => 1,
-        }
-    }
-}
-
-/// Разбор словоформы в словаре: форма таблицы словоизменения
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct Entry {
-    /// Номер таблицы, который вернул `Builder::add_table`
-    pub table: u16,
-    /// Номер формы словоформы в парадигме таблицы
-    pub form: u16,
-}
 
 /// Сборщик словаря из таблиц тегов, префиксов, суффиксов, парадигм, словоформ и частот
 ///

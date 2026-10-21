@@ -301,6 +301,7 @@ Bug reports, ideas and pull requests are welcome - the [issues](https://github.c
 
 *   **crates/rumorph** - the analyzer core in Rust: the dictionary format, building, analysis and inflection
 *   **crates/rumorph-build** - building the dictionary from an export of pymorphy3-dicts-ru and converting the OpenCorpora tags to UD
+*   **crates/rumorph-dict-ru** - the crate with the dictionary for `rumorph` on crates.io
 *   **crates/rumorph-py** - the Python module `rumorph._rumorph` built with PyO3
 *   **python/rumorph** - the Python package
 *   **scripts** - exporting the pymorphy3-dicts-ru dictionary and checking the installed package before publishing

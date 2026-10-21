@@ -577,6 +577,74 @@ mod tests {
     }
 
     #[test]
+    fn dictionary_numerals_weighted_by_syntagrus() {
+        let ordinal = |feats: &str| format!("{feats}|NumForm=Combi|NumType=Ord|Number=Plur");
+        let dict = dictionary_of(
+            &[(
+                "ADJ",
+                "90-",
+                vec![
+                    ("е", ordinal("Case=Nom")),
+                    ("х", ordinal("Animacy=Anim|Case=Acc")),
+                    ("х", ordinal("Case=Gen")),
+                    ("х", ordinal("Case=Loc")),
+                ],
+            )],
+            &[],
+        );
+        let weight = |case: &str| {
+            let analysis = dict
+                .analyze("90-х")
+                .into_iter()
+                .find(|analysis| dict.feat(analysis.ud, "Case") == Some(case))
+                .unwrap();
+            dict.numeral_weight(analysis.ud)
+        };
+        // Доля - число в SynTagRus плюс один; сочетания, которых там нет, - единица
+        assert_eq!(
+            (weight("Gen"), weight("Loc"), weight("Acc")),
+            (197.0, 77.0, 1.0)
+        );
+        let probs: Vec<(Option<&str>, f64)> = dict
+            .analyze("90-х")
+            .iter()
+            .map(|analysis| (dict.feat(analysis.ud, "Case"), analysis.prob))
+            .collect();
+        assert_eq!(
+            probs,
+            [
+                (Some("Gen"), 197.0 / 275.0),
+                (Some("Loc"), 77.0 / 275.0),
+                (Some("Acc"), 1.0 / 275.0)
+            ]
+        );
+    }
+
+    #[test]
+    fn numerals_mixed_with_other_analyses_keep_dictionary_shares() {
+        let dict = dictionary_of(
+            &[
+                (
+                    "ADJ",
+                    "90-",
+                    vec![(
+                        "х",
+                        "Case=Gen|NumForm=Combi|NumType=Ord|Number=Plur".to_owned(),
+                    )],
+                ),
+                (
+                    "NOUN",
+                    "90-",
+                    vec![("х", "Case=Gen|Number=Plur".to_owned())],
+                ),
+            ],
+            &[],
+        );
+        let probs: Vec<f64> = dict.analyze("90-х").iter().map(|a| a.prob).collect();
+        assert_eq!(probs, [0.5, 0.5]);
+    }
+
+    #[test]
     fn roman_and_latin() {
         let dict = dictionary();
         let roman = "NumForm=Roman|NumType=Ord";

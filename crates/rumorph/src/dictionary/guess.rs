@@ -1,8 +1,29 @@
 //! Угадывание незнакомых слов по окончанию: формы словарных слов с тем же окончанием и их
 //! таблицы словоизменения. Слово с заглавной буквы угадывается в основном как имя собственное
 
-use super::{Analysis, Dictionary, Source};
-use crate::{Entry, GuessIndex};
+use super::{Analysis, Dictionary, Entry, Source};
+
+/// Индекс угадывания незнакомых слов по окончанию
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum GuessIndex {
+    /// Нарицательные слова
+    Common,
+    /// Имена собственные: для слов с заглавной буквы
+    Proper,
+}
+
+impl GuessIndex {
+    /// Наибольшая длина окончания в буквах
+    pub const MAX_ENDING: usize = 5;
+
+    /// Первый байт ключа окончания в автомате угадывания
+    pub(crate) fn byte(self) -> u8 {
+        match self {
+            GuessIndex::Common => 0,
+            GuessIndex::Proper => 1,
+        }
+    }
+}
 
 /// Доля имен собственных среди незнакомых словарю слов с заглавной буквы в SynTagRus
 const PROPER_SHARE: f64 = 0.89;
