@@ -191,7 +191,7 @@ The package dictionary is built from the [OpenCorpora](https://opencorpora.org) 
 
 ## Threads and processes { #parallel }
 
-One analyzer can be used from several threads: `analyze_many` and `lemmatize` release the GIL and process lists in parallel. The analyzer and analyses are pickled, so they work with `multiprocessing` and joblib: a process loads the dictionary once, however many analyses it receives. Passing analyses between processes costs more than the analysis itself, so in processes it is better to get lemmas and analysis fields, and analyses in threads.
+One analyzer can be used from several threads: `analyze_many` and `lemmatize` release the GIL and process lists in parallel, and on the free-threaded Python 3.14t the other methods of the analyzer and analyses run in parallel too. A shared analyzer is not slower than a separate one per thread, so there is no need for an analyzer per thread. The analyzer and analyses are pickled, so they work with `multiprocessing` and joblib: processes share the dictionary mapped into memory, however many analyses they receive. Passing analyses between processes costs more than the analysis itself, so in processes it is better to get lemmas and analysis fields, and analyses in threads.
 
 === "Code"
 

@@ -54,7 +54,7 @@ pip install rumorph
 uv add rumorph
 ```
 
-Колеса собираются для Linux, macOS и Windows, Rust для установки не нужен; словарь входит в пакет. На других платформах и на Python 3.14t без GIL pip соберет пакет из исходников - для этого нужен [Rust](https://www.rust-lang.org/tools/install) 1.88 или новее. Подробнее - на странице [Установка](https://sergeyshk.github.io/ruMorph/installation/).
+Колеса собираются для Linux (в том числе Alpine), macOS и Windows, включая Python 3.14t без GIL; Rust для установки не нужен, словарь входит в пакет. На других платформах pip соберет пакет из исходников - для этого нужен [Rust](https://www.rust-lang.org/tools/install) 1.88 или новее. Подробнее - на странице [Установка](https://sergeyshk.github.io/ruMorph/installation/).
 
 ## Быстрый старт
 
@@ -92,7 +92,7 @@ Analysis(word='стали', lemma='стать', pos='VERB', feats='Aspect=Perf|M
 (True, False)
 ```
 
-Списки слов методы `analyze_many` и `lemmatize` разбирают без GIL, поэтому несколько потоков с одним анализатором работают параллельно. Анализатор и разборы сохраняются через pickle и работают с `multiprocessing` и joblib.
+Списки слов методы `analyze_many` и `lemmatize` разбирают без GIL, поэтому несколько потоков с одним анализатором работают параллельно; в Python 3.14t без GIL параллельно работают и остальные методы. Анализатор и разборы сохраняются через pickle и работают с `multiprocessing` и joblib.
 
 Подробнее - в документации: [анализатор](https://sergeyshk.github.io/ruMorph/analyzer/), [разбор словоформы](https://sergeyshk.github.io/ruMorph/analysis/).
 
