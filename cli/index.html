@@ -1040,6 +1040,11 @@
 <td style="text-align: left;">Файл словаря ruMorph</td>
 </tr>
 <tr>
+<td style="text-align: left;"><code>-o</code>, <code>--output</code></td>
+<td style="text-align: left;">стандартный вывод</td>
+<td style="text-align: left;">Файл результата; <code>-</code> - стандартный вывод</td>
+</tr>
+<tr>
 <td style="text-align: left;"><code>-h</code>, <code>--help</code></td>
 <td style="text-align: left;"></td>
 <td style="text-align: left;">Показать справку</td>
@@ -1051,7 +1056,8 @@
 </tr>
 </tbody>
 </table>
-<p>Файлы читаются по очереди, без файлов и вместо <code>-</code> - стандартный ввод; вход - в UTF-8: файл в другой кодировке (cp1251, UTF-16) не разбирается, а отдельная строка с неверными байтами разбирается с U+FFFD вместо них. Значение параметра пишется отдельно или слитно: <code>-f conllu</code>, <code>-fconllu</code>, <code>--format=conllu</code>. В терминал результат выводится сразу после каждого предложения.</p>
+<p>Файлы читаются по очереди, без файлов и вместо <code>-</code> - стандартный ввод; вход - в UTF-8: файл в другой кодировке (cp1251, UTF-16) не разбирается, а отдельная строка с неверными байтами разбирается с U+FFFD вместо них. Значение параметра пишется отдельно или слитно: <code>-f conllu</code>, <code>-fconllu</code>, <code>--format=conllu</code>. В терминал результат выводится после каждого предложения, а в канал и файл - всякий раз, когда команда ждет следующую строку входа: ее можно держать открытой и подавать текст по строке.</p>
+<p>В Windows PowerShell 5.1 перенаправление <code>&gt;</code> и конвейер (<code>Get-Content text.txt | rumorph</code>) портят кириллицу: передавайте файл аргументом, а результат пишите параметром <code>-o</code> (в PowerShell 7 работают и они). Текст из <code>echo</code> в cmd приходит в кодировке консоли: перед ним нужна команда <code>chcp 65001</code>. Шаблоны файлов (<code>*.txt</code>) cmd и PowerShell не раскрывают.</p>
 <h2 id="input">Вход<a class="headerlink" href="#input" title="Permanent link">&para;</a></h2>
 <ul>
 <li><code>text</code> - текст, предложение - строка. Текст делится на токены просто: слова - с дефисами и апострофами между буквами («кто-то», «д’Артаньян»), числа - с точкой или запятой между цифрами («3,14»), остальные знаки - по одному, одинаковые знаки подряд - вместе («...»), эмодзи с модификаторами и флаги - целиком. Пробел нулевой ширины и другие невидимые разделители делят токены, а мягкий перенос и соединитель слов (U+2060) внутри слова - нет. Точка сокращения отделяется: «т.е.» - четыре токена; для точного деления текста подайте готовые токены.</li>
@@ -1068,7 +1074,7 @@
 <h3 id="lemmas">lemmas<a class="headerlink" href="#lemmas" title="Permanent link">&para;</a></h3>
 <p>Леммы через пробел, строка на предложение; пустая строка текста остается пустой.</p>
 <h3 id="conllu">conllu<a class="headerlink" href="#conllu" title="Permanent link">&para;</a></h3>
-<p>CoNLL-U: номер, токен, лемма, часть речи и признаки, <code>SpaceAfter=No</code> у токена, за которым в тексте нет пробела, а у предложения текста - комментарии <code>sent_id</code> и <code>text</code>.</p>
+<p>CoNLL-U: номер, токен, лемма, часть речи и признаки, <code>SpaceAfter=No</code> у токена, за которым в тексте нет пробела, и комментарии <code>sent_id</code> и <code>text</code>. Текст в <code>text</code> собирается из токенов, как требует CoNLL-U: пробелы между токенами - по одному, без пробелов по краям и невидимых символов, у входа <code>tokens</code> - токены через пробел.</p>
 <div class="highlight"><pre><span></span><code><span class="nb">echo</span><span class="w"> </span><span class="s2">"Мы стали друзьями в ковиде."</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>rumorph<span class="w"> </span>-f<span class="w"> </span>conllu
 </code></pre></div>
 <div class="highlight"><pre><span></span><code># sent_id = 1
@@ -1124,7 +1130,7 @@
 </tr>
 <tr>
 <td style="text-align: left;">1</td>
-<td style="text-align: left;">Файл не найден или не в UTF-8, строка не в UTF-8 (она разбирается с U+FFFD), неверная строка CoNLL-U, словарь не читается, ошибка записи; остальные файлы все равно разбираются</td>
+<td style="text-align: left;">Файл не найден или не в UTF-8, строка не в UTF-8 (она разбирается с U+FFFD), неверная строка CoNLL-U, словарь не читается, файл вывода не создается или совпадает с входным файлом или словарем, ошибка записи; остальные файлы все равно разбираются</td>
 </tr>
 <tr>
 <td style="text-align: left;">2</td>

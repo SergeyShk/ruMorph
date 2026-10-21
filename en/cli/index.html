@@ -1040,6 +1040,11 @@
 <td style="text-align: left;">A ruMorph dictionary file</td>
 </tr>
 <tr>
+<td style="text-align: left;"><code>-o</code>, <code>--output</code></td>
+<td style="text-align: left;">the standard output</td>
+<td style="text-align: left;">The result file; <code>-</code> is the standard output</td>
+</tr>
+<tr>
 <td style="text-align: left;"><code>-h</code>, <code>--help</code></td>
 <td style="text-align: left;"></td>
 <td style="text-align: left;">Show the help</td>
@@ -1051,7 +1056,8 @@
 </tr>
 </tbody>
 </table>
-<p>Files are read one after another; without files and in place of <code>-</code> the standard input is read; the input is in UTF-8: a file in another encoding (cp1251, UTF-16) is not analyzed, and a single line with invalid bytes is analyzed with U+FFFD in their place. An option value is written separately or attached: <code>-f conllu</code>, <code>-fconllu</code>, <code>--format=conllu</code>. On a terminal the result appears right after each sentence.</p>
+<p>Files are read one after another; without files and in place of <code>-</code> the standard input is read; the input is in UTF-8: a file in another encoding (cp1251, UTF-16) is not analyzed, and a single line with invalid bytes is analyzed with U+FFFD in their place. An option value is written separately or attached: <code>-f conllu</code>, <code>-fconllu</code>, <code>--format=conllu</code>. On a terminal the result appears after each sentence, and in a pipe or a file whenever the command waits for the next input line: it can be kept open and fed text line by line.</p>
+<p>In Windows PowerShell 5.1 the <code>&gt;</code> redirection and a pipeline (<code>Get-Content text.txt | rumorph</code>) corrupt Cyrillic: pass the file as an argument and write the result with the <code>-o</code> option (in PowerShell 7 they work too). Text passed with <code>echo</code> in cmd comes in the console encoding: run <code>chcp 65001</code> first. cmd and PowerShell do not expand file patterns (<code>*.txt</code>).</p>
 <h2 id="input">Input<a class="headerlink" href="#input" title="Permanent link">&para;</a></h2>
 <ul>
 <li><code>text</code> - text, a sentence is a line. The text is split into tokens simply: words with hyphens and apostrophes between letters («кто-то», «д’Артаньян»), numbers with a period or a comma between digits («3,14»), other signs one by one, the same signs in a row together («...»), emoji with modifiers and flags whole. A zero-width space and other invisible separators split tokens, while a soft hyphen and a word joiner (U+2060) inside a word do not. The period of an abbreviation is split off: «т.е.» is four tokens; for exact splitting pass ready tokens.</li>
@@ -1068,7 +1074,7 @@
 <h3 id="lemmas">lemmas<a class="headerlink" href="#lemmas" title="Permanent link">&para;</a></h3>
 <p>Lemmas separated by spaces, a line per sentence; an empty line of text stays empty.</p>
 <h3 id="conllu">conllu<a class="headerlink" href="#conllu" title="Permanent link">&para;</a></h3>
-<p>CoNLL-U: the number, token, lemma, part of speech and features, <code>SpaceAfter=No</code> on a token not followed by a space in the text, and the <code>sent_id</code> and <code>text</code> comments for a sentence of text.</p>
+<p>CoNLL-U: the number, token, lemma, part of speech and features, <code>SpaceAfter=No</code> on a token not followed by a space in the text, and the <code>sent_id</code> and <code>text</code> comments. The <code>text</code> is built from the tokens, as CoNLL-U requires: one space between tokens, no spaces at the ends and no invisible characters; for the <code>tokens</code> input it is the tokens separated by spaces.</p>
 <div class="highlight"><pre><span></span><code><span class="nb">echo</span><span class="w"> </span><span class="s2">"Мы стали друзьями в ковиде."</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>rumorph<span class="w"> </span>-f<span class="w"> </span>conllu
 </code></pre></div>
 <div class="highlight"><pre><span></span><code># sent_id = 1
@@ -1124,7 +1130,7 @@
 </tr>
 <tr>
 <td style="text-align: left;">1</td>
-<td style="text-align: left;">A file is missing or not in UTF-8, a line is not in UTF-8 (it is analyzed with U+FFFD), an invalid CoNLL-U line, the dictionary cannot be read, a write error; the other files are still analyzed</td>
+<td style="text-align: left;">A file is missing or not in UTF-8, a line is not in UTF-8 (it is analyzed with U+FFFD), an invalid CoNLL-U line, the dictionary cannot be read, the output file cannot be created or is an input file or the dictionary, a write error; the other files are still analyzed</td>
 </tr>
 <tr>
 <td style="text-align: left;">2</td>
