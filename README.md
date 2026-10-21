@@ -34,6 +34,7 @@
 * **[Токены вне словаря](https://sergeyshk.github.io/ruMorph/analysis/#rules)** - числа, знаки, латиница, инициалы и сокращения по правилам
 * **[Незнакомые слова](https://sergeyshk.github.io/ruMorph/analysis/#guess)** - разборы по окончанию, слова через дефис и с приставками, формы угаданных слов
 * **[Словоизменение](https://sergeyshk.github.io/ruMorph/inflection/)** - формы лексемы, форма по признакам UD, согласование с количеством
+* **[Команда rumorph](https://sergeyshk.github.io/ruMorph/cli/)** - разбор файлов и потоков: леммы, CoNLL-U, TSV и JSON Lines
 * **[Переход с pymorphy](https://sergeyshk.github.io/ruMorph/migration/)** - соответствие вызовов pymorphy2 и pymorphy3, частей речи и граммем
 * **[Скорость и память](https://sergeyshk.github.io/ruMorph/performance/)** - разбор, лемматизация и словоизменение в сравнении с pymorphy3, загрузка словаря и память
 
@@ -221,6 +222,23 @@ Analysis(word='стали', lemma='стать', pos='VERB', feats='Aspect=Perf|M
 ```
 
 Подробнее - в [документации](https://sergeyshk.github.io/ruMorph/inflection/).
+
+</details>
+
+<details>
+<summary><b>Команда rumorph</b></summary>
+
+<br>
+
+Команда ставится вместе с пакетом и разбирает текст из файлов или стандартного ввода: леммы, CoNLL-U, TSV или JSON Lines со всеми разборами. На входе - текст, токены по одному в строке или CoNLL-U, в котором заполняются LEMMA, UPOS и FEATS.
+
+```bash
+$ echo "Мы стали друзьями в ковиде." | rumorph
+мы стать друг в ковид .
+$ rumorph --format conllu text.txt > text.conllu
+```
+
+Подробнее - в [документации](https://sergeyshk.github.io/ruMorph/cli/): параметры, форматы и коды выхода.
 
 </details>
 

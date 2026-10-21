@@ -35,6 +35,14 @@
 
     [:octicons-arrow-right-24: Inflection](inflection.md)
 
+-   :material-console:{ .lg .middle } __The rumorph command__
+
+    ---
+
+    Analysis of files and streams from the command line: lemmas, CoNLL-U, TSV and JSON Lines
+
+    [:octicons-arrow-right-24: The rumorph command](cli.md)
+
 -   :material-swap-horizontal:{ .lg .middle } __Migrating from pymorphy__
 
     ---

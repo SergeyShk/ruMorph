@@ -34,6 +34,7 @@ Analysis and lemmatization are 6-8 times faster than in pymorphy3 with the `pymo
 * **[Tokens outside the dictionary](https://sergeyshk.github.io/ruMorph/en/analysis/#rules)** - numbers, signs, Latin script, initials and abbreviations by rules
 * **[Unknown words](https://sergeyshk.github.io/ruMorph/en/analysis/#guess)** - analyses by the ending, hyphenated words and words with prefixes, forms of guessed words
 * **[Inflection](https://sergeyshk.github.io/ruMorph/en/inflection/)** - forms of a lexeme, a form by UD features, agreement with a number
+* **[The rumorph command](https://sergeyshk.github.io/ruMorph/en/cli/)** - analysis of files and streams: lemmas, CoNLL-U, TSV and JSON Lines
 * **[Migrating from pymorphy](https://sergeyshk.github.io/ruMorph/en/migration/)** - pymorphy2 and pymorphy3 calls, parts of speech and grammemes and their counterparts
 * **[Speed and memory](https://sergeyshk.github.io/ruMorph/en/performance/)** - analysis, lemmatization and inflection compared with pymorphy3, dictionary loading and memory
 
@@ -221,6 +222,23 @@ If the lexeme has no such form, `inflect` and `agree` raise `FormNotFoundError`,
 ```
 
 See the [documentation](https://sergeyshk.github.io/ruMorph/en/inflection/).
+
+</details>
+
+<details>
+<summary><b>The rumorph command</b></summary>
+
+<br>
+
+The command is installed with the package and analyzes text from files or the standard input: lemmas, CoNLL-U, TSV or JSON Lines with all analyses. The input is text, one token per line or CoNLL-U with the LEMMA, UPOS and FEATS columns to fill.
+
+```bash
+$ echo "Мы стали друзьями в ковиде." | rumorph
+мы стать друг в ковид .
+$ rumorph --format conllu text.txt > text.conllu
+```
+
+See the [documentation](https://sergeyshk.github.io/ruMorph/en/cli/) for the options, formats and exit codes.
 
 </details>
 

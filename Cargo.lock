@@ -151,18 +151,19 @@ dependencies = [
 
 [[package]]
 name = "rumorph"
-version = "0.2.0-dev.3"
+version = "0.2.0-dev.4"
 dependencies = [
  "bytemuck",
  "crc32fast",
  "fst",
  "memmap2",
  "rumorph-dict-ru",
+ "unicode-segmentation",
 ]
 
 [[package]]
 name = "rumorph-build"
-version = "0.2.0-dev.3"
+version = "0.2.0-dev.4"
 dependencies = [
  "rumorph",
  "serde_json",
@@ -170,11 +171,11 @@ dependencies = [
 
 [[package]]
 name = "rumorph-dict-ru"
-version = "0.2.0-dev.3"
+version = "0.2.0-dev.4"
 
 [[package]]
 name = "rumorph-py"
-version = "0.2.0-dev.3"
+version = "0.2.0-dev.4"
 dependencies = [
  "pyo3",
  "rumorph",
@@ -244,6 +245,12 @@ name = "unicode-ident"
 version = "1.0.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2c754d6c33795a1c324727428e5a7dedb5b06195f9890bdbcba760d3e246563"
+
+[[package]]
+name = "unicode-segmentation"
+version = "1.13.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c6f5d3c3b1bf09027a88a6bc961fc00497d651009560b5463668dc81b0fa87a8"
 
 [[package]]
 name = "zmij"

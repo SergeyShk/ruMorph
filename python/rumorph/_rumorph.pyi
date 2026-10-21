@@ -9,6 +9,8 @@ __version__: str
 
 class FormNotFoundError(LookupError): ...
 
+def _main(args: list[str]) -> int: ...
+
 @final
 class Analysis:
     @property

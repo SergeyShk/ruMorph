@@ -87,7 +87,7 @@ jobs:
       - name: Run tests
         run: uv run --no-sync pytest --cov rumorph
       - name: Run Rust tests
-        run: cargo test -p rumorph -p rumorph-build -p rumorph-dict-ru --locked
+        run: cargo test -p rumorph -p rumorph-build -p rumorph-dict-ru --all-features --locked
 
   msrv:
     runs-on: ubuntu-latest

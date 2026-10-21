@@ -170,7 +170,7 @@ def test_capitalized_abbreviation(morph):
 
 
 @pytest.mark.parametrize(
-    "word", [" ", "\n", "\u00a0", "\u200b", "\ufeff", "\x00", "\u200d", "а б", "-\u00ad"]
+    "word", [" ", "\n", "\u00a0", "\u200b", "\ufeff", "\x00", "\u200d", "а б", "\u00ad"]
 )
 def test_not_tokens(morph, word):
     assert morph.analyze(word) == []
