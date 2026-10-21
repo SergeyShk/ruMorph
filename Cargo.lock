@@ -157,6 +157,7 @@ dependencies = [
  "crc32fast",
  "fst",
  "memmap2",
+ "rumorph-dict-ru",
 ]
 
 [[package]]
@@ -166,6 +167,10 @@ dependencies = [
  "rumorph",
  "serde_json",
 ]
+
+[[package]]
+name = "rumorph-dict-ru"
+version = "0.2.0-dev.3"
 
 [[package]]
 name = "rumorph-py"

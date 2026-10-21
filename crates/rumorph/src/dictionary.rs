@@ -7,21 +7,24 @@ use std::sync::Arc;
 
 use fst::Map;
 
+use crate::Error;
 use crate::alphabet::{Alphabet, Key, yo_order};
 use crate::format::{self, Layout, MAX_SPELLINGS, Slice, Storage, Strings, WordValue};
-use crate::{Entry, Error};
 
 mod guess;
 mod parts;
 mod rules;
 mod ud;
 
+#[cfg(any(test, feature = "build"))]
+pub use guess::GuessIndex;
 use parts::with_particle;
 pub use ud::UdTag;
 use ud::UdTags;
 
 /// Откуда взят разбор
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Source {
     /// Словоформа есть в словаре
     Dictionary,
@@ -43,8 +46,18 @@ impl Source {
     }
 }
 
+/// Разбор словоформы в словаре: форма таблицы словоизменения
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct Entry {
+    /// Номер таблицы, который вернул `Builder::add_table`
+    pub table: u16,
+    /// Номер формы словоформы в парадигме таблицы
+    pub form: u16,
+}
+
 /// Разбор словоформы
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct Analysis {
     /// Словоформа в написании словаря: с буквой «ё», если она есть в словаре
     pub word: String,
@@ -132,6 +145,16 @@ pub struct Dictionary {
     guesses: Map<Slice>,
 }
 
+impl std::fmt::Debug for Dictionary {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Dictionary")
+            .field("meta", &self.meta)
+            .field("word_count", &self.word_count)
+            .field("ud_tags", &self.ud.len())
+            .finish_non_exhaustive()
+    }
+}
+
 /// Написания ключа словоформы: места «ё» и начала списков разборов, а также списки частот
 /// написаний
 enum Spellings<'a> {
@@ -212,6 +235,30 @@ impl Dictionary {
     /// Читает словарь из байтов файла словаря
     pub fn from_bytes(data: &[u8]) -> Result<Self, Error> {
         Self::from_storage(Storage::copy(data))
+    }
+
+    /// Читает словарь из данных программы (`include_bytes!`): байты, выровненные по 8,
+    /// читаются без копии
+    pub fn from_static(data: &'static [u8]) -> Result<Self, Error> {
+        Self::from_storage(Storage::of_static(data))
+    }
+
+    /// Словарь OpenCorpora из крейта `rumorph-dict-ru`
+    ///
+    /// ```
+    /// let dictionary = rumorph::Dictionary::bundled()?;
+    /// assert_eq!(dictionary.analyze("стали")[0].lemma, "стать");
+    /// # Ok::<(), rumorph::Error>(())
+    /// ```
+    #[cfg(feature = "bundled")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "bundled")))]
+    pub fn bundled() -> Result<Self, Error> {
+        if rumorph_dict_ru::DICTIONARY.is_empty() {
+            return Err(Error::Format(
+                "крейт rumorph-dict-ru собран без файла словаря".into(),
+            ));
+        }
+        Self::from_static(rumorph_dict_ru::DICTIONARY)
     }
 
     fn from_storage(storage: Storage) -> Result<Self, Error> {
@@ -443,7 +490,8 @@ impl Dictionary {
     }
 
     /// Разборы OpenCorpora до перевода в UD и слияния: написание, тег, начальная форма парадигмы
-    /// и вероятность (без частот - равная доля)
+    /// и вероятность (без частот - равная доля); для проверки словаря
+    #[doc(hidden)]
     pub fn opencorpora(&self, word: &str) -> Vec<(String, &str, String, f64)> {
         let analyses = self.candidates(word);
         let uniform = analyses.iter().all(|analysis| analysis.prob == 0.0);
@@ -1426,8 +1474,8 @@ fn walk_lists(lists: &[u32], width: usize, valid: impl Fn(&[u32]) -> bool) -> Re
 #[cfg(test)]
 pub(super) mod tests {
     use super::*;
+    use crate::builder::Builder;
     use crate::format::Sections;
-    use crate::{Builder, Entry, GuessIndex};
 
     const TAGS: [&str; 6] = [
         "NOUN,anim,masc sing,nomn",

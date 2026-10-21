@@ -1,0 +1,15 @@
+[package]
+name = "rumorph-dict-ru"
+description = "Russian dictionary for the ruMorph morphological analyzer, built from OpenCorpora"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license = "CC-BY-SA-3.0"
+authors.workspace = true
+repository.workspace = true
+homepage = "https://sergeyshk.github.io/ruMorph/"
+readme = "README.md"
+keywords = ["russian", "dictionary", "morphology", "opencorpora", "nlp"]
+categories = ["text-processing"]
+# Файл словаря не хранится в git: перед публикацией его кладет сюда CI
+include = ["build.rs", "src/**", "README.md", "LICENSE-DICTIONARY.txt", "ru.dict"]

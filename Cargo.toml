@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/rumorph", "crates/rumorph-build", "crates/rumorph-py"]
+members = ["crates/rumorph", "crates/rumorph-build", "crates/rumorph-dict-ru", "crates/rumorph-py"]
 resolver = "3"
 
 [workspace.package]

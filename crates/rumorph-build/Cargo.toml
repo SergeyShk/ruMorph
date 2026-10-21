@@ -10,5 +10,5 @@ repository.workspace = true
 publish = false
 
 [dependencies]
-rumorph = { path = "../rumorph" }
+rumorph = { path = "../rumorph", default-features = false, features = ["build"] }
 serde_json = "1.0.154"

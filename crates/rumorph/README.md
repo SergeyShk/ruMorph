@@ -1,0 +1,52 @@
+# rumorph
+
+Быстрый морфологический анализатор русского языка на Rust - ядро библиотеки
+[ruMorph](https://github.com/SergeyShk/ruMorph) для Python.
+
+- Разборы словоформы по словарю OpenCorpora: лемма, часть речи и признаки
+  [Universal Dependencies](https://universaldependencies.org/) в соглашениях трибанка SynTagRus,
+  вероятность разбора.
+- Незнакомые слова: числа, знаки, латиница, сокращения, слова через дефис и с приставками,
+  угадывание по окончанию.
+- Формы лексемы, форма с заданными признаками и согласование с количеством.
+- Словарь отображается в память или читается из данных программы без копий: загрузка около 3 мс,
+  разбор словоформы - около 0,6 мкс.
+
+## Установка
+
+```toml
+[dependencies]
+rumorph = "0.2"
+```
+
+Словарь OpenCorpora входит в крейт [`rumorph-dict-ru`](https://crates.io/crates/rumorph-dict-ru)
+и подключается feature `bundled` (по умолчанию). Без нее словарь читается из файла:
+`Dictionary::open`.
+
+## Пример
+
+```rust
+use rumorph::Dictionary;
+
+let dictionary = Dictionary::bundled()?;
+let analysis = &dictionary.analyze("стали")[0];
+let tag = dictionary.ud_tag(analysis.ud).unwrap();
+assert_eq!((analysis.lemma.as_str(), tag.pos()), ("стать", "VERB"));
+assert_eq!(tag.feat("Tense"), Some("Past"));
+
+let cat = &dictionary.analyze("кошка")[0];
+assert_eq!(dictionary.inflect(cat, &[("Case", "Gen")]).unwrap().word, "кошки");
+let ruble = &dictionary.analyze("рубль")[0];
+assert_eq!(dictionary.agree(ruble, 5).unwrap().word, "рублей");
+# Ok::<(), rumorph::Error>(())
+```
+
+## Features
+
+- `bundled` (по умолчанию) - словарь из крейта `rumorph-dict-ru`: `Dictionary::bundled`.
+- `build` - сборка своих словарей: `Builder`.
+
+## Лицензия
+
+Код распространяется под лицензией MIT. Словарь в крейте `rumorph-dict-ru` собран из словаря
+[OpenCorpora](https://opencorpora.org) и распространяется по лицензии CC BY-SA 3.0.

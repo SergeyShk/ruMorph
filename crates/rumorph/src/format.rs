@@ -14,6 +14,7 @@ const HEADER: usize = 16;
 const ALIGN: usize = 8;
 
 /// Содержимое словаря для записи в файл
+#[cfg(any(test, feature = "build"))]
 #[derive(Clone, Default)]
 pub(crate) struct Sections {
     pub meta: String,
@@ -73,6 +74,7 @@ const MANY: u64 = 1 << 63;
 
 impl WordValue {
     /// Значение автомата; `None`, если написание не укладывается в значение
+    #[cfg(any(test, feature = "build"))]
     pub fn pack(self) -> Option<u64> {
         let fits = |value: u64, bits: u32| (value >> bits == 0).then_some(value);
         match self {
@@ -142,6 +144,7 @@ impl Layout {
     }
 }
 
+#[cfg(any(test, feature = "build"))]
 pub(crate) fn write(sections: &Sections) -> Vec<u8> {
     let mut out = MAGIC.to_vec();
     out.extend_from_slice(&VERSION.to_le_bytes());
@@ -239,10 +242,11 @@ fn truncated() -> Error {
     Error::Format("файл обрезан".into())
 }
 
-/// Байты словаря: отображенный в память файл или копия, выровненная по 8 байт
+/// Байты словаря: отображенный в память файл, данные программы или копия, выровненная по 8 байт
 pub(crate) enum Storage {
     Owned(Vec<u64>, usize),
     Mapped(memmap2::Mmap),
+    Static(&'static [u8]),
 }
 
 impl Storage {
@@ -252,10 +256,20 @@ impl Storage {
         Storage::Owned(words, data.len())
     }
 
+    /// Данные программы читаются без копии, если они выровнены по 8 байт
+    pub fn of_static(data: &'static [u8]) -> Self {
+        if (data.as_ptr() as usize).is_multiple_of(ALIGN) {
+            Storage::Static(data)
+        } else {
+            Storage::copy(data)
+        }
+    }
+
     pub fn bytes(&self) -> &[u8] {
         match self {
             Storage::Owned(words, len) => &bytemuck::cast_slice(words)[..*len],
             Storage::Mapped(map) => map,
+            Storage::Static(data) => data,
         }
     }
 
@@ -361,6 +375,7 @@ impl Strings {
     }
 }
 
+#[cfg(any(test, feature = "build"))]
 fn strings_bytes(values: &[String]) -> Vec<u8> {
     let mut out = (values.len() as u32).to_le_bytes().to_vec();
     let mut end = 0;
@@ -374,6 +389,7 @@ fn strings_bytes(values: &[String]) -> Vec<u8> {
     out
 }
 
+#[cfg(any(test, feature = "build"))]
 fn u16_bytes(values: &[u16]) -> Vec<u8> {
     values
         .iter()
@@ -381,6 +397,7 @@ fn u16_bytes(values: &[u16]) -> Vec<u8> {
         .collect()
 }
 
+#[cfg(any(test, feature = "build"))]
 fn u32_bytes(values: &[u32]) -> Vec<u8> {
     values
         .iter()

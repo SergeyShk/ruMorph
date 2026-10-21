@@ -2,6 +2,7 @@ use std::fmt;
 
 /// Ошибка чтения или сборки словаря
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum Error {
     /// Ошибка ввода-вывода
     Io(std::io::Error),
