@@ -11,12 +11,21 @@ use std::time::SystemTime;
 
 use pyo3::create_exception;
 use pyo3::exceptions::{PyLookupError, PyOSError, PyOverflowError, PyTypeError, PyValueError};
+use pyo3::intern;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyFloat, PyFrozenSet, PyInt, PyString, PyTuple};
 
 /// Сколько слов `analyze_many` и `lemmatize` разбирают за раз без GIL: между кусками
 /// переводятся результаты и проверяется Ctrl+C
 const CHUNK: usize = 8192;
+
+/// Python работает без GIL (3.14t): поля разборов собираются заново, а не копируются из общих
+/// объектов тега
+static GIL_DISABLED: AtomicBool = AtomicBool::new(false);
+
+fn gil_disabled() -> bool {
+    GIL_DISABLED.load(Ordering::Relaxed)
+}
 
 create_exception!(
     rumorph,
@@ -36,18 +45,39 @@ struct UdText {
 /// Объекты Python тега UD, общие для всех разборов с этим тегом
 struct UdObjects {
     pos: Py<PyString>,
-    /// Образец признаков: наружу отдается копия
+    /// Образец признаков: с GIL наружу отдается копия
     feats: Py<PyDict>,
+    /// Признаки интернированными строками: без GIL из них собирается новый словарь, а не копия
+    /// образца, счетчик ссылок которого меняли бы все потоки
+    pairs: Vec<(Py<PyString>, Py<PyString>)>,
     labels: Py<PyFrozenSet>,
-    text: Arc<UdText>,
+    label_strings: Vec<Py<PyString>>,
+    /// Признаки и пометы строками Python для pickle: один объект на тег, поэтому pickle списка
+    /// разборов хранит их один раз
+    feats_text: Py<PyString>,
+    labels_text: Py<PyString>,
+    text: UdText,
 }
 
 impl UdObjects {
     fn new(py: Python<'_>, pos: &str, feats: &[(&str, &str)], labels: &[&str]) -> PyResult<Self> {
+        let pairs: Vec<(Py<PyString>, Py<PyString>)> = feats
+            .iter()
+            .map(|(name, value)| {
+                (
+                    PyString::intern(py, name).unbind(),
+                    PyString::intern(py, value).unbind(),
+                )
+            })
+            .collect();
         let dict = PyDict::new(py);
-        for (name, value) in feats {
-            dict.set_item(PyString::intern(py, name), PyString::intern(py, value))?;
+        for (name, value) in &pairs {
+            dict.set_item(name, value)?;
         }
+        let label_strings: Vec<Py<PyString>> = labels
+            .iter()
+            .map(|label| PyString::intern(py, label).unbind())
+            .collect();
         let text = UdText {
             pos: pos.to_owned(),
             feats: feats
@@ -60,9 +90,12 @@ impl UdObjects {
         Ok(UdObjects {
             pos: PyString::intern(py, pos).unbind(),
             feats: dict.unbind(),
-            labels: PyFrozenSet::new(py, labels.iter().map(|label| PyString::intern(py, label)))?
-                .unbind(),
-            text: Arc::new(text),
+            pairs,
+            labels: PyFrozenSet::new(py, &label_strings)?.unbind(),
+            label_strings,
+            feats_text: PyString::new(py, &text.feats).unbind(),
+            labels_text: PyString::new(py, &text.labels).unbind(),
+            text,
         })
     }
 
@@ -105,13 +138,23 @@ impl UdObjects {
 struct Analysis {
     /// Разбор ядра: его таблица словоизменения и форма дают остальные формы лексемы
     inner: rumorph::Analysis,
-    #[pyo3(get)]
-    pos: Py<PyString>,
-    feats: Py<PyDict>,
-    #[pyo3(get)]
-    labels: Py<PyFrozenSet>,
-    ud: Arc<UdText>,
+    /// Ручка анализатора потока: через нее берутся словарь и объекты тега. Своих ссылок на общие
+    /// объекты тега у разбора нет: без GIL их счетчики ссылок меняли бы все потоки
     handle: Arc<Handle>,
+}
+
+impl Analysis {
+    /// Объекты тега разбора: их создает `Analyzer::to_py`
+    fn tag(&self) -> PyResult<&UdObjects> {
+        self.handle
+            .analyzer
+            .get()
+            .shared
+            .ud
+            .get(usize::from(self.inner.ud))
+            .and_then(OnceLock::get)
+            .ok_or_else(|| PyValueError::new_err("Нет тега UD"))
+    }
 }
 
 #[pymethods]
@@ -124,6 +167,20 @@ impl Analysis {
     #[getter]
     fn lemma(&self) -> &str {
         &self.inner.lemma
+    }
+
+    #[getter]
+    fn pos(&self, py: Python<'_>) -> PyResult<Py<PyString>> {
+        Ok(self.tag()?.pos.clone_ref(py))
+    }
+
+    #[getter]
+    fn labels<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyFrozenSet>> {
+        let tag = self.tag()?;
+        if gil_disabled() {
+            return PyFrozenSet::new(py, &tag.label_strings);
+        }
+        Ok(tag.labels.bind(py).clone())
     }
 
     #[getter]
@@ -274,17 +331,26 @@ impl Analysis {
 
     #[getter]
     fn feats<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
-        self.feats.bind(py).copy()
+        let tag = self.tag()?;
+        if !gil_disabled() {
+            return tag.feats.bind(py).copy();
+        }
+        let feats = PyDict::new(py);
+        for (name, value) in &tag.pairs {
+            feats.set_item(name, value)?;
+        }
+        Ok(feats)
     }
 
     fn __repr__(&self, py: Python<'_>) -> PyResult<String> {
+        let ud = &self.tag()?.text;
         Ok(format!(
             "Analysis(word={}, lemma={}, pos={}, feats={}, labels={}, prob={}, source={})",
             py_repr(py, &self.inner.word)?,
             py_repr(py, &self.inner.lemma)?,
-            py_repr(py, &self.ud.pos)?,
-            py_repr(py, &self.ud.feats)?,
-            py_repr(py, &self.ud.labels)?,
+            py_repr(py, &ud.pos)?,
+            py_repr(py, &ud.feats)?,
+            py_repr(py, &ud.labels)?,
             PyFloat::new(py, self.inner.prob).repr()?,
             py_repr(py, self.inner.source.as_str())?
         ))
@@ -297,19 +363,19 @@ impl Analysis {
         self.inner.word == other.inner.word
             && self.inner.lemma == other.inner.lemma
             && self.inner.source == other.inner.source
-            && self.ud == other.ud
+            && matches!((self.tag(), other.tag()), (Ok(own), Ok(other)) if own.text == other.text)
     }
 
-    fn __hash__(&self) -> u64 {
+    fn __hash__(&self) -> PyResult<u64> {
         let mut hasher = DefaultHasher::new();
         (
             &self.inner.word,
             &self.inner.lemma,
             self.inner.source.as_str(),
-            &self.ud,
+            &self.tag()?.text,
         )
             .hash(&mut hasher);
-        hasher.finish()
+        Ok(hasher.finish())
     }
 
     fn __copy__(slf: Bound<'_, Self>) -> Bound<'_, Self> {
@@ -320,16 +386,22 @@ impl Analysis {
         slf
     }
 
-    fn __reduce__<'py>(&self, py: Python<'py>) -> Reduced<'py, (Py<Analyzer>, AnalysisState)> {
+    fn __reduce__<'py>(&self, py: Python<'py>) -> Reduced<'py, (Py<Analyzer>, PickledState)> {
         let restore = py.import("rumorph._rumorph")?.getattr("_analysis")?;
+        let tag = self.tag()?;
+        let source = match self.inner.source {
+            rumorph::Source::Rule => intern!(py, "rule"),
+            rumorph::Source::Guess => intern!(py, "guess"),
+            _ => intern!(py, "dictionary"),
+        };
         let state = (
             self.inner.word.clone(),
             self.inner.lemma.clone(),
-            self.ud.pos.clone(),
-            self.ud.feats.clone(),
-            self.ud.labels.clone(),
+            tag.pos.clone_ref(py),
+            tag.feats_text.clone_ref(py),
+            tag.labels_text.clone_ref(py),
             self.inner.prob,
-            self.inner.source.as_str().to_owned(),
+            source.clone().unbind(),
             self.inner.entry.map(|entry| (entry.table, entry.form)),
         );
         Ok((restore, (self.handle.analyzer.clone_ref(py), state)))
@@ -338,6 +410,18 @@ impl Analysis {
 
 /// Функция восстановления объекта из pickle и ее аргументы
 type Reduced<'py, Args> = PyResult<(Bound<'py, PyAny>, Args)>;
+
+/// Поля разбора в pickle: строки тега и источника - общие объекты
+type PickledState = (
+    String,
+    String,
+    Py<PyString>,
+    Py<PyString>,
+    Py<PyString>,
+    f64,
+    Py<PyString>,
+    Option<(u16, u16)>,
+);
 
 /// Поля разбора для pickle: слово, лемма, часть речи, признаки, пометы, вероятность, источник,
 /// таблица словоизменения и форма в ней
@@ -476,8 +560,27 @@ impl FileKey {
 /// запертой потоком, которого в нем нет, и зависнуть на первом же анализаторе
 struct Dictionaries {
     locked: AtomicBool,
-    entries: UnsafeCell<Vec<(FileKey, Slot)>>,
-    last: UnsafeCell<Option<Arc<Shared>>>,
+    state: UnsafeCell<Loaded>,
+}
+
+/// Список словарей и последний полученный словарь
+struct Loaded {
+    entries: Vec<(FileKey, Slot)>,
+    last: Option<Arc<Shared>>,
+}
+
+impl Loaded {
+    /// Запоминает последний полученный словарь; вывод - прежний, его освобождают уже без флага
+    fn keep(&mut self, shared: &Arc<Shared>) -> Option<Arc<Shared>> {
+        if self
+            .last
+            .as_ref()
+            .is_some_and(|known| Arc::ptr_eq(known, shared))
+        {
+            return None;
+        }
+        self.last.replace(Arc::clone(shared))
+    }
 }
 
 /// Словарь в списке загруженных
@@ -487,13 +590,15 @@ enum Slot {
     Loaded(Weak<Shared>),
 }
 
-// SAFETY: `entries` и `last` читаются и меняются только под флагом `locked`
+// SAFETY: `state` читается и меняется только под флагом `locked`
 unsafe impl Sync for Dictionaries {}
 
 static DICTIONARIES: Dictionaries = Dictionaries {
     locked: AtomicBool::new(false),
-    entries: UnsafeCell::new(Vec::new()),
-    last: UnsafeCell::new(None),
+    state: UnsafeCell::new(Loaded {
+        entries: Vec::new(),
+        last: None,
+    }),
 };
 
 impl Dictionaries {
@@ -513,33 +618,30 @@ impl Dictionaries {
         self.locked.store(false, Ordering::Release);
     }
 
-    /// Действие со списком словарей под флагом
-    fn with<T>(&self, action: impl FnOnce(&mut Vec<(FileKey, Slot)>) -> T) -> T {
+    /// Действие со словарями под флагом
+    fn with<T>(&self, action: impl FnOnce(&mut Loaded) -> T) -> T {
+        self.lock();
+        self.locked_with(action)
+    }
+
+    /// Действие со словарями, если флаг свободен: поток с GIL не ждет флаг
+    fn try_with<T>(&self, action: impl FnOnce(&mut Loaded) -> T) -> Option<T> {
+        self.locked
+            .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+            .ok()?;
+        Some(self.locked_with(action))
+    }
+
+    fn locked_with<T>(&self, action: impl FnOnce(&mut Loaded) -> T) -> T {
         struct Unlock<'a>(&'a Dictionaries);
         impl Drop for Unlock<'_> {
             fn drop(&mut self) {
                 self.0.unlock();
             }
         }
-        self.lock();
         let _unlock = Unlock(self);
         // SAFETY: флаг взят только этим потоком
-        action(unsafe { &mut *self.entries.get() })
-    }
-
-    /// Запоминает последний полученный словарь; вывод - прежний, его освобождают уже без флага
-    fn keep(&self, shared: &Arc<Shared>) -> Option<Arc<Shared>> {
-        self.with(|_| {
-            // SAFETY: флаг взят только этим потоком
-            let last = unsafe { &mut *self.last.get() };
-            if last
-                .as_ref()
-                .is_some_and(|known| Arc::ptr_eq(known, shared))
-            {
-                return None;
-            }
-            last.replace(Arc::clone(shared))
-        })
+        action(unsafe { &mut *self.state.get() })
     }
 }
 
@@ -558,7 +660,11 @@ fn _after_fork_in_parent() {
 #[pyfunction]
 fn _after_fork_in_child() {
     DICTIONARIES.unlock();
-    DICTIONARIES.with(|entries| entries.retain(|(_, slot)| matches!(slot, Slot::Loaded(_))));
+    DICTIONARIES.with(|loaded| {
+        loaded
+            .entries
+            .retain(|(_, slot)| matches!(slot, Slot::Loaded(_)));
+    });
 }
 
 /// Что делать со словарем файла
@@ -577,7 +683,8 @@ struct Loading<'a> {
 
 impl Drop for Loading<'_> {
     fn drop(&mut self) {
-        DICTIONARIES.with(|entries| {
+        DICTIONARIES.with(|loaded| {
+            let entries = &mut loaded.entries;
             let Some(at) = entries
                 .iter()
                 .position(|(known, slot)| known == self.key && matches!(slot, Slot::Loading))
@@ -600,8 +707,24 @@ impl Drop for Loading<'_> {
 /// его объекты Python уходят в пул отложенных decref PyO3, мьютекс которого может застать fork
 fn dictionary(path: &Path) -> Result<(Arc<Shared>, Option<Arc<Shared>>), rumorph::Error> {
     let shared = find_or_load(path)?;
-    let previous = DICTIONARIES.keep(&shared);
+    let previous = DICTIONARIES.with(|loaded| loaded.keep(&shared));
     Ok((shared, previous))
+}
+
+/// Словарь файла `path`, если он уже загружен и флаг словарей свободен: так анализатор,
+/// созданный на один вызов, не отпускает GIL. Иначе `None`
+fn loaded_dictionary(path: &Path) -> Option<(Arc<Shared>, Option<Arc<Shared>>)> {
+    let key = FileKey::new(path, &std::fs::metadata(path).ok()?)?;
+    DICTIONARIES
+        .try_with(|loaded| {
+            let shared = loaded.entries.iter().find_map(|(known, slot)| match slot {
+                Slot::Loaded(shared) if *known == key => shared.upgrade(),
+                _ => None,
+            })?;
+            let previous = loaded.keep(&shared);
+            Some((shared, previous))
+        })
+        .flatten()
 }
 
 fn find_or_load(path: &Path) -> Result<Arc<Shared>, rumorph::Error> {
@@ -609,7 +732,8 @@ fn find_or_load(path: &Path) -> Result<Arc<Shared>, rumorph::Error> {
         return Ok(Arc::new(Shared::new(rumorph::Dictionary::open(path)?)));
     };
     loop {
-        let lookup = DICTIONARIES.with(|entries| {
+        let lookup = DICTIONARIES.with(|loaded| {
+            let entries = &mut loaded.entries;
             entries.retain(|(_, slot)| match slot {
                 Slot::Loading => true,
                 Slot::Loaded(shared) => shared.strong_count() > 0,
@@ -660,10 +784,32 @@ fn package_version() -> String {
     env!("CARGO_PKG_VERSION").replace("-dev.", ".dev")
 }
 
-/// Восстановление анализатора из pickle: словарь берется из загруженных в процессе
+/// Восстановление анализатора из pickle: анализатор потока с тем же путем к словарю (pickle
+/// разборов не создает анализатор на каждый разбор, а удаленный файл словаря не мешает), иначе
+/// новый со словарем из загруженных в процессе
 #[pyfunction]
-fn _analyzer(py: Python<'_>, path: Option<PathBuf>) -> PyResult<Analyzer> {
-    Analyzer::open(py, path)
+fn _analyzer(py: Python<'_>, path: Option<PathBuf>) -> PyResult<Py<Analyzer>> {
+    let explicit = path.is_some();
+    let path = Analyzer::resolve(py, path)?;
+    let found = HANDLES
+        .try_with(|handles| {
+            handles
+                .borrow()
+                .slots
+                .iter()
+                .filter_map(|(_, handle)| handle.upgrade())
+                .find(|handle| {
+                    let analyzer = handle.analyzer.get();
+                    analyzer.explicit == explicit && analyzer.path == path
+                })
+                .map(|handle| handle.analyzer.clone_ref(py))
+        })
+        .ok()
+        .flatten();
+    match found {
+        Some(analyzer) => Ok(analyzer),
+        None => Py::new(py, Analyzer::load(py, path, explicit)?),
+    }
 }
 
 /// Морфологический анализатор
@@ -930,17 +1076,28 @@ impl Analyzer {
 }
 
 impl Analyzer {
-    /// Анализатор со словарем файла `path` (по умолчанию - словарем из пакета); путь хранится
-    /// абсолютным, чтобы pickle работал в другом рабочем каталоге
+    /// Анализатор со словарем файла `path` (по умолчанию - словарем из пакета)
     fn open(py: Python<'_>, path: Option<PathBuf>) -> PyResult<Self> {
         let explicit = path.is_some();
-        let path = match path {
-            Some(path) => std::path::absolute(&path).unwrap_or(path),
-            None => default_path(py)?,
+        let path = Self::resolve(py, path)?;
+        Self::load(py, path, explicit)
+    }
+
+    /// Путь к словарю: абсолютный, чтобы pickle работал в другом рабочем каталоге
+    fn resolve(py: Python<'_>, path: Option<PathBuf>) -> PyResult<PathBuf> {
+        match path {
+            Some(path) => Ok(std::path::absolute(&path).unwrap_or(path)),
+            None => default_path(py),
+        }
+    }
+
+    fn load(py: Python<'_>, path: PathBuf, explicit: bool) -> PyResult<Self> {
+        let (shared, previous) = match loaded_dictionary(&path) {
+            Some(found) => found,
+            None => py
+                .detach(|| dictionary(&path))
+                .map_err(|err| load_error(&path, err))?,
         };
-        let (shared, previous) = py
-            .detach(|| dictionary(&path))
-            .map_err(|err| load_error(&path, err))?;
         drop(previous);
         Ok(Analyzer {
             shared,
@@ -993,19 +1150,20 @@ impl Analyzer {
         handle: &Arc<Handle>,
         analysis: rumorph::Analysis,
     ) -> PyResult<Analysis> {
-        let this = handle.analyzer.get();
-        let number = usize::from(analysis.ud);
-        let shared = &this.shared;
-        let ud = once(&shared.ud[number], || {
-            let tag = shared.dictionary.ud_tag(analysis.ud);
-            UdObjects::from_tag(py, tag.ok_or_else(|| PyValueError::new_err("Нет тега UD"))?)
+        let shared = &handle.analyzer.get().shared;
+        let missing = || PyValueError::new_err("Нет тега UD");
+        let cell = shared
+            .ud
+            .get(usize::from(analysis.ud))
+            .ok_or_else(missing)?;
+        once(cell, || {
+            UdObjects::from_tag(
+                py,
+                shared.dictionary.ud_tag(analysis.ud).ok_or_else(missing)?,
+            )
         })?;
         Ok(Analysis {
             inner: analysis,
-            pos: ud.pos.clone_ref(py),
-            feats: ud.feats.clone_ref(py),
-            labels: ud.labels.clone_ref(py),
-            ud: Arc::clone(&ud.text),
             handle: Arc::clone(handle),
         })
     }
@@ -1258,5 +1416,9 @@ fn _rumorph(m: &Bound<'_, PyModule>) -> PyResult<()> {
         os.call_method("register_at_fork", (), Some(&handlers))?;
     }
     m.add("__version__", package_version())?;
+    let sys = m.py().import("sys")?;
+    if let Ok(enabled) = sys.getattr("_is_gil_enabled") {
+        GIL_DISABLED.store(!enabled.call0()?.is_truthy()?, Ordering::Relaxed);
+    }
     Ok(())
 }
