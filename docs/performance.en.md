@@ -1,6 +1,6 @@
 # Speed and memory
 
-Analysis and lemmatization in ruMorph are 6-8 times faster than in pymorphy3 with the `pymorphy3[fast]` speedup and 31-63 times faster than in pymorphy3 without it; `inflect` and `agree` are 15-18 times faster. Lists of words are processed without the GIL, so several threads sharing one analyzer run in parallel. The dictionary loads in 5 ms, 6 times faster than in pymorphy3, and takes less memory than with `pymorphy3[fast]`; processes share the dictionary, so every further process with an analyzer takes about 1.5 MB.
+Analysis and lemmatization in ruMorph are 6-8 times faster than in pymorphy3 with the `pymorphy3[fast]` speedup and 31-63 times faster than in pymorphy3 without it; `inflect` and `agree` are 15-18 times faster. Lists of words are processed without the GIL, so several threads sharing one analyzer run in parallel. The dictionary loads in 5 ms, 6 times faster than in pymorphy3, and takes less memory than with `pymorphy3[fast]`; processes share the dictionary, so every further process with an analyzer takes about 1.4 MB.
 
 ## Speed { #speed }
 
@@ -22,7 +22,7 @@ Thousands of words or analyses per second, more is better:
 | :- | :------ | :-------- | :-------------- |
 | Import and dictionary loading | 5 ms | 30 ms | 31 ms |
 | Growth of process memory | 16.2 MB | 34.5 MB | 25.5 MB |
-| Every further process | 1.4 MB | 34.5 MB | 25.5 MB |
+| Every further process | 1.4 MB | 32.5 MB | 23.1 MB |
 
 Analyzers with the same dictionary file in a process share the dictionary. The dictionary file is mapped into memory, so `multiprocessing` or joblib processes and web server workers share it too: every further process adds only the analyzer's own tables.
 
