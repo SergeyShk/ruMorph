@@ -892,7 +892,7 @@
 
 
 <h1 id="speed-and-memory">Speed and memory<a class="headerlink" href="#speed-and-memory" title="Permanent link">&para;</a></h1>
-<p>Analysis and lemmatization in ruMorph are 6-8 times faster than in pymorphy3 with the <code>pymorphy3[fast]</code> speedup and 31-63 times faster than in pymorphy3 without it; <code>inflect</code> and <code>agree</code> are 15-18 times faster. Lists of words are processed without the GIL, so several threads sharing one analyzer run in parallel. The dictionary loads in 5 ms, 6 times faster than in pymorphy3, and takes less memory than with <code>pymorphy3[fast]</code>; processes share the dictionary, so every further process with an analyzer takes about 1.4 MB.</p>
+<p>Analysis and lemmatization in ruMorph are 7-8 times faster than in pymorphy3 with the <code>pymorphy3[fast]</code> speedup and 37-64 times faster than in pymorphy3 without it; <code>inflect</code> and <code>agree</code> are 17-18 times faster. Lists of words are processed without the GIL, so several threads sharing one analyzer run in parallel. The dictionary loads in 4 ms, 7 times faster than in pymorphy3, and takes less memory than with <code>pymorphy3[fast]</code>; processes share the dictionary, so every further process with an analyzer takes about 1.4 MB.</p>
 <h2 id="speed">Speed<a class="headerlink" href="#speed" title="Permanent link">&para;</a></h2>
 <p>Thousands of words or analyses per second, more is better:</p>
 <table>
@@ -907,43 +907,43 @@
 <tbody>
 <tr>
 <td style="text-align: left;">Analysis of a word form: <code>analyze</code> in a loop, <code>parse</code></td>
-<td style="text-align: left;">629</td>
+<td style="text-align: left;">732</td>
 <td style="text-align: left;">20</td>
 <td style="text-align: left;">105</td>
 </tr>
 <tr>
 <td style="text-align: left;">Analysis of a list: <code>analyze_many</code></td>
-<td style="text-align: left;">641</td>
+<td style="text-align: left;">754</td>
 <td style="text-align: left;">-</td>
 <td style="text-align: left;">-</td>
 </tr>
 <tr>
 <td style="text-align: left;">Lemmatization: <code>lemmatize</code>, <code>parse(word)[0].normal_form</code></td>
-<td style="text-align: left;">1,391</td>
+<td style="text-align: left;">1,404</td>
 <td style="text-align: left;">22</td>
 <td style="text-align: left;">170</td>
 </tr>
 <tr>
 <td style="text-align: left;">Lemmatization in 4 threads: <code>lemmatize</code></td>
-<td style="text-align: left;">4,210</td>
+<td style="text-align: left;">4,275</td>
 <td style="text-align: left;">-</td>
 <td style="text-align: left;">-</td>
 </tr>
 <tr>
 <td style="text-align: left;">Form by features: <code>inflect(Case="Gen")</code>, <code>inflect({"gent"})</code></td>
-<td style="text-align: left;">1,338</td>
+<td style="text-align: left;">1,399</td>
 <td style="text-align: left;">76</td>
 <td style="text-align: left;">76</td>
 </tr>
 <tr>
 <td style="text-align: left;">Agreement with a number: <code>agree(5)</code>, <code>make_agree_with_number(5)</code></td>
-<td style="text-align: left;">1,284</td>
+<td style="text-align: left;">1,417</td>
 <td style="text-align: left;">85</td>
 <td style="text-align: left;">85</td>
 </tr>
 <tr>
 <td style="text-align: left;">Forms of the lexeme: <code>forms()</code>, <code>lexeme</code></td>
-<td style="text-align: left;">62</td>
+<td style="text-align: left;">101</td>
 <td style="text-align: left;">32</td>
 <td style="text-align: left;">32</td>
 </tr>
@@ -962,13 +962,13 @@
 <tbody>
 <tr>
 <td style="text-align: left;">Import and dictionary loading</td>
-<td style="text-align: left;">5 ms</td>
+<td style="text-align: left;">4 ms</td>
 <td style="text-align: left;">30 ms</td>
 <td style="text-align: left;">31 ms</td>
 </tr>
 <tr>
 <td style="text-align: left;">Growth of process memory</td>
-<td style="text-align: left;">16.2 MB</td>
+<td style="text-align: left;">16.0 MB</td>
 <td style="text-align: left;">34.5 MB</td>
 <td style="text-align: left;">25.5 MB</td>
 </tr>
@@ -983,7 +983,7 @@
 <p>Analyzers with the same dictionary file in a process share the dictionary. The dictionary file is mapped into memory, so <code>multiprocessing</code> or joblib processes and web server workers share it too: every further process adds only the analyzer's own tables.</p>
 <h2 id="method">How it was measured<a class="headerlink" href="#method" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Computer - Apple M3 Pro, macOS 26, Python 3.11; ruMorph 0.2.0.dev1, pymorphy3 2.0.6 with the pymorphy3-dicts-ru 2.4.417150.4580142 dictionary; <code>pymorphy3[fast]</code> - the same with the C++ DAWG extension.</li>
+<li>Computer - Apple M3 Pro, macOS 26, Python 3.11; ruMorph 0.2.0, pymorphy3 2.0.6 with the pymorphy3-dicts-ru 2.4.417150.4580142 dictionary; <code>pymorphy3[fast]</code> - the same with the C++ DAWG extension.</li>
 <li>Words - 128,251 word forms of the test part of <a href="https://github.com/UniversalDependencies/UD_Russian-SynTagRus">UD_Russian-SynTagRus</a> without punctuation, in text order. Time - the best of three runs in one thread, except for the row with threads.</li>
 <li><code>inflect</code> - the genitive of the first analyses that have a case, <code>agree</code> - the first analyses of nouns with the number 5, <code>forms</code> - the first analyses of the first 20,000 words.</li>
 <li>Memory - the growth of the resident memory of the process (<code>ps -o rss</code>) after importing the library and creating the analyzer; time - the import, creating the analyzer and the first analysis. A further process - the growth of the memory the process does not share with others (USS), in each of four <code>multiprocessing</code> processes with an analyzer.</li>
