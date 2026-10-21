@@ -4,7 +4,7 @@
 Analyzer(path=None)
 ```
 
-Morphological analyzer: for a word form it finds all [analyses](analysis.md) in the OpenCorpora dictionary - the initial form, the part of speech and the [Universal Dependencies](https://universaldependencies.org/) features - and orders them by probability. The dictionary is loaded when the first analyzer is created: analyzers with the same dictionary file in a process share it, so a new analyzer is created instantly.
+Morphological analyzer: for a word form it finds all [analyses](analysis.md) in the OpenCorpora dictionary - the initial form, the part of speech and the [Universal Dependencies](https://universaldependencies.org/) features - and orders them by probability. The dictionary is loaded when the first analyzer is created: analyzers with the same dictionary file in a process share it, so a new analyzer is created instantly. The last loaded dictionary stays in the process even without analyzers, so process pool tasks and an analyzer created for a single call do not load the dictionary again.
 
 Exceptions:
 

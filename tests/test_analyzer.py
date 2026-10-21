@@ -196,6 +196,14 @@ def test_analyses_of_threads(morph, tmp_path):
     assert sys.getrefcount(analyzer) == references
 
 
+def test_last_dictionary_stays_loaded(morph, tmp_path):
+    # Последний словарь процесс держит и без анализаторов: объекты его тегов - те же
+    path = tmp_path / "ru.dict"
+    shutil.copy(morph.path, path)
+    labels = Analyzer(path).analyze("стали")[0].labels
+    assert Analyzer(path).analyze("стали")[0].labels is labels
+
+
 def test_more_analyzers_than_handle_slots(morph):
     # Анализаторов больше, чем ручек помнит поток: вытесненные ручки живут в своих разборах
     analyzers = [Analyzer(morph.path) for _ in range(10)]

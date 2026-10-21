@@ -460,7 +460,9 @@ impl FileKey {
 }
 
 /// Словари, загруженные в процессе. Анализаторы с одним файлом словаря делят словарь, а разборы
-/// из pickle не загружают его еще раз; словарь освобождается вместе с последним анализатором.
+/// из pickle не загружают его еще раз; словарь освобождается вместе с последним анализатором,
+/// кроме последнего полученного: его процесс держит и без анализаторов, иначе каждая задача
+/// `multiprocessing.Pool` и анализатор, созданный на один вызов, загружали бы словарь заново.
 ///
 /// Блокировка - свой флаг, а не `Mutex`: перед fork ее берет поток, который делает fork
 /// (`os.register_at_fork`), и снимает в обоих процессах. Иначе дочерний процесс может получить ее
@@ -468,6 +470,7 @@ impl FileKey {
 struct Dictionaries {
     locked: AtomicBool,
     entries: UnsafeCell<Vec<(FileKey, Slot)>>,
+    last: UnsafeCell<Option<Arc<Shared>>>,
 }
 
 /// Словарь в списке загруженных
@@ -477,12 +480,13 @@ enum Slot {
     Loaded(Weak<Shared>),
 }
 
-// SAFETY: `entries` читается и меняется только под флагом `locked`
+// SAFETY: `entries` и `last` читаются и меняются только под флагом `locked`
 unsafe impl Sync for Dictionaries {}
 
 static DICTIONARIES: Dictionaries = Dictionaries {
     locked: AtomicBool::new(false),
     entries: UnsafeCell::new(Vec::new()),
+    last: UnsafeCell::new(None),
 };
 
 impl Dictionaries {
@@ -514,6 +518,21 @@ impl Dictionaries {
         let _unlock = Unlock(self);
         // SAFETY: флаг взят только этим потоком
         action(unsafe { &mut *self.entries.get() })
+    }
+
+    /// Запоминает последний полученный словарь; вывод - прежний, его освобождают уже без флага
+    fn keep(&self, shared: &Arc<Shared>) -> Option<Arc<Shared>> {
+        self.with(|_| {
+            // SAFETY: флаг взят только этим потоком
+            let last = unsafe { &mut *self.last.get() };
+            if last
+                .as_ref()
+                .is_some_and(|known| Arc::ptr_eq(known, shared))
+            {
+                return None;
+            }
+            last.replace(Arc::clone(shared))
+        })
     }
 }
 
@@ -571,6 +590,12 @@ impl Drop for Loading<'_> {
 /// Словарь файла `path`: загруженный в процессе, если файл тот же и не изменился, иначе новый.
 /// Флаг словарей берется только на поиск и запись, загрузка идет без него
 fn dictionary(path: &Path) -> Result<Arc<Shared>, rumorph::Error> {
+    let shared = find_or_load(path)?;
+    drop(DICTIONARIES.keep(&shared));
+    Ok(shared)
+}
+
+fn find_or_load(path: &Path) -> Result<Arc<Shared>, rumorph::Error> {
     let Some(key) = FileKey::new(path, &std::fs::metadata(path)?) else {
         return Ok(Arc::new(Shared::new(rumorph::Dictionary::open(path)?)));
     };
