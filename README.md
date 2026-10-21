@@ -1,15 +1,22 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/SergeyShk/ruMorph/master/docs/img/rumorph.png" alt="ruMorph" width="480">
+</p>
+
 <h1 align="center">ruMorph</h1>
 
 <p align="center">
-  Быстрый морфологический анализатор русского языка на Rust с API для Python
+  <b>Russian Morphology</b> - быстрый морфологический анализатор русского языка на Rust с API для Python
 </p>
 
 <p align="center">
   <a href="https://sergeyshk.github.io/ruMorph/">Документация</a> ·
+  <a href="https://pypi.org/project/rumorph/">PyPI</a> ·
   <a href="https://github.com/SergeyShk/ruMorph/blob/master/README.en.md">English</a>
 </p>
 
 <p align="center">
+  <a href="https://pypi.org/project/rumorph/"><img src="https://img.shields.io/pypi/v/rumorph?logo=pypi&logoColor=FFE873" alt="Версия"></a>
+  <a href="https://pypi.org/project/rumorph/"><img src="https://img.shields.io/pypi/pyversions/rumorph.svg?logo=python&logoColor=FFE873" alt="Поддерживаемые версии Python"></a>
   <a href="https://github.com/SergeyShk/ruMorph/actions/workflows/ci.yml"><img src="https://github.com/SergeyShk/ruMorph/actions/workflows/ci.yml/badge.svg" alt="Сборка"></a>
   <a href="https://github.com/astral-sh/ruff"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json" alt="Ruff"></a>
   <a href="https://github.com/SergeyShk/ruMorph/blob/master/LICENSE.txt"><img src="https://img.shields.io/github/license/sergeyshk/rumorph.svg" alt="Лицензия"></a>
@@ -17,7 +24,17 @@
 
 ---
 
-**ruMorph** - морфологический анализатор русского языка: ядро на Rust и API для Python. Для словоформы анализатор находит по словарю OpenCorpora варианты разбора - начальную форму (лемму), часть речи и грамматические признаки - и упорядочивает их по вероятности.
+**ruMorph** - морфологический анализатор русского языка: ядро на Rust и API для Python. Для словоформы анализатор находит по словарю [OpenCorpora](https://opencorpora.org) варианты разбора - начальную форму (лемму), часть речи и признаки [Universal Dependencies](https://universaldependencies.org/) - упорядочивает их по вероятности и строит формы слова.
+
+Разбор и лемматизация примерно в 5 раз быстрее, чем в pymorphy3 с ускорением `pymorphy3[fast]`, форма по признакам и согласование с количеством - в 15-18 раз; списки слов разбираются без GIL. Части речи, признаки и леммы следуют соглашениям трибанка SynTagRus, поэтому результат можно сравнивать с разметкой spaCy, Stanza и других инструментов на UD.
+
+* **[Анализатор](https://sergeyshk.github.io/ruMorph/analyzer/)** - разборы словоформы по убыванию вероятности, разбор списков слов и лемматизация без GIL, проверка словоформы по словарю
+* **[Части речи и признаки UD](https://sergeyshk.github.io/ruMorph/analysis/#ud)** - части речи, признаки и леммы в соглашениях SynTagRus; пометы OpenCorpora, у которых нет признака UD
+* **[Токены вне словаря](https://sergeyshk.github.io/ruMorph/analysis/#rules)** - числа, знаки, латиница, инициалы и сокращения по правилам
+* **[Незнакомые слова](https://sergeyshk.github.io/ruMorph/analysis/#guess)** - разборы по окончанию, слова через дефис и с приставками, формы угаданных слов
+* **[Словоизменение](https://sergeyshk.github.io/ruMorph/inflection/)** - формы лексемы, форма по признакам UD, согласование с количеством
+* **[Переход с pymorphy](https://sergeyshk.github.io/ruMorph/migration/)** - соответствие вызовов pymorphy2 и pymorphy3, частей речи и граммем
+* **[Скорость и память](https://sergeyshk.github.io/ruMorph/performance/)** - разбор, лемматизация и словоизменение в сравнении с pymorphy3, загрузка словаря и память
 
 > [!NOTE]
 > Ранняя версия: до 1.0 API может меняться между версиями 0.x, изменения описываются в заметках к выпускам.
@@ -30,7 +47,13 @@
 pip install rumorph
 ```
 
-Колеса собираются для Linux, macOS и Windows; на других платформах для сборки из исходников нужен [Rust](https://www.rust-lang.org/tools/install). Словарь входит в пакет. Подробнее - на странице [Установка](https://sergeyshk.github.io/ruMorph/installation/).
+Или с помощью [uv](https://docs.astral.sh/uv/):
+
+```bash
+uv add rumorph
+```
+
+Колеса собираются для Linux, macOS и Windows, Rust для установки не нужен; словарь входит в пакет. На других платформах и на Python 3.14t без GIL pip соберет пакет из исходников - для этого нужен [Rust](https://www.rust-lang.org/tools/install) 1.88 или новее. Подробнее - на странице [Установка](https://sergeyshk.github.io/ruMorph/installation/).
 
 ## Быстрый старт
 
@@ -38,16 +61,211 @@ pip install rumorph
 >>> from rumorph import Analyzer
 
 >>> morph = Analyzer()
->>> morph.lemmatize(["Мы", "стали", "друзьями"])
-['мы', 'стать', 'друг']
+>>> morph.lemmatize("Мы стали друзьями в ковиде".split())
+['мы', 'стать', 'друг', 'в', 'ковид']
 >>> [(a.lemma, a.pos, a.feats.get("Case"), round(a.prob, 3)) for a in morph.analyze("стали")][:2]
 [('стать', 'VERB', None, 0.975), ('сталь', 'NOUN', 'Gen', 0.011)]
->>> cat = morph.analyze("кошка")[0]
->>> cat.inflect(Case="Gen", Number="Plur"), morph.analyze("рубль")[0].agree(5)
-('кошек', 'рублей')
+>>> morph.analyze("кошка")[0].inflect(Case="Gen", Number="Plur")
+'кошек'
+>>> morph.analyze("рубль")[0].agree(5)
+'рублей'
 ```
 
-Подробнее - на страницах [Анализатор](https://sergeyshk.github.io/ruMorph/analyzer/), [Разбор словоформы](https://sergeyshk.github.io/ruMorph/analysis/) и [Словоизменение](https://sergeyshk.github.io/ruMorph/inflection/). Как перейти с pymorphy2 и pymorphy3 - на странице [Переход с pymorphy](https://sergeyshk.github.io/ruMorph/migration/), сравнение скорости и памяти - на странице [Скорость и память](https://sergeyshk.github.io/ruMorph/performance/).
+Анализатор достаточно создать один раз: при создании он загружает словарь, дальше им можно пользоваться во всей программе.
+
+## Возможности
+
+### Разбор словоформы
+
+Метод `analyze` возвращает разборы словоформы по убыванию вероятности - объекты `Analysis` с леммой, частью речи, признаками UD, пометами словаря, вероятностью и источником разбора. Регистр не важен, буква «е» может обозначать «ё». Разборы неизменяемы: их можно сравнивать, класть в множества и сохранять через pickle.
+
+```python
+>>> from rumorph import Analyzer
+
+>>> morph = Analyzer()
+>>> morph.analyze("стали")[0]
+Analysis(word='стали', lemma='стать', pos='VERB', feats='Aspect=Perf|Mood=Ind|Number=Plur|Tense=Past|VerbForm=Fin|Voice=Mid', labels='intr', prob=0.9753459013836056, source='dictionary')
+>>> [len(analyses) for analyses in morph.analyze_many(["мама", "мыла", "раму"])]
+[1, 4, 2]
+>>> morph.is_known("Ежи"), morph.is_known("вайб")
+(True, False)
+```
+
+Списки слов методы `analyze_many` и `lemmatize` разбирают без GIL, поэтому несколько потоков с одним анализатором работают параллельно. Анализатор и разборы сохраняются через pickle и работают с `multiprocessing` и joblib.
+
+Подробнее - в документации: [анализатор](https://sergeyshk.github.io/ruMorph/analyzer/), [разбор словоформы](https://sergeyshk.github.io/ruMorph/analysis/).
+
+<details>
+<summary><b>Части речи и признаки Universal Dependencies</b></summary>
+
+<br>
+
+Части речи и признаки следуют [Universal Dependencies](https://universaldependencies.org/u/pos/) в соглашениях крупнейшего русского трибанка [UD_Russian-SynTagRus](https://github.com/UniversalDependencies/UD_Russian-SynTagRus). Отличия от частей речи OpenCorpora:
+
+*   «который», «этот», «свой», «весь», «такой» и другие местоименные прилагательные - `DET`
+*   «быть» и «бы» - `AUX`
+*   вводные слова «однако», «например», «конечно» - `ADV`
+*   «можно», «надо», «нельзя» - `VERB` без признаков
+*   предлоги - `ADP`, сочинительные союзы - `CCONJ`, подчинительные - `SCONJ`, частицы - `PART`
+
+Признаки: падеж, число, род, одушевленность, лицо, время, вид, наклонение, залог, форма глагола, степень, краткая форма, тип имени собственного, сокращение, притяжательность, тип числительного и его запись, тип местоимения, возвратность, несклоняемость, отрицание. Леммы тоже следуют SynTagRus: «Ивановой» - «иванова», «важнейшей» - «важнейший», «денег» - «деньги». Граммемы OpenCorpora, для которых в UD нет признака, - стиль, переходность, второй предложный падеж и другие - лежат в пометах `labels`.
+
+```python
+>>> from rumorph import Analyzer
+
+>>> morph = Analyzer()
+>>> words = ["который", "был", "конечно", "можно", "Ивановой", "денег"]
+>>> [(analyses[0].lemma, analyses[0].pos) for analyses in morph.analyze_many(words)]
+[('который', 'DET'), ('быть', 'AUX'), ('конечно', 'ADV'), ('можно', 'VERB'), ('иванова', 'PROPN'), ('деньги', 'NOUN')]
+>>> lesu = morph.analyze("лесу")[0]
+>>> lesu.feats["Case"], lesu.labels
+('Loc', frozenset({'loc2'}))
+```
+
+Подробнее - в [документации](https://sergeyshk.github.io/ruMorph/analysis/#ud); соответствие граммем OpenCorpora признакам UD - на странице [Переход с pymorphy](https://sergeyshk.github.io/ruMorph/migration/#grammemes).
+
+</details>
+
+<details>
+<summary><b>Токены вне словаря</b></summary>
+
+<br>
+
+Числа, знаки, латиницу и сокращения анализатор разбирает по правилам, `source` у таких разборов - `"rule"`:
+
+*   знаки препинания - `PUNCT`, символы `%`, `$`, `№` и эмодзи - `SYM`
+*   числа цифрами - `NUM`; целое число может быть и порядковым `ADJ`, у годов это первый разбор
+*   числа с окончанием «2005-го», «5-ти» - порядковые `ADJ` с падежом или количественные `NUM`, римские числа - порядковые `ADJ`
+*   слова латиницей - `X` с `Foreign=Yes`
+*   инициалы «А.» - имя, отчество или фамилия с `Abbr=Yes`
+*   сокращения с точкой «т.», «им.» - разборы словарного сокращения, аббревиатуры капсом «НКО» - `PROPN` или `NOUN` с `Abbr=Yes`
+*   наречия «по-бурятски», «по-молодому» - `ADV`
+*   прочие токены «км/ч», «РосПил» - `X` без признаков, лемма - токен в нижнем регистре
+
+Доли неоднозначных разборов взяты из частот в SynTagRus.
+
+```python
+>>> from rumorph import Analyzer
+
+>>> morph = Analyzer()
+>>> [(a.lemma, a.pos, a.feats["NumType"], round(a.prob, 2)) for a in morph.analyze("2026")]
+[('2026', 'ADJ', 'Ord', 0.94), ('2026', 'NUM', 'Card', 0.06)]
+>>> [(a.lemma, a.pos, a.feats["Case"]) for a in morph.analyze("2005-го")][:1]
+[('2005-й', 'ADJ', 'Gen')]
+>>> [(a.pos, a.feats, a.source) for a in morph.analyze("iPhone")]
+[('X', {'Foreign': 'Yes'}, 'rule')]
+```
+
+Подробнее - в [документации](https://sergeyshk.github.io/ruMorph/analysis/#rules).
+
+</details>
+
+<details>
+<summary><b>Незнакомые слова</b></summary>
+
+<br>
+
+Разборы слова кириллицей, которого нет в словаре, анализатор угадывает по окончанию: берет формы словарных слов с тем же окончанием - их часть речи, признаки и словоизменение. `source` у таких разборов - `"guess"`.
+
+*   Слово в нижнем регистре угадывается как нарицательное, слово с заглавной буквы - в основном как имя собственное: фамилия, имя, топоним
+*   Слово через дефис разбирается по последней части: «крэш-тестов» - «крэш-тест», «Мак-Киннона» - «мак-киннон»
+*   Слово с известной приставкой - «эко», «анти», «супер», «микро» и другими - разбирается по словарному слову без нее: «экодомов» - «экодом»
+*   У угаданного разбора есть формы, и они сохраняют заглавные буквы: «Мак-Киннона» в дательном падеже - «Мак-Киннону»
+
+```python
+>>> from rumorph import Analyzer
+
+>>> morph = Analyzer()
+>>> [(a.lemma, a.pos, a.feats["Case"], a.source) for a in morph.analyze("чатботу")][:1]
+[('чатбот', 'NOUN', 'Dat', 'guess')]
+>>> guess = morph.analyze("Мартова")[0]
+>>> guess.lemma, guess.pos, guess.feats["NameType"], guess.inflect(Case="Dat")
+('мартов', 'PROPN', 'Sur', 'Мартову')
+>>> morph.analyze("крэш-тестов")[0].lemma, morph.analyze("экодомов")[0].lemma
+('крэш-тест', 'экодом')
+```
+
+Подробнее - в [документации](https://sergeyshk.github.io/ruMorph/analysis/#guess).
+
+</details>
+
+<details>
+<summary><b>Словоизменение</b></summary>
+
+<br>
+
+Каждый разбор знает свою лексему - все формы слова с той же леммой:
+
+*   `forms` - формы лексемы в порядке словаря
+*   `inflect` - форма с заданными признаками UD; признаки, которые не названы, по возможности сохраняются
+*   `agree` - форма существительного, прилагательного или причастия, согласованная с количеством: «1 рубль», «2 рубля», «5 рублей», «2 суток»
+
+Если у лексемы нет нужной формы, `inflect` и `agree` бросают `FormNotFoundError`, а на опечатку в признаке `inflect` бросает `ValueError` со списком допустимых значений.
+
+```python
+>>> from rumorph import Analyzer
+
+>>> morph = Analyzer()
+>>> cat = morph.analyze("кошка")[0]
+>>> [form.word for form in cat.forms()][:5]
+['кошка', 'кошки', 'кошке', 'кошку', 'кошкой']
+>>> cat.inflect(Case="Gen"), cat.inflect(Case="Gen", Number="Plur")
+('кошки', 'кошек')
+>>> verb = morph.analyze("читал")[0]
+>>> verb.inflect(Gender="Fem"), verb.inflect(Tense="Pres", Person="3", Number="Plur")
+('читала', 'читают')
+>>> ruble = morph.analyze("рубль")[0]
+>>> [f"{n} {ruble.agree(n)}" for n in (1, 2, 5, 21)]
+['1 рубль', '2 рубля', '5 рублей', '21 рубль']
+```
+
+Подробнее - в [документации](https://sergeyshk.github.io/ruMorph/inflection/).
+
+</details>
+
+<details>
+<summary><b>Переход с pymorphy</b></summary>
+
+<br>
+
+ruMorph работает с тем же словарем OpenCorpora, что pymorphy2 и pymorphy3, но API у него свое: части речи и признаки UD вместо граммем OpenCorpora, вероятность вместо `score`, словоформы строкой, исключения вместо `None`. Здесь `morph` - анализатор, `p` - разбор pymorphy, `a` - разбор ruMorph:
+
+| pymorphy2, pymorphy3 | ruMorph |
+| :------------------- | :------ |
+| `MorphAnalyzer()` | `Analyzer()` |
+| `morph.parse(word)` | `morph.analyze(word)` |
+| `[morph.parse(w)[0].normal_form for w in words]` | `morph.lemmatize(words)` |
+| `morph.word_is_known(word)` | `morph.is_known(word)` |
+| `p.normal_form`, `p.tag.POS`, `p.score` | `a.lemma`, `a.pos`, `a.prob` |
+| `p.tag.case`, `p.tag.number` | `a.feats.get("Case")`, `a.feats.get("Number")` |
+| `p.lexeme` | `a.forms()` |
+| `p.inflect({"gent", "plur"}).word` | `a.inflect(Case="Gen", Number="Plur")` |
+| `p.make_agree_with_number(n).word` | `a.agree(n)` |
+
+Подробнее - в [документации](https://sergeyshk.github.io/ruMorph/migration/): все вызовы, части речи и граммемы.
+
+</details>
+
+<details>
+<summary><b>Скорость и память</b></summary>
+
+<br>
+
+Тысяч слов или разборов в секунду, больше - лучше:
+
+| Операция | ruMorph | pymorphy3 | pymorphy3[fast] |
+| :------- | :------ | :-------- | :-------------- |
+| Разбор словоформы | 474 | 20 | 105 |
+| Лемматизация | 810 | 22 | 170 |
+| Лемматизация в 4 потоках | 2 345 | - | - |
+| Форма по признакам | 1 400 | 76 | 76 |
+| Согласование с количеством | 1 307 | 85 | 85 |
+
+Импорт и загрузка словаря занимают 14 мс против 30 мс у pymorphy3, прирост памяти процесса - 21,5 МБ против 25,5 МБ у `pymorphy3[fast]`. Замер - на 128 251 словоформе тестовой части UD_Russian-SynTagRus, Apple M3 Pro, Python 3.11.
+
+Подробнее - в [документации](https://sergeyshk.github.io/ruMorph/performance/): все операции и как они измерены.
+
+</details>
 
 ## Разработка
 
@@ -84,7 +302,7 @@ uv run pre-commit install
 *   **crates/rumorph-build** - сборка словаря из выгрузки pymorphy3-dicts-ru и перевод тегов OpenCorpora в UD
 *   **crates/rumorph-py** - модуль Python `rumorph._rumorph` на PyO3
 *   **python/rumorph** - пакет Python
-*   **scripts** - выгрузка словаря pymorphy3-dicts-ru
+*   **scripts** - выгрузка словаря pymorphy3-dicts-ru и проверка установленного пакета перед публикацией
 *   **docs** - документация MkDocs на русском и английском
 *   **tests** - тесты пакета Python
 
@@ -97,3 +315,16 @@ uv run pre-commit install
 ## Лицензия
 
 Код распространяется под лицензией [MIT](https://github.com/SergeyShk/ruMorph/blob/master/LICENSE.txt). Словарь в пакете собран из словаря [OpenCorpora](https://opencorpora.org) и распространяется по лицензии CC BY-SA 3.0 ([LICENSE-DICTIONARY.txt](https://github.com/SergeyShk/ruMorph/blob/master/LICENSE-DICTIONARY.txt)).
+
+## Цитирование
+
+Если вы используете **ruMorph** в исследованиях или программах, пожалуйста, цитируйте библиотеку по следующей записи BibTeX - это помогает развитию и поддержке проекта. Те же метаданные лежат в [CITATION.cff](https://github.com/SergeyShk/ruMorph/blob/master/CITATION.cff) - GitHub показывает их по кнопке «Cite this repository».
+
+```bibtex
+@software{ruMorph,
+  author = {Sergey Shkarin},
+  title = {{ruMorph, a fast morphological analyzer for Russian}},
+  year = 2026,
+  url = {https://github.com/SergeyShk/ruMorph}
+}
+```
