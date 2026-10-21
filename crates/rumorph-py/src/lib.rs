@@ -655,10 +655,25 @@ struct Handle {
     analyzer: Py<Analyzer>,
 }
 
+/// Сколько ручек помнит поток: анализаторов, которыми поток пользуется попеременно, немного,
+/// а длинный список ручек сделал бы распаковку тысяч разборов из pickle квадратичной
+const HANDLE_SLOTS: usize = 4;
+
+/// Ручки анализаторов потока: адрес объекта анализатора и слабая ссылка - ручка живет, пока живы
+/// ее разборы, и не держит анализатор дольше них; новая ручка занимает место умершей или
+/// следующее место по кругу
+struct Handles {
+    slots: [(usize, Weak<Handle>); HANDLE_SLOTS],
+    next: usize,
+}
+
 thread_local! {
-    /// Ручки анализаторов этого потока: адрес объекта анализатора и слабая ссылка - ручка живет,
-    /// пока живы ее разборы, и не держит анализатор дольше них
-    static HANDLES: RefCell<Vec<(usize, Weak<Handle>)>> = const { RefCell::new(Vec::new()) };
+    static HANDLES: RefCell<Handles> = const {
+        RefCell::new(Handles {
+            slots: [const { (0, Weak::new()) }; HANDLE_SLOTS],
+            next: 0,
+        })
+    };
 }
 
 #[pymethods]
@@ -897,15 +912,27 @@ impl Analyzer {
             .try_with(|handles| {
                 let mut handles = handles.borrow_mut();
                 let found = handles
+                    .slots
                     .iter()
-                    .find(|(known, _)| *known == address)
-                    .and_then(|(_, handle)| handle.upgrade());
+                    .filter(|(known, _)| *known == address)
+                    .find_map(|(_, handle)| handle.upgrade());
                 if let Some(handle) = found {
                     return handle;
                 }
-                handles.retain(|(_, handle)| handle.strong_count() > 0);
+                let slot = match handles
+                    .slots
+                    .iter()
+                    .position(|(_, handle)| handle.strong_count() == 0)
+                {
+                    Some(slot) => slot,
+                    None => {
+                        let slot = handles.next;
+                        handles.next = (slot + 1) % HANDLE_SLOTS;
+                        slot
+                    }
+                };
                 let handle = new();
-                handles.push((address, Arc::downgrade(&handle)));
+                handles.slots[slot] = (address, Arc::downgrade(&handle));
                 handle
             })
             .unwrap_or_else(|_| new())

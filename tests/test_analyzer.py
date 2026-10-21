@@ -196,6 +196,17 @@ def test_analyses_of_threads(morph, tmp_path):
     assert sys.getrefcount(analyzer) == references
 
 
+def test_more_analyzers_than_handle_slots(morph):
+    # Анализаторов больше, чем ручек помнит поток: вытесненные ручки живут в своих разборах
+    analyzers = [Analyzer(morph.path) for _ in range(10)]
+    analyses = [analyzer.analyze("ежа")[0] for analyzer in analyzers * 2]
+    expected = [form.word for form in morph.analyze("ежа")[0].forms()]
+    assert all([form.word for form in analysis.forms()] == expected for analysis in analyses)
+    restored = [pickle.loads(pickle.dumps(analysis)) for analysis in analyses]
+    assert restored == analyses
+    assert {analysis.forms()[1].word for analysis in restored} == {"ежа"}
+
+
 def test_analysis(morph):
     first, second = morph.analyze("ёж")[:2]
     assert first == morph.analyze("еж")[0]
