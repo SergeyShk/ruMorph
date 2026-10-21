@@ -92,7 +92,7 @@ Analysis(word='стали', lemma='стать', pos='VERB', feats='Aspect=Perf|M
 (True, False)
 ```
 
-Списки слов методы `analyze_many` и `lemmatize` разбирают без GIL, поэтому несколько потоков с одним анализатором работают параллельно; в Python 3.14t без GIL параллельно работают и остальные методы. Анализатор и разборы сохраняются через pickle и работают с `multiprocessing` и joblib.
+Списки слов методы `analyze_many` и `lemmatize` разбирают без GIL, поэтому несколько потоков с одним анализатором работают параллельно; в Python 3.14t без GIL параллельно работают и `analyze`, `inflect` и `agree`. Анализатор и разборы сохраняются через pickle и работают с `multiprocessing` и joblib.
 
 Подробнее - в документации: [анализатор](https://sergeyshk.github.io/ruMorph/analyzer/), [разбор словоформы](https://sergeyshk.github.io/ruMorph/analysis/).
 

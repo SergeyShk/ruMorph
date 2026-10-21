@@ -92,7 +92,7 @@ Analysis(word='стали', lemma='стать', pos='VERB', feats='Aspect=Perf|M
 (True, False)
 ```
 
-The `analyze_many` and `lemmatize` methods analyze lists of words without the GIL, so several threads sharing one analyzer run in parallel; on the free-threaded Python 3.14t the other methods run in parallel too. The analyzer and the analyses can be pickled and work with `multiprocessing` and joblib.
+The `analyze_many` and `lemmatize` methods analyze lists of words without the GIL, so several threads sharing one analyzer run in parallel; on the free-threaded Python 3.14t `analyze`, `inflect` and `agree` run in parallel too. The analyzer and the analyses can be pickled and work with `multiprocessing` and joblib.
 
 See the documentation: [analyzer](https://sergeyshk.github.io/ruMorph/en/analyzer/), [word analysis](https://sergeyshk.github.io/ruMorph/en/analysis/).
 
