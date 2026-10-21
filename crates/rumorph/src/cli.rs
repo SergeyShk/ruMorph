@@ -226,6 +226,10 @@ fn execute(
                 report(format!("{name}: {}", describe(&err)));
                 code = 1;
             }
+            Err(Failure::Encoding) => {
+                report(format!("{name}: файл не в UTF-8"));
+                code = 1;
+            }
             Err(Failure::Input(line, message)) => {
                 report(format!("{name}: строка {line}: {message}"));
                 code = 1;
@@ -275,6 +279,8 @@ fn describe(err: &io::Error) -> String {
 enum Failure {
     /// Ошибка чтения входа
     Read(io::Error),
+    /// Файл в другой кодировке: UTF-16 или неверные байты раньше первой строки UTF-8
+    Encoding,
     /// Неверная строка входа: номер и что не так
     Input(usize, String),
     Write(io::Error),
@@ -324,6 +330,9 @@ impl Writer<'_> {
         let mut bytes = Vec::new();
         let mut number = 0;
         let mut invalid = None;
+        // Была ли строка UTF-8 с не-ASCII байтами: до нее неверные байты значат другую кодировку
+        // файла (cp1251, UTF-16), после - испорченную строку
+        let mut utf8 = false;
         let mut block = Block::default();
         loop {
             bytes.clear();
@@ -335,9 +344,17 @@ impl Writer<'_> {
                 break;
             }
             number += 1;
+            if number == 1 && (bytes.starts_with(&[0xFF, 0xFE]) || bytes.starts_with(&[0xFE, 0xFF]))
+            {
+                return Err(Failure::Encoding);
+            }
             let decoded = String::from_utf8_lossy(&bytes);
-            if matches!(decoded, std::borrow::Cow::Owned(_)) && invalid.is_none() {
-                invalid = Some(number);
+            match decoded {
+                Cow::Owned(_) if !utf8 => return Err(Failure::Encoding),
+                Cow::Owned(_) => {
+                    invalid.get_or_insert(number);
+                }
+                Cow::Borrowed(_) => utf8 |= !bytes.is_ascii(),
             }
             let mut text = decoded.trim_end_matches(['\n', '\r']);
             if number == 1 {
@@ -588,12 +605,12 @@ fn word(grapheme: &str) -> bool {
     grapheme.chars().next().is_some_and(char::is_alphanumeric)
 }
 
-/// Разделитель токенов: пробел или невидимый символ (пробел нулевой ширины, соединитель слов,
-/// BOM), после которого нет пробела в тексте
+/// Разделитель токенов: графема с пробела или невидимого символа (пробел нулевой ширины,
+/// соединитель слов, BOM, мягкий перенос вне слова), после которого нет пробела в тексте
 fn separator(grapheme: &str) -> bool {
-    grapheme
-        .chars()
-        .all(|c| c.is_whitespace() || matches!(c, '\u{200b}' | '\u{2060}' | '\u{feff}'))
+    grapheme.chars().next().is_some_and(|c| {
+        c.is_whitespace() || matches!(c, '\u{200b}' | '\u{2060}' | '\u{feff}' | '\u{ad}')
+    })
 }
 
 /// Токены строки текста по графемам: слова (с дефисами и апострофами между буквами, мягкими
@@ -666,7 +683,7 @@ impl<'a> Iterator for Tokens<'a> {
         let space_after = self
             .graphemes
             .peek()
-            .is_none_or(|&(_, grapheme)| grapheme.chars().all(char::is_whitespace));
+            .is_none_or(|&(_, grapheme)| grapheme.chars().next().is_some_and(char::is_whitespace));
         Some(Token {
             word: &self.line[start..end],
             space_after,
@@ -773,6 +790,15 @@ mod tests {
             .map(|(word, _)| word)
             .collect();
         assert_eq!(tokens, ["❤️", "👍🏽", "🇷🇺", "👨‍👩‍👧", "!!"]);
+        // Знак после пробела и мягкий перенос вне слова - не токены
+        assert_eq!(
+            words("кот \u{301}пес \u{ad} да"),
+            [
+                ("кот".into(), true),
+                ("пес".into(), true),
+                ("да".into(), true)
+            ]
+        );
         // Невидимые символы разделяют токены, но пробелом не считаются; мягкий перенос - в слове
         assert_eq!(
             words("при\u{200b}вет \u{feff}раму при\u{ad}вет"),
@@ -1000,13 +1026,26 @@ mod tests {
             (code, error.as_str()),
             (1, "rumorph: нет.dict: файл не найден\n")
         );
-        // Строка не в UTF-8 разбирается с U+FFFD вместо неверных байт, разбор идет дальше
-        let (code, out, error) = dict.run(&[], b"\xd0\xff\n\xd0\xa0\xd0\xb0\xd0\xbc\xd1\x83\n");
-        assert_eq!((code, out.as_str()), (1, "\u{fffd}\u{fffd}\nрама\n"));
+        // Строка не в UTF-8 в файле UTF-8 разбирается с U+FFFD вместо неверных байт
+        let mut input = "Раму\n".as_bytes().to_vec();
+        input.extend_from_slice(b"\xd0\xff\n");
+        input.extend_from_slice("раму\n".as_bytes());
+        let (code, out, error) = dict.run(&[], &input);
+        assert_eq!((code, out.as_str()), (1, "рама\n\u{fffd}\u{fffd}\nрама\n"));
         assert_eq!(
             error,
-            "rumorph: -: строка 1: не UTF-8, неверные байты заменены на U+FFFD\n"
+            "rumorph: -: строка 2: не UTF-8, неверные байты заменены на U+FFFD\n"
         );
+        // Файл в другой кодировке не разбирается: cp1251 и UTF-16 с BOM
+        for input in [&b"abc\n\xd0\xe0\xec\xf3\n"[..], b"\xff\xfe\x20\x04"] {
+            let (code, out, error) = dict.run(&[], input);
+            assert_eq!(
+                (code, error.as_str()),
+                (1, "rumorph: -: файл не в UTF-8\n"),
+                "{input:?}"
+            );
+            assert!(out.len() <= "abc\n".len(), "{out}");
+        }
     }
 
     /// Вывод, который считает сбросы и может отказать при сбросе

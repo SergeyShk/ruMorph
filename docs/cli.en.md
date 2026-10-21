@@ -24,7 +24,7 @@ echo "Мы стали друзьями в ковиде." | rumorph
 | `-h`, `--help` | | Show the help |
 | `-V`, `--version` | | Show the version |
 
-Files are read one after another; without files and in place of `-` the standard input is read; the input is in UTF-8, and a line with invalid bytes is analyzed with U+FFFD in their place. An option value is written separately or attached: `-f conllu`, `-fconllu`, `--format=conllu`. On a terminal the result appears right after each sentence.
+Files are read one after another; without files and in place of `-` the standard input is read; the input is in UTF-8: a file in another encoding (cp1251, UTF-16) is not analyzed, and a single line with invalid bytes is analyzed with U+FFFD in their place. An option value is written separately or attached: `-f conllu`, `-fconllu`, `--format=conllu`. On a terminal the result appears right after each sentence.
 
 ## Input { #input }
 
@@ -114,7 +114,7 @@ echo "Мы стали" | rumorph -f jsonl
 | Code | When |
 | :--- | :--- |
 | 0 | Success, including when the output is closed before the end (`rumorph text.txt \| head`) |
-| 1 | A file is missing, a line is not in UTF-8 (it is analyzed with U+FFFD), an invalid CoNLL-U line, the dictionary cannot be read, a write error; the other files are still analyzed |
+| 1 | A file is missing or not in UTF-8, a line is not in UTF-8 (it is analyzed with U+FFFD), an invalid CoNLL-U line, the dictionary cannot be read, a write error; the other files are still analyzed |
 | 2 | Invalid options |
 
 Error messages go to the standard error.
