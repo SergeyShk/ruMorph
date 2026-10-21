@@ -146,13 +146,24 @@ def test_not_a_token(morph, word):
         ("\u040dван", "Иван"),
         ("при\u2060вет", "привет"),
         ("\ufeffпривет", "привет"),
+        ("cтали", "стали"),
+        ("Рoccия", "Россия"),
+        ("eгo", "его"),
+        ("в\u2060ceх", "всех"),
     ],
 )
 def test_normalized_input(morph, word, normal):
     # Разложенные «й» и «ё» (NFD), неразрывный дефис, знаки ударения (и в составленных «ѐ», «ѝ»),
-    # мягкий перенос и соединители слов - как обычное написание
+    # мягкий перенос, соединители слов и латинские буквы-двойники - как обычное написание
     assert morph.analyze(word) == morph.analyze(normal)
     assert morph.is_known(word)
+
+
+def test_mixed_scripts(morph):
+    # Кириллическая «с» в английском слове - латиница, а «ТНК-BP» - две части разной письменности
+    assert morph.analyze("сedar") == morph.analyze("cedar")
+    assert morph.analyze("сedar")[0].pos == "X"
+    assert [a.word for a in morph.analyze("ТНК-BP")] == ["ТНК-BP"]
 
 
 @pytest.mark.parametrize(
