@@ -65,4 +65,5 @@ echo "Мы стали друзьями в ковиде." | rumorph -f conllu
 ## Лицензия
 
 Код распространяется под лицензией MIT. Словарь в крейте `rumorph-dict-ru` собран из словаря
-[OpenCorpora](https://opencorpora.org) и распространяется по лицензии CC BY-SA 3.0.
+[OpenCorpora](https://opencorpora.org) с частотами по трибанкам UD Taiga и GSD и распространяется по
+лицензии CC BY-SA 4.0.

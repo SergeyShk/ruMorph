@@ -30,7 +30,7 @@ The dictionary is included in the package, no separate dictionary package is nee
     >>> morph = rumorph.Analyzer()
     >>> a = morph.analyze("стали")[0]
     >>> a.lemma, a.pos, a.feats["Number"], round(a.prob, 3)
-    ('стать', 'VERB', 'Plur', 0.975)
+    ('стать', 'VERB', 'Plur', 0.988)
     >>> cat = morph.analyze("кошка")[0]
     >>> cat.inflect(Case="Gen", Number="Plur")
     'кошек'

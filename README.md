@@ -70,7 +70,7 @@ uv add rumorph
 >>> morph.lemmatize("Мы стали друзьями в ковиде".split())
 ['мы', 'стать', 'друг', 'в', 'ковид']
 >>> [(a.lemma, a.pos, a.feats.get("Case"), round(a.prob, 3)) for a in morph.analyze("стали")][:2]
-[('стать', 'VERB', None, 0.975), ('сталь', 'NOUN', 'Gen', 0.011)]
+[('стать', 'VERB', None, 0.988), ('сталь', 'NOUN', 'Gen', 0.005)]
 >>> morph.analyze("кошка")[0].inflect(Case="Gen", Number="Plur")
 'кошек'
 >>> morph.analyze("рубль")[0].agree(5)
@@ -90,7 +90,7 @@ uv add rumorph
 
 >>> morph = Analyzer()
 >>> morph.analyze("стали")[0]
-Analysis(word='стали', lemma='стать', pos='VERB', feats='Aspect=Perf|Mood=Ind|Number=Plur|Tense=Past|VerbForm=Fin|Voice=Mid', labels='intr', prob=0.9753459013836056, source='dictionary')
+Analysis(word='стали', lemma='стать', pos='VERB', feats='Aspect=Perf|Mood=Ind|Number=Plur|Tense=Past|VerbForm=Fin|Voice=Mid', labels='intr', prob=0.9877829877829878, source='dictionary')
 >>> [len(analyses) for analyses in morph.analyze_many(["мама", "мыла", "раму"])]
 [1, 4, 2]
 >>> morph.is_known("Ежи"), morph.is_known("вайб")
@@ -299,7 +299,7 @@ git clone https://github.com/SergeyShk/ruMorph.git
 cd ruMorph
 
 make deps        # создать окружение, установить зависимости и собрать модуль на Rust
-make dictionary  # собрать словарь из pymorphy3-dicts-ru
+make dictionary  # собрать словарь из pymorphy3-dicts-ru и трибанков UD
 make test        # запустить тесты Python, примеры из докстрингов (doctest) и тесты Rust
 make lint        # ruff, mypy, rustfmt и clippy
 ```
@@ -322,7 +322,7 @@ uv run pre-commit install
 <br>
 
 *   **crates/rumorph** - ядро анализатора на Rust: формат словаря, сборка, разбор и словоизменение
-*   **crates/rumorph-build** - сборка словаря из выгрузки pymorphy3-dicts-ru и перевод тегов OpenCorpora в UD
+*   **crates/rumorph-build** - сборка словаря из выгрузки pymorphy3-dicts-ru, перевод тегов OpenCorpora в UD и частоты разборов по трибанкам UD
 *   **crates/rumorph-dict-ru** - крейт со словарем для `rumorph` на crates.io
 *   **crates/rumorph-py** - модуль Python `rumorph._rumorph` на PyO3
 *   **python/rumorph** - пакет Python
@@ -338,7 +338,7 @@ uv run pre-commit install
 
 ## Лицензия
 
-Код распространяется под лицензией [MIT](https://github.com/SergeyShk/ruMorph/blob/master/LICENSE.txt). Словарь в пакете собран из словаря [OpenCorpora](https://opencorpora.org) и распространяется по лицензии CC BY-SA 3.0 ([LICENSE-DICTIONARY.txt](https://github.com/SergeyShk/ruMorph/blob/master/LICENSE-DICTIONARY.txt)).
+Код распространяется под лицензией [MIT](https://github.com/SergeyShk/ruMorph/blob/master/LICENSE.txt). Словарь в пакете собран из словаря [OpenCorpora](https://opencorpora.org) с частотами по трибанкам [UD_Russian-Taiga](https://github.com/UniversalDependencies/UD_Russian-Taiga) и [UD_Russian-GSD](https://github.com/UniversalDependencies/UD_Russian-GSD) и распространяется по лицензии CC BY-SA 4.0 ([LICENSE-DICTIONARY.txt](https://github.com/SergeyShk/ruMorph/blob/master/LICENSE-DICTIONARY.txt)).
 
 ## Цитирование
 

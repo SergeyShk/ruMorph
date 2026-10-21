@@ -97,14 +97,14 @@ Prebuilt wheels and building from source are described on the [Installation](ins
 
     ```
     ['мы', 'стать', 'друг']
-    [('стать', 'VERB', None, 0.975), ('сталь', 'NOUN', 'Gen', 0.011)]
+    [('стать', 'VERB', None, 0.988), ('сталь', 'NOUN', 'Gen', 0.005)]
     ('кошек', 'рублей')
     ```
 
 ??? note "Project structure"
 
     *   **crates/rumorph** - the Rust core of the analyzer: dictionary format, building, analysis and inflection
-    *   **crates/rumorph-build** - building the dictionary from the pymorphy3-dicts-ru export and converting OpenCorpora tags to UD
+    *   **crates/rumorph-build** - building the dictionary from the pymorphy3-dicts-ru export, converting OpenCorpora tags to UD and frequencies of analyses from UD treebanks
     *   **crates/rumorph-dict-ru** - the crate with the dictionary for `rumorph` on crates.io
     *   **crates/rumorph-py** - the Python module `rumorph._rumorph` on PyO3
     *   **python/rumorph** - the Python package

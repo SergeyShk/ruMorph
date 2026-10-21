@@ -8,7 +8,9 @@ use fst::Map;
 
 use crate::Error;
 use crate::alphabet::{Alphabet, Key, yo_order};
-use crate::format::{self, Layout, MAX_LIST, MAX_SPELLINGS, Slice, Storage, Strings, WordValue};
+use crate::format::{
+    self, ENTRY_KEYS, Layout, MAX_LIST, MAX_SPELLINGS, Slice, Storage, Strings, WordValue,
+};
 
 mod guess;
 mod parts;
@@ -202,6 +204,26 @@ impl Spellings<'_> {
 
 fn unpack([low, high, offset]: [u32; 3]) -> (u64, u32) {
     (u64::from(low) | u64::from(high) << 32, offset)
+}
+
+/// Список частот: пары «ключ, доля в миллионных», ключи - теги или формы таблиц
+#[derive(Clone, Copy)]
+struct Probabilities<'a> {
+    by_entry: bool,
+    pairs: &'a [u32],
+}
+
+impl Probabilities<'_> {
+    /// Ключ разбора в списке: форма таблицы или тег
+    fn key(self, analysis: &Analysis) -> Option<u32> {
+        if self.by_entry {
+            analysis
+                .entry
+                .map(|entry| (u32::from(entry.table) << 16) | u32::from(entry.form))
+        } else {
+            analysis.tag.map(u32::from)
+        }
+    }
 }
 
 /// Написания ключа, которые подходят к запросу: места «ё» и начало списка разборов
@@ -517,6 +539,38 @@ impl Dictionary {
         }
         self.assign_probabilities(&groups[..matches.len], input.is_some(), &mut analyses);
         analyses
+    }
+
+    /// Разборы словаря до слияния с долями из списков частот (без частот - нулевыми): для сборщика
+    /// словаря, который пересчитывает частоты
+    #[cfg(feature = "build")]
+    #[doc(hidden)]
+    pub fn candidate_analyses(&self, word: &str) -> Vec<Analysis> {
+        self.candidates(word)
+    }
+
+    /// Доли разборов словоформы заданы по формам таблиц (частоты корпуса UD), а не по тегам:
+    /// для сверки с pymorphy3
+    #[doc(hidden)]
+    pub fn table_frequencies(&self, word: &str) -> bool {
+        let Some(key) = self.alphabet.input_key(word) else {
+            return false;
+        };
+        let Some(spellings) = self.spellings(&key) else {
+            return false;
+        };
+        let by_entry = |yo: u64| {
+            spellings
+                .probabilities(yo)
+                .and_then(|offset| self.probabilities_at(offset))
+                .is_some_and(|list| list.by_entry)
+        };
+        by_entry(key.yo)
+            || self
+                .matches(&spellings, key.yo)
+                .as_slice()
+                .iter()
+                .any(|&(yo, _)| by_entry(yo))
     }
 
     /// Разборы OpenCorpora до перевода в UD и слияния: написание, тег, начальная форма парадигмы
@@ -1088,18 +1142,28 @@ impl Dictionary {
     }
 
     /// Список частот: пары «тег, P(тег | словоформа) в миллионных долях»
-    fn probabilities_at(&self, offset: u32) -> Option<&[u32]> {
-        list(self.probability_records(), offset, 2)
+    fn probabilities_at(&self, offset: u32) -> Option<Probabilities<'_>> {
+        let lists = self.probability_records();
+        let header = *lists.get(offset as usize)?;
+        let count = (header & !ENTRY_KEYS) as usize;
+        if count > MAX_LIST {
+            return None;
+        }
+        let start = offset as usize + 1;
+        Some(Probabilities {
+            by_entry: header & ENTRY_KEYS != 0,
+            pairs: lists.get(start..start + 2 * count)?,
+        })
     }
 
-    /// Вероятность тега делится поровну между разборами с этим тегом и той же таблицей частот
+    /// Доля тега или формы таблицы делится поровну между разборами с этим ключом и той же таблицей частот
     /// (с частотами из запроса - всеми, иначе - того же написания) и нормируется. Без частот
     /// вероятности остаются нулевыми: равные доли раздает `merge` после слияния. Если частоты
     /// есть только у части написаний («совершённого», но не «совершенного»), разбор написания без
     /// частот получает среднюю долю разборов с частотами
     fn assign_probabilities(
         &self,
-        groups: &[(usize, usize, Option<&[u32]>)],
+        groups: &[(usize, usize, Option<Probabilities>)],
         input: bool,
         analyses: &mut [Analysis],
     ) {
@@ -1118,16 +1182,18 @@ impl Dictionary {
             let Some(table) = table(i) else {
                 continue;
             };
-            let (tag, spelling) = (analyses[i].tag, analyses[i].word.as_str());
+            let key = |analysis: &Analysis| table.key(analysis);
+            let (own, spelling) = (key(&analyses[i]), analyses[i].word.as_str());
             let share = analyses
                 .iter()
-                .filter(|other| other.tag == tag && (input || other.word == spelling))
+                .filter(|other| key(other) == own && (input || other.word == spelling))
                 .count() as f64;
             let prob = table
+                .pairs
                 .as_chunks::<2>()
                 .0
                 .iter()
-                .find(|[known, _]| Some(*known) == tag.map(u32::from))
+                .find(|[known, _]| Some(*known) == own)
                 .map_or(0.0, |[_, millionths]| f64::from(*millionths));
             analyses[i].prob = prob / share;
             total += analyses[i].prob;
@@ -1578,11 +1644,29 @@ impl Dictionary {
         walk_lists(self.records(), 1, |items| {
             items.iter().all(|&packed| entry(packed))
         })?;
-        walk_lists(self.probability_records(), 2, |items| {
-            items
-                .chunks(2)
-                .all(|pair| (pair[0] as usize) < self.tags.len())
-        })?;
+        // Длина списка частот - с битом ключей: список проверяется своим обходом
+        let lists = self.probability_records();
+        let mut start = 0;
+        while start < lists.len() {
+            let Some(probabilities) = self.probabilities_at(start as u32) else {
+                return Err(Error::Format(
+                    "список частот обрезан или длиннее 255 элементов".into(),
+                ));
+            };
+            let valid = probabilities.pairs.chunks(2).all(|pair| {
+                if probabilities.by_entry {
+                    entry(pair[0])
+                } else {
+                    (pair[0] as usize) < self.tags.len()
+                }
+            });
+            if !valid {
+                return Err(Error::Format(
+                    "список частот ссылается на несуществующий тег или форму".into(),
+                ));
+            }
+            start += 1 + probabilities.pairs.len();
+        }
         walk_lists(self.guess_records(), 2, |items| {
             items.chunks(2).all(|pair| entry(pair[0]))
         })
@@ -2889,6 +2973,55 @@ pub(super) mod tests {
         // Знак ударения после латинской буквы - не ударение русского слова
         assert_eq!(normalized_input("cafe\u{301}"), None);
         assert_eq!(normalized_input("Москва"), None);
+    }
+
+    #[test]
+    fn probabilities_of_table_forms() {
+        // «стали» - форма «стать» и несклоняемое «стали» с одним тегом: доли по тегу их не
+        // различают, доли по формам таблиц - различают
+        let mut builder = builder(&["VERB"], &[""], &["", "ть", "ли"]);
+        let become_ = lexeme_table(&mut builder, &[(1, 0, 0), (2, 0, 0)]);
+        let other = lexeme_table(&mut builder, &[(0, 0, 0)]);
+        for (word, entries) in [
+            ("стать", vec![entry(become_, 0)]),
+            ("стали", vec![entry(become_, 1), entry(other, 0)]),
+        ] {
+            builder.add_word(word, &entries).unwrap();
+        }
+        builder.add_probability("стали", 0, 1_000_000).unwrap();
+        let lemmas = |builder: &Builder| -> Vec<(String, f64)> {
+            let dict = Dictionary::from_bytes(&builder.build().unwrap()).unwrap();
+            dict.analyze("стали")
+                .into_iter()
+                .map(|analysis| (analysis.lemma, analysis.prob))
+                .collect()
+        };
+        assert_eq!(
+            lemmas(&builder),
+            [("стать".to_owned(), 0.5), ("стали".to_owned(), 0.5)]
+        );
+        builder
+            .set_entry_probabilities(
+                "стали",
+                &[(entry(other, 0), 900_000), (entry(become_, 1), 100_000)],
+            )
+            .unwrap();
+        assert_eq!(
+            lemmas(&builder),
+            [("стали".to_owned(), 0.9), ("стать".to_owned(), 0.1)]
+        );
+        // Список по формам заменяет список по тегам, а не дополняется им
+        assert!(builder.add_probability("стали", 0, 1).is_err());
+        assert!(
+            builder
+                .set_entry_probabilities("стали", &[(entry(9, 0), 1)])
+                .is_err()
+        );
+        assert!(
+            builder
+                .set_entry_probabilities("стали", &[(entry(other, 5), 1)])
+                .is_err()
+        );
     }
 
     #[test]

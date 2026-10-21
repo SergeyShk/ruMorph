@@ -4,11 +4,11 @@ build-backend = "maturin"
 
 [project]
 name = "rumorph"
-version = "0.3.0.dev2"
+version = "0.3.0.dev3"
 description = "Fast Russian morphological analyzer written in Rust with a Python API"
 readme = "README.md"
 requires-python = ">=3.11"
-license = "MIT AND CC-BY-SA-3.0"
+license = "MIT AND CC-BY-SA-4.0"
 license-files = ["LICENSE.txt", "LICENSE-DICTIONARY.txt"]
 authors = [{ name = "Шкарин Сергей", email = "kouki.sergey@gmail.com" }]
 maintainers = [{ name = "Шкарин Сергей", email = "kouki.sergey@gmail.com" }]

@@ -25,7 +25,7 @@ Exceptions:
 === "Result"
 
     ```
-    Analysis(word='стали', lemma='стать', pos='VERB', feats='Aspect=Perf|Mood=Ind|Number=Plur|Tense=Past|VerbForm=Fin|Voice=Mid', labels='intr', prob=0.9753459013836056, source='dictionary')
+    Analysis(word='стали', lemma='стать', pos='VERB', feats='Aspect=Perf|Mood=Ind|Number=Plur|Tense=Past|VerbForm=Fin|Voice=Mid', labels='intr', prob=0.9877829877829878, source='dictionary')
     ```
 
 ## Parameters
@@ -69,12 +69,12 @@ Exceptions:
 === "Result"
 
     ```
-    [('стать', 'VERB', None, 0.975),
-     ('сталь', 'NOUN', 'Gen', 0.011),
-     ('сталь', 'NOUN', 'Nom', 0.005),
-     ('сталь', 'NOUN', 'Dat', 0.003),
-     ('сталь', 'NOUN', 'Loc', 0.003),
-     ('сталь', 'NOUN', 'Acc', 0.003)]
+    [('стать', 'VERB', None, 0.988),
+     ('сталь', 'NOUN', 'Gen', 0.005),
+     ('сталь', 'NOUN', 'Nom', 0.003),
+     ('сталь', 'NOUN', 'Dat', 0.001),
+     ('сталь', 'NOUN', 'Loc', 0.001),
+     ('сталь', 'NOUN', 'Acc', 0.001)]
     [('чатбот', 'guess'), ('чатбота', 'guess')]
     ```
 
@@ -187,7 +187,7 @@ Exceptions:
 
 ## Dictionary { #dictionary }
 
-The package dictionary is built from the [OpenCorpora](https://opencorpora.org) dictionary: about 3.1 million word forms. The probabilities of analyses come from the OpenCorpora corpus: a word written with «е» instead of «ё» gets the frequencies of the spelling with «ё», and word forms missing from the corpus get equally probable analyses. The dictionary is distributed under the [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/) license.
+The package dictionary is built from the [OpenCorpora](https://opencorpora.org) dictionary: about 3.1 million word forms. The probabilities of analyses come from the OpenCorpora corpus and are refined by the annotation of the Universal Dependencies treebanks [UD_Russian-Taiga](https://github.com/UniversalDependencies/UD_Russian-Taiga) and [UD_Russian-GSD](https://github.com/UniversalDependencies/UD_Russian-GSD): this way «ничего» is more often a pronoun than an adverb. Word forms missing from every corpus get equally probable analyses. The dictionary is distributed under the [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) license.
 
 ## Threads and processes { #parallel }
 
@@ -207,5 +207,5 @@ One analyzer can be used from several threads: `analyze_many` and `lemmatize` re
 === "Result"
 
     ```
-    [['мама', 'мыло', 'рама'], ['кошка', 'ловить', 'мышь']]
+    [['мама', 'мыть', 'рама'], ['кошка', 'ловить', 'мышь']]
     ```

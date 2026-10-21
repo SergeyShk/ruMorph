@@ -5,7 +5,7 @@ use fst::MapBuilder;
 use crate::Error;
 use crate::alphabet::{Alphabet, MAX_KEY, yo_order};
 use crate::dictionary::{Entry, GuessIndex};
-use crate::format::{self, MAX_LIST, MAX_SPELLINGS, Sections, WordValue};
+use crate::format::{self, ENTRY_KEYS, MAX_LIST, MAX_SPELLINGS, Sections, WordValue};
 
 /// Сборщик словаря из таблиц тегов, префиксов, суффиксов, парадигм, словоформ и частот
 ///
@@ -25,7 +25,8 @@ pub struct Builder {
     tables: Vec<(u16, Vec<u32>)>,
     table_numbers: HashMap<(u16, Vec<u32>), u16>,
     words: BTreeMap<String, Vec<u32>>,
-    probabilities: BTreeMap<String, Vec<(u16, u32)>>,
+    /// Списки частот: ключи - формы таблиц (`true`) или теги, пары «ключ, доля в миллионных»
+    probabilities: BTreeMap<String, (bool, Vec<(u32, u32)>)>,
     guesses: BTreeMap<(GuessIndex, String), Vec<(u32, u32)>>,
 }
 
@@ -201,14 +202,42 @@ impl Builder {
         Ok(())
     }
 
-    /// Добавляет P(тег | словоформа) в миллионных долях
+    /// Добавляет P(тег | словоформа) в миллионных долях; доля делится поровну между разборами
+    /// словоформы с этим тегом
     pub fn add_probability(&mut self, word: &str, tag: u16, millionths: u32) -> Result<(), Error> {
         check_id("тег", tag, self.tags.len())?;
-        let pairs = self.probabilities.entry(word.to_owned()).or_default();
-        match pairs.iter_mut().find(|(known, _)| *known == tag) {
-            Some(pair) => pair.1 = millionths,
-            None => pairs.push((tag, millionths)),
+        let (by_entry, pairs) = self.probabilities.entry(word.to_owned()).or_default();
+        if *by_entry {
+            return Err(Error::Build(format!(
+                "у словоформы {word:?} уже есть доли форм таблиц"
+            )));
         }
+        match pairs.iter_mut().find(|(known, _)| *known == u32::from(tag)) {
+            Some(pair) => pair.1 = millionths,
+            None => pairs.push((u32::from(tag), millionths)),
+        }
+        Ok(())
+    }
+
+    /// Задает доли разборов словоформы по формам таблиц в миллионных: список заменяет прежние
+    /// доли словоформы, в том числе по тегам. Разборы без доли в списке получают нулевую
+    pub fn set_entry_probabilities(
+        &mut self,
+        word: &str,
+        probabilities: &[(Entry, u32)],
+    ) -> Result<(), Error> {
+        let mut pairs = Vec::with_capacity(probabilities.len());
+        for &(entry, millionths) in probabilities {
+            let &(paradigm, _) = self.tables.get(entry.table as usize).ok_or_else(|| {
+                Error::Build(format!("словоформа {word:?}: нет таблицы {}", entry.table))
+            })?;
+            check_id("форма", entry.form, self.paradigms[paradigm as usize].len())?;
+            pairs.push((
+                (u32::from(entry.table) << 16) | u32::from(entry.form),
+                millionths,
+            ));
+        }
+        self.probabilities.insert(word.to_owned(), (true, pairs));
         Ok(())
     }
 
@@ -294,7 +323,7 @@ impl Builder {
         // Частоты написаний, у которых нет ключа в словаре, не нужны: такие слова не разбираются
         // по словарю
         let mut probability_records = Vec::new();
-        for (word, pairs) in &self.probabilities {
+        for (word, (by_entry, pairs)) in &self.probabilities {
             let Some(key) = letters.spelling_key(word) else {
                 continue;
             };
@@ -304,9 +333,10 @@ impl Builder {
             spellings
                 .probabilities
                 .push((key.yo, probability_records.len() as u32));
-            probability_records.push(pairs.len() as u32);
-            for &(tag, millionths) in pairs {
-                probability_records.extend([u32::from(tag), millionths]);
+            let flag = if *by_entry { ENTRY_KEYS } else { 0 };
+            probability_records.push(pairs.len() as u32 | flag);
+            for &(key, millionths) in pairs {
+                probability_records.extend([key, millionths]);
             }
         }
 
@@ -416,7 +446,7 @@ impl Builder {
                 return Err(err);
             }
         }
-        for (word, pairs) in &self.probabilities {
+        for (word, (_, pairs)) in &self.probabilities {
             if let Some(err) = long("частот", &format!("словоформы {word:?}"), pairs.len())
             {
                 return Err(err);
