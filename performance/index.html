@@ -846,7 +846,7 @@
 
 
 <h1 id="_1">Скорость и память<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h1>
-<p>Разбор и лемматизация в ruMorph примерно в 5 раз быстрее, чем в pymorphy3 с ускорением <code>pymorphy3[fast]</code>, и в 24-37 раз быстрее, чем в pymorphy3 без него; <code>inflect</code> и <code>agree</code> - в 15-18 раз. Списки слов разбираются без GIL, поэтому несколько потоков с одним анализатором работают параллельно. Словарь загружается за 14 мс, вдвое быстрее, чем в pymorphy3, и занимает в памяти меньше, чем у <code>pymorphy3[fast]</code>.</p>
+<p>Разбор и лемматизация в ruMorph в 6-8 раз быстрее, чем в pymorphy3 с ускорением <code>pymorphy3[fast]</code>, и в 31-63 раза быстрее, чем в pymorphy3 без него; <code>inflect</code> и <code>agree</code> - в 15-18 раз. Списки слов разбираются без GIL, поэтому несколько потоков с одним анализатором работают параллельно. Словарь загружается за 5 мс, в 6 раз быстрее, чем в pymorphy3, и занимает в памяти меньше, чем у <code>pymorphy3[fast]</code>; процессы делят словарь, поэтому каждый следующий процесс с анализатором занимает около 1,4 МБ.</p>
 <h2 id="speed">Скорость<a class="headerlink" href="#speed" title="Permanent link">&para;</a></h2>
 <p>Тысяч слов или разборов в секунду, больше - лучше:</p>
 <table>
@@ -861,43 +861,43 @@
 <tbody>
 <tr>
 <td style="text-align: left;">Разбор словоформы: <code>analyze</code> в цикле, <code>parse</code></td>
-<td style="text-align: left;">474</td>
+<td style="text-align: left;">629</td>
 <td style="text-align: left;">20</td>
 <td style="text-align: left;">105</td>
 </tr>
 <tr>
 <td style="text-align: left;">Разбор списка: <code>analyze_many</code></td>
-<td style="text-align: left;">493</td>
+<td style="text-align: left;">641</td>
 <td style="text-align: left;">-</td>
 <td style="text-align: left;">-</td>
 </tr>
 <tr>
 <td style="text-align: left;">Лемматизация: <code>lemmatize</code>, <code>parse(word)[0].normal_form</code></td>
-<td style="text-align: left;">810</td>
+<td style="text-align: left;">1 391</td>
 <td style="text-align: left;">22</td>
 <td style="text-align: left;">170</td>
 </tr>
 <tr>
 <td style="text-align: left;">Лемматизация в 4 потоках: <code>lemmatize</code></td>
-<td style="text-align: left;">2 345</td>
+<td style="text-align: left;">4 210</td>
 <td style="text-align: left;">-</td>
 <td style="text-align: left;">-</td>
 </tr>
 <tr>
 <td style="text-align: left;">Форма по признакам: <code>inflect(Case="Gen")</code>, <code>inflect({"gent"})</code></td>
-<td style="text-align: left;">1 400</td>
+<td style="text-align: left;">1 338</td>
 <td style="text-align: left;">76</td>
 <td style="text-align: left;">76</td>
 </tr>
 <tr>
 <td style="text-align: left;">Согласование с количеством: <code>agree(5)</code>, <code>make_agree_with_number(5)</code></td>
-<td style="text-align: left;">1 307</td>
+<td style="text-align: left;">1 284</td>
 <td style="text-align: left;">85</td>
 <td style="text-align: left;">85</td>
 </tr>
 <tr>
 <td style="text-align: left;">Формы лексемы: <code>forms()</code>, <code>lexeme</code></td>
-<td style="text-align: left;">57</td>
+<td style="text-align: left;">62</td>
 <td style="text-align: left;">32</td>
 <td style="text-align: left;">32</td>
 </tr>
@@ -916,25 +916,31 @@
 <tbody>
 <tr>
 <td style="text-align: left;">Импорт и загрузка словаря</td>
-<td style="text-align: left;">14 мс</td>
+<td style="text-align: left;">5 мс</td>
 <td style="text-align: left;">30 мс</td>
 <td style="text-align: left;">31 мс</td>
 </tr>
 <tr>
 <td style="text-align: left;">Прирост памяти процесса</td>
-<td style="text-align: left;">21,5 МБ</td>
+<td style="text-align: left;">16,2 МБ</td>
 <td style="text-align: left;">34,5 МБ</td>
 <td style="text-align: left;">25,5 МБ</td>
 </tr>
+<tr>
+<td style="text-align: left;">Каждый следующий процесс</td>
+<td style="text-align: left;">1,4 МБ</td>
+<td style="text-align: left;">32,5 МБ</td>
+<td style="text-align: left;">23,1 МБ</td>
+</tr>
 </tbody>
 </table>
-<p>Анализаторы с одним файлом словаря в процессе делят словарь, а процессы <code>multiprocessing</code> и joblib загружают его каждый в своей памяти.</p>
+<p>Анализаторы с одним файлом словаря в процессе делят словарь. Файл словаря отображается в память, поэтому процессы <code>multiprocessing</code>, joblib или воркеры веб-сервера делят и его: каждый следующий процесс добавляет только собственные таблицы анализатора.</p>
 <h2 id="method">Как измерено<a class="headerlink" href="#method" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Компьютер - Apple M3 Pro, macOS 26, Python 3.11; ruMorph 0.1.0.dev14, pymorphy3 2.0.6 со словарем pymorphy3-dicts-ru 2.4.417150.4580142; <code>pymorphy3[fast]</code> - то же с расширением DAWG на C++.</li>
+<li>Компьютер - Apple M3 Pro, macOS 26, Python 3.11; ruMorph 0.2.0.dev1, pymorphy3 2.0.6 со словарем pymorphy3-dicts-ru 2.4.417150.4580142; <code>pymorphy3[fast]</code> - то же с расширением DAWG на C++.</li>
 <li>Слова - 128 251 словоформа тестовой части <a href="https://github.com/UniversalDependencies/UD_Russian-SynTagRus">UD_Russian-SynTagRus</a> без знаков препинания, в порядке текста. Время - лучшее из трех прогонов в одном потоке, кроме строки с потоками.</li>
 <li><code>inflect</code> - родительный падеж первых разборов с падежом, <code>agree</code> - первые разборы существительных с числом 5, <code>forms</code> - первые разборы первых 20 000 слов.</li>
-<li>Память - прирост резидентной памяти процесса (<code>ps -o rss</code>) после импорта библиотеки и создания анализатора, время - импорт, создание анализатора и первый разбор.</li>
+<li>Память - прирост резидентной памяти процесса (<code>ps -o rss</code>) после импорта библиотеки и создания анализатора, время - импорт, создание анализатора и первый разбор. Следующий процесс - прирост памяти, которую процесс не делит с другими (USS), в каждом из четырех процессов <code>multiprocessing</code> с анализатором.</li>
 </ul>
 
 
