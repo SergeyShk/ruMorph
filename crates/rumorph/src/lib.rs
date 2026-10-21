@@ -4,12 +4,14 @@
 //! по парадигмам
 //!
 //! ```
+//! # #[cfg(feature = "bundled")] {
 //! use rumorph::Dictionary;
 //!
 //! let dictionary = Dictionary::bundled()?;
 //! let analysis = &dictionary.analyze("стали")[0];
 //! assert_eq!(analysis.lemma, "стать");
 //! assert_eq!(dictionary.ud_tag(analysis.ud).unwrap().pos(), "VERB");
+//! # }
 //! # Ok::<(), rumorph::Error>(())
 //! ```
 //!
