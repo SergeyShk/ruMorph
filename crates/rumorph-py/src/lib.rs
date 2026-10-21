@@ -10,7 +10,9 @@ use std::sync::{Arc, OnceLock, Weak};
 use std::time::SystemTime;
 
 use pyo3::create_exception;
-use pyo3::exceptions::{PyLookupError, PyOSError, PyOverflowError, PyTypeError, PyValueError};
+use pyo3::exceptions::{
+    PyFileNotFoundError, PyLookupError, PyOSError, PyOverflowError, PyTypeError, PyValueError,
+};
 use pyo3::intern;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyFloat, PyFrozenSet, PyInt, PyString, PyTuple};
@@ -497,12 +499,18 @@ struct Shared {
     dictionary: rumorph::Dictionary,
     /// Объекты тегов UD создаются при первом разборе с тегом: в тексте встречается малая доля тегов
     ud: Vec<OnceLock<UdObjects>>,
+    /// Путь, по которому словарь загружен
+    path: PathBuf,
 }
 
 impl Shared {
-    fn new(dictionary: rumorph::Dictionary) -> Self {
+    fn new(dictionary: rumorph::Dictionary, path: &Path) -> Self {
         let ud = dictionary.ud_tags().map(|_| OnceLock::new()).collect();
-        Shared { dictionary, ud }
+        Shared {
+            dictionary,
+            ud,
+            path: path.to_owned(),
+        }
     }
 }
 
@@ -711,6 +719,21 @@ fn dictionary(path: &Path) -> Result<(Arc<Shared>, Option<Arc<Shared>>), rumorph
     Ok((shared, previous))
 }
 
+/// Словарь, загруженный в процессе по пути `path`: им восстанавливается pickle, если файла уже нет
+fn loaded_from(py: Python<'_>, path: &Path) -> Option<Arc<Shared>> {
+    // Флаг ждут без GIL, а лишние ссылки на словари освобождаются уже с GIL
+    let alive: Vec<Arc<Shared>> = py.detach(|| {
+        DICTIONARIES.with(|loaded| {
+            let entries = loaded.entries.iter().filter_map(|(_, slot)| match slot {
+                Slot::Loaded(shared) => shared.upgrade(),
+                Slot::Loading => None,
+            });
+            loaded.last.iter().cloned().chain(entries).collect()
+        })
+    });
+    alive.into_iter().find(|shared| shared.path == path)
+}
+
 /// Словарь файла `path`, если он уже загружен и флаг словарей свободен: так анализатор,
 /// созданный на один вызов, не отпускает GIL. Иначе `None`
 fn loaded_dictionary(path: &Path) -> Option<(Arc<Shared>, Option<Arc<Shared>>)> {
@@ -729,7 +752,10 @@ fn loaded_dictionary(path: &Path) -> Option<(Arc<Shared>, Option<Arc<Shared>>)> 
 
 fn find_or_load(path: &Path) -> Result<Arc<Shared>, rumorph::Error> {
     let Some(key) = FileKey::new(path, &std::fs::metadata(path)?) else {
-        return Ok(Arc::new(Shared::new(rumorph::Dictionary::open(path)?)));
+        return Ok(Arc::new(Shared::new(
+            rumorph::Dictionary::open(path)?,
+            path,
+        )));
     };
     loop {
         let lookup = DICTIONARIES.with(|loaded| {
@@ -762,7 +788,7 @@ fn find_or_load(path: &Path) -> Result<Arc<Shared>, rumorph::Error> {
                     key: &key,
                     shared: None,
                 };
-                let shared = Arc::new(Shared::new(rumorph::Dictionary::open(path)?));
+                let shared = Arc::new(Shared::new(rumorph::Dictionary::open(path)?, path));
                 loading.shared = Some(Arc::downgrade(&shared));
                 return Ok(shared);
             }
@@ -784,9 +810,9 @@ fn package_version() -> String {
     env!("CARGO_PKG_VERSION").replace("-dev.", ".dev")
 }
 
-/// Восстановление анализатора из pickle: анализатор потока с тем же путем к словарю (pickle
-/// разборов не создает анализатор на каждый разбор, а удаленный файл словаря не мешает), иначе
-/// новый со словарем из загруженных в процессе
+/// Восстановление анализатора из pickle: анализатор с тем же путем к словарю, разборы которого
+/// есть в потоке (pickle разборов не создает анализатор на каждый разбор), иначе новый со словарем
+/// файла, а если файла уже нет - со словарем, загруженным из него в процессе
 #[pyfunction]
 fn _analyzer(py: Python<'_>, path: Option<PathBuf>) -> PyResult<Py<Analyzer>> {
     let explicit = path.is_some();
@@ -806,9 +832,26 @@ fn _analyzer(py: Python<'_>, path: Option<PathBuf>) -> PyResult<Py<Analyzer>> {
         })
         .ok()
         .flatten();
-    match found {
-        Some(analyzer) => Ok(analyzer),
-        None => Py::new(py, Analyzer::load(py, path, explicit)?),
+    if let Some(analyzer) = found {
+        return Ok(analyzer);
+    }
+    match Analyzer::load(py, path.clone(), explicit) {
+        Ok(analyzer) => Py::new(py, analyzer),
+        // Тип ошибки - OSError, а значение по errno - FileNotFoundError
+        Err(err) if err.value(py).is_instance_of::<PyFileNotFoundError>() => {
+            match loaded_from(py, &path) {
+                Some(shared) => Py::new(
+                    py,
+                    Analyzer {
+                        shared,
+                        path,
+                        explicit,
+                    },
+                ),
+                None => Err(err),
+            }
+        }
+        Err(err) => Err(err),
     }
 }
 

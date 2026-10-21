@@ -484,10 +484,9 @@ def test_pickled_analyses_share_tag_objects(morph):
         # Без GIL пометы и признаки - новые объекты: общие замедляли бы потоки
         if getattr(sys, "_is_gil_enabled", lambda: True)():
             assert restored.labels is first.labels
-    # Строки тега в pickle - общие объекты: pickle списка хранит их один раз
-    analyses = morph.analyze("стали")
-    single = len(pickle.dumps(analyses[:1]))
-    assert len(pickle.dumps(analyses[:1] * 20)) < 2 * single
+    # Строки тега в pickle - общие объекты: pickle списка разных разборов хранит их один раз
+    analyses = [morph.analyze("стали")[0] for _ in range(20)]
+    assert pickle.dumps(analyses).count(tag_text(analyses[0]).encode()) == 1
 
 
 def test_same_file_by_other_path(morph, tmp_path):
@@ -532,6 +531,13 @@ def test_deleted_file_keeps_working(morph, tmp_path):
     # pickle разбора восстанавливает анализатор потока, а не читает удаленный файл
     assert pickle.loads(pickle.dumps(analysis)) == analysis
     assert pickle.loads(pickle.dumps(analyzer)) is analyzer
+    # Без разборов в потоке и в другом потоке - словарь, загруженный из этого файла
+    blob = pickle.dumps(analysis)
+    del analysis
+    assert pickle.loads(blob).lemma == "стать"
+    assert pickle.loads(pickle.dumps(analyzer)).path == path
+    with ThreadPoolExecutor(1) as pool:
+        assert pool.submit(pickle.loads, blob).result().lemma == "стать"
 
 
 @pytest.mark.skipif(not hasattr(os, "fork"), reason="нет fork")
