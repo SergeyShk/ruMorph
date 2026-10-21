@@ -457,7 +457,8 @@ const ADVERB_DEGREES: &[(&str, &str)] = &[
 ];
 
 /// Существительные, род которых в SynTagRus другой, чем в OpenCorpora: «евро» - мужского рода
-const GENDER_EXCEPTIONS: &[(&str, &str)] = &[("евро", "Masc")];
+const GENDER_EXCEPTIONS: &[(&str, &str)] =
+    &[("евро", "Masc"), ("масс-медиа", "Neut"), ("медиа", "Neut")];
 
 /// Супплетивные превосходные прилагательные: в SynTagRus Degree=Pos, а не Sup
 const SUPPLETIVE_SUPERLATIVES: &[&str] = &[
@@ -960,18 +961,24 @@ pub fn lemma_class(lemma: &str) -> &str {
     }
 }
 
-/// Род существительного, у которого есть только множественное число (Pltm), по склонению, как
-/// в SynTagRus: именительный на -а, -я - средний («ворота», «уста»), родительный на -ов, -ев,
-/// -ей - мужской («выборов», «саней»), иначе - женский («суток», «денег»). Формы - тег и написание
+/// Род существительного, у которого есть только множественное число (Pltm) и нет рода в теге,
+/// по склонению, как в SynTagRus: именительный на -а, -я - средний («ворота», «уста»),
+/// родительный на -ов, -ев, -ей - мужской («выборов», «саней»), иначе - женский («суток»,
+/// «денег»). У несклоняемых («СМИ») и склоняемых как прилагательные («данные») рода нет.
+/// Формы - тег и написание
 pub fn plural_only_gender(forms: &[(&str, String)]) -> Option<&'static str> {
     let find = |case: &str| {
         forms.iter().find_map(|(tag, word)| {
             let grammemes: Vec<&str> = tag.split([',', ' ']).collect();
-            (grammemes.contains(&"Pltm") && grammemes.contains(&case)).then_some(word.as_str())
+            let genderless = grammemes.contains(&"Pltm") && grammemes.contains(&"GNdr");
+            (genderless && grammemes.contains(&case)).then_some(word.as_str())
         })
     };
     let nominative = find("nomn")?;
     let genitive = find("gent")?;
+    if nominative == genitive || genitive.ends_with("ых") || genitive.ends_with("их") {
+        return None;
+    }
     Some(if nominative.ends_with(['а', 'я']) {
         "Neut"
     } else if ["ов", "ев", "ёв", "ей"]
@@ -1017,6 +1024,14 @@ mod tests {
             let found = plural_only_gender(&forms(nominative, genitive));
             assert_eq!(found, Some(gender), "{nominative}");
         }
+        for (nominative, genitive) in [("сми", "сми"), ("данные", "данных")] {
+            assert_eq!(plural_only_gender(&forms(nominative, genitive)), None);
+        }
+        let gendered = [
+            ("NOUN,inan,femn,Pltm plur,nomn", "ворота".to_owned()),
+            ("NOUN,inan,femn,Pltm plur,gent", "ворот".to_owned()),
+        ];
+        assert_eq!(plural_only_gender(&gendered), None);
         assert_eq!(
             plural_only_gender(&[("NOUN,inan,masc plur,nomn", "столы".to_owned())]),
             None

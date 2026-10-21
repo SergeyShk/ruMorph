@@ -313,7 +313,8 @@ fn build(export: &Path, ud: &Path, output: &Path) -> Result<(), Box<dyn Error>> 
                             (true, true) if !tag.contains("Fixd") => Some(Abbreviation::Declinable),
                             (true, true) => None,
                         };
-                        let gender = plural_gender.filter(|_| tag.contains("Pltm"));
+                        let gender =
+                            plural_gender.filter(|_| tag.contains("Pltm") && tag.contains("GNdr"));
                         let key = (layout[count + form], class, counting, abbreviation, gender);
                         let (ud, untyped) = match ud_numbers.get(&key) {
                             Some(&value) => value,
