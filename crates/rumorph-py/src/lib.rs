@@ -6,13 +6,12 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Weak};
+use std::sync::{Arc, OnceLock, Weak};
 use std::time::SystemTime;
 
 use pyo3::create_exception;
 use pyo3::exceptions::{PyLookupError, PyOSError, PyOverflowError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::sync::PyOnceLock;
 use pyo3::types::{PyDict, PyFloat, PyFrozenSet, PyInt, PyString, PyTuple};
 
 /// Сколько слов `analyze_many` и `lemmatize` разбирают за раз без GIL: между кусками
@@ -405,12 +404,12 @@ fn _analysis(py: Python<'_>, analyzer: Py<Analyzer>, state: AnalysisState) -> Py
 struct Shared {
     dictionary: rumorph::Dictionary,
     /// Объекты тегов UD создаются при первом разборе с тегом: в тексте встречается малая доля тегов
-    ud: Vec<PyOnceLock<UdObjects>>,
+    ud: Vec<OnceLock<UdObjects>>,
 }
 
 impl Shared {
     fn new(dictionary: rumorph::Dictionary) -> Self {
-        let ud = dictionary.ud_tags().map(|_| PyOnceLock::new()).collect();
+        let ud = dictionary.ud_tags().map(|_| OnceLock::new()).collect();
         Shared { dictionary, ud }
     }
 }
@@ -975,7 +974,7 @@ impl Analyzer {
         let this = handle.analyzer.get();
         let number = usize::from(analysis.ud);
         let shared = &this.shared;
-        let ud = shared.ud[number].get_or_try_init(py, || {
+        let ud = once(&shared.ud[number], || {
             let tag = shared.dictionary.ud_tag(analysis.ud);
             UdObjects::from_tag(py, tag.ok_or_else(|| PyValueError::new_err("Нет тега UD"))?)
         })?;
@@ -988,6 +987,18 @@ impl Analyzer {
             handle: Arc::clone(handle),
         })
     }
+}
+
+/// Значение ячейки, созданное при первом обращении. Значение создается до записи в ячейку,
+/// и поток не ждет Python, заняв ее (как `PyOnceLock`): fork, заставший такое ожидание, оставил бы
+/// ячейку занятой навсегда, и дочерний процесс завис бы на ней. Если два потока создали значение
+/// одновременно, лишнее освобождается здесь, в потоке Python
+fn once<T>(cell: &OnceLock<T>, init: impl FnOnce() -> PyResult<T>) -> PyResult<&T> {
+    if let Some(value) = cell.get() {
+        return Ok(value);
+    }
+    let value = init()?;
+    Ok(cell.get_or_init(move || value))
 }
 
 fn join<'a>(values: impl IntoIterator<Item = &'a String>) -> String {
@@ -1095,12 +1106,12 @@ fn type_error(message: &str, value: &Bound<'_, PyAny>) -> PyErr {
 /// и Fraction. Согласование зависит от двух последних цифр и от того, меньше ли количество 5,
 /// поэтому числа больше u64 сводятся к 100-199
 fn count(number: &Bound<'_, PyAny>) -> PyResult<Option<u64>> {
-    static INDEX: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+    static INDEX: OnceLock<Py<PyAny>> = OnceLock::new();
     let py = number.py();
     let integer = if number.is_instance_of::<PyInt>() {
         number.clone()
     } else {
-        let index = INDEX.get_or_try_init(py, || {
+        let index = once(&INDEX, || {
             PyResult::Ok(py.import("operator")?.getattr("index")?.unbind())
         })?;
         match index.bind(py).call1((number,)) {
@@ -1128,9 +1139,9 @@ fn count(number: &Bound<'_, PyAny>) -> PyResult<Option<u64>> {
 /// «21.0») и `Fraction` со знаменателем 1; `None` - дробное количество. Конечность проверяется
 /// без перевода в float: «1E+400» - конечное целое
 fn integral<'py>(number: &Bound<'py, PyAny>) -> PyResult<Option<Bound<'py, PyAny>>> {
-    static TYPES: PyOnceLock<(Py<PyAny>, Py<PyAny>, Py<PyAny>)> = PyOnceLock::new();
+    static TYPES: OnceLock<(Py<PyAny>, Py<PyAny>, Py<PyAny>)> = OnceLock::new();
     let py = number.py();
-    let (decimal, rational, real) = TYPES.get_or_try_init(py, || {
+    let (decimal, rational, real) = once(&TYPES, || {
         let numbers = py.import("numbers")?;
         PyResult::Ok((
             py.import("decimal")?.getattr("Decimal")?.unbind(),
