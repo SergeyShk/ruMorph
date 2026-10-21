@@ -589,10 +589,12 @@ impl Drop for Loading<'_> {
 
 /// Словарь файла `path`: загруженный в процессе, если файл тот же и не изменился, иначе новый.
 /// Флаг словарей берется только на поиск и запись, загрузка идет без него
-fn dictionary(path: &Path) -> Result<Arc<Shared>, rumorph::Error> {
+/// Вывод - словарь и прежний последний словарь: его освобождают в потоке Python, иначе
+/// его объекты Python уходят в пул отложенных decref PyO3, мьютекс которого может застать fork
+fn dictionary(path: &Path) -> Result<(Arc<Shared>, Option<Arc<Shared>>), rumorph::Error> {
     let shared = find_or_load(path)?;
-    drop(DICTIONARIES.keep(&shared));
-    Ok(shared)
+    let previous = DICTIONARIES.keep(&shared);
+    Ok((shared, previous))
 }
 
 fn find_or_load(path: &Path) -> Result<Arc<Shared>, rumorph::Error> {
@@ -650,7 +652,8 @@ fn _analyzer(py: Python<'_>, path: Option<PathBuf>) -> PyResult<Analyzer> {
 ///     вероятность. Регистр не важен, буква «е» в слове может обозначать «ё». Словарь
 ///     загружается один раз при создании анализатора; анализатор можно использовать
 ///     из нескольких потоков. Файл словаря отображается в память и общий для процессов:
-///     пока анализатор существует, файл нельзя перезаписывать на месте
+///     пока он открыт, его нельзя перезаписывать на месте. Последний загруженный словарь
+///     остается открытым и без анализаторов
 ///
 /// Аргументы:
 ///     path (str | os.PathLike | None): Путь к файлу словаря; по умолчанию - словарь из пакета
@@ -914,9 +917,10 @@ impl Analyzer {
             Some(path) => std::path::absolute(&path).unwrap_or(path),
             None => default_path(py)?,
         };
-        let shared = py
+        let (shared, previous) = py
             .detach(|| dictionary(&path))
             .map_err(|err| load_error(&path, err))?;
+        drop(previous);
         Ok(Analyzer {
             shared,
             path,
