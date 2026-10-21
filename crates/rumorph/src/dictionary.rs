@@ -510,7 +510,7 @@ impl Dictionary {
                     continue;
                 };
                 analyses.push(Analysis {
-                    lemma: self.spell(&lexeme, lexeme.lemma_form(form)),
+                    lemma: self.lemma(&lexeme, form),
                     ud: lexeme.ud(form),
                     tag: Some(lexeme.tag(form)),
                     word: String::new(),
@@ -681,7 +681,7 @@ impl Dictionary {
         }
         Some(Analysis {
             word: word.to_owned(),
-            lemma: self.spell(&lexeme, lexeme.lemma_form(entry.form)),
+            lemma: self.lemma(&lexeme, entry.form),
             ud: lexeme.ud(entry.form),
             tag: Some(lexeme.tag(entry.form)),
             prob: 1.0,
@@ -1075,6 +1075,15 @@ impl Dictionary {
             .strip_prefix(self.prefixes.at(prefix))?
             .strip_suffix(self.suffixes.at(suffix))?;
         Some(lexeme)
+    }
+
+    /// Лемма формы лексемы; у сокращения - полное слово («млн» - «миллион»)
+    fn lemma(&self, lexeme: &Lexeme, form: u16) -> String {
+        let lemma = self.spell(lexeme, lexeme.lemma_form(form));
+        match self.abbreviation_lemma(&lemma, lexeme.tag(form)) {
+            Some(full) => full.to_owned(),
+            None => lemma,
+        }
     }
 
     /// Написание формы лексемы

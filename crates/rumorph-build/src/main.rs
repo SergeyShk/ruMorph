@@ -34,8 +34,15 @@ type Records = Vec<(u16, u16, String)>;
 /// Лексема выгрузки: парадигма, основа и пары «форма леммы, тег UD» ее форм
 type SourceLexeme = (u16, String, Vec<(u16, u16)>);
 
-/// Ключ перевода в UD: тег OpenCorpora, класс леммы, счетная форма и вид аббревиатуры
-type UdKey = (u16, String, bool, Option<Abbreviation>);
+/// Ключ перевода в UD: тег OpenCorpora, класс леммы, счетная форма, вид аббревиатуры и род
+/// существительного, у которого есть только множественное число
+type UdKey = (
+    u16,
+    String,
+    bool,
+    Option<Abbreviation>,
+    Option<&'static str>,
+);
 
 /// Аббревиатура, у которой признаки UD отличаются от тега OpenCorpora
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -251,6 +258,11 @@ fn build(export: &Path, ud: &Path, output: &Path) -> Result<(), Box<dyn Error>> 
                         })
                         .unwrap_or(0);
                     let pos = tag_of(0).split([',', ' ']).next().unwrap_or_default();
+                    let plural_gender = ud::plural_only_gender(
+                        &(0..count)
+                            .map(|form| (tag_of(form), spell(paradigm, &stem, form)))
+                            .collect::<Vec<_>>(),
+                    );
                     let variant_main = VARIANT_LEMMAS
                         .iter()
                         .find(|&&(variant_pos, variant, _)| variant_pos == pos && variant == lemma)
@@ -301,11 +313,15 @@ fn build(export: &Path, ud: &Path, output: &Path) -> Result<(), Box<dyn Error>> 
                             (true, true) if !tag.contains("Fixd") => Some(Abbreviation::Declinable),
                             (true, true) => None,
                         };
-                        let key = (layout[count + form], class, counting, abbreviation);
+                        let gender = plural_gender.filter(|_| tag.contains("Pltm"));
+                        let key = (layout[count + form], class, counting, abbreviation, gender);
                         let (ud, untyped) = match ud_numbers.get(&key) {
                             Some(&value) => value,
                             None => {
                                 let mut converted = ud::convert(tag, &key.1);
+                                if let Some(gender) = gender {
+                                    converted.feats.insert("Gender", gender);
+                                }
                                 if counting {
                                     converted.labels.push("Coun".into());
                                     converted.labels.sort();

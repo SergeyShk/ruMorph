@@ -198,7 +198,7 @@ def test_pickled_rule_analyses(morph):
 
 def test_lemmatize(morph):
     assert morph.lemmatize(["В", "2008", "г.", "Apple", "выпустила", "iPhone", ",", "а", "НКО", "—", "нет"]) == [
-        "в", "2008", "г", "apple", "выпустить", "iphone", ",", "а", "нко", "—", "нет",
+        "в", "2008", "год", "apple", "выпустить", "iphone", ",", "а", "нко", "—", "нет",
     ]  # fmt: skip
 
 

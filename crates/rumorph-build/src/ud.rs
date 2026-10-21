@@ -456,6 +456,9 @@ const ADVERB_DEGREES: &[(&str, &str)] = &[
     ("больше", "Cmp"),
 ];
 
+/// Существительные, род которых в SynTagRus другой, чем в OpenCorpora: «евро» - мужского рода
+const GENDER_EXCEPTIONS: &[(&str, &str)] = &[("евро", "Masc")];
+
 /// Супплетивные превосходные прилагательные: в SynTagRus Degree=Pos, а не Sup
 const SUPPLETIVE_SUPERLATIVES: &[&str] = &[
     "высший",
@@ -635,6 +638,9 @@ pub fn convert(tag: &str, lemma: &str) -> Ud {
         if g(grammeme) {
             feats.insert(name, value);
         }
+    }
+    if let Some(&(_, gender)) = GENDER_EXCEPTIONS.iter().find(|&&(word, _)| word == lemma) {
+        feats.insert("Gender", gender);
     }
     let verbal_pos = matches!(oc, "VERB" | "INFN" | "PRTF" | "PRTS" | "GRND");
     let uninflected = matches!(pos, "ADV" | "PART" | "ADP" | "CCONJ" | "SCONJ" | "INTJ")
@@ -922,6 +928,7 @@ pub fn counting_form(tag: &str, lemma: &str, word: &str) -> bool {
 /// глаголов, иначе пустая строка; разборы с одним тегом и классом леммы переводятся одинаково
 pub fn lemma_class(lemma: &str) -> &str {
     let listed = SCONJ.contains(&lemma)
+        || GENDER_EXCEPTIONS.iter().any(|&(word, _)| word == lemma)
         || POS_EXCEPTIONS.iter().any(|&(_, word, _)| word == lemma)
         || ADVERB_DEGREES.iter().any(|&(word, _)| word == lemma)
         || PRONOUN_TYPES.iter().any(|&(_, word, _)| word == lemma)
@@ -953,6 +960,30 @@ pub fn lemma_class(lemma: &str) -> &str {
     }
 }
 
+/// Род существительного, у которого есть только множественное число (Pltm), по склонению, как
+/// в SynTagRus: именительный на -а, -я - средний («ворота», «уста»), родительный на -ов, -ев,
+/// -ей - мужской («выборов», «саней»), иначе - женский («суток», «денег»). Формы - тег и написание
+pub fn plural_only_gender(forms: &[(&str, String)]) -> Option<&'static str> {
+    let find = |case: &str| {
+        forms.iter().find_map(|(tag, word)| {
+            let grammemes: Vec<&str> = tag.split([',', ' ']).collect();
+            (grammemes.contains(&"Pltm") && grammemes.contains(&case)).then_some(word.as_str())
+        })
+    };
+    let nominative = find("nomn")?;
+    let genitive = find("gent")?;
+    Some(if nominative.ends_with(['а', 'я']) {
+        "Neut"
+    } else if ["ов", "ев", "ёв", "ей"]
+        .iter()
+        .any(|ending| genitive.ends_with(ending))
+    {
+        "Masc"
+    } else {
+        "Fem"
+    })
+}
+
 /// Признаки UD в записи CoNLL-U: «Case=Gen|Number=Sing», по алфавиту без учета регистра
 pub fn feats_string(feats: &BTreeMap<&str, &str>) -> String {
     let mut feats: Vec<_> = feats.iter().collect();
@@ -967,6 +998,30 @@ pub fn feats_string(feats: &BTreeMap<&str, &str>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn plural_only_gender_by_declension() {
+        let forms = |nominative: &str, genitive: &str| {
+            vec![
+                ("NOUN,inan,GNdr,Pltm plur,nomn", nominative.to_owned()),
+                ("NOUN,inan,GNdr,Pltm plur,gent", genitive.to_owned()),
+            ]
+        };
+        for (nominative, genitive, gender) in [
+            ("выборы", "выборов", "Masc"),
+            ("сани", "саней", "Masc"),
+            ("ворота", "ворот", "Neut"),
+            ("сутки", "суток", "Fem"),
+            ("деньги", "денег", "Fem"),
+        ] {
+            let found = plural_only_gender(&forms(nominative, genitive));
+            assert_eq!(found, Some(gender), "{nominative}");
+        }
+        assert_eq!(
+            plural_only_gender(&[("NOUN,inan,masc plur,nomn", "столы".to_owned())]),
+            None
+        );
+    }
 
     fn summary(tag: &str, lemma: &str) -> (String, String, Vec<String>) {
         let ud = convert(tag, lemma);

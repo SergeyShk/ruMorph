@@ -44,6 +44,38 @@ const NUMERAL_FEATS: &[(&str, &str, &str, &str, f64)] = &[
     ("Acc", "", "Plur", "Anim", 1.0),
 ];
 
+/// Полные леммы сокращений, как в SynTagRus: сокращение, граммема рода или одушевленности
+/// его тега OpenCorpora (пусто - любая) и лемма. В OpenCorpora лемма сокращения - оно само
+const ABBREVIATION_LEMMAS: &[(&str, &str, &str)] = &[
+    ("в", "masc", "век"),
+    ("вв", "masc", "век"),
+    ("г", "anim", "господин"),
+    ("г", "inan", "год"),
+    ("гг", "masc", "год"),
+    ("долл", "masc", "доллар"),
+    ("кг", "masc", "килограмм"),
+    ("км", "masc", "километр"),
+    ("м", "masc", "метр"),
+    ("мг", "masc", "миллиграмм"),
+    ("мин", "femn", "минута"),
+    ("млн", "masc", "миллион"),
+    ("млрд", "masc", "миллиард"),
+    ("мм", "masc", "миллиметр"),
+    ("п", "masc", "пункт"),
+    ("проф", "anim", "профессор"),
+    ("руб", "masc", "рубль"),
+    ("сек", "femn", "секунда"),
+    ("см", "masc", "сантиметр"),
+    ("ст", "femn", "статья"),
+    ("т", "femn", "тонна"),
+    ("т", "masc", "том"),
+    ("трлн", "masc", "триллион"),
+    ("тыс", "femn", "тысяча"),
+    ("ч", "femn", "часть"),
+    ("ч", "masc", "час"),
+    ("э", "femn", "эра"),
+];
+
 /// Падежные окончания количественных числительных из цифр: «5-ти», «2-х», «3-мя», «4-м»
 const CARDINAL_ENDINGS: &[&str] = &[
     "ти", "ть", "х", "ух", "ех", "ми", "мя", "м", "ем", "ём", "у",
@@ -379,6 +411,18 @@ impl Dictionary {
             }
         }
         analyses.sort_by(|a, b| b.prob.total_cmp(&a.prob));
+    }
+
+    /// Полная лемма сокращения из `ABBREVIATION_LEMMAS` с тегом OpenCorpora `tag`
+    pub(super) fn abbreviation_lemma(&self, lemma: &str, tag: u16) -> Option<&'static str> {
+        let grammemes: Vec<&str> = self.tag(tag)?.split([',', ' ']).collect();
+        if !grammemes.contains(&"Abbr") {
+            return None;
+        }
+        ABBREVIATION_LEMMAS
+            .iter()
+            .find(|&&(short, grammeme, _)| short == lemma && grammemes.contains(&grammeme))
+            .map(|&(_, _, full)| full)
     }
 
     /// Доля разбора порядкового из цифр по его падежу, роду, числу и одушевленности
