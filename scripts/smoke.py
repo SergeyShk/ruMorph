@@ -6,6 +6,7 @@
 
 import pickle
 import sys
+import sysconfig
 
 import rumorph
 from rumorph import Analyzer
@@ -24,6 +25,9 @@ assert morph.lemmatize(["Мы", "стали", "друзьями", "в", "ков�
 ]
 assert pickle.loads(pickle.dumps(analysis)) == analysis
 assert "site-packages" in rumorph.__file__, rumorph.__file__
+# В Python без GIL импорт модуля не должен включать GIL обратно
+if sysconfig.get_config_var("Py_GIL_DISABLED"):
+    assert not sys._is_gil_enabled()
 if len(sys.argv) > 1:
     assert rumorph.__version__ == sys.argv[1], (rumorph.__version__, sys.argv[1])
 print(f"rumorph {rumorph.__version__}: {morph.path}")
