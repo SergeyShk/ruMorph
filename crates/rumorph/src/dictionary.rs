@@ -425,6 +425,8 @@ impl Dictionary {
 
     /// Разборы словоформы по убыванию вероятности; регистр не важен, «е» может обозначать «ё»
     ///
+    /// Регистр меняет доли имен собственных: у строчного слова они идут последними, у слова
+    /// с заглавной буквы их доля выше, чем в частотах словаря.
     /// Разборы OpenCorpora, которые совпали в написании, лемме, части речи и признаках UD,
     /// сливаются в один с суммой вероятностей и пометами более вероятного. Токен, которого нет
     /// в словаре, разбирается по правилам (`Source::Rule`), а незнакомое слово кириллицей
@@ -439,6 +441,7 @@ impl Dictionary {
         let mut analyses = self.merge(self.candidates(word));
         if !analyses.is_empty() {
             self.reweight_numerals(&mut analyses);
+            self.weigh_by_case(word, &mut analyses);
             return analyses;
         }
         let analyses = self.rules(word);
