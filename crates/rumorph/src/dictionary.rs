@@ -1361,14 +1361,16 @@ fn unified_script(word: &str) -> Option<String> {
         }
         let run = &chars[start..at];
         let latin = |c: char| c.is_ascii_alphabetic();
+        // «ѐ» и «ѝ» - кириллица: знак ударения в них снимается уже после приведения
+        let cyrillic = |c: char| rules::cyrillic(c) || matches!(c, 'ѐ' | 'ѝ' | 'Ѐ' | 'Ѝ');
         let count = |script: &dyn Fn(char) -> bool, own: bool| {
             run.iter()
                 .filter(|&&c| script(c) && own != has_twin(c))
                 .count()
         };
-        let (latin_own, cyrillic_own) = (count(&latin, true), count(&rules::cyrillic, true));
+        let (latin_own, cyrillic_own) = (count(&latin, true), count(&cyrillic, true));
         let latin_all = latin_own + count(&latin, false);
-        let cyrillic_all = cyrillic_own + count(&rules::cyrillic, false);
+        let cyrillic_all = cyrillic_own + count(&cyrillic, false);
         let to_cyrillic = match (latin_own > 0, cyrillic_own > 0) {
             (true, true) => None,
             (true, false) => Some(false),
@@ -2879,6 +2881,7 @@ pub(super) mod tests {
         // Мягкий перенос и соединитель слов не делят отрезок
         assert_eq!(normalized_input("в\u{2060}ceх"), Some("всех".into()));
         assert_eq!(normalized_input("дoм\u{ad}a"), Some("дома".into()));
+        assert_eq!(normalized_input("p\u{450}"), Some("ре".into()));
         for word in ["ТНК-BP", "T-клетки", "Газета.ru", "Юрiю", "iPhone", "стали"]
         {
             assert_eq!(normalized_input(word), None, "{word}");
