@@ -10,9 +10,8 @@ fn main() {
     let output = PathBuf::from(std::env::var_os("OUT_DIR").unwrap_or_default()).join("ru.dict");
     let package = crate_dir.join("../../python/rumorph");
     let candidates = [package.join("data/ru.dict"), crate_dir.join("ru.dict")];
-    for candidate in &candidates {
-        watch(candidate);
-    }
+    watch(&candidates[0], &package);
+    watch(&candidates[1], &crate_dir);
     let result = match candidates.iter().find(|path| path.is_file()) {
         Some(found) => std::fs::copy(found, &output).map(drop),
         None if package.is_dir() => {
@@ -29,9 +28,14 @@ fn main() {
 }
 
 /// Пересборка при изменении файла; за отсутствующим файлом следит ближайший существующий
-/// каталог: иначе cargo пересобирал бы крейт при каждой сборке
-fn watch(path: &Path) {
-    if let Some(existing) = path.ancestors().find(|ancestor| ancestor.exists()) {
+/// каталог не выше `root`: иначе cargo пересобирал бы крейт при каждой сборке, а выше `root`
+/// у крейта, подключенного путем вне ruMorph, - каталоги проекта пользователя
+fn watch(path: &Path, root: &Path) {
+    let existing = path
+        .ancestors()
+        .take_while(|ancestor| ancestor.starts_with(root))
+        .find(|ancestor| ancestor.exists());
+    if let Some(existing) = existing {
         println!("cargo::rerun-if-changed={}", existing.display());
     }
 }
