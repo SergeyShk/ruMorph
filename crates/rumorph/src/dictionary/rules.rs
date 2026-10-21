@@ -341,22 +341,29 @@ impl Dictionary {
     /// собственным, а слово с заглавной буквы бывает им чаще, чем говорят частоты словаря без
     /// учета регистра. Слово капсом и разборы одной части речи не меняются
     pub(super) fn weigh_by_case(&self, word: &str, analyses: &mut [Analysis]) {
-        let mut letters = word.chars().filter(|c| c.is_alphabetic());
-        let Some(first) = letters.next() else {
-            return;
+        // Сначала разборы: имена собственные вместе с другими частями речи - у 3 % словоформ
+        let propn = |analysis: &Analysis| {
+            self.proper_nouns
+                .get(usize::from(analysis.ud))
+                .is_some_and(|&proper| proper)
         };
-        let rest_lower = letters.all(char::is_lowercase);
-        let factor = match (first.is_lowercase(), rest_lower) {
-            (true, true) => LOWERCASE_PROPN,
-            (false, true) if word.chars().filter(|c| c.is_alphabetic()).count() > 1 => {
-                TITLECASE_PROPN
-            }
-            _ => return,
-        };
-        let propn = |analysis: &Analysis| self.pos(analysis.ud) == "PROPN";
         if analyses.iter().all(propn) || !analyses.iter().any(propn) {
             return;
         }
+        let (mut letters, mut first_lower, mut rest_lower) = (0, false, true);
+        for c in word.chars().filter(|c| c.is_alphabetic()) {
+            if letters == 0 {
+                first_lower = c.is_lowercase();
+            } else {
+                rest_lower &= c.is_lowercase();
+            }
+            letters += 1;
+        }
+        let factor = match (first_lower, rest_lower) {
+            (true, true) => LOWERCASE_PROPN,
+            (false, true) if letters > 1 => TITLECASE_PROPN,
+            _ => return,
+        };
         for analysis in analyses.iter_mut().filter(|analysis| propn(analysis)) {
             analysis.prob *= factor;
         }
