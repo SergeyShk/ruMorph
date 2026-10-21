@@ -213,13 +213,16 @@ fn execute(
     let mut file_output;
     let output: &mut dyn Write = match &output_path {
         Some(path) => {
-            // Файл вывода создается заново: вход или словарь, которые он затер бы, не разбираются
+            // Файл вывода создается заново: вход или словарь, которые он затер бы, не разбираются.
+            // Устройство (/dev/null, /dev/stdout в терминале) создание не затирает
             let mut sources = files
                 .iter()
                 .map(|file| (file != "-").then(|| Path::new(file)))
                 .chain(dictionary_path.map(Some));
-            if file_id(Some(path))
-                .is_some_and(|id| sources.any(|source| file_id(source).as_ref() == Some(&id)))
+            let regular = std::fs::metadata(path).is_ok_and(|metadata| metadata.is_file());
+            if regular
+                && file_id(Some(path))
+                    .is_some_and(|id| sources.any(|source| file_id(source).as_ref() == Some(&id)))
             {
                 report(format!(
                     "{}: файл вывода совпадает с входным файлом или словарем",
@@ -1278,8 +1281,10 @@ mod tests {
             clash(&["-o", &path(&link), &path(&input)]);
         }
         assert_eq!(std::fs::read_to_string(&input).unwrap(), "раму\n");
-        // «-o -» - стандартный вывод
+        // «-o -» - стандартный вывод; устройство - не входной файл, даже если вход - оно же
         assert_eq!(dict.run(&["-o", "-"], "раму".as_bytes()).1, "рама\n");
+        #[cfg(unix)]
+        assert_eq!(dict.run(&["-o", "/dev/null", "/dev/null"], b"").0, 0);
         // Каталог вместо файла - понятное сообщение и на входе, и на выходе
         let (code, _, error) = dict.run(&[&path(&dir)], b"");
         assert_eq!(
