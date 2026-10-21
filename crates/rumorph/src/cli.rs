@@ -226,8 +226,8 @@ fn execute(
                 report(format!("{name}: {}", describe(&err)));
                 code = 1;
             }
-            Err(Failure::Encoding) => {
-                report(format!("{name}: файл не в UTF-8"));
+            Err(Failure::Encoding(line)) => {
+                report(format!("{name}: файл не в UTF-8 (строка {line})"));
                 code = 1;
             }
             Err(Failure::Input(line, message)) => {
@@ -279,8 +279,9 @@ fn describe(err: &io::Error) -> String {
 enum Failure {
     /// Ошибка чтения входа
     Read(io::Error),
-    /// Файл в другой кодировке: UTF-16 или неверные байты раньше первой строки UTF-8
-    Encoding,
+    /// Файл в другой кодировке: UTF-16 или неверные байты раньше первой строки UTF-8; номер
+    /// строки, на которой это видно
+    Encoding(usize),
     /// Неверная строка входа: номер и что не так
     Input(usize, String),
     Write(io::Error),
@@ -330,8 +331,8 @@ impl Writer<'_> {
         let mut bytes = Vec::new();
         let mut number = 0;
         let mut invalid = None;
-        // Была ли строка UTF-8 с не-ASCII байтами: до нее неверные байты значат другую кодировку
-        // файла (cp1251, UTF-16), после - испорченную строку
+        // Была ли строка UTF-8 с не-ASCII байтами: до нее неверные байты и NUL значат другую
+        // кодировку файла (cp1251, UTF-16 без BOM), после - испорченную строку
         let mut utf8 = false;
         let mut block = Block::default();
         loop {
@@ -344,13 +345,13 @@ impl Writer<'_> {
                 break;
             }
             number += 1;
-            if number == 1 && (bytes.starts_with(&[0xFF, 0xFE]) || bytes.starts_with(&[0xFE, 0xFF]))
-            {
-                return Err(Failure::Encoding);
+            let utf16 = bytes.starts_with(&[0xFF, 0xFE]) || bytes.starts_with(&[0xFE, 0xFF]);
+            if (number == 1 && utf16) || (!utf8 && bytes.contains(&0)) {
+                return Err(Failure::Encoding(number));
             }
             let decoded = String::from_utf8_lossy(&bytes);
             match decoded {
-                Cow::Owned(_) if !utf8 => return Err(Failure::Encoding),
+                Cow::Owned(_) if !utf8 => return Err(Failure::Encoding(number)),
                 Cow::Owned(_) => {
                     invalid.get_or_insert(number);
                 }
@@ -1036,12 +1037,16 @@ mod tests {
             error,
             "rumorph: -: строка 2: не UTF-8, неверные байты заменены на U+FFFD\n"
         );
-        // Файл в другой кодировке не разбирается: cp1251 и UTF-16 с BOM
-        for input in [&b"abc\n\xd0\xe0\xec\xf3\n"[..], b"\xff\xfe\x20\x04"] {
+        // Файл в другой кодировке не разбирается: cp1251, UTF-16 с BOM и без него
+        for (input, line) in [
+            (&b"abc\n\xd0\xe0\xec\xf3\n"[..], 2),
+            (b"\xff\xfe\x20\x04", 1),
+            (b"\x1c\x04\x30\x04\x20\x00", 1),
+        ] {
             let (code, out, error) = dict.run(&[], input);
             assert_eq!(
-                (code, error.as_str()),
-                (1, "rumorph: -: файл не в UTF-8\n"),
+                (code, error),
+                (1, format!("rumorph: -: файл не в UTF-8 (строка {line})\n")),
                 "{input:?}"
             );
             assert!(out.len() <= "abc\n".len(), "{out}");
