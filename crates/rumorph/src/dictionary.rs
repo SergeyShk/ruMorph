@@ -137,6 +137,8 @@ pub struct Dictionary {
     combined_numeral: Option<(usize, u16)>,
     /// Тег UD - имя собственное (`PROPN`): по номеру тега
     proper_nouns: Vec<bool>,
+    /// Граммемы сокращения-существительного для `ABBREVIATION_LEMMAS`: по номеру тега OpenCorpora
+    abbreviation_grammemes: Vec<u8>,
     features: BTreeMap<String, BTreeSet<String>>,
     alphabet: Alphabet,
     prefixes: Strings,
@@ -321,6 +323,7 @@ impl Dictionary {
             preferences: Preferences::default(),
             combined_numeral: None,
             proper_nouns: Vec::new(),
+            abbreviation_grammemes: Vec::new(),
             meta,
             alphabet,
             layout,
@@ -411,6 +414,11 @@ impl Dictionary {
         };
         self.combined_numeral = code("NumForm", "Combi");
         self.proper_nouns = self.ud.iter().map(|tag| tag.pos() == "PROPN").collect();
+        self.abbreviation_grammemes = self
+            .tags
+            .iter()
+            .map(rules::abbreviation_grammemes)
+            .collect();
         Ok(())
     }
 
@@ -495,7 +503,7 @@ impl Dictionary {
             return Vec::new();
         };
         let matches = self.matches(&spellings, key.yo);
-        let mut analyses = Vec::new();
+        let mut analyses: Vec<Analysis> = Vec::new();
         // Разборы каждого написания идут подряд: начало, конец и список частот
         let mut groups = [(0, 0, None); MAX_SPELLINGS];
         let input = spellings
@@ -504,15 +512,25 @@ impl Dictionary {
         for (group, &(yo, records)) in groups.iter_mut().zip(matches.as_slice()) {
             let spelling = self.alphabet.spelling(&key, yo);
             let start = analyses.len();
+            // Формы лексемы идут подряд (у сокращения «в» их 12): одна лемма ищется один раз
+            let mut previous = None;
             for &entry in self.records_at(records).unwrap_or_default() {
                 let (table, form) = ((entry >> 16) as u16, entry as u16);
                 let Some(lexeme) = self.lexeme(table, form, &spelling) else {
                     continue;
                 };
+                let tag = lexeme.tag(form);
+                let bits = self.abbreviation_grammemes.get(usize::from(tag)).copied();
+                let key = Some((table, lexeme.stem, lexeme.lemma_form(form), bits));
+                let lemma = match analyses.last() {
+                    Some(last) if previous == key => last.lemma.clone(),
+                    _ => self.lemma(&lexeme, form),
+                };
+                previous = key;
                 analyses.push(Analysis {
-                    lemma: self.lemma(&lexeme, form),
+                    lemma,
                     ud: lexeme.ud(form),
-                    tag: Some(lexeme.tag(form)),
+                    tag: Some(tag),
                     word: String::new(),
                     prob: 0.0,
                     source: Source::Dictionary,
@@ -1080,7 +1098,7 @@ impl Dictionary {
     /// Лемма формы лексемы; у сокращения - полное слово («млн» - «миллион»)
     fn lemma(&self, lexeme: &Lexeme, form: u16) -> String {
         let lemma = self.spell(lexeme, lexeme.lemma_form(form));
-        match self.abbreviation_lemma(&lemma, lexeme.tag(form)) {
+        match self.abbreviation_lemma(&lemma, lexeme.tag(form), lexeme.ud(form)) {
             Some(full) => full.to_owned(),
             None => lemma,
         }
