@@ -1320,12 +1320,81 @@ struct Preferences {
     counting: Option<u16>,
 }
 
+/// Слово в обычной записи: знаки и буквы-двойники (`normalized_marks`, `unified_script`)
+/// приведены к обычным. `None`, если менять нечего
+fn normalized_input(word: &str) -> Option<String> {
+    let unified = unified_script(word);
+    normalized_marks(unified.as_deref().unwrap_or(word)).or(unified)
+}
+
+/// Буквы-двойники другой письменности в отрезке букв - письменностью большинства его букв, если
+/// у всех них есть двойники: «cтали» с латинской «c» - «стали», «сedar» с кириллической «с» -
+/// «cedar»; при равенстве - кириллицей. Отрезки через дефис или точку («ТНК-BP», «Газета.ru»)
+/// не смешиваются. `None`, если менять нечего
+fn unified_script(word: &str) -> Option<String> {
+    // Смешение возможно только в слове с латинской буквой и не-ASCII символом
+    if word.is_ascii() || !word.bytes().any(|byte| byte.is_ascii_alphabetic()) {
+        return None;
+    }
+    let chars: Vec<char> = word.chars().collect();
+    let mut normal = String::with_capacity(word.len());
+    let mut changed = false;
+    let mut at = 0;
+    while at < chars.len() {
+        let start = at;
+        // Знак ударения и другие комбинирующие знаки - часть отрезка букв
+        while at < chars.len()
+            && (chars[at].is_alphabetic() || matches!(chars[at], '\u{300}'..='\u{36F}'))
+        {
+            at += 1;
+        }
+        let run = &chars[start..at];
+        let latin = run.iter().filter(|c| c.is_ascii_alphabetic()).count();
+        let cyrillic = run.iter().filter(|&&c| rules::cyrillic(c)).count();
+        let unified: Option<String> = (latin > 0 && cyrillic > 0)
+            .then(|| {
+                run.iter()
+                    .map(|&c| match (cyrillic >= latin, c.is_ascii_alphabetic()) {
+                        (true, true) => twin(c, LATIN_TWINS, CYRILLIC_TWINS),
+                        (false, false) if rules::cyrillic(c) => {
+                            twin(c, CYRILLIC_TWINS, LATIN_TWINS)
+                        }
+                        _ => Some(c),
+                    })
+                    .collect()
+            })
+            .flatten();
+        match unified {
+            Some(unified) => {
+                normal.push_str(&unified);
+                changed = true;
+            }
+            None => normal.extend(run),
+        }
+        if at < chars.len() {
+            normal.push(chars[at]);
+            at += 1;
+        }
+    }
+    changed.then_some(normal)
+}
+
+/// Латинские буквы, которые пишутся как кириллические, и их кириллические двойники
+const LATIN_TWINS: &str = "aceopxyABCEHKMOPTXY";
+const CYRILLIC_TWINS: &str = "асеорхуАВСЕНКМОРТХУ";
+
+/// Двойник буквы `c` из `from` в `to`
+fn twin(c: char, from: &str, to: &str) -> Option<char> {
+    let index = from.chars().position(|known| known == c)?;
+    to.chars().nth(index)
+}
+
 /// Слово в составленной записи, с обычным дефисом и без знаков ударения, мягких переносов
 /// и соединителей слов: «и» со знаком краткой и «е» с диерезисом (разложенный Unicode, NFD) -
 /// «й» и «ё», неразрывный дефис и дефис U+2010 - «-», «ѐ» и «ѝ» (знак ударения в составленной
 /// букве) - «е» и «и»; знак ударения после кириллической буквы, мягкий перенос и соединители
 /// слов U+2060 и U+FEFF убираются. `None`, если менять нечего
-fn normalized_input(word: &str) -> Option<String> {
+fn normalized_marks(word: &str) -> Option<String> {
     const MARKS: [char; 13] = [
         '\u{306}', '\u{308}', '\u{2010}', '\u{2011}', '\u{300}', '\u{301}', '\u{AD}', '\u{2060}',
         '\u{FEFF}', 'ѐ', 'ѝ', 'Ѐ', 'Ѝ',
@@ -2769,6 +2838,22 @@ pub(super) mod tests {
         assert_eq!(normalized_input("вс\u{450}"), Some("все".into()));
         assert_eq!(normalized_input("\u{40d}ван"), Some("Иван".into()));
         assert_eq!(normalized_input("\u{400}\u{45d}"), Some("Еи".into()));
+        // Буквы-двойники - письменностью большинства букв отрезка
+        assert_eq!(normalized_input("cтали"), Some("стали".into()));
+        assert_eq!(normalized_input("Рoccия"), Some("Россия".into()));
+        assert_eq!(normalized_input("сedar"), Some("cedar".into()));
+        assert_eq!(normalized_input("ХIX-го"), Some("XIX-го".into()));
+        assert_eq!(normalized_input("cтa\u{301}ли"), Some("стали".into()));
+        for word in [
+            "ТНК-BP",
+            "T-клетки",
+            "Газета.ru",
+            "СаМgВ6O8",
+            "iPhone",
+            "стали",
+        ] {
+            assert_eq!(normalized_input(word), None, "{word}");
+        }
         // Знак ударения после латинской буквы - не ударение русского слова
         assert_eq!(normalized_input("cafe\u{301}"), None);
         assert_eq!(normalized_input("Москва"), None);
