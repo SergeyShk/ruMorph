@@ -17,6 +17,11 @@ import rumorph
 from rumorph import Analysis, Analyzer
 
 
+def tag_text(analysis):
+    # Строка признаков из состояния pickle - объект тега, общий для разборов одного словаря
+    return analysis.__reduce__()[1][1][3]
+
+
 @pytest.fixture(scope="module")
 def morph():
     return Analyzer()
@@ -226,8 +231,8 @@ def test_last_dictionary_stays_loaded(morph, tmp_path):
     # Последний словарь процесс держит и без анализаторов: объекты его тегов - те же
     path = tmp_path / "ru.dict"
     shutil.copy(morph.path, path)
-    labels = Analyzer(path).analyze("стали")[0].labels
-    assert Analyzer(path).analyze("стали")[0].labels is labels
+    text = tag_text(Analyzer(path).analyze("стали")[0])
+    assert tag_text(Analyzer(path).analyze("стали")[0]) is text
 
 
 def test_more_analyzers_than_handle_slots(morph):
@@ -470,14 +475,23 @@ def test_pickle(morph):
 
 
 def test_pickled_analyses_share_tag_objects(morph):
-    # Анализатор из pickle берет словарь и объекты тегов из загруженных в процессе
+    # Разборы из pickle берут анализатор потока с тем же словарем, а не создают свой
     first = morph.analyze("стали")[0]
-    assert all(pickle.loads(pickle.dumps(first)).labels is first.labels for _ in range(3))
+    for _ in range(3):
+        restored = pickle.loads(pickle.dumps(first))
+        assert restored.__reduce__()[1][0] is morph
+        assert restored.pos is first.pos
+        # Без GIL пометы и признаки - новые объекты: общие замедляли бы потоки
+        if getattr(sys, "_is_gil_enabled", lambda: True)():
+            assert restored.labels is first.labels
+    # Строки тега в pickle - общие объекты: pickle списка разных разборов хранит их один раз
+    analyses = [morph.analyze("стали")[0] for _ in range(20)]
+    assert pickle.dumps(analyses).count(tag_text(analyses[0]).encode()) == 1
 
 
 def test_same_file_by_other_path(morph, tmp_path):
     # Тот же файл через «..» или симлинк не загружается еще раз
-    labels = morph.analyze("стали")[0].labels
+    text = tag_text(morph.analyze("стали")[0])
     paths = [morph.path.parent / ".." / morph.path.parent.name / morph.path.name]
     link = tmp_path / "link.dict"
     try:
@@ -486,7 +500,7 @@ def test_same_file_by_other_path(morph, tmp_path):
     except OSError:
         pass
     for path in paths:
-        assert Analyzer(path).analyze("стали")[0].labels is labels
+        assert tag_text(Analyzer(path).analyze("стали")[0]) is text
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="Windows не заменяет отображенный файл")
@@ -511,8 +525,19 @@ def test_deleted_file_keeps_working(morph, tmp_path):
     path = tmp_path / "ru.dict"
     shutil.copy(morph.path, path)
     analyzer = Analyzer(path)
+    analysis = analyzer.analyze("стали")[0]
     path.unlink()
     assert analyzer.lemmatize(["стали", "ёжиком"]) == ["стать", "ёжик"]
+    # pickle разбора восстанавливает анализатор потока, а не читает удаленный файл
+    assert pickle.loads(pickle.dumps(analysis)) == analysis
+    assert pickle.loads(pickle.dumps(analyzer)) is analyzer
+    # Без разборов в потоке и в другом потоке - словарь, загруженный из этого файла
+    blob = pickle.dumps(analysis)
+    del analysis
+    assert pickle.loads(blob).lemma == "стать"
+    assert pickle.loads(pickle.dumps(analyzer)).path == path
+    with ThreadPoolExecutor(1) as pool:
+        assert pool.submit(pickle.loads, blob).result().lemma == "стать"
 
 
 @pytest.mark.skipif(not hasattr(os, "fork"), reason="нет fork")
