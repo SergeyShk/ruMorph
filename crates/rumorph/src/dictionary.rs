@@ -1332,10 +1332,11 @@ fn normalized_input(word: &str) -> Option<String> {
     normalized_marks(unified.as_deref().unwrap_or(word)).or(unified)
 }
 
-/// Буквы-двойники другой письменности в отрезке букв - письменностью большинства его букв, если
-/// у всех них есть двойники: «cтали» с латинской «c» - «стали», «сedar» с кириллической «с» -
-/// «cedar»; при равенстве - кириллицей. Отрезки через дефис или точку («ТНК-BP», «Газета.ru»)
-/// не смешиваются. `None`, если менять нечего
+/// Буквы-двойники другой письменности в отрезке букв - письменностью отрезка: ее задают буквы
+/// без двойника («eгo» с латинскими «e», «o» - «его», «ХХI» с кириллическими «Х» - «XXI»), а если
+/// двойники все буквы - большинство, при равенстве кириллица («cтали» - «стали», «сedar» -
+/// «cedar»). Отрезок с буквами без двойника обеих письменностей и отрезки через дефис или точку
+/// («ТНК-BP», «Газета.ru») не меняются. `None`, если менять нечего
 fn unified_script(word: &str) -> Option<String> {
     // Смешение возможно только в слове с латинской буквой и не-ASCII символом
     if word.is_ascii() || !word.bytes().any(|byte| byte.is_ascii_alphabetic()) {
@@ -1347,28 +1348,44 @@ fn unified_script(word: &str) -> Option<String> {
     let mut at = 0;
     while at < chars.len() {
         let start = at;
-        // Знак ударения и другие комбинирующие знаки - часть отрезка букв
+        // Комбинирующие знаки, мягкий перенос и соединители слов - внутри отрезка: их убирают
+        // после приведения, и половинки слова приводятся вместе
         while at < chars.len()
-            && (chars[at].is_alphabetic() || matches!(chars[at], '\u{300}'..='\u{36F}'))
+            && (chars[at].is_alphabetic()
+                || matches!(
+                    chars[at],
+                    '\u{300}'..='\u{36F}' | '\u{AD}' | '\u{2060}' | '\u{FEFF}'
+                ))
         {
             at += 1;
         }
         let run = &chars[start..at];
-        let latin = run.iter().filter(|c| c.is_ascii_alphabetic()).count();
-        let cyrillic = run.iter().filter(|&&c| rules::cyrillic(c)).count();
-        let unified: Option<String> = (latin > 0 && cyrillic > 0)
-            .then(|| {
+        let latin = |c: char| c.is_ascii_alphabetic();
+        let count = |script: &dyn Fn(char) -> bool, own: bool| {
+            run.iter()
+                .filter(|&&c| script(c) && own != has_twin(c))
+                .count()
+        };
+        let (latin_own, cyrillic_own) = (count(&latin, true), count(&rules::cyrillic, true));
+        let latin_all = latin_own + count(&latin, false);
+        let cyrillic_all = cyrillic_own + count(&rules::cyrillic, false);
+        let to_cyrillic = match (latin_own > 0, cyrillic_own > 0) {
+            (true, true) => None,
+            (true, false) => Some(false),
+            (false, true) => Some(true),
+            (false, false) => Some(cyrillic_all >= latin_all),
+        };
+        let unified: Option<String> = to_cyrillic
+            .filter(|_| latin_all > 0 && cyrillic_all > 0)
+            .and_then(|to_cyrillic| {
                 run.iter()
-                    .map(|&c| match (cyrillic >= latin, c.is_ascii_alphabetic()) {
-                        (true, true) => twin(c, LATIN_TWINS, CYRILLIC_TWINS),
-                        (false, false) if rules::cyrillic(c) => {
-                            twin(c, CYRILLIC_TWINS, LATIN_TWINS)
-                        }
+                    .map(|&c| match (to_cyrillic, latin(c), rules::cyrillic(c)) {
+                        (true, true, _) => twin(c, LATIN_TWINS, CYRILLIC_TWINS),
+                        (false, _, true) => twin(c, CYRILLIC_TWINS, LATIN_TWINS),
                         _ => Some(c),
                     })
                     .collect()
-            })
-            .flatten();
+            });
         match unified {
             Some(unified) => {
                 normal.push_str(&unified);
@@ -1382,6 +1399,11 @@ fn unified_script(word: &str) -> Option<String> {
         }
     }
     changed.then_some(normal)
+}
+
+/// Есть ли у буквы двойник другой письменности
+fn has_twin(c: char) -> bool {
+    LATIN_TWINS.contains(c) || CYRILLIC_TWINS.contains(c)
 }
 
 /// Латинские буквы, которые пишутся как кириллические, и их кириллические двойники
@@ -2849,14 +2871,16 @@ pub(super) mod tests {
         assert_eq!(normalized_input("сedar"), Some("cedar".into()));
         assert_eq!(normalized_input("ХIX-го"), Some("XIX-го".into()));
         assert_eq!(normalized_input("cтa\u{301}ли"), Some("стали".into()));
-        for word in [
-            "ТНК-BP",
-            "T-клетки",
-            "Газета.ru",
-            "СаМgВ6O8",
-            "iPhone",
-            "стали",
-        ] {
+        // Письменность задают буквы без двойника, а не большинство
+        assert_eq!(normalized_input("eгo"), Some("его".into()));
+        assert_eq!(normalized_input("Hoвocти"), Some("Новости".into()));
+        assert_eq!(normalized_input("ХХI"), Some("XXI".into()));
+        assert_eq!(normalized_input("СаМgВ6O8"), Some("CaMgB6O8".into()));
+        // Мягкий перенос и соединитель слов не делят отрезок
+        assert_eq!(normalized_input("в\u{2060}ceх"), Some("всех".into()));
+        assert_eq!(normalized_input("дoм\u{ad}a"), Some("дома".into()));
+        for word in ["ТНК-BP", "T-клетки", "Газета.ru", "Юрiю", "iPhone", "стали"]
+        {
             assert_eq!(normalized_input(word), None, "{word}");
         }
         // Знак ударения после латинской буквы - не ударение русского слова

@@ -148,6 +148,8 @@ def test_not_a_token(morph, word):
         ("\ufeffпривет", "привет"),
         ("cтали", "стали"),
         ("Рoccия", "Россия"),
+        ("eгo", "его"),
+        ("в\u2060ceх", "всех"),
     ],
 )
 def test_normalized_input(morph, word, normal):
