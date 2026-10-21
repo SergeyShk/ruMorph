@@ -20,6 +20,7 @@
   <a href="https://github.com/SergeyShk/ruMorph/actions/workflows/ci.yml"><img src="https://github.com/SergeyShk/ruMorph/actions/workflows/ci.yml/badge.svg" alt="Сборка"></a>
   <a href="https://github.com/astral-sh/ruff"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json" alt="Ruff"></a>
   <a href="https://github.com/SergeyShk/ruMorph/blob/master/LICENSE.txt"><img src="https://img.shields.io/github/license/sergeyshk/rumorph.svg" alt="Лицензия"></a>
+  <a href="https://doi.org/10.5281/zenodo.23520738"><img src="https://zenodo.org/badge/DOI/10.5281/zenodo.23520738.svg" alt="DOI"></a>
 </p>
 
 ---
@@ -318,13 +319,14 @@ uv run pre-commit install
 
 ## Цитирование
 
-Если вы используете **ruMorph** в исследованиях или программах, пожалуйста, цитируйте библиотеку по следующей записи BibTeX - это помогает развитию и поддержке проекта. Те же метаданные лежат в [CITATION.cff](https://github.com/SergeyShk/ruMorph/blob/master/CITATION.cff) - GitHub показывает их по кнопке «Cite this repository».
+Если вы используете **ruMorph** в исследованиях или программах, пожалуйста, цитируйте библиотеку по следующей записи BibTeX - это помогает развитию и поддержке проекта. Те же метаданные лежат в [CITATION.cff](https://github.com/SergeyShk/ruMorph/blob/master/CITATION.cff) - GitHub показывает их по кнопке «Cite this repository». Concept DOI [10.5281/zenodo.23520738](https://doi.org/10.5281/zenodo.23520738) на Zenodo указывает на все версии библиотеки; DOI конкретной версии - на странице релиза.
 
 ```bibtex
 @software{ruMorph,
   author = {Sergey Shkarin},
   title = {{ruMorph, a fast morphological analyzer for Russian}},
   year = 2026,
+  doi = {10.5281/zenodo.23520738},
   url = {https://github.com/SergeyShk/ruMorph}
 }
 ```
