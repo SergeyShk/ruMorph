@@ -151,7 +151,7 @@ dependencies = [
 
 [[package]]
 name = "rumorph"
-version = "0.2.0-dev.3"
+version = "0.2.0-dev.4"
 dependencies = [
  "bytemuck",
  "crc32fast",
@@ -162,7 +162,7 @@ dependencies = [
 
 [[package]]
 name = "rumorph-build"
-version = "0.2.0-dev.3"
+version = "0.2.0-dev.4"
 dependencies = [
  "rumorph",
  "serde_json",
@@ -170,11 +170,11 @@ dependencies = [
 
 [[package]]
 name = "rumorph-dict-ru"
-version = "0.2.0-dev.3"
+version = "0.2.0-dev.4"
 
 [[package]]
 name = "rumorph-py"
-version = "0.2.0-dev.3"
+version = "0.2.0-dev.4"
 dependencies = [
  "pyo3",
  "rumorph",
