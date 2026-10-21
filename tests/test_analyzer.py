@@ -172,6 +172,14 @@ def test_feats_order_and_probabilities(morph, word):
         assert 0 < analysis.prob <= 1
 
 
+@pytest.mark.parametrize(
+    ("word", "pos"), [("шаров", "NOUN"), ("Шаров", "PROPN"), ("роза", "NOUN"), ("Роза", "PROPN")]
+)
+def test_proper_nouns_by_letter_case(morph, word, pos):
+    # Строчное слово - нарицательное, с заглавной буквы чаще имя собственное
+    assert morph.analyze(word)[0].pos == pos
+
+
 def test_is_known(morph):
     assert morph.is_known("Ежи")
     assert morph.is_known("СТАЛИ")

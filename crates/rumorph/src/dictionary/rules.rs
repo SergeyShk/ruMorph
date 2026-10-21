@@ -9,6 +9,11 @@ const SYMBOLS: &[char] = &[
     '%', '‰', '$', '£', '¥', '°', '+', '=', '±', '×', '÷', '§', '©', '®',
 ];
 
+/// Множители долей имен собственных у строчного слова и слова с заглавной буквы: в SynTagRus
+/// строчных имен собственных почти нет, множитель с заглавной подобран по train
+const LOWERCASE_PROPN: f64 = 0.001;
+const TITLECASE_PROPN: f64 = 3.0;
+
 /// Порядковые из цифр с окончанием в обучающей части SynTagRus: падеж, род, число,
 /// одушевленность и сколько раз встретились; доля разбора по образцу - число плюс один
 const NUMERAL_FEATS: &[(&str, &str, &str, &str, f64)] = &[
@@ -332,6 +337,45 @@ impl Dictionary {
         analyses.sort_by(|a, b| b.prob.total_cmp(&a.prob));
     }
 
+    /// Доли имен собственных по регистру слова: в тексте строчное слово почти не бывает именем
+    /// собственным, а слово с заглавной буквы бывает им чаще, чем говорят частоты словаря без
+    /// учета регистра. Слово капсом и разборы одной части речи не меняются
+    pub(super) fn weigh_by_case(&self, word: &str, analyses: &mut [Analysis]) {
+        // Сначала разборы: имена собственные вместе с другими частями речи - у 3 % словоформ
+        let propn = |analysis: &Analysis| {
+            self.proper_nouns
+                .get(usize::from(analysis.ud))
+                .is_some_and(|&proper| proper)
+        };
+        if analyses.iter().all(propn) || !analyses.iter().any(propn) {
+            return;
+        }
+        let (mut letters, mut first_lower, mut rest_lower) = (0, false, true);
+        for c in word.chars().filter(|c| c.is_alphabetic()) {
+            if letters == 0 {
+                first_lower = c.is_lowercase();
+            } else {
+                rest_lower &= c.is_lowercase();
+            }
+            letters += 1;
+        }
+        let factor = match (first_lower, rest_lower) {
+            (true, true) => LOWERCASE_PROPN,
+            (false, true) if letters > 1 => TITLECASE_PROPN,
+            _ => return,
+        };
+        for analysis in analyses.iter_mut().filter(|analysis| propn(analysis)) {
+            analysis.prob *= factor;
+        }
+        let total: f64 = analyses.iter().map(|analysis| analysis.prob).sum();
+        if total > 0.0 {
+            for analysis in analyses.iter_mut() {
+                analysis.prob /= total;
+            }
+        }
+        analyses.sort_by(|a, b| b.prob.total_cmp(&a.prob));
+    }
+
     /// Доля разбора порядкового из цифр по его падежу, роду, числу и одушевленности
     fn numeral_weight(&self, ud: u16) -> f64 {
         let feat = |name: &str| self.feat(ud, name).unwrap_or_default();
@@ -553,6 +597,37 @@ mod tests {
 
     fn analysis(lemma: &str, pos: &str, feats: &str) -> (String, String, String) {
         (lemma.to_owned(), pos.to_owned(), feats.to_owned())
+    }
+
+    #[test]
+    fn proper_nouns_by_letter_case() {
+        let (noun, propn) = ("Case=Gen|Number=Plur", "Case=Nom|Number=Sing");
+        let (noun_tag, propn_tag) = (format!("NOUN {noun}"), format!("PROPN {propn}"));
+        let dict = dictionary_of(
+            &[
+                ("NOUN", "шар", vec![("ов", noun.to_owned())]),
+                ("PROPN", "шаров", vec![("", propn.to_owned())]),
+                ("PROPN", "москв", vec![("а", propn.to_owned())]),
+            ],
+            &[
+                ("шаров", &noun_tag, 600_000),
+                ("шаров", &propn_tag, 400_000),
+            ],
+        );
+        let first = |word: &str| {
+            let analyses = dict.analyze(word);
+            let total: f64 = analyses.iter().map(|analysis| analysis.prob).sum();
+            assert!((total - 1.0).abs() < 1e-9, "{word}: {total}");
+            (dict.pos(analyses[0].ud).to_owned(), analyses[0].prob)
+        };
+        // Строчное слово - нарицательное, с заглавной буквы доля имени собственного втрое выше
+        assert_eq!(first("шаров").0, "NOUN");
+        let (pos, prob) = first("Шаров");
+        assert_eq!(pos, "PROPN");
+        assert!((prob - 2.0 / 3.0).abs() < 1e-9, "{prob}");
+        // Капс и разборы одной части речи не меняются
+        assert_eq!(first("ШАРОВ"), ("NOUN".to_owned(), 0.6));
+        assert_eq!(first("москва"), ("PROPN".to_owned(), 1.0));
     }
 
     #[test]

@@ -49,7 +49,7 @@ The object keeps the dictionary path in `path` of type `Path`, read-only. The di
 analyze(word)
 ```
 
-Analyses of the word form in descending order of probability; the probabilities sum to 1. Case does not matter, and the letter «е» may stand for «ё»: `analyze("ЕЖ")` returns the analyses of the word form «ёж». A token that is not in the dictionary - a number, a symbol, a Latin word, an abbreviation - is analyzed [by rules](analysis.md#rules), and the analyses of an unknown Cyrillic word are [guessed](analysis.md#guess) from its ending and parts. A token without spaces and invisible characters gets at least one analysis: if nothing fits, `X` without features.
+Analyses of the word form in descending order of probability; the probabilities sum to 1. Case does not matter for the lookup, and the letter «е» may stand for «ё»: `analyze("ЕЖ")` returns the analyses of the word form «ёж». The probabilities take the case into account: a lowercase word gets proper nouns last («шаров» - «шар»), and a capitalized word gets them a larger share («Шаров» - a surname). A token that is not in the dictionary - a number, a symbol, a Latin word, an abbreviation - is analyzed [by rules](analysis.md#rules), and the analyses of an unknown Cyrillic word are [guessed](analysis.md#guess) from its ending and parts. A token without spaces and invisible characters gets at least one analysis: if nothing fits, `X` without features.
 
 | Parameter | Type | Default | Description |
 | :-------- | :--- | :------ | :---------- |
