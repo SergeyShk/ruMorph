@@ -11,12 +11,14 @@
 <p align="center">
   <a href="https://sergeyshk.github.io/ruMorph/">Документация</a> ·
   <a href="https://pypi.org/project/rumorph/">PyPI</a> ·
+  <a href="https://crates.io/crates/rumorph">crates.io</a> ·
   <a href="https://github.com/SergeyShk/ruMorph/blob/master/README.en.md">English</a>
 </p>
 
 <p align="center">
   <a href="https://pypi.org/project/rumorph/"><img src="https://img.shields.io/pypi/v/rumorph?logo=pypi&logoColor=FFE873" alt="Версия"></a>
   <a href="https://pypi.org/project/rumorph/"><img src="https://img.shields.io/pypi/pyversions/rumorph.svg?logo=python&logoColor=FFE873" alt="Поддерживаемые версии Python"></a>
+  <a href="https://crates.io/crates/rumorph"><img src="https://img.shields.io/crates/v/rumorph?logo=rust" alt="Крейт"></a>
   <a href="https://github.com/SergeyShk/ruMorph/actions/workflows/ci.yml"><img src="https://github.com/SergeyShk/ruMorph/actions/workflows/ci.yml/badge.svg" alt="Сборка"></a>
   <a href="https://github.com/astral-sh/ruff"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json" alt="Ruff"></a>
   <a href="https://github.com/SergeyShk/ruMorph/blob/master/LICENSE.txt"><img src="https://img.shields.io/github/license/sergeyshk/rumorph.svg" alt="Лицензия"></a>
@@ -27,7 +29,7 @@
 
 **ruMorph** - морфологический анализатор русского языка: ядро на Rust и API для Python. Для словоформы анализатор находит по словарю [OpenCorpora](https://opencorpora.org) варианты разбора - начальную форму (лемму), часть речи и признаки [Universal Dependencies](https://universaldependencies.org/) - упорядочивает их по вероятности и строит формы слова.
 
-Разбор и лемматизация в 6-8 раз быстрее, чем в pymorphy3 с ускорением `pymorphy3[fast]`, форма по признакам и согласование с количеством - в 15-18 раз; списки слов разбираются без GIL. Части речи, признаки и леммы следуют соглашениям трибанка SynTagRus, поэтому результат можно сравнивать с разметкой spaCy, Stanza и других инструментов на UD.
+Разбор и лемматизация в 7-8 раз быстрее, чем в pymorphy3 с ускорением `pymorphy3[fast]`, форма по признакам и согласование с количеством - в 17-18 раз; списки слов разбираются без GIL. Части речи, признаки и леммы следуют соглашениям трибанка SynTagRus, поэтому результат можно сравнивать с разметкой spaCy, Stanza и других инструментов на UD.
 
 * **[Анализатор](https://sergeyshk.github.io/ruMorph/analyzer/)** - разборы словоформы по убыванию вероятности, разбор списков слов и лемматизация без GIL, проверка словоформы по словарю
 * **[Части речи и признаки UD](https://sergeyshk.github.io/ruMorph/analysis/#ud)** - части речи, признаки и леммы в соглашениях SynTagRus; пометы OpenCorpora, у которых нет признака UD
@@ -56,6 +58,8 @@ uv add rumorph
 ```
 
 Колеса собираются для Linux (в том числе Alpine), macOS и Windows, включая Python 3.14t без GIL; Rust для установки не нужен, словарь входит в пакет. На других платформах pip соберет пакет из исходников - для этого нужен [Rust](https://www.rust-lang.org/tools/install) 1.88 или новее. Подробнее - на странице [Установка](https://sergeyshk.github.io/ruMorph/installation/).
+
+Для Rust - крейт [`rumorph`](https://crates.io/crates/rumorph) со словарем (`cargo add rumorph`, документация - на [docs.rs](https://docs.rs/rumorph)); команда `rumorph` без Python ставится через `cargo install rumorph --features cli`.
 
 ## Быстрый старт
 
@@ -274,13 +278,13 @@ ruMorph работает с тем же словарем OpenCorpora, что pym
 
 | Операция | ruMorph | pymorphy3 | pymorphy3[fast] |
 | :------- | :------ | :-------- | :-------------- |
-| Разбор словоформы | 629 | 20 | 105 |
-| Лемматизация | 1 391 | 22 | 170 |
-| Лемматизация в 4 потоках | 4 210 | - | - |
-| Форма по признакам | 1 338 | 76 | 76 |
-| Согласование с количеством | 1 284 | 85 | 85 |
+| Разбор словоформы | 732 | 20 | 105 |
+| Лемматизация | 1 404 | 22 | 170 |
+| Лемматизация в 4 потоках | 4 275 | - | - |
+| Форма по признакам | 1 399 | 76 | 76 |
+| Согласование с количеством | 1 417 | 85 | 85 |
 
-Импорт и загрузка словаря занимают 5 мс против 30 мс у pymorphy3, прирост памяти процесса - 16,2 МБ против 25,5 МБ у `pymorphy3[fast]`; процессы делят словарь, и каждый следующий добавляет 1,4 МБ. Замер - на 128 251 словоформе тестовой части UD_Russian-SynTagRus, Apple M3 Pro, Python 3.11.
+Импорт и загрузка словаря занимают 4 мс против 30 мс у pymorphy3, прирост памяти процесса - 16,0 МБ против 25,5 МБ у `pymorphy3[fast]`; процессы делят словарь, и каждый следующий добавляет 1,4 МБ. Замер - на 128 251 словоформе тестовой части UD_Russian-SynTagRus, Apple M3 Pro, Python 3.11.
 
 Подробнее - в [документации](https://sergeyshk.github.io/ruMorph/performance/): все операции и как они измерены.
 

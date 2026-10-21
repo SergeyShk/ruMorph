@@ -155,6 +155,7 @@ impl Analysis {
             .ud
             .get(usize::from(self.inner.ud))
             .and_then(OnceLock::get)
+            .map(Box::as_ref)
             .ok_or_else(|| PyValueError::new_err("Нет тега UD"))
     }
 }
@@ -497,8 +498,9 @@ fn _analysis(py: Python<'_>, analyzer: Py<Analyzer>, state: AnalysisState) -> Py
 /// Словарь и объекты его тегов UD: общие для анализаторов с одним файлом словаря
 struct Shared {
     dictionary: rumorph::Dictionary,
-    /// Объекты тегов UD создаются при первом разборе с тегом: в тексте встречается малая доля тегов
-    ud: Vec<OnceLock<UdObjects>>,
+    /// Объекты тегов UD создаются при первом разборе с тегом: в тексте встречается малая доля тегов,
+    /// поэтому ячейка - указатель, а не сами объекты
+    ud: Vec<OnceLock<Box<UdObjects>>>,
     /// Путь, по которому словарь загружен
     path: PathBuf,
 }
@@ -1204,6 +1206,7 @@ impl Analyzer {
                 py,
                 shared.dictionary.ud_tag(analysis.ud).ok_or_else(missing)?,
             )
+            .map(Box::new)
         })?;
         Ok(Analysis {
             inner: analysis,
