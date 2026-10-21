@@ -70,7 +70,7 @@ For Rust there is the [`rumorph`](https://crates.io/crates/rumorph) crate with t
 >>> morph.lemmatize("Мы стали друзьями в ковиде".split())
 ['мы', 'стать', 'друг', 'в', 'ковид']
 >>> [(a.lemma, a.pos, a.feats.get("Case"), round(a.prob, 3)) for a in morph.analyze("стали")][:2]
-[('стать', 'VERB', None, 0.975), ('сталь', 'NOUN', 'Gen', 0.011)]
+[('стать', 'VERB', None, 0.988), ('сталь', 'NOUN', 'Gen', 0.005)]
 >>> morph.analyze("кошка")[0].inflect(Case="Gen", Number="Plur")
 'кошек'
 >>> morph.analyze("рубль")[0].agree(5)
@@ -90,7 +90,7 @@ The `analyze` method returns the analyses of a word form by descending probabili
 
 >>> morph = Analyzer()
 >>> morph.analyze("стали")[0]
-Analysis(word='стали', lemma='стать', pos='VERB', feats='Aspect=Perf|Mood=Ind|Number=Plur|Tense=Past|VerbForm=Fin|Voice=Mid', labels='intr', prob=0.9753459013836056, source='dictionary')
+Analysis(word='стали', lemma='стать', pos='VERB', feats='Aspect=Perf|Mood=Ind|Number=Plur|Tense=Past|VerbForm=Fin|Voice=Mid', labels='intr', prob=0.9877829877829878, source='dictionary')
 >>> [len(analyses) for analyses in morph.analyze_many(["мама", "мыла", "раму"])]
 [1, 4, 2]
 >>> morph.is_known("Ежи"), morph.is_known("вайб")
@@ -299,7 +299,7 @@ git clone https://github.com/SergeyShk/ruMorph.git
 cd ruMorph
 
 make deps        # create the environment, install the dependencies and build the Rust module
-make dictionary  # build the dictionary from pymorphy3-dicts-ru
+make dictionary  # build the dictionary from pymorphy3-dicts-ru and UD treebanks
 make test        # run the Python tests, the docstring examples (doctest) and the Rust tests
 make lint        # ruff, mypy, rustfmt and clippy
 ```
@@ -322,7 +322,7 @@ Bug reports, ideas and pull requests are welcome - the [issues](https://github.c
 <br>
 
 *   **crates/rumorph** - the analyzer core in Rust: the dictionary format, building, analysis and inflection
-*   **crates/rumorph-build** - building the dictionary from an export of pymorphy3-dicts-ru and converting the OpenCorpora tags to UD
+*   **crates/rumorph-build** - building the dictionary from an export of pymorphy3-dicts-ru, converting the OpenCorpora tags to UD and frequencies of analyses from UD treebanks
 *   **crates/rumorph-dict-ru** - the crate with the dictionary for `rumorph` on crates.io
 *   **crates/rumorph-py** - the Python module `rumorph._rumorph` built with PyO3
 *   **python/rumorph** - the Python package
@@ -338,7 +338,7 @@ Bug reports, ideas and pull requests are welcome - the [issues](https://github.c
 
 ## License
 
-The code is distributed under the [MIT](https://github.com/SergeyShk/ruMorph/blob/master/LICENSE.txt) license. The dictionary in the package is built from the [OpenCorpora](https://opencorpora.org) dictionary and is distributed under the CC BY-SA 3.0 license ([LICENSE-DICTIONARY.txt](https://github.com/SergeyShk/ruMorph/blob/master/LICENSE-DICTIONARY.txt)).
+The code is distributed under the [MIT](https://github.com/SergeyShk/ruMorph/blob/master/LICENSE.txt) license. The dictionary in the package is built from the [OpenCorpora](https://opencorpora.org) dictionary with frequencies from the [UD_Russian-Taiga](https://github.com/UniversalDependencies/UD_Russian-Taiga) and [UD_Russian-GSD](https://github.com/UniversalDependencies/UD_Russian-GSD) treebanks and is distributed under the CC BY-SA 4.0 license ([LICENSE-DICTIONARY.txt](https://github.com/SergeyShk/ruMorph/blob/master/LICENSE-DICTIONARY.txt)).
 
 ## Citation
 

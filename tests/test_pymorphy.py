@@ -121,6 +121,10 @@ def test_same_analyses(pymorphy, unsorted, words):
         theirs = [(p.word, str(p.tag), p.normal_form) for p in parses]
         assert sorted(item[:3] for item in ours) == sorted(theirs), word
         checked["same analyses"] += 1
+        # Доли по частотам корпуса UD с pymorphy3 не совпадают намеренно
+        if morph._table_frequencies(word):
+            checked["UD frequencies"] += 1
+            continue
         if len({tag for _, tag, _, _ in ours}) == len(ours):
             expected = expected_order(pymorphy, word, unsorted.parse(word))
             assert [item[:3] for item in ours] == [
@@ -130,4 +134,4 @@ def test_same_analyses(pymorphy, unsorted, words):
                 assert math.isclose(prob, expected_prob, rel_tol=1e-9), word
             checked["same order"] += 1
     assert checked["same analyses"] > 40_000
-    assert checked["same order"] > 0.95 * checked["same analyses"]
+    assert checked["same order"] > 0.95 * (checked["same analyses"] - checked["UD frequencies"])

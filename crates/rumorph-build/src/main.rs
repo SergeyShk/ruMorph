@@ -1,5 +1,6 @@
 //! Сборка словаря ruMorph из выгрузки pymorphy3-dicts-ru (`scripts/export_pymorphy.py`)
 
+mod frequencies;
 mod lexemes;
 mod ud;
 
@@ -14,11 +15,11 @@ use rumorph::{Builder, Dictionary, Entry, GuessIndex};
 
 fn main() -> ExitCode {
     let args: Vec<PathBuf> = std::env::args_os().skip(1).map(PathBuf::from).collect();
-    let [export, output] = args.as_slice() else {
-        eprintln!("Использование: rumorph-build <каталог выгрузки> <файл словаря>");
+    let [export, ud, output] = args.as_slice() else {
+        eprintln!("Использование: rumorph-build <выгрузка pymorphy3> <выгрузка UD> <файл словаря>");
         return ExitCode::from(2);
     };
-    match build(export, output) {
+    match build(export, ud, output) {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) => {
             eprintln!("rumorph-build: {err}");
@@ -55,10 +56,12 @@ const VARIANT_LEMMAS: &[(&str, &str, &str)] = &[
     ("PRCL", "чтоб", "чтобы"),
 ];
 
-fn build(export: &Path, output: &Path) -> Result<(), Box<dyn Error>> {
+fn build(export: &Path, ud: &Path, output: &Path) -> Result<(), Box<dyn Error>> {
     let started = Instant::now();
     let read =
         |name: &str| fs::read_to_string(export.join(name)).map_err(|err| format!("{name}: {err}"));
+    let read_ud =
+        |name: &str| fs::read_to_string(ud.join(name)).map_err(|err| format!("{name}: {err}"));
     let strings = |name: &str| -> Result<Vec<String>, Box<dyn Error>> {
         Ok(serde_json::from_str(&read(name)?).map_err(|err| format!("{name}: {err}"))?)
     };
@@ -80,7 +83,19 @@ fn build(export: &Path, output: &Path) -> Result<(), Box<dyn Error>> {
         );
     }
     let mut builder = Builder::new(tags.clone(), prefixes.clone(), suffixes.clone());
-    builder.meta(read("meta.json")?);
+    // Словарь производен и от трибанков UD: лицензия - их CC BY-SA 4.0, допустимая для OpenCorpora
+    let json = |name: &str, text: String| -> Result<serde_json::Value, String> {
+        serde_json::from_str(&text).map_err(|err| format!("{name}: {err}"))
+    };
+    let mut meta = json("meta.json", read("meta.json")?)?;
+    if let Some(fields) = meta.as_object_mut() {
+        fields.insert("license".into(), "CC BY-SA 4.0".into());
+        fields.insert(
+            "frequencies".into(),
+            json("sources.json", read_ud("sources.json")?)?,
+        );
+    }
+    builder.meta(meta.to_string());
     // Парадигмы по формам: новые парадигмы (объединенные лексемы, копии форм) не повторяются
     let mut paradigm_numbers: HashMap<Vec<(u16, u16, u16)>, u16> = HashMap::new();
 
@@ -620,6 +635,14 @@ fn build(export: &Path, output: &Path) -> Result<(), Box<dyn Error>> {
         return Err(format!("местоимения без PronType: {}", list.join(", ")).into());
     }
 
+    // Доли разборов по счетчикам UD считаются по разборам уже собранного словаря
+    let counts = frequencies::read(&read_ud("counts.tsv")?)?;
+    let first = Dictionary::from_bytes(&builder.build()?)?;
+    let blended = frequencies::blend(&first, &counts);
+    for (word, list) in &blended {
+        builder.set_entry_probabilities(word, list)?;
+    }
+
     let data = builder.build()?;
     let dictionary = Dictionary::from_bytes(&data)?;
     if let Some(parent) = output.parent() {
@@ -635,7 +658,8 @@ fn build(export: &Path, output: &Path) -> Result<(), Box<dyn Error>> {
         .map_err(|err| format!("{}: {err}", output.display()))?;
     eprintln!(
         "{}: {} словоформ, {} тегов UD, {} таблиц словоизменения, {combined_count} лексем \
-         объединено, {guess_endings} окончаний для угадывания, {:.1} МБ, {:.1} с",
+         объединено, {guess_endings} окончаний для угадывания, {} словоформ с долями по UD, \
+         {:.1} МБ, {:.1} с",
         output.display(),
         dictionary.word_count(),
         dictionary.ud_tags().len(),
@@ -644,6 +668,7 @@ fn build(export: &Path, output: &Path) -> Result<(), Box<dyn Error>> {
             .map(|(table, _)| table)
             .collect::<BTreeSet<_>>()
             .len(),
+        blended.len(),
         data.len() as f64 / 1e6,
         started.elapsed().as_secs_f64()
     );

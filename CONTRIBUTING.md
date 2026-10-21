@@ -15,11 +15,11 @@ git clone https://github.com/SergeyShk/ruMorph.git
 cd ruMorph
 
 make deps                   # создать окружение, установить все зависимости и собрать модуль на Rust
-make dictionary             # собрать словарь из pymorphy3-dicts-ru
+make dictionary             # собрать словарь из pymorphy3-dicts-ru и трибанков UD
 uv run pre-commit install   # хуки: линтеры на коммите, тесты на пуше
 ```
 
-Модуль на Rust собирается при установке пакета в окружение; `uv run` пересобирает его сам, когда меняются файлы `crates/` или `Cargo.toml`. Словарь `python/rumorph/data/ru.dict` в git не хранится: `make dictionary` выгружает словарь pymorphy3-dicts-ru скриптом `scripts/export_pymorphy.py` и собирает его сборщиком `rumorph-build`; `make test` и `make build` делают это сами. Полный список команд - `make help`.
+Модуль на Rust собирается при установке пакета в окружение; `uv run` пересобирает его сам, когда меняются файлы `crates/` или `Cargo.toml`. Словарь `python/rumorph/data/ru.dict` в git не хранится: `make dictionary` выгружает словарь pymorphy3-dicts-ru скриптом `scripts/export_pymorphy.py`, скачивает обучающие части трибанков UD_Russian-Taiga и UD_Russian-GSD закрепленного релиза скриптом `scripts/export_ud.py` (счетчики разметки словоформ для частот разборов) и собирает словарь сборщиком `rumorph-build`; `make test` и `make build` делают это сами. Полный список команд - `make help`.
 
 ## Проверки
 
@@ -48,10 +48,10 @@ make docs-build  # mkdocs build --strict, если менялась докуме
 
 - `crates/rumorph/` - ядро анализатора на Rust: формат словаря, сборка (feature `build`), разбор и команда `rumorph` (feature `cli`, `src/cli.rs`; пакет Python вызывает ее из `python/rumorph/__main__.py`); публикуется на crates.io.
 - `crates/rumorph-dict-ru/` - крейт со словарем для `rumorph` (feature `bundled`): файл словаря в git не хранится, `build.rs` берет `python/rumorph/data/ru.dict`, а без него собирает крейт с пустым словарем, только если задана переменная `RUMORPH_EMPTY_DICTIONARY=1` (ее задает `.cargo/config.toml` репозитория).
-- `crates/rumorph-build/` - сборка словаря из выгрузки pymorphy3-dicts-ru и перевод тегов OpenCorpora в UD (`ud.rs`).
+- `crates/rumorph-build/` - сборка словаря из выгрузки pymorphy3-dicts-ru, перевод тегов OpenCorpora в UD (`ud.rs`) и частоты разборов по счетчикам трибанков UD (`frequencies.rs`).
 - `crates/rumorph-py/` - модуль Python `rumorph._rumorph` на PyO3.
 - `python/rumorph/` - пакет Python поверх модуля; `data/ru.dict` - собранный словарь.
-- `scripts/` - выгрузка словаря pymorphy3-dicts-ru и проверка установленного пакета перед публикацией.
+- `scripts/` - выгрузка словаря pymorphy3-dicts-ru и счетчиков трибанков UD, проверка установленного пакета перед публикацией.
 - `tests/` - тесты пакета Python; `tests/test_pymorphy.py` сверяет разборы с pymorphy3 на частых словоформах, `tests/test_docs.py` - два языка документации.
 - `docs/` - документация MkDocs (Material), `mkdocs.yml` - навигация и перевод ее на английский.
 - `.github/workflows/` - CI (`ci.yml`), публикация (`publish.yml`: словарь собирается один раз и входит в колеса для Linux, macOS и Windows и в исходники), документация (`docs.yml`).

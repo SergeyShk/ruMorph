@@ -25,7 +25,7 @@ Analyzer(path=None)
 === "Результат"
 
     ```
-    Analysis(word='стали', lemma='стать', pos='VERB', feats='Aspect=Perf|Mood=Ind|Number=Plur|Tense=Past|VerbForm=Fin|Voice=Mid', labels='intr', prob=0.9753459013836056, source='dictionary')
+    Analysis(word='стали', lemma='стать', pos='VERB', feats='Aspect=Perf|Mood=Ind|Number=Plur|Tense=Past|VerbForm=Fin|Voice=Mid', labels='intr', prob=0.9877829877829878, source='dictionary')
     ```
 
 ## Параметры
@@ -69,12 +69,12 @@ analyze(word)
 === "Результат"
 
     ```
-    [('стать', 'VERB', None, 0.975),
-     ('сталь', 'NOUN', 'Gen', 0.011),
-     ('сталь', 'NOUN', 'Nom', 0.005),
-     ('сталь', 'NOUN', 'Dat', 0.003),
-     ('сталь', 'NOUN', 'Loc', 0.003),
-     ('сталь', 'NOUN', 'Acc', 0.003)]
+    [('стать', 'VERB', None, 0.988),
+     ('сталь', 'NOUN', 'Gen', 0.005),
+     ('сталь', 'NOUN', 'Nom', 0.003),
+     ('сталь', 'NOUN', 'Dat', 0.001),
+     ('сталь', 'NOUN', 'Loc', 0.001),
+     ('сталь', 'NOUN', 'Acc', 0.001)]
     [('чатбот', 'guess'), ('чатбота', 'guess')]
     ```
 
@@ -187,7 +187,7 @@ is_known(word)
 
 ## Словарь { #dictionary }
 
-Словарь пакета собран из словаря [OpenCorpora](https://opencorpora.org): около 3,1 млн словоформ. Вероятности разборов взяты из корпуса OpenCorpora: у слова, написанного через «е» вместо «ё», - частоты написания с «ё», у словоформ, которых в корпусе нет, разборы равновероятны. Словарь распространяется по лицензии [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/).
+Словарь пакета собран из словаря [OpenCorpora](https://opencorpora.org): около 3,1 млн словоформ. Вероятности разборов взяты из корпуса OpenCorpora и уточнены по разметке трибанков Universal Dependencies [UD_Russian-Taiga](https://github.com/UniversalDependencies/UD_Russian-Taiga) и [UD_Russian-GSD](https://github.com/UniversalDependencies/UD_Russian-GSD): так «ничего» чаще местоимение, чем наречие. У словоформ, которых нет ни в одном корпусе, разборы равновероятны. Словарь распространяется по лицензии [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
 
 ## Потоки и процессы { #parallel }
 
@@ -207,5 +207,5 @@ is_known(word)
 === "Результат"
 
     ```
-    [['мама', 'мыло', 'рама'], ['кошка', 'ловить', 'мышь']]
+    [['мама', 'мыть', 'рама'], ['кошка', 'ловить', 'мышь']]
     ```

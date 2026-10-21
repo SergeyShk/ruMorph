@@ -1,5 +1,6 @@
 //! Словарь русского языка для морфологического анализатора ruMorph: словарь OpenCorpora
-//! в формате ruMorph с частотами разборов из корпуса OpenCorpora, лицензия CC BY-SA 3.0
+//! в формате ruMorph с частотами разборов по корпусу OpenCorpora и трибанкам UD Taiga и GSD,
+//! лицензия CC BY-SA 4.0
 //!
 //! Словарь загружается крейтом `rumorph`: `rumorph::Dictionary::bundled()`
 

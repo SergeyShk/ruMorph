@@ -7,6 +7,8 @@ PACKAGE := rumorph
 DICTIONARY := $(SRC_PATH)/$(PACKAGE)/data/ru.dict
 EXPORT_PATH := target/opencorpora
 EXPORT_STAMP := $(EXPORT_PATH)/.exported
+UD_PATH := target/ud
+UD_STAMP := $(UD_PATH)/.exported
 
 help: ## Показать список команд
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "%-20s %s\n", $$1, $$2}'
@@ -28,14 +30,18 @@ else
 	uv sync --all-groups
 endif
 
-dictionary: $(DICTIONARY) ## Собрать словарь из pymorphy3-dicts-ru
+dictionary: $(DICTIONARY) ## Собрать словарь из pymorphy3-dicts-ru и трибанков UD
 
 $(EXPORT_STAMP): $(SCRIPTS_PATH)/export_pymorphy.py uv.lock | deps
 	uv run python $(SCRIPTS_PATH)/export_pymorphy.py $(EXPORT_PATH)
 	touch $@
 
-$(DICTIONARY): $(EXPORT_STAMP) crates/rumorph/src/format.rs crates/rumorph/src/builder.rs $(wildcard crates/rumorph-build/src/*.rs)
-	cargo run --release --locked -p rumorph-build -- $(EXPORT_PATH) $(DICTIONARY)
+$(UD_STAMP): $(SCRIPTS_PATH)/export_ud.py | deps
+	uv run python $(SCRIPTS_PATH)/export_ud.py $(UD_PATH)
+	touch $@
+
+$(DICTIONARY): $(EXPORT_STAMP) $(UD_STAMP) crates/rumorph/src/format.rs crates/rumorph/src/builder.rs $(wildcard crates/rumorph-build/src/*.rs)
+	cargo run --release --locked -p rumorph-build -- $(EXPORT_PATH) $(UD_PATH) $(DICTIONARY)
 
 lock: uv ## Обновить lock-файлы до последних версий зависимостей
 	uv lock --upgrade

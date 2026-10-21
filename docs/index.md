@@ -97,14 +97,14 @@ pip install rumorph
 
     ```
     ['мы', 'стать', 'друг']
-    [('стать', 'VERB', None, 0.975), ('сталь', 'NOUN', 'Gen', 0.011)]
+    [('стать', 'VERB', None, 0.988), ('сталь', 'NOUN', 'Gen', 0.005)]
     ('кошек', 'рублей')
     ```
 
 ??? note "Структура проекта"
 
     *   **crates/rumorph** - ядро анализатора на Rust: формат словаря, сборка, разбор и словоизменение
-    *   **crates/rumorph-build** - сборка словаря из выгрузки pymorphy3-dicts-ru и перевод тегов OpenCorpora в UD
+    *   **crates/rumorph-build** - сборка словаря из выгрузки pymorphy3-dicts-ru, перевод тегов OpenCorpora в UD и частоты разборов по трибанкам UD
     *   **crates/rumorph-dict-ru** - крейт со словарем для `rumorph` на crates.io
     *   **crates/rumorph-py** - модуль Python `rumorph._rumorph` на PyO3
     *   **python/rumorph** - пакет Python
