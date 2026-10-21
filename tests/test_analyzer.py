@@ -176,6 +176,45 @@ def test_threads(morph):
     assert results == [morph.lemmatize(chunk) for chunk in chunks]
 
 
+def test_analyses_of_threads(morph, tmp_path):
+    # Разборы держат анализатор через ручку своего потока: в других потоках они работают,
+    # а анализатор освобождается вместе с последним разбором
+    path = tmp_path / "ru.dict"
+    shutil.copy(morph.path, path)
+    analyzer = Analyzer(path)
+    references = sys.getrefcount(analyzer)
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        analyses = list(pool.map(analyzer.analyze, ["стали", "ежа", "мама", "кошки"] * 4))
+        forms = list(pool.map(lambda found: [form.word for form in found[0].forms()], analyses))
+        restored = list(pool.map(lambda found: pickle.loads(pickle.dumps(found)), analyses))
+    assert analyses == [analyzer.analyze(word) for word in ["стали", "ежа", "мама", "кошки"] * 4]
+    assert forms == [[form.word for form in found[0].forms()] for found in analyses]
+    assert restored == analyses
+    assert analyses[0][0].inflect(Number="Sing", Gender="Fem") == "стала"
+    assert sys.getrefcount(analyzer) > references
+    del analyses, restored
+    assert sys.getrefcount(analyzer) == references
+
+
+def test_last_dictionary_stays_loaded(morph, tmp_path):
+    # Последний словарь процесс держит и без анализаторов: объекты его тегов - те же
+    path = tmp_path / "ru.dict"
+    shutil.copy(morph.path, path)
+    labels = Analyzer(path).analyze("стали")[0].labels
+    assert Analyzer(path).analyze("стали")[0].labels is labels
+
+
+def test_more_analyzers_than_handle_slots(morph):
+    # Анализаторов больше, чем ручек помнит поток: вытесненные ручки живут в своих разборах
+    analyzers = [Analyzer(morph.path) for _ in range(10)]
+    analyses = [analyzer.analyze("ежа")[0] for analyzer in analyzers * 2]
+    expected = [form.word for form in morph.analyze("ежа")[0].forms()]
+    assert all([form.word for form in analysis.forms()] == expected for analysis in analyses)
+    restored = [pickle.loads(pickle.dumps(analysis)) for analysis in analyses]
+    assert restored == analyses
+    assert {analysis.forms()[1].word for analysis in restored} == {"ежа"}
+
+
 def test_analysis(morph):
     first, second = morph.analyze("ёж")[:2]
     assert first == morph.analyze("еж")[0]

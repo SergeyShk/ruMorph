@@ -54,7 +54,7 @@ Or with [uv](https://docs.astral.sh/uv/):
 uv add rumorph
 ```
 
-Wheels are built for Linux, macOS and Windows, installing them does not require Rust; the dictionary is part of the package. On other platforms and on the free-threaded Python 3.14t pip builds the package from source, which requires [Rust](https://www.rust-lang.org/tools/install) 1.88 or newer. See the [Installation](https://sergeyshk.github.io/ruMorph/en/installation/) page.
+Wheels are built for Linux (Alpine included), macOS and Windows, the free-threaded Python 3.14t included; installing them does not require Rust, and the dictionary is part of the package. On other platforms pip builds the package from source, which requires [Rust](https://www.rust-lang.org/tools/install) 1.88 or newer. See the [Installation](https://sergeyshk.github.io/ruMorph/en/installation/) page.
 
 ## Quick start
 
@@ -92,7 +92,7 @@ Analysis(word='стали', lemma='стать', pos='VERB', feats='Aspect=Perf|M
 (True, False)
 ```
 
-The `analyze_many` and `lemmatize` methods analyze lists of words without the GIL, so several threads sharing one analyzer run in parallel. The analyzer and the analyses can be pickled and work with `multiprocessing` and joblib.
+The `analyze_many` and `lemmatize` methods analyze lists of words without the GIL, so several threads sharing one analyzer run in parallel; on the free-threaded Python 3.14t `analyze`, `inflect` and `agree` run in parallel too. The analyzer and the analyses can be pickled and work with `multiprocessing` and joblib.
 
 See the documentation: [analyzer](https://sergeyshk.github.io/ruMorph/en/analyzer/), [word analysis](https://sergeyshk.github.io/ruMorph/en/analysis/).
 

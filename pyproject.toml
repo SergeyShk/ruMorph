@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "rumorph"
-version = "0.2.0.dev1"
+version = "0.2.0.dev2"
 description = "Fast Russian morphological analyzer written in Rust with a Python API"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -30,6 +30,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: Free Threading :: 3 - Stable",
     "Programming Language :: Rust",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",

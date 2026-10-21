@@ -1,18 +1,17 @@
 //! Модуль Python `rumorph._rumorph`
 
-use std::cell::UnsafeCell;
+use std::cell::{RefCell, UnsafeCell};
 use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Weak};
+use std::sync::{Arc, OnceLock, Weak};
 use std::time::SystemTime;
 
 use pyo3::create_exception;
 use pyo3::exceptions::{PyLookupError, PyOSError, PyOverflowError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::sync::PyOnceLock;
 use pyo3::types::{PyDict, PyFloat, PyFrozenSet, PyInt, PyString, PyTuple};
 
 /// Сколько слов `analyze_many` и `lemmatize` разбирают за раз без GIL: между кусками
@@ -112,7 +111,7 @@ struct Analysis {
     #[pyo3(get)]
     labels: Py<PyFrozenSet>,
     ud: Arc<UdText>,
-    analyzer: Py<Analyzer>,
+    handle: Arc<Handle>,
 }
 
 #[pymethods]
@@ -150,13 +149,14 @@ impl Analysis {
     ///     >>> [form.word for form in Analyzer().analyze("ёж")[0].forms()][:6]
     ///     ['ёж', 'ежа', 'ежу', 'ежа', 'ежом', 'еже']
     fn forms(&self, py: Python<'_>) -> PyResult<Vec<Analysis>> {
-        self.analyzer
+        self.handle
+            .analyzer
             .get()
             .shared
             .dictionary
             .forms(&self.inner)
             .into_iter()
-            .map(|form| Analyzer::to_py(py, &self.analyzer, form))
+            .map(|form| Analyzer::to_py(py, &self.handle, form))
             .collect()
     }
 
@@ -184,7 +184,7 @@ impl Analysis {
     ///     ('кошки', 'кошек')
     #[pyo3(signature = (**feats))]
     fn inflect(&self, feats: Option<&Bound<'_, PyDict>>) -> PyResult<String> {
-        let dictionary = &self.analyzer.get().shared.dictionary;
+        let dictionary = &self.handle.analyzer.get().shared.dictionary;
         let mut requested: Vec<(String, String)> = Vec::new();
         for (name, value) in feats.into_iter().flatten() {
             let name: String = name.extract()?;
@@ -256,7 +256,7 @@ impl Analysis {
     ///     >>> [f"{n} {ruble.agree(n)}" for n in (1, 2, 5, 21)]
     ///     ['1 рубль', '2 рубля', '5 рублей', '21 рубль']
     fn agree(&self, number: &Bound<'_, PyAny>) -> PyResult<String> {
-        let dictionary = &self.analyzer.get().shared.dictionary;
+        let dictionary = &self.handle.analyzer.get().shared.dictionary;
         let form = match count(number)? {
             Some(count) => dictionary.agree(&self.inner, count),
             None => dictionary.agree_fraction(&self.inner),
@@ -332,7 +332,7 @@ impl Analysis {
             self.inner.source.as_str().to_owned(),
             self.inner.entry.map(|entry| (entry.table, entry.form)),
         );
-        Ok((restore, (self.analyzer.clone_ref(py), state)))
+        Ok((restore, (self.handle.analyzer.clone_ref(py), state)))
     }
 }
 
@@ -397,19 +397,19 @@ fn _analysis(py: Python<'_>, analyzer: Py<Analyzer>, state: AnalysisState) -> Py
         )));
     };
     inner.prob = prob;
-    Analyzer::to_py(py, &analyzer, inner)
+    Analyzer::to_py(py, &Analyzer::handle(analyzer.bind(py)), inner)
 }
 
 /// Словарь и объекты его тегов UD: общие для анализаторов с одним файлом словаря
 struct Shared {
     dictionary: rumorph::Dictionary,
     /// Объекты тегов UD создаются при первом разборе с тегом: в тексте встречается малая доля тегов
-    ud: Vec<PyOnceLock<UdObjects>>,
+    ud: Vec<OnceLock<UdObjects>>,
 }
 
 impl Shared {
     fn new(dictionary: rumorph::Dictionary) -> Self {
-        let ud = dictionary.ud_tags().map(|_| PyOnceLock::new()).collect();
+        let ud = dictionary.ud_tags().map(|_| OnceLock::new()).collect();
         Shared { dictionary, ud }
     }
 }
@@ -459,7 +459,9 @@ impl FileKey {
 }
 
 /// Словари, загруженные в процессе. Анализаторы с одним файлом словаря делят словарь, а разборы
-/// из pickle не загружают его еще раз; словарь освобождается вместе с последним анализатором.
+/// из pickle не загружают его еще раз; словарь освобождается вместе с последним анализатором,
+/// кроме последнего полученного: его процесс держит и без анализаторов, иначе каждая задача
+/// `multiprocessing.Pool` и анализатор, созданный на один вызов, загружали бы словарь заново.
 ///
 /// Блокировка - свой флаг, а не `Mutex`: перед fork ее берет поток, который делает fork
 /// (`os.register_at_fork`), и снимает в обоих процессах. Иначе дочерний процесс может получить ее
@@ -467,6 +469,7 @@ impl FileKey {
 struct Dictionaries {
     locked: AtomicBool,
     entries: UnsafeCell<Vec<(FileKey, Slot)>>,
+    last: UnsafeCell<Option<Arc<Shared>>>,
 }
 
 /// Словарь в списке загруженных
@@ -476,12 +479,13 @@ enum Slot {
     Loaded(Weak<Shared>),
 }
 
-// SAFETY: `entries` читается и меняется только под флагом `locked`
+// SAFETY: `entries` и `last` читаются и меняются только под флагом `locked`
 unsafe impl Sync for Dictionaries {}
 
 static DICTIONARIES: Dictionaries = Dictionaries {
     locked: AtomicBool::new(false),
     entries: UnsafeCell::new(Vec::new()),
+    last: UnsafeCell::new(None),
 };
 
 impl Dictionaries {
@@ -513,6 +517,21 @@ impl Dictionaries {
         let _unlock = Unlock(self);
         // SAFETY: флаг взят только этим потоком
         action(unsafe { &mut *self.entries.get() })
+    }
+
+    /// Запоминает последний полученный словарь; вывод - прежний, его освобождают уже без флага
+    fn keep(&self, shared: &Arc<Shared>) -> Option<Arc<Shared>> {
+        self.with(|_| {
+            // SAFETY: флаг взят только этим потоком
+            let last = unsafe { &mut *self.last.get() };
+            if last
+                .as_ref()
+                .is_some_and(|known| Arc::ptr_eq(known, shared))
+            {
+                return None;
+            }
+            last.replace(Arc::clone(shared))
+        })
     }
 }
 
@@ -569,7 +588,15 @@ impl Drop for Loading<'_> {
 
 /// Словарь файла `path`: загруженный в процессе, если файл тот же и не изменился, иначе новый.
 /// Флаг словарей берется только на поиск и запись, загрузка идет без него
-fn dictionary(path: &Path) -> Result<Arc<Shared>, rumorph::Error> {
+/// Вывод - словарь и прежний последний словарь: его освобождают в потоке Python, иначе
+/// его объекты Python уходят в пул отложенных decref PyO3, мьютекс которого может застать fork
+fn dictionary(path: &Path) -> Result<(Arc<Shared>, Option<Arc<Shared>>), rumorph::Error> {
+    let shared = find_or_load(path)?;
+    let previous = DICTIONARIES.keep(&shared);
+    Ok((shared, previous))
+}
+
+fn find_or_load(path: &Path) -> Result<Arc<Shared>, rumorph::Error> {
     let Some(key) = FileKey::new(path, &std::fs::metadata(path)?) else {
         return Ok(Arc::new(Shared::new(rumorph::Dictionary::open(path)?)));
     };
@@ -624,7 +651,8 @@ fn _analyzer(py: Python<'_>, path: Option<PathBuf>) -> PyResult<Analyzer> {
 ///     вероятность. Регистр не важен, буква «е» в слове может обозначать «ё». Словарь
 ///     загружается один раз при создании анализатора; анализатор можно использовать
 ///     из нескольких потоков. Файл словаря отображается в память и общий для процессов:
-///     пока анализатор существует, файл нельзя перезаписывать на месте
+///     пока он открыт, его нельзя перезаписывать на месте. Последний загруженный словарь
+///     остается открытым и без анализаторов
 ///
 /// Аргументы:
 ///     path (str | os.PathLike | None): Путь к файлу словаря; по умолчанию - словарь из пакета
@@ -645,6 +673,34 @@ struct Analyzer {
     path: PathBuf,
     /// Путь задан явно: иначе pickle не сохраняет путь, и в другом окружении берется словарь его пакета
     explicit: bool,
+}
+
+/// Анализатор для разборов одного потока. Разборы держат анализатор через ручку своего потока:
+/// в Python без GIL счетчик ссылок общего объекта, который меняют сразу несколько потоков,
+/// в несколько раз замедляет разбор
+struct Handle {
+    analyzer: Py<Analyzer>,
+}
+
+/// Сколько ручек помнит поток: анализаторов, которыми поток пользуется попеременно, немного,
+/// а длинный список ручек сделал бы распаковку тысяч разборов из pickle квадратичной
+const HANDLE_SLOTS: usize = 4;
+
+/// Ручки анализаторов потока: адрес объекта анализатора и слабая ссылка - ручка живет, пока живы
+/// ее разборы, и не держит анализатор дольше них; новая ручка занимает место умершей или
+/// следующее место по кругу
+struct Handles {
+    slots: [(usize, Weak<Handle>); HANDLE_SLOTS],
+    next: usize,
+}
+
+thread_local! {
+    static HANDLES: RefCell<Handles> = const {
+        RefCell::new(Handles {
+            slots: [const { (0, Weak::new()) }; HANDLE_SLOTS],
+            next: 0,
+        })
+    };
 }
 
 #[pymethods]
@@ -701,13 +757,13 @@ impl Analyzer {
     ///     [('стать', 'VERB', None), ('сталь', 'NOUN', 'Gen'), ('сталь', 'NOUN', 'Nom')]
     fn analyze(slf: &Bound<'_, Self>, word: &Bound<'_, PyAny>) -> PyResult<Vec<Analysis>> {
         let word = text(word)?;
-        let analyzer = slf.clone().unbind();
+        let handle = Self::handle(slf);
         slf.get()
             .shared
             .dictionary
             .analyze(&word)
             .into_iter()
-            .map(|analysis| Self::to_py(slf.py(), &analyzer, analysis))
+            .map(|analysis| Self::to_py(slf.py(), &handle, analysis))
             .collect()
     }
 
@@ -734,7 +790,7 @@ impl Analyzer {
         slf: &Bound<'_, Self>,
         words: &Bound<'_, PyAny>,
     ) -> PyResult<Vec<Vec<Analysis>>> {
-        let (py, analyzer) = (slf.py(), slf.clone().unbind());
+        let (py, handle) = (slf.py(), Self::handle(slf));
         let words = collect_words(words)?;
         let dictionary = &slf.get().shared.dictionary;
         let mut result = Vec::with_capacity(words.len());
@@ -749,7 +805,7 @@ impl Analyzer {
                 result.push(
                     analyses
                         .into_iter()
-                        .map(|analysis| Self::to_py(py, &analyzer, analysis))
+                        .map(|analysis| Self::to_py(py, &handle, analysis))
                         .collect::<PyResult<_>>()?,
                 );
             }
@@ -860,9 +916,10 @@ impl Analyzer {
             Some(path) => std::path::absolute(&path).unwrap_or(path),
             None => default_path(py)?,
         };
-        let shared = py
+        let (shared, previous) = py
             .detach(|| dictionary(&path))
             .map_err(|err| load_error(&path, err))?;
+        drop(previous);
         Ok(Analyzer {
             shared,
             path,
@@ -870,15 +927,54 @@ impl Analyzer {
         })
     }
 
+    /// Ручка анализатора для разборов этого потока
+    fn handle(slf: &Bound<'_, Self>) -> Arc<Handle> {
+        let address = slf.as_ptr() as usize;
+        let new = || {
+            Arc::new(Handle {
+                analyzer: slf.clone().unbind(),
+            })
+        };
+        // В завершающемся потоке ручек уже нет: ручка создается без запоминания
+        HANDLES
+            .try_with(|handles| {
+                let mut handles = handles.borrow_mut();
+                let found = handles
+                    .slots
+                    .iter()
+                    .filter(|(known, _)| *known == address)
+                    .find_map(|(_, handle)| handle.upgrade());
+                if let Some(handle) = found {
+                    return handle;
+                }
+                let slot = match handles
+                    .slots
+                    .iter()
+                    .position(|(_, handle)| handle.strong_count() == 0)
+                {
+                    Some(slot) => slot,
+                    None => {
+                        let slot = handles.next;
+                        handles.next = (slot + 1) % HANDLE_SLOTS;
+                        slot
+                    }
+                };
+                let handle = new();
+                handles.slots[slot] = (address, Arc::downgrade(&handle));
+                handle
+            })
+            .unwrap_or_else(|_| new())
+    }
+
     fn to_py(
         py: Python<'_>,
-        analyzer: &Py<Analyzer>,
+        handle: &Arc<Handle>,
         analysis: rumorph::Analysis,
     ) -> PyResult<Analysis> {
-        let this = analyzer.get();
+        let this = handle.analyzer.get();
         let number = usize::from(analysis.ud);
         let shared = &this.shared;
-        let ud = shared.ud[number].get_or_try_init(py, || {
+        let ud = once(&shared.ud[number], || {
             let tag = shared.dictionary.ud_tag(analysis.ud);
             UdObjects::from_tag(py, tag.ok_or_else(|| PyValueError::new_err("Нет тега UD"))?)
         })?;
@@ -888,9 +984,21 @@ impl Analyzer {
             feats: ud.feats.clone_ref(py),
             labels: ud.labels.clone_ref(py),
             ud: Arc::clone(&ud.text),
-            analyzer: analyzer.clone_ref(py),
+            handle: Arc::clone(handle),
         })
     }
+}
+
+/// Значение ячейки, созданное при первом обращении. Значение создается до записи в ячейку,
+/// и поток, в отличие от `PyOnceLock`, не ждет Python, заняв ее: fork, заставший такое ожидание,
+/// оставил бы ячейку занятой навсегда, и дочерний процесс завис бы на ней. Если два потока создали значение
+/// одновременно, лишнее освобождается здесь, в потоке Python
+fn once<T>(cell: &OnceLock<T>, init: impl FnOnce() -> PyResult<T>) -> PyResult<&T> {
+    if let Some(value) = cell.get() {
+        return Ok(value);
+    }
+    let value = init()?;
+    Ok(cell.get_or_init(move || value))
 }
 
 fn join<'a>(values: impl IntoIterator<Item = &'a String>) -> String {
@@ -998,12 +1106,12 @@ fn type_error(message: &str, value: &Bound<'_, PyAny>) -> PyErr {
 /// и Fraction. Согласование зависит от двух последних цифр и от того, меньше ли количество 5,
 /// поэтому числа больше u64 сводятся к 100-199
 fn count(number: &Bound<'_, PyAny>) -> PyResult<Option<u64>> {
-    static INDEX: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+    static INDEX: OnceLock<Py<PyAny>> = OnceLock::new();
     let py = number.py();
     let integer = if number.is_instance_of::<PyInt>() {
         number.clone()
     } else {
-        let index = INDEX.get_or_try_init(py, || {
+        let index = once(&INDEX, || {
             PyResult::Ok(py.import("operator")?.getattr("index")?.unbind())
         })?;
         match index.bind(py).call1((number,)) {
@@ -1031,9 +1139,9 @@ fn count(number: &Bound<'_, PyAny>) -> PyResult<Option<u64>> {
 /// «21.0») и `Fraction` со знаменателем 1; `None` - дробное количество. Конечность проверяется
 /// без перевода в float: «1E+400» - конечное целое
 fn integral<'py>(number: &Bound<'py, PyAny>) -> PyResult<Option<Bound<'py, PyAny>>> {
-    static TYPES: PyOnceLock<(Py<PyAny>, Py<PyAny>, Py<PyAny>)> = PyOnceLock::new();
+    static TYPES: OnceLock<(Py<PyAny>, Py<PyAny>, Py<PyAny>)> = OnceLock::new();
     let py = number.py();
-    let (decimal, rational, real) = TYPES.get_or_try_init(py, || {
+    let (decimal, rational, real) = once(&TYPES, || {
         let numbers = py.import("numbers")?;
         PyResult::Ok((
             py.import("decimal")?.getattr("Decimal")?.unbind(),

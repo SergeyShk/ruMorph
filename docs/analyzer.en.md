@@ -4,7 +4,7 @@
 Analyzer(path=None)
 ```
 
-Morphological analyzer: for a word form it finds all [analyses](analysis.md) in the OpenCorpora dictionary - the initial form, the part of speech and the [Universal Dependencies](https://universaldependencies.org/) features - and orders them by probability. The dictionary is loaded when the first analyzer is created: analyzers with the same dictionary file in a process share it, so a new analyzer is created instantly.
+Morphological analyzer: for a word form it finds all [analyses](analysis.md) in the OpenCorpora dictionary - the initial form, the part of speech and the [Universal Dependencies](https://universaldependencies.org/) features - and orders them by probability. The dictionary is loaded when the first analyzer is created: analyzers with the same dictionary file in a process share it, so a new analyzer is created instantly. The last loaded dictionary stays in the process even without analyzers, so process pool tasks and an analyzer created for a single call do not load the dictionary again.
 
 Exceptions:
 
@@ -34,7 +34,7 @@ Exceptions:
 | :-------- | :--- | :------ | :---------- |
 | `path` | `str` / `PathLike` | `None` | Path to the dictionary file; by default, the dictionary from the package |
 
-The object keeps the dictionary path in `path` of type `Path`, read-only. The dictionary file is mapped into memory: processes with the same file share its memory, so every further process with an analyzer takes about 1.4 MB. While an analyzer exists, the file must not be overwritten in place, but it can be replaced with a new file; on Windows an open file can be neither replaced nor deleted. A dictionary is trusted data, like code: loading rejects a damaged file but not every deliberately crafted one, so dictionaries from untrusted sources should not be loaded.
+The object keeps the dictionary path in `path` of type `Path`, read-only. The dictionary file is mapped into memory: processes with the same file share its memory, so every further process with an analyzer takes about 1.4 MB. While an analyzer exists, the file must not be overwritten in place, but it can be replaced with a new file; on Windows an open file can be neither replaced nor deleted. The last loaded dictionary stays open even after the analyzers are deleted - until a dictionary from another file is loaded or the process exits. A dictionary is trusted data, like code: loading rejects a damaged file but not every deliberately crafted one, so dictionaries from untrusted sources should not be loaded.
 
 ## Methods
 
@@ -191,7 +191,7 @@ The package dictionary is built from the [OpenCorpora](https://opencorpora.org) 
 
 ## Threads and processes { #parallel }
 
-One analyzer can be used from several threads: `analyze_many` and `lemmatize` release the GIL and process lists in parallel. The analyzer and analyses are pickled, so they work with `multiprocessing` and joblib: a process loads the dictionary once, however many analyses it receives. Passing analyses between processes costs more than the analysis itself, so in processes it is better to get lemmas and analysis fields, and analyses in threads.
+One analyzer can be used from several threads: `analyze_many` and `lemmatize` release the GIL and process lists in parallel, and on the free-threaded Python 3.14t `analyze`, `is_known`, `inflect` and `agree` run in parallel too. A shared analyzer is not slower than a separate one per thread, so there is no need for an analyzer per thread. Without the GIL threads are limited by deleting the analysis objects: `forms` hardly speeds up in threads and `analyze_many` on long lists speeds up weakly, so such lists are better analyzed in chunks of a thousand or two words. The analyzer and analyses are pickled, so they work with `multiprocessing` and joblib: processes share the dictionary mapped into memory, however many analyses they receive. Passing analyses between processes costs more than the analysis itself, so in processes it is better to get lemmas and analysis fields, and analyses in threads.
 
 === "Code"
 

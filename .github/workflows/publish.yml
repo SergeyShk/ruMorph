@@ -76,8 +76,10 @@ jobs:
           path: python/rumorph/data/ru.dict
           if-no-files-found: error
 
+  # Каждое задание собирает колесо abi3 для Python 3.11+ и колесо Python 3.14t без GIL:
+  # abi3 его не покрывает
   wheels:
-    name: wheels (${{ matrix.os }}, ${{ matrix.target }})
+    name: wheels (${{ matrix.platform }})
     needs: dictionary
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
@@ -85,15 +87,34 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          - platform: manylinux x86_64
+            os: ubuntu-latest
             target: x86_64
-          - os: ubuntu-latest
+            manylinux: auto
+          - platform: manylinux aarch64
+            os: ubuntu-latest
             target: aarch64
+            manylinux: auto
+          - platform: musllinux x86_64
+            os: ubuntu-latest
+            target: x86_64
+            manylinux: musllinux_1_2
+          - platform: musllinux aarch64
+            os: ubuntu-latest
+            target: aarch64
+            manylinux: musllinux_1_2
           # Оба колеса macOS - в одном задании: раннеров arm64 часто не хватает
-          - os: macos-latest
+          - platform: macos
+            os: macos-latest
             target: x86_64 aarch64
-          - os: windows-latest
+          - platform: windows x64
+            os: windows-latest
             target: x64
+            architecture: x64
+          - platform: windows arm64
+            os: windows-11-arm
+            target: aarch64
+            architecture: arm64
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -102,32 +123,62 @@ jobs:
         with:
           name: dictionary
           path: python/rumorph/data
-      - name: Build wheel
-        if: runner.os != 'macOS'
+      # В Linux интерпретаторы есть в образе сборки, macOS собирается под явную цель
+      # по встроенным настройкам maturin, а в Windows нужны установленные интерпретаторы
+      - name: Setup Python 3.11 (Windows)
+        id: python-abi3
+        if: runner.os == 'Windows'
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+          architecture: ${{ matrix.architecture }}
+      - name: Setup Python 3.14t (Windows)
+        id: python-free-threaded
+        if: runner.os == 'Windows'
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14t"
+          architecture: ${{ matrix.architecture }}
+      - name: Setup Rust (Windows arm64)
+        if: matrix.os == 'windows-11-arm'
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - name: Build wheels
+        if: runner.os == 'Linux'
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
           maturin-version: v1.15.0
           target: ${{ matrix.target }}
-          args: --release --locked --compatibility pypi --out dist
-          manylinux: auto
-      - name: Build wheel (macOS x86_64)
+          args: --release --locked --compatibility pypi --out dist -i python3.11 python3.14t
+          manylinux: ${{ matrix.manylinux }}
+      - name: Build wheels (Windows)
+        if: runner.os == 'Windows'
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        with:
+          maturin-version: v1.15.0
+          target: ${{ matrix.target }}
+          args: >-
+            --release --locked --compatibility pypi --out dist
+            -i ${{ steps.python-abi3.outputs.python-path }} ${{ steps.python-free-threaded.outputs.python-path }}
+      - name: Build wheels (macOS x86_64)
         if: runner.os == 'macOS'
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
           maturin-version: v1.15.0
           target: x86_64
-          args: --release --locked --compatibility pypi --out dist
-      - name: Build wheel (macOS aarch64)
+          args: --release --locked --compatibility pypi --out dist -i python3.11 python3.14t
+      - name: Build wheels (macOS aarch64)
         if: runner.os == 'macOS'
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
           maturin-version: v1.15.0
           target: aarch64
-          args: --release --locked --compatibility pypi --out dist
-      - name: Upload wheel
+          args: --release --locked --compatibility pypi --out dist -i python3.11 python3.14t
+      - name: Upload wheels
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: wheels-${{ matrix.os }}-${{ matrix.target }}
+          name: wheels-${{ strategy.job-index }}
           path: dist
           if-no-files-found: error
 
@@ -164,8 +215,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, macos-15-intel, windows-latest]
-        python-version: ["3.11", "3.14"]
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, macos-15-intel, windows-latest, windows-11-arm]
+        python-version: ["3.11", "3.14", "3.14t"]
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -186,6 +237,41 @@ jobs:
           uv run --isolated --no-project --no-index --no-build --find-links dist --with rumorph
           python scripts/smoke.py ${{ github.event_name == 'push' && github.ref_name || '' }}
         shell: bash
+
+  # Колеса musllinux - в образе musllinux: в нем есть Python 3.11 и 3.14t
+  smoke-musl:
+    name: smoke (musllinux, ${{ matrix.arch }})
+    needs: wheels
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            arch: x86_64
+          - os: ubuntu-24.04-arm
+            arch: aarch64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Download wheels
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: wheels-*
+          path: dist
+          merge-multiple: true
+      - name: Smoke test
+        env:
+          IMAGE: quay.io/pypa/musllinux_1_2_${{ matrix.arch }}:2026.10.10-1
+          VERSION: ${{ github.event_name == 'push' && github.ref_name || '' }}
+        run: |
+          docker run --rm -v "$PWD:/w" -w /w -e VERSION "$IMAGE" sh -ec '
+            for python in python3.11 python3.14t; do
+              "$python" -m venv "/tmp/$python"
+              "/tmp/$python/bin/pip" install --quiet --no-index --find-links dist rumorph
+              "/tmp/$python/bin/python" scripts/smoke.py $VERSION
+            done'
 
   smoke-sdist:
     needs: sdist
@@ -223,7 +309,7 @@ jobs:
 
   # Проверка - отдельно от заданий с правом публикации
   check-distribution:
-    needs: [smoke, smoke-sdist]
+    needs: [smoke, smoke-musl, smoke-sdist]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
