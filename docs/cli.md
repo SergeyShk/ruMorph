@@ -1,0 +1,120 @@
+# Команда rumorph
+
+``` bash
+rumorph [параметры] [файл ...]
+```
+
+Команда разбирает текст из файлов или стандартного ввода и пишет леммы, части речи и признаки [Universal Dependencies](https://universaldependencies.org/) в одном из четырех форматов. Она ставится вместе с пакетом (`pip install rumorph`) и запускается и как `python -m rumorph`; без Python ее ставит `cargo install rumorph --features cli`. Разбор и вывод выполняет ядро на Rust: около миллиона токенов в секунду в одном потоке.
+
+``` bash
+echo "Мы стали друзьями в ковиде." | rumorph
+```
+
+```
+мы стать друг в ковид .
+```
+
+## Параметры { #options }
+
+| Параметр | По умолчанию | Описание |
+| :------- | :----------- | :------- |
+| `-f`, `--format` | `lemmas` | [Формат вывода](#formats): `lemmas`, `conllu`, `tsv`, `jsonl` |
+| `-i`, `--input` | `text` | [Вход](#input): `text`, `tokens`, `conllu` |
+| `-d`, `--dictionary` | словарь пакета | Файл словаря ruMorph |
+| `-h`, `--help` | | Показать справку |
+| `-V`, `--version` | | Показать версию |
+
+Файлы читаются по очереди, без файлов и вместо `-` - стандартный ввод; вход - в UTF-8. Значение параметра пишется отдельно или слитно: `-f conllu`, `-fconllu`, `--format=conllu`.
+
+## Вход { #input }
+
+- `text` - текст, предложение - строка. Текст делится на токены просто: слова - с дефисами и апострофами между буквами («кто-то», «д’Артаньян»), числа - с точкой или запятой между цифрами («3,14»), остальные знаки - по одному, одинаковые знаки подряд - вместе («...»). Точка сокращения отделяется: «т.е.» - четыре токена; для точного деления текста подайте готовые токены.
+- `tokens` - токен в строке, пустая строка разделяет предложения.
+- `conllu` - [CoNLL-U](https://universaldependencies.org/format.html): заполняются столбцы LEMMA, UPOS и FEATS, а остальные столбцы, комментарии, многословные токены и пустые узлы остаются как есть.
+
+``` bash
+printf '1\tМы\t_\t_\t_\t_\t2\tnsubj\t_\t_\n2\tстали\t_\t_\t_\t_\t0\troot\t_\t_\n' | rumorph -i conllu -f conllu
+```
+
+```
+1	Мы	мы	PRON	_	Case=Nom|Number=Plur|Person=1|PronType=Prs	2	nsubj	_	_
+2	стали	стать	VERB	_	Aspect=Perf|Mood=Ind|Number=Plur|Tense=Past|VerbForm=Fin|Voice=Mid	0	root	_	_
+```
+
+## Форматы вывода { #formats }
+
+Все форматы, кроме `jsonl`, берут самый вероятный разбор токена; токен без разбора получает лемму в нижнем регистре и часть речи `X`.
+
+### lemmas
+
+Леммы через пробел, строка на предложение; пустая строка текста остается пустой.
+
+### conllu
+
+CoNLL-U: номер, токен, лемма, часть речи и признаки, `SpaceAfter=No` у токена, за которым в тексте нет пробела, а у предложения текста - комментарии `sent_id` и `text`.
+
+``` bash
+echo "Мы стали друзьями в ковиде." | rumorph -f conllu
+```
+
+```
+# sent_id = 1
+# text = Мы стали друзьями в ковиде.
+1	Мы	мы	PRON	_	Case=Nom|Number=Plur|Person=1|PronType=Prs	_	_	_	_
+2	стали	стать	VERB	_	Aspect=Perf|Mood=Ind|Number=Plur|Tense=Past|VerbForm=Fin|Voice=Mid	_	_	_	_
+3	друзьями	друг	NOUN	_	Animacy=Anim|Case=Ins|Gender=Masc|Number=Plur	_	_	_	_
+4	в	в	ADP	_	_	_	_	_	_
+5	ковиде	ковид	NOUN	_	Animacy=Inan|Case=Loc|Gender=Masc|Number=Sing	_	_	_	SpaceAfter=No
+6	.	.	PUNCT	_	_	_	_	_	_
+```
+
+### tsv
+
+Токен, лемма, часть речи, признаки и вероятность разбора через табуляцию, без заголовка; предложения разделяет пустая строка.
+
+``` bash
+echo "Мы стали друзьями." | rumorph -f tsv
+```
+
+```
+Мы	мы	PRON	Case=Nom|Number=Plur|Person=1|PronType=Prs	1
+стали	стать	VERB	Aspect=Perf|Mood=Ind|Number=Plur|Tense=Past|VerbForm=Fin|Voice=Mid	0.9753459013836056
+друзьями	друг	NOUN	Animacy=Anim|Case=Ins|Gender=Masc|Number=Plur	1
+.	.	PUNCT	_	1
+```
+
+### jsonl
+
+[JSON Lines](https://jsonlines.org/): предложение в строке - текст (если он есть на входе) и токены со всеми разборами: лемма, часть речи, признаки, пометы, вероятность и [источник разбора](analysis.md). Ниже - одна строка вывода, отформатированная для чтения, у «стали» - два разбора из шести.
+
+``` bash
+echo "Мы стали" | rumorph -f jsonl
+```
+
+``` json
+{
+  "text": "Мы стали",
+  "tokens": [
+    {"word": "Мы", "analyses": [
+      {"lemma": "мы", "pos": "PRON", "feats": {"Case": "Nom", "Number": "Plur", "Person": "1", "PronType": "Prs"},
+       "labels": [], "prob": 1, "source": "dictionary"}
+    ]},
+    {"word": "стали", "analyses": [
+      {"lemma": "стать", "pos": "VERB", "feats": {"Aspect": "Perf", "Mood": "Ind", "Number": "Plur", "Tense": "Past", "VerbForm": "Fin", "Voice": "Mid"},
+       "labels": ["intr"], "prob": 0.9753459013836056, "source": "dictionary"},
+      {"lemma": "сталь", "pos": "NOUN", "feats": {"Animacy": "Inan", "Case": "Gen", "Gender": "Fem", "Number": "Sing"},
+       "labels": [], "prob": 0.01095804383217533, "source": "dictionary"}
+    ]}
+  ]
+}
+```
+
+## Коды выхода { #exit-codes }
+
+| Код | Когда |
+| :-- | :---- |
+| 0 | Успех, в том числе если вывод закрыт раньше конца (`rumorph text.txt \| head`) |
+| 1 | Файл не найден или не в UTF-8, неверная строка CoNLL-U, словарь не читается; остальные файлы все равно разбираются |
+| 2 | Неверные параметры |
+
+Сообщения об ошибках пишутся в стандартный поток ошибок.

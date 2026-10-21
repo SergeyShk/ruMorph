@@ -34,3 +34,5 @@ pip install rumorph
 ``` bash
 cargo add rumorph
 ```
+
+[Команду rumorph](cli.md) без Python ставит `cargo install rumorph --features cli`.

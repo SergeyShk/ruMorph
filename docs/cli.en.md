@@ -1,0 +1,120 @@
+# The rumorph command
+
+``` bash
+rumorph [options] [file ...]
+```
+
+The command analyzes text from files or the standard input and writes lemmas, parts of speech and [Universal Dependencies](https://universaldependencies.org/) features in one of four formats. It is installed with the package (`pip install rumorph`) and also runs as `python -m rumorph`; without Python, `cargo install rumorph --features cli` installs it. The Rust core does the analysis and the output: about a million tokens per second in one thread.
+
+``` bash
+echo "Мы стали друзьями в ковиде." | rumorph
+```
+
+```
+мы стать друг в ковид .
+```
+
+## Options { #options }
+
+| Option | Default | Description |
+| :----- | :------ | :---------- |
+| `-f`, `--format` | `lemmas` | [Output format](#formats): `lemmas`, `conllu`, `tsv`, `jsonl` |
+| `-i`, `--input` | `text` | [Input](#input): `text`, `tokens`, `conllu` |
+| `-d`, `--dictionary` | the package dictionary | A ruMorph dictionary file |
+| `-h`, `--help` | | Show the help |
+| `-V`, `--version` | | Show the version |
+
+Files are read one after another; without files and in place of `-` the standard input is read; the input is in UTF-8. An option value is written separately or attached: `-f conllu`, `-fconllu`, `--format=conllu`.
+
+## Input { #input }
+
+- `text` - text, a sentence is a line. The text is split into tokens simply: words with hyphens and apostrophes between letters («кто-то», «д’Артаньян»), numbers with a period or a comma between digits («3,14»), other signs one by one, the same signs in a row together («...»). The period of an abbreviation is split off: «т.е.» is four tokens; for exact splitting pass ready tokens.
+- `tokens` - one token per line, an empty line separates sentences.
+- `conllu` - [CoNLL-U](https://universaldependencies.org/format.html): the LEMMA, UPOS and FEATS columns are filled, while the other columns, comments, multiword tokens and empty nodes stay as they are.
+
+``` bash
+printf '1\tМы\t_\t_\t_\t_\t2\tnsubj\t_\t_\n2\tстали\t_\t_\t_\t_\t0\troot\t_\t_\n' | rumorph -i conllu -f conllu
+```
+
+```
+1	Мы	мы	PRON	_	Case=Nom|Number=Plur|Person=1|PronType=Prs	2	nsubj	_	_
+2	стали	стать	VERB	_	Aspect=Perf|Mood=Ind|Number=Plur|Tense=Past|VerbForm=Fin|Voice=Mid	0	root	_	_
+```
+
+## Output formats { #formats }
+
+All formats except `jsonl` take the most probable analysis of a token; a token without analyses gets the lowercase token as the lemma and the part of speech `X`.
+
+### lemmas
+
+Lemmas separated by spaces, a line per sentence; an empty line of text stays empty.
+
+### conllu
+
+CoNLL-U: the number, token, lemma, part of speech and features, `SpaceAfter=No` on a token not followed by a space in the text, and the `sent_id` and `text` comments for a sentence of text.
+
+``` bash
+echo "Мы стали друзьями в ковиде." | rumorph -f conllu
+```
+
+```
+# sent_id = 1
+# text = Мы стали друзьями в ковиде.
+1	Мы	мы	PRON	_	Case=Nom|Number=Plur|Person=1|PronType=Prs	_	_	_	_
+2	стали	стать	VERB	_	Aspect=Perf|Mood=Ind|Number=Plur|Tense=Past|VerbForm=Fin|Voice=Mid	_	_	_	_
+3	друзьями	друг	NOUN	_	Animacy=Anim|Case=Ins|Gender=Masc|Number=Plur	_	_	_	_
+4	в	в	ADP	_	_	_	_	_	_
+5	ковиде	ковид	NOUN	_	Animacy=Inan|Case=Loc|Gender=Masc|Number=Sing	_	_	_	SpaceAfter=No
+6	.	.	PUNCT	_	_	_	_	_	_
+```
+
+### tsv
+
+The token, lemma, part of speech, features and probability of the analysis separated by tabs, without a header; an empty line separates sentences.
+
+``` bash
+echo "Мы стали друзьями." | rumorph -f tsv
+```
+
+```
+Мы	мы	PRON	Case=Nom|Number=Plur|Person=1|PronType=Prs	1
+стали	стать	VERB	Aspect=Perf|Mood=Ind|Number=Plur|Tense=Past|VerbForm=Fin|Voice=Mid	0.9753459013836056
+друзьями	друг	NOUN	Animacy=Anim|Case=Ins|Gender=Masc|Number=Plur	1
+.	.	PUNCT	_	1
+```
+
+### jsonl
+
+[JSON Lines](https://jsonlines.org/): a sentence per line - the text (when the input has it) and the tokens with all their analyses: the lemma, part of speech, features, labels, probability and [source of the analysis](analysis.md). Below is one line of output formatted for reading, with two of the six analyses of «стали».
+
+``` bash
+echo "Мы стали" | rumorph -f jsonl
+```
+
+``` json
+{
+  "text": "Мы стали",
+  "tokens": [
+    {"word": "Мы", "analyses": [
+      {"lemma": "мы", "pos": "PRON", "feats": {"Case": "Nom", "Number": "Plur", "Person": "1", "PronType": "Prs"},
+       "labels": [], "prob": 1, "source": "dictionary"}
+    ]},
+    {"word": "стали", "analyses": [
+      {"lemma": "стать", "pos": "VERB", "feats": {"Aspect": "Perf", "Mood": "Ind", "Number": "Plur", "Tense": "Past", "VerbForm": "Fin", "Voice": "Mid"},
+       "labels": ["intr"], "prob": 0.9753459013836056, "source": "dictionary"},
+      {"lemma": "сталь", "pos": "NOUN", "feats": {"Animacy": "Inan", "Case": "Gen", "Gender": "Fem", "Number": "Sing"},
+       "labels": [], "prob": 0.01095804383217533, "source": "dictionary"}
+    ]}
+  ]
+}
+```
+
+## Exit codes { #exit-codes }
+
+| Code | When |
+| :--- | :--- |
+| 0 | Success, including when the output is closed before the end (`rumorph text.txt \| head`) |
+| 1 | A file is missing or not in UTF-8, an invalid CoNLL-U line, the dictionary cannot be read; the other files are still analyzed |
+| 2 | Invalid options |
+
+Error messages go to the standard error.

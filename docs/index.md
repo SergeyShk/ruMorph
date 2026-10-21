@@ -35,6 +35,14 @@
 
     [:octicons-arrow-right-24: Словоизменение](inflection.md)
 
+-   :material-console:{ .lg .middle } __Команда rumorph__
+
+    ---
+
+    Разбор файлов и потоков из командной строки: леммы, CoNLL-U, TSV и JSON Lines
+
+    [:octicons-arrow-right-24: Команда rumorph](cli.md)
+
 -   :material-swap-horizontal:{ .lg .middle } __Переход с pymorphy__
 
     ---

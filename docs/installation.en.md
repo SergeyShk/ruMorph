@@ -34,3 +34,5 @@ The analyzer core is published on crates.io as the [`rumorph`](https://crates.io
 ``` bash
 cargo add rumorph
 ```
+
+`cargo install rumorph --features cli` installs [the rumorph command](cli.md) without Python.
