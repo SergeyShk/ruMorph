@@ -139,7 +139,11 @@ fn parse(args: Vec<OsString>) -> Result<Command, String> {
                 }
             }
             "-d" | "--dictionary" => dictionary = Some(PathBuf::from(value()?)),
-            "-o" | "--output" => output = Some(PathBuf::from(value()?)),
+            "-o" | "--output" => {
+                output = Some(value()?)
+                    .filter(|value| value != "-")
+                    .map(PathBuf::from);
+            }
             _ => return Err(format!("неизвестный параметр {option}")),
         }
     }
@@ -193,7 +197,8 @@ fn execute(
             return 2;
         }
     };
-    let dictionary = match load(dictionary.as_deref().or(default)) {
+    let dictionary_path = dictionary.as_deref().or(default);
+    let dictionary = match load(dictionary_path) {
         Ok(dictionary) => dictionary,
         Err(message) => {
             report(message);
@@ -208,10 +213,16 @@ fn execute(
     let mut file_output;
     let output: &mut dyn Write = match &output_path {
         Some(path) => {
-            // Файл вывода создается заново: вход, который он затер бы, не разбирается
-            if files.iter().any(|file| same_file(path, Path::new(file))) {
+            // Файл вывода создается заново: вход или словарь, которые он затер бы, не разбираются
+            let mut sources = files
+                .iter()
+                .map(|file| (file != "-").then(|| Path::new(file)))
+                .chain(dictionary_path.map(Some));
+            if file_id(Some(path))
+                .is_some_and(|id| sources.any(|source| file_id(source).as_ref() == Some(&id)))
+            {
                 report(format!(
-                    "{}: файл вывода совпадает с входным",
+                    "{}: файл вывода совпадает с входным файлом или словарем",
                     path.display()
                 ));
                 return 1;
@@ -324,12 +335,25 @@ fn open_error(path: &Path, err: &io::Error) -> String {
     }
 }
 
-/// Один ли это файл: файл вывода, который совпадает с входным, затер бы его до чтения
-fn same_file(a: &Path, b: &Path) -> bool {
-    matches!(
-        (std::fs::canonicalize(a), std::fs::canonicalize(b)),
-        (Ok(a), Ok(b)) if a == b
-    )
+/// Файл на диске (`None` - стандартный ввод): на Unix - устройство и номер, поэтому жесткая
+/// ссылка и симлинк - тот же файл; иначе - канонический путь
+#[cfg(unix)]
+fn file_id(path: Option<&Path>) -> Option<(u64, u64)> {
+    use std::os::fd::AsFd;
+    use std::os::unix::fs::MetadataExt;
+    let metadata = match path {
+        Some(path) => std::fs::metadata(path).ok()?,
+        // По дескриптору: /dev/stdin в macOS - файл devfs, а не перенаправленный файл
+        None => File::from(io::stdin().as_fd().try_clone_to_owned().ok()?)
+            .metadata()
+            .ok()?,
+    };
+    Some((metadata.dev(), metadata.ino()))
+}
+
+#[cfg(not(unix))]
+fn file_id(path: Option<&Path>) -> Option<PathBuf> {
+    std::fs::canonicalize(path?).ok()
 }
 
 enum Failure {
@@ -396,6 +420,10 @@ impl Writer<'_> {
         };
         if let Some(line) = foreign_encoding(head) {
             return Err(Failure::Encoding(line));
+        }
+        // Конец входа в терминале (Ctrl+D) не повторяется: второе чтение ждало бы ввода
+        if head.is_empty() {
+            return Ok(None);
         }
         let mut bytes = Vec::new();
         let mut number = 0;
@@ -1232,14 +1260,26 @@ mod tests {
         let (code, out, error) = dict.run(&["-o", &path(&output), &path(&input)], b"");
         assert_eq!((code, out.as_str(), error.as_str()), (0, "", ""));
         assert_eq!(std::fs::read_to_string(&output).unwrap(), "рама\n");
-        // Файл вывода, который совпадает с входным, не создается: вход не затирается
-        let (code, _, error) = dict.run(&["-o", &path(&input), &path(&input)], b"");
-        assert_eq!(code, 1);
-        assert!(
-            error.ends_with("файл вывода совпадает с входным\n"),
-            "{error}"
-        );
+        // Файл вывода, который совпадает с входным или словарем, не создается: они не затираются
+        let clash = |args: &[&str]| {
+            let (code, _, error) = dict.run(args, b"");
+            assert_eq!(code, 1, "{args:?}");
+            assert!(
+                error.ends_with("файл вывода совпадает с входным файлом или словарем\n"),
+                "{error}"
+            );
+        };
+        clash(&["-o", &path(&input), &path(&input)]);
+        clash(&["-o", &path(&dict.0)]);
+        #[cfg(unix)]
+        {
+            let link = dir.join("link.txt");
+            std::fs::hard_link(&input, &link).unwrap();
+            clash(&["-o", &path(&link), &path(&input)]);
+        }
         assert_eq!(std::fs::read_to_string(&input).unwrap(), "раму\n");
+        // «-o -» - стандартный вывод
+        assert_eq!(dict.run(&["-o", "-"], "раму".as_bytes()).1, "рама\n");
         // Каталог вместо файла - понятное сообщение и на входе, и на выходе
         let (code, _, error) = dict.run(&[&path(&dir)], b"");
         assert_eq!(
@@ -1306,6 +1346,35 @@ mod tests {
         output.flushes = 0;
         assert_eq!(run_with(&dict, false, &mut output).0, 0);
         assert_eq!(output.flushes, 2);
+    }
+
+    #[test]
+    fn reads_end_of_input_once() {
+        // Конец ввода в терминале не повторяется: второе чтение ждало бы следующего Ctrl+D
+        struct Terminal(bool);
+        impl Read for Terminal {
+            fn read(&mut self, _: &mut [u8]) -> io::Result<usize> {
+                if std::mem::replace(&mut self.0, true) {
+                    return Err(io::Error::other("второе чтение после конца ввода"));
+                }
+                Ok(0)
+            }
+        }
+        let dict = TestDictionary::new();
+        let mut stderr = Vec::new();
+        let code = execute(
+            Vec::new(),
+            "",
+            Some(&dict.0),
+            true,
+            &mut Terminal(false),
+            &mut Vec::new(),
+            &mut stderr,
+        );
+        assert_eq!(
+            (code, String::from_utf8(stderr).unwrap()),
+            (0, String::new())
+        );
     }
 
     #[test]

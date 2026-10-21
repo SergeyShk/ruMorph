@@ -166,6 +166,17 @@ def test_output_file_and_encoding(tmp_path):
         output.read_text(encoding="utf-8").splitlines()[1]
         == "# text = Мы стали друзьями в ковиде."
     )
+    # Стандартный ввод из файла вывода: файл не затирается
+    if sys.platform != "win32":
+        with path.open("rb") as stdin:
+            result = subprocess.run(
+                [sys.executable, "-m", "rumorph", "-o", str(path)],
+                stdin=stdin,
+                capture_output=True,
+                check=False,
+            )
+        assert result.returncode == 1
+        assert path.read_text(encoding="utf-8") == TEXT
     # Файл в cp1251 с ASCII в начале (субтитры) не разбирается и частично
     subtitles = tmp_path / "cp1251.srt"
     subtitles.write_bytes("1\n00:00:01,000 --> 00:00:02,000\nМама мыла раму\n".encode("cp1251"))
