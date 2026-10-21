@@ -140,6 +140,7 @@ Numbers, signs, Latin script and abbreviations are analyzed by rules, their `sou
 *   initials «А.» - a first name, a patronymic or a surname with `Abbr=Yes`
 *   abbreviations with a dot «т.», «им.» - the analyses of the dictionary abbreviation, uppercase acronyms «НКО» - `PROPN` or `NOUN` with `Abbr=Yes`
 *   adverbs «по-бурятски», «по-молодому» - `ADV`
+*   other tokens «км/ч», «РосПил» - `X` without features, the lemma is the token in lowercase
 
 The shares of ambiguous analyses come from the frequencies in SynTagRus.
 
@@ -254,13 +255,13 @@ Thousands of words or analyses per second, higher is better:
 
 | Operation | ruMorph | pymorphy3 | pymorphy3[fast] |
 | :-------- | :------ | :-------- | :-------------- |
-| Word analysis | 483 | 20 | 106 |
-| Lemmatization | 889 | 21 | 172 |
-| Lemmatization in 4 threads | 2,229 | - | - |
-| Form by features | 1,354 | 76 | 76 |
-| Agreement with a number | 1,270 | 85 | 86 |
+| Word analysis | 474 | 20 | 105 |
+| Lemmatization | 810 | 22 | 170 |
+| Lemmatization in 4 threads | 2,345 | - | - |
+| Form by features | 1,400 | 76 | 76 |
+| Agreement with a number | 1,307 | 85 | 85 |
 
-Importing and loading the dictionary takes 24 ms against 31 ms for pymorphy3, the process memory grows by 26 MB, as with `pymorphy3[fast]`. Measured on the 128,251 word forms of the UD_Russian-SynTagRus test set, Apple M3 Pro, Python 3.11.
+Importing and loading the dictionary takes 14 ms against 30 ms for pymorphy3, the process memory grows by 21.5 MB against 25.5 MB with `pymorphy3[fast]`. Measured on the 128,251 word forms of the UD_Russian-SynTagRus test set, Apple M3 Pro, Python 3.11.
 
 See the [documentation](https://sergeyshk.github.io/ruMorph/en/performance/) for all the operations and how they were measured.
 
@@ -301,7 +302,7 @@ Bug reports, ideas and pull requests are welcome - the [issues](https://github.c
 *   **crates/rumorph-build** - building the dictionary from an export of pymorphy3-dicts-ru and converting the OpenCorpora tags to UD
 *   **crates/rumorph-py** - the Python module `rumorph._rumorph` built with PyO3
 *   **python/rumorph** - the Python package
-*   **scripts** - exporting the pymorphy3-dicts-ru dictionary
+*   **scripts** - exporting the pymorphy3-dicts-ru dictionary and checking the installed package before publishing
 *   **docs** - MkDocs documentation in Russian and English
 *   **tests** - tests of the Python package
 
