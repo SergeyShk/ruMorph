@@ -3,6 +3,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import threading
 from pathlib import Path
 
 import pytest
@@ -124,3 +125,50 @@ def test_main_in_process(tmp_path, monkeypatch, capfd):
     assert exit_info.value.code == 0
     assert handlers == [(signal.SIGINT, signal.SIG_DFL)]
     assert capfd.readouterr().out == "мы стать друг в ковид .\n"
+    # Игнорируемый SIGINT остается игнорируемым
+    handlers.clear()
+    monkeypatch.setattr(signal, "getsignal", lambda _: signal.SIG_IGN)
+    with pytest.raises(SystemExit):
+        command.main()
+    assert handlers == []
+
+
+def test_line_by_line():
+    # Команда отвечает на каждую строку, не дожидаясь конца ввода: ее можно держать открытой
+    process = subprocess.Popen(
+        [sys.executable, "-m", "rumorph"],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        encoding="utf-8",
+    )
+    assert process.stdin is not None and process.stdout is not None
+    stdout = process.stdout
+    try:
+        for _ in range(2):
+            process.stdin.write("Мы стали друзьями\n")
+            process.stdin.flush()
+            lines: list[str] = []
+            reader = threading.Thread(target=lambda out=lines: out.append(stdout.readline()))
+            reader.start()
+            reader.join(timeout=60)
+            assert lines == ["мы стать друг\n"]
+    finally:
+        process.stdin.close()
+        process.wait(timeout=60)
+
+
+def test_output_file_and_encoding(tmp_path):
+    path, output = tmp_path / "text.txt", tmp_path / "text.conllu"
+    path.write_text(TEXT, encoding="utf-8")
+    result = run("-f", "conllu", "-o", str(output), str(path))
+    assert (result.returncode, result.stdout, result.stderr) == (0, "", "")
+    assert (
+        output.read_text(encoding="utf-8").splitlines()[1]
+        == "# text = Мы стали друзьями в ковиде."
+    )
+    # Файл в cp1251 с ASCII в начале (субтитры) не разбирается и частично
+    subtitles = tmp_path / "cp1251.srt"
+    subtitles.write_bytes("1\n00:00:01,000 --> 00:00:02,000\nМама мыла раму\n".encode("cp1251"))
+    result = run(str(subtitles))
+    assert (result.returncode, result.stdout) == (1, "")
+    assert result.stderr == f"rumorph: {subtitles}: файл не в UTF-8 (строка 3)\n"

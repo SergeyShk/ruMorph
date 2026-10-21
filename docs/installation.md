@@ -16,6 +16,12 @@ pip install rumorph
 pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ --pre rumorph
 ```
 
+uv берет пакет из первого индекса, где он есть, поэтому ему нужен другой порядок индексов:
+
+``` bash
+uv pip install --extra-index-url https://test.pypi.org/simple/ --index-strategy unsafe-best-match --pre rumorph
+```
+
 ## Сборка из исходников
 
 Для других платформ pip соберет пакет из исходников; для этого нужен [Rust](https://www.rust-lang.org/tools/install) 1.88 или новее:

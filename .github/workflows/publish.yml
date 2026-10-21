@@ -46,6 +46,12 @@ jobs:
             echo "Version in pyproject.toml ($version) does not match the tag ($GITHUB_REF_NAME)"
             exit 1
           fi
+          # Крейты публикуют версию из Cargo.toml: 0.2.0-dev.5 - запись semver тега 0.2.0.dev5
+          crate="$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n 1)"
+          if [ "${crate/-dev./.dev}" != "$GITHUB_REF_NAME" ]; then
+            echo "Version in Cargo.toml ($crate) does not match the tag ($GITHUB_REF_NAME)"
+            exit 1
+          fi
 
   dictionary:
     needs: check
@@ -257,10 +263,11 @@ jobs:
         uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
           toolchain: stable
-      # rumorph проверяется со словарем из только что собранного пакета rumorph-dict-ru
+      # rumorph проверяется со словарем из только что собранного пакета rumorph-dict-ru и со всеми
+      # feature: команда rumorph ставится из крейта (cargo install rumorph --features cli)
       - name: Package crates
         run: |
-          cargo package --locked --allow-dirty -p rumorph-dict-ru -p rumorph
+          cargo package --locked --allow-dirty --all-features -p rumorph-dict-ru -p rumorph
           cargo package --list --locked --allow-dirty -p rumorph-dict-ru | grep -qx ru.dict || { echo "No dictionary in rumorph-dict-ru"; exit 1; }
           size="$(stat -c %s target/package/rumorph-dict-ru-*.crate)"
           echo "rumorph-dict-ru: $size bytes"
@@ -434,7 +441,17 @@ jobs:
       - name: Authenticate
         id: auth
         uses: rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18 # v1.0.5
+      # Крейты публикуются по одному, а опубликованная версия пропускается: повторный запуск задания
+      # после сбоя между крейтами допубликует оставшийся
       - name: Publish crates
-        run: cargo publish --locked --allow-dirty -p rumorph-dict-ru -p rumorph
+        run: |
+          version="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "rumorph") | .version')"
+          for crate in rumorph-dict-ru rumorph; do
+            if curl -sf "https://index.crates.io/ru/mo/$crate" | grep -qF "\"vers\":\"$version\""; then
+              echo "$crate $version is already on crates.io"
+              continue
+            fi
+            cargo publish --locked --allow-dirty -p "$crate"
+          done
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}

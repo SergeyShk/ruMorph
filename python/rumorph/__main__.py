@@ -24,12 +24,14 @@ def main() -> None:
 
     Описание:
         Аргументы разбирает, файлы читает и результат пишет ядро на Rust; Ctrl+C завершает
-        команду сразу, как обычную программу
+        команду сразу, как обычную программу, а игнорируемый SIGINT (фоновая команда сценария)
+        остается игнорируемым
 
     Исключения:
         SystemExit: Всегда, с кодом выхода команды
     """
-    signal.signal(signal.SIGINT, signal.SIG_DFL)
+    if signal.getsignal(signal.SIGINT) is signal.default_int_handler:
+        signal.signal(signal.SIGINT, signal.SIG_DFL)
     sys.exit(_main(sys.argv[1:]))
 
 
