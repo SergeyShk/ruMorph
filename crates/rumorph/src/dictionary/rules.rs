@@ -1,6 +1,6 @@
 //! Разбор токенов, которых нет в словаре: числа, знаки, латиница, римские числа, инициалы,
 //! аббревиатуры, сокращения с точкой и наречия вида «по-русски». Части речи и признаки - по соглашениям SynTagRus,
-//! доли неоднозначных разборов - по частотам в его обучающей части
+//! доли неоднозначных разборов - по частотам в обучающих частях трибанков UD Taiga и GSD
 
 use super::{Analysis, Dictionary, Source, UdTags};
 
@@ -38,6 +38,7 @@ const NUMERAL_FEATS: &[(&str, &str, &str, &str, f64)] = &[
     ("Loc", "Neut", "Sing", "", 3.0),
     ("Ins", "Fem", "Sing", "", 2.0),
     ("Dat", "Fem", "Sing", "", 2.0),
+    ("Dat", "Neut", "Sing", "", 1.0),
     ("Dat", "", "Plur", "", 2.0),
     ("Acc", "Masc", "Sing", "Anim", 2.0),
     ("Acc", "Neut", "Sing", "Inan", 1.0),
@@ -84,8 +85,8 @@ const CARDINAL_ENDINGS: &[&str] = &[
 /// Одиночные буквы, которые могут быть римским числом: доли римского числа и латиницы
 /// по обучающим частям UD Taiga и GSD плюс один («C» и «L» там - только латиница)
 const ROMAN_LETTERS: &[(&str, f64, f64)] = &[
-    ("I", 174.0, 8.0),
-    ("V", 74.0, 3.0),
+    ("I", 176.0, 6.0),
+    ("V", 75.0, 2.0),
     ("X", 52.0, 7.0),
     ("L", 1.0, 5.0),
     ("C", 1.0, 16.0),
@@ -190,7 +191,7 @@ impl Dictionary {
                     Some(&(_, ordinal, foreign)) => (ordinal, foreign),
                     // «CV», «CI», «XL» - чаще латинские сокращения, чем римские числа
                     None if chars.len() == 2 && word.contains(['C', 'L']) => (1.0, 3.0),
-                    None => (471.0, 19.0),
+                    None => (2566.0, 2.0),
                 };
             return self.shares(
                 word,
@@ -227,9 +228,9 @@ impl Dictionary {
             return self.shares(
                 word,
                 &[
-                    (&lemma, tags.given, 561.0),
-                    (&lemma, tags.patronymic, 297.0),
-                    (&lemma, tags.surname, 79.0),
+                    (&lemma, tags.given, 6781.0),
+                    (&lemma, tags.patronymic, 4706.0),
+                    (&lemma, tags.surname, 9.0),
                 ],
             );
         }
@@ -240,8 +241,8 @@ impl Dictionary {
             let mut analyses = self.shares(
                 word,
                 &[
-                    (&lower, tags.organization, 510.0),
-                    (&lower, tags.abbreviation, 327.0),
+                    (&lower, tags.organization, 252.0),
+                    (&lower, tags.abbreviation, 198.0),
                 ],
             );
             // Длинное слово капсом в SynTagRus - чаще обычное слово заглавными буквами, чем
@@ -357,7 +358,7 @@ impl Dictionary {
         cardinal.then(|| self.shares(word, &[(digits, self.rule_tags.cardinal, 1.0)]))
     }
 
-    /// Словарные порядковые из цифр («90-е») получают те же доли по SynTagRus, что и разобранные
+    /// Словарные порядковые из цифр («90-е») получают те же доли по корпусу, что и разобранные
     /// по образцу: частот OpenCorpora у них нет или они мало что говорят
     pub(super) fn reweight_numerals(&self, analyses: &mut [Analysis]) {
         let combi = |analysis: &Analysis| self.has_code(analysis.ud, self.combined_numeral);
