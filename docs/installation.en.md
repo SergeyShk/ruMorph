@@ -26,3 +26,11 @@ pip install rumorph
 ```
 
 The development environment is described in [CONTRIBUTING.md](https://github.com/SergeyShk/ruMorph/blob/master/CONTRIBUTING.md).
+
+## Rust { #rust }
+
+The analyzer core is published on crates.io as the [`rumorph`](https://crates.io/crates/rumorph) crate and the dictionary as the [`rumorph-dict-ru`](https://crates.io/crates/rumorph-dict-ru) crate: it is enabled by default and loaded with `Dictionary::bundled()`. The API documentation is on [docs.rs](https://docs.rs/rumorph).
+
+``` bash
+cargo add rumorph
+```

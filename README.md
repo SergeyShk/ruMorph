@@ -301,6 +301,7 @@ uv run pre-commit install
 
 *   **crates/rumorph** - ядро анализатора на Rust: формат словаря, сборка, разбор и словоизменение
 *   **crates/rumorph-build** - сборка словаря из выгрузки pymorphy3-dicts-ru и перевод тегов OpenCorpora в UD
+*   **crates/rumorph-dict-ru** - крейт со словарем для `rumorph` на crates.io
 *   **crates/rumorph-py** - модуль Python `rumorph._rumorph` на PyO3
 *   **python/rumorph** - пакет Python
 *   **scripts** - выгрузка словаря pymorphy3-dicts-ru и проверка установленного пакета перед публикацией

@@ -26,3 +26,11 @@ pip install rumorph
 ```
 
 Окружение для разработки описано в [CONTRIBUTING.md](https://github.com/SergeyShk/ruMorph/blob/master/CONTRIBUTING.md).
+
+## Rust { #rust }
+
+Ядро анализатора публикуется на crates.io крейтом [`rumorph`](https://crates.io/crates/rumorph), словарь - крейтом [`rumorph-dict-ru`](https://crates.io/crates/rumorph-dict-ru): он подключается по умолчанию и загружается `Dictionary::bundled()`. Документация API - на [docs.rs](https://docs.rs/rumorph).
+
+``` bash
+cargo add rumorph
+```
