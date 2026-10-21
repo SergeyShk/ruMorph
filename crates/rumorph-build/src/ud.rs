@@ -953,8 +953,10 @@ pub fn lemma_class(lemma: &str) -> &str {
     }
 }
 
-/// Признаки UD в записи CoNLL-U: «Case=Gen|Number=Sing»
+/// Признаки UD в записи CoNLL-U: «Case=Gen|Number=Sing», по алфавиту без учета регистра
 pub fn feats_string(feats: &BTreeMap<&str, &str>) -> String {
+    let mut feats: Vec<_> = feats.iter().collect();
+    feats.sort_by_key(|(name, _)| name.to_ascii_lowercase());
     feats
         .iter()
         .map(|(name, value)| format!("{name}={value}"))
@@ -1026,7 +1028,7 @@ mod tests {
         assert_eq!(summary("ADJF,Apro,Subx masc,sing,nomn", "который").0, "DET");
         assert_eq!(
             summary("ADJF,Apro,Anum masc,sing,nomn", "один").1,
-            "Case=Nom|Gender=Masc|NumForm=Word|NumType=Card|Number=Sing"
+            "Case=Nom|Gender=Masc|Number=Sing|NumForm=Word|NumType=Card"
         );
         // «его» в SynTagRus без падежа, рода и числа: 24 разбора OpenCorpora сливаются в один
         assert_eq!(
@@ -1161,7 +1163,7 @@ mod tests {
         );
         assert_eq!(
             summary("ADJF,Abbr,Anum plur,gent", "90-й").1,
-            "Case=Gen|NumForm=Combi|NumType=Ord|Number=Plur"
+            "Case=Gen|Number=Plur|NumForm=Combi|NumType=Ord"
         );
         assert_eq!(
             summary("NOUN,inan,femn,Abbr,Fixd,Geox sing,gent", "рф").1,
@@ -1193,7 +1195,7 @@ mod tests {
         );
         assert_eq!(
             feats("ADJF,Abbr,Anum plur,gent", "90-й"),
-            "Case=Gen|NumForm=Combi|NumType=Ord|Number=Plur"
+            "Case=Gen|Number=Plur|NumForm=Combi|NumType=Ord"
         );
         let (_, kino, labels) = summary("NOUN,inan,neut,Fixd sing,gent", "кино");
         assert_eq!(

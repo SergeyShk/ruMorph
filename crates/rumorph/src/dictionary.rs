@@ -1,6 +1,5 @@
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
-use std::io::Read;
 use std::ops::Range;
 use std::path::Path;
 use std::sync::Arc;
@@ -9,7 +8,7 @@ use fst::Map;
 
 use crate::Error;
 use crate::alphabet::{Alphabet, Key, yo_order};
-use crate::format::{self, Layout, MAX_SPELLINGS, Slice, Storage, Strings, WordValue};
+use crate::format::{self, Layout, MAX_LIST, MAX_SPELLINGS, Slice, Storage, Strings, WordValue};
 
 mod guess;
 mod parts;
@@ -127,7 +126,7 @@ pub struct Dictionary {
     ud: UdTags,
     /// Номер пары «часть речи, признаки» тега UD: разборы, которые отличаются только пометами, сливаются
     ud_core: Vec<u16>,
-    /// Коды значений признаков тегов UD подряд, по `features.len()` на тег
+    /// Коды значений признаков пар `ud_core` подряд, по `features.len()` на пару
     ud_values: Vec<u16>,
     rule_tags: rules::Tags,
     /// Коды признаков и помет, которые `closest` проверяет у каждой формы
@@ -216,20 +215,19 @@ impl Matches {
 }
 
 impl Dictionary {
-    /// Читает словарь из файла: обычный файл отображается в память, канал и устройство
-    /// читаются целиком
+    /// Читает словарь из файла: обычный файл отображается в память, а канал, устройство и файл,
+    /// который не отображается (WASI, часть сетевых файловых систем), читаются
     pub fn open(path: impl AsRef<Path>) -> Result<Self, Error> {
-        let mut file = std::fs::File::open(path)?;
+        let file = std::fs::File::open(path)?;
         let metadata = file.metadata()?;
         if metadata.is_file() && metadata.len() > 0 {
             // SAFETY: отображение только читается; перезаписывать файл, пока словарь открыт, нельзя
             // (документация `Dictionary`)
-            let map = unsafe { memmap2::Mmap::map(&file)? };
-            return Self::from_storage(Storage::Mapped(map));
+            if let Ok(map) = unsafe { memmap2::Mmap::map(&file) } {
+                return Self::from_storage(Storage::Mapped(map));
+            }
         }
-        let mut data = Vec::new();
-        file.read_to_end(&mut data)?;
-        Self::from_bytes(&data)
+        Self::from_storage(format::read(file)?)
     }
 
     /// Читает словарь из байтов файла словаря
@@ -243,7 +241,8 @@ impl Dictionary {
         Self::from_storage(Storage::of_static(data))
     }
 
-    /// Словарь OpenCorpora из крейта `rumorph-dict-ru`
+    /// Словарь OpenCorpora из крейта `rumorph-dict-ru`; словарь проверяется при каждом вызове
+    /// (около 3 мс), поэтому его создают один раз и делят между потоками
     ///
     /// ```
     /// let dictionary = rumorph::Dictionary::bundled()?;
@@ -309,28 +308,32 @@ impl Dictionary {
         dictionary.table_offsets = dictionary.check_tables(ud_count)?;
         dictionary.check_lists()?;
         dictionary.word_count = dictionary.words.len() + dictionary.check_variants()?;
-        dictionary.index_ud_tags();
+        dictionary.index_ud_tags()?;
         Ok(dictionary)
     }
 
     /// Слияние тегов по части речи и признакам, коды значений признаков и коды для `closest`
-    fn index_ud_tags(&mut self) {
+    fn index_ud_tags(&mut self) -> Result<(), Error> {
         let numbers = |number: usize| self.ud.numbers(number as u16).unwrap_or_default();
         let mut cores: HashMap<(u16, &[u16]), u16> = HashMap::new();
-        let mut pairs: HashSet<(u16, u16)> = HashSet::new();
+        // Признаки первого тега каждой пары «часть речи, признаки»
+        let mut core_feats = Vec::new();
         for number in 0..self.ud.len() {
             let (pos, feats, _) = numbers(number);
-            pairs.extend(
-                feats
-                    .as_chunks::<2>()
-                    .0
-                    .iter()
-                    .map(|&[name, value]| (name, value)),
-            );
             let next = cores.len() as u16;
-            self.ud_core
-                .push(*cores.entry((pos, feats)).or_insert(next));
+            let core = *cores.entry((pos, feats)).or_insert(next);
+            if core == next {
+                core_feats.push(feats);
+            }
+            self.ud_core.push(core);
         }
+        let mut pairs: Vec<(u16, u16)> = core_feats
+            .iter()
+            .flat_map(|feats| feats.as_chunks::<2>().0)
+            .map(|&[name, value]| (name, value))
+            .collect();
+        pairs.sort_unstable();
+        pairs.dedup();
         let string = |number: u16| self.ud.string(number);
         for &(name, value) in &pairs {
             self.features
@@ -338,21 +341,39 @@ impl Dictionary {
                 .or_default()
                 .insert(string(value).to_owned());
         }
-        let mut codes: HashMap<(u16, u16), (usize, u16)> = HashMap::new();
-        for (name, value) in pairs {
-            codes.insert(
-                (name, value),
-                feature_code(&self.features, string(name), string(value)).unwrap_or_default(),
-            );
+        // Коды занимают features.len() чисел на пару «часть речи, признаки»: число признаков
+        // ограничено, чтобы файл не задавал гигабайты
+        if self.features.len() > MAX_FEATURES {
+            return Err(Error::Format(format!("больше {MAX_FEATURES} признаков UD")));
         }
-        let count = self.features.len();
-        self.ud_values = vec![0; self.ud.len() * count];
-        for number in 0..self.ud.len() {
-            for &[name, value] in numbers(number).1.as_chunks::<2>().0 {
-                let (index, code) = codes[&(name, value)];
-                self.ud_values[number * count + index] = code;
+        let mut positions: HashMap<(&str, &str), (usize, u16)> = HashMap::new();
+        for (index, (name, values)) in self.features.iter().enumerate() {
+            for (position, value) in values.iter().enumerate() {
+                let code = u16::try_from(position + 1)
+                    .map_err(|_| Error::Format("больше 65 535 значений признака UD".into()))?;
+                positions.insert((name, value), (index, code));
             }
         }
+        let codes: Vec<(usize, u16)> = pairs
+            .iter()
+            .map(|&(name, value)| {
+                positions
+                    .get(&(string(name), string(value)))
+                    .copied()
+                    .unwrap_or_default()
+            })
+            .collect();
+        let count = self.features.len();
+        let mut values = vec![0; core_feats.len() * count];
+        for (row, feats) in values.chunks_mut(count.max(1)).zip(&core_feats) {
+            for &[name, value] in feats.as_chunks::<2>().0 {
+                if let Ok(at) = pairs.binary_search(&(name, value)) {
+                    let (index, code) = codes[at];
+                    row[index] = code;
+                }
+            }
+        }
+        self.ud_values = values;
         let code = |name: &str, value: &str| feature_code(&self.features, name, value);
         self.preferences = Preferences {
             infinitive: code("VerbForm", "Inf"),
@@ -364,6 +385,7 @@ impl Dictionary {
             counting: self.ud.string_number("Coun"),
         };
         self.combined_numeral = code("NumForm", "Combi");
+        Ok(())
     }
 
     /// Описание источника словаря
@@ -532,7 +554,8 @@ impl Dictionary {
             });
             match same {
                 Some(j) => {
-                    let prob = merged[j].prob + merged[i].prob;
+                    // Сумма долей из-за округления бывает чуть больше 1
+                    let prob = (merged[j].prob + merged[i].prob).min(1.0);
                     if yo_count(&merged[i].word) < yo_count(&merged[j].word) {
                         merged.swap(i, j);
                     }
@@ -845,15 +868,16 @@ impl Dictionary {
         type Score = (usize, Reverse<usize>, usize);
         let mut best: Option<(u16, Score)> = None;
         for &form in forms {
-            let Some(codes) = self.codes(lexeme.ud(form)) else {
-                continue;
-            };
-            if required
-                .iter()
-                .any(|&(name, value)| codes.values[name] != value)
+            let ud = lexeme.ud(form);
+            if self
+                .values(ud)
+                .is_none_or(|values| required.iter().any(|&(name, value)| values[name] != value))
             {
                 continue;
             }
+            let Some(codes) = self.codes(ud) else {
+                continue;
+            };
             let same = wanted
                 .iter()
                 .zip(codes.values)
@@ -902,13 +926,18 @@ impl Dictionary {
     /// Коды тега UD для подбора формы
     fn codes(&self, number: u16) -> Option<Codes<'_>> {
         let (pos, _, labels) = self.ud.numbers(number)?;
-        let count = self.features.len();
-        let start = usize::from(number) * count;
         Some(Codes {
             pos,
-            values: self.ud_values.get(start..start + count)?,
+            values: self.values(number)?,
             labels,
         })
+    }
+
+    /// Коды значений признаков тега UD
+    fn values(&self, number: u16) -> Option<&[u16]> {
+        let count = self.features.len();
+        let start = usize::from(*self.ud_core.get(usize::from(number))?) * count;
+        self.ud_values.get(start..start + count)
     }
 
     /// Часть речи тега UD; у несуществующего тега - пустая строка
@@ -924,8 +953,8 @@ impl Dictionary {
     /// Есть ли у тега UD значение признака с кодом `code` из `features`
     fn has_code(&self, number: u16, code: Option<(usize, u16)>) -> bool {
         code.is_some_and(|(index, code)| {
-            let start = usize::from(number) * self.features.len();
-            self.ud_values.get(start + index) == Some(&code)
+            self.values(number)
+                .is_some_and(|values| values.get(index) == Some(&code))
         })
     }
 
@@ -934,17 +963,13 @@ impl Dictionary {
         let entry = analysis.entry?;
         let lexeme = self.lexeme(entry.table, entry.form, &analysis.word)?;
         let own = lexeme.lemma_form(entry.form);
-        // Лемма формы та же, если ее форма леммы пишется так же
-        let (prefix, suffix) = lexeme.affixes(own);
-        let (prefix, suffix) = (self.prefixes.at(prefix), self.suffixes.at(suffix));
+        // Лемма формы та же, если ее форма леммы пишется так же: префиксы и суффиксы словаря
+        // не повторяются, поэтому написания сравниваются по их номерам
+        let affixes = lexeme.affixes(own);
         let forms = (0..lexeme.cells.len() as u16)
             .filter(|&form| {
                 let lemma_form = lexeme.lemma_form(form);
-                if lemma_form == own {
-                    return true;
-                }
-                let (other_prefix, other_suffix) = lexeme.affixes(lemma_form);
-                self.prefixes.at(other_prefix) == prefix && self.suffixes.at(other_suffix) == suffix
+                lemma_form == own || lexeme.affixes(lemma_form) == affixes
             })
             .collect();
         Some((lexeme, forms))
@@ -1292,13 +1317,15 @@ struct Preferences {
     counting: Option<u16>,
 }
 
-/// Слово в составленной записи, с обычным дефисом и без знаков ударения и мягких переносов:
-/// «и» со знаком краткой и «е» с диерезисом (разложенный Unicode, NFD) - «й» и «ё», неразрывный
-/// дефис и дефис U+2010 - «-»; знак ударения после кириллической буквы и мягкий перенос
-/// убираются. `None`, если менять нечего
+/// Слово в составленной записи, с обычным дефисом и без знаков ударения, мягких переносов
+/// и соединителей слов: «и» со знаком краткой и «е» с диерезисом (разложенный Unicode, NFD) -
+/// «й» и «ё», неразрывный дефис и дефис U+2010 - «-», «ѐ» и «ѝ» (знак ударения в составленной
+/// букве) - «е» и «и»; знак ударения после кириллической буквы, мягкий перенос и соединители
+/// слов U+2060 и U+FEFF убираются. `None`, если менять нечего
 fn normalized_input(word: &str) -> Option<String> {
-    const MARKS: [char; 7] = [
-        '\u{306}', '\u{308}', '\u{2010}', '\u{2011}', '\u{300}', '\u{301}', '\u{AD}',
+    const MARKS: [char; 13] = [
+        '\u{306}', '\u{308}', '\u{2010}', '\u{2011}', '\u{300}', '\u{301}', '\u{AD}', '\u{2060}',
+        '\u{FEFF}', 'ѐ', 'ѝ', 'Ѐ', 'Ѝ',
     ];
     if !word.contains(MARKS) {
         return None;
@@ -1320,7 +1347,11 @@ fn normalized_input(word: &str) -> Option<String> {
                 normal.push(letter);
             }
             (None, '\u{2010}' | '\u{2011}') => normal.push('-'),
-            (None, '\u{AD}') => {}
+            (None, '\u{AD}' | '\u{2060}' | '\u{FEFF}') => {}
+            (None, 'ѐ') => normal.push('е'),
+            (None, 'ѝ') => normal.push('и'),
+            (None, 'Ѐ') => normal.push('Е'),
+            (None, 'Ѝ') => normal.push('И'),
             (None, _) if stress => {}
             (None, c) => normal.push(c),
         }
@@ -1357,9 +1388,8 @@ fn capitalized_like(original: &str, form: Analysis) -> Analysis {
     }
 }
 
-/// Наибольшая длина списка разборов, частот, написаний или форм для угадывания: в словаре они
-/// не длиннее нескольких десятков, а испорченная длина делает разбор слова квадратичным
-const MAX_LIST: usize = 255;
+/// Наибольшее число признаков UD в словаре: в словаре OpenCorpora их 22
+const MAX_FEATURES: usize = 255;
 
 impl Dictionary {
     /// Парадигмы ссылаются только на существующие суффиксы, теги и префиксы
@@ -2489,11 +2519,36 @@ pub(super) mod tests {
     #[test]
     fn rejects_damaged_file() {
         let data = dictionary_bytes();
-        let middle = data.len() / 2;
+        let middle = format::layout(&data).unwrap().words.start + 1;
         let mut damaged = data.clone();
         damaged[middle] ^= 1;
         let err = Dictionary::from_bytes(&damaged).err().unwrap();
         assert!(err.to_string().contains("контрольная сумма"), "{err}");
+    }
+
+    #[test]
+    fn limits_feature_count() {
+        // У каждого тега свой признак: коды признаков занимают число признаков на тег
+        let with_features = |count: usize| {
+            let mut builder =
+                Builder::new(vec!["X".into()], vec![String::new()], vec![String::new()]);
+            let tags: Vec<u16> = (0..count)
+                .map(|number| {
+                    builder
+                        .add_ud_tag("X", &format!("F{number}=V"), &[])
+                        .unwrap()
+                })
+                .collect();
+            let paradigm = builder.add_paradigm(&[(0, 0, 0)]).unwrap();
+            let table = builder.add_table(paradigm, &[(0, tags[0])]).unwrap();
+            builder.add_word("а", &[entry(table, 0)]).unwrap();
+            Dictionary::from_bytes(&builder.build().unwrap())
+        };
+        // Правила добавляют свои признаки (NumForm, NumType, Foreign, Abbr, NameType, Degree)
+        let dict = with_features(MAX_FEATURES - 6).unwrap();
+        assert_eq!(dict.features().len(), MAX_FEATURES);
+        let err = with_features(MAX_FEATURES - 5).err().unwrap();
+        assert!(err.to_string().contains("признаков UD"), "{err}");
     }
 
     /// Контрольная сумма автомата, как ее считает `fst`: CRC32C с маской
@@ -2705,6 +2760,12 @@ pub(super) mod tests {
         assert_eq!(normalized_input("Москва\u{301}"), Some("Москва".into()));
         assert_eq!(normalized_input("за\u{300}мок"), Some("замок".into()));
         assert_eq!(normalized_input("при\u{ad}вет"), Some("привет".into()));
+        assert_eq!(normalized_input("при\u{2060}вет"), Some("привет".into()));
+        assert_eq!(normalized_input("\u{feff}привет"), Some("привет".into()));
+        // Знак ударения в составленной букве (NFC): «ѐ» и «ѝ»
+        assert_eq!(normalized_input("вс\u{450}"), Some("все".into()));
+        assert_eq!(normalized_input("\u{40d}ван"), Some("Иван".into()));
+        assert_eq!(normalized_input("\u{400}\u{45d}"), Some("Еи".into()));
         // Знак ударения после латинской буквы - не ударение русского слова
         assert_eq!(normalized_input("cafe\u{301}"), None);
         assert_eq!(normalized_input("Москва"), None);

@@ -60,6 +60,14 @@ def test_dictionary_from_pipe(morph, tmp_path):
         writer.join()
 
 
+@pytest.mark.skipif(
+    not Path("/dev/zero").exists(), reason="устройство /dev/zero есть только в POSIX"
+)
+def test_endless_device():
+    with pytest.raises(ValueError, match="нет сигнатуры словаря"):
+        Analyzer("/dev/zero")
+
+
 @pytest.mark.parametrize("content", [b"", b"not a dictionary", b"RUMORPH\x00\x01\x00\x00\x00"])
 def test_broken_dictionary(tmp_path, content):
     path = tmp_path / "broken.dict"
@@ -129,11 +137,15 @@ def test_not_a_token(morph, word):
         ("Москва\u0301", "Москва"),
         ("за\u0300мок", "замок"),
         ("при\u00adвет", "привет"),
+        ("вс\u0450", "все"),
+        ("\u040dван", "Иван"),
+        ("при\u2060вет", "привет"),
+        ("\ufeffпривет", "привет"),
     ],
 )
 def test_normalized_input(morph, word, normal):
-    # Разложенные «й» и «ё» (NFD), неразрывный дефис, знаки ударения и мягкий перенос - как обычное
-    # написание
+    # Разложенные «й» и «ё» (NFD), неразрывный дефис, знаки ударения (и в составленных «ѐ», «ѝ»),
+    # мягкий перенос и соединители слов - как обычное написание
     assert morph.analyze(word) == morph.analyze(normal)
     assert morph.is_known(word)
 
@@ -145,6 +157,14 @@ def test_combining_mark_elsewhere(morph, word):
     # Знак не после «и» или «е» ничего не составляет: слово разбирается как есть
     assert morph.analyze(word)
     assert morph.lemmatize(["кот", word])[0] == "кот"
+
+
+@pytest.mark.parametrize("word", ["одной", "первого", "2005-го", "г", "млн", "РСФСР"])
+def test_feats_order_and_probabilities(morph, word):
+    # Признаки - по алфавиту без учета регистра, как в CoNLL-U; сумма долей не больше 1
+    for analysis in morph.analyze(word):
+        assert list(analysis.feats) == sorted(analysis.feats, key=str.lower)
+        assert 0 < analysis.prob <= 1
 
 
 def test_is_known(morph):
@@ -436,6 +456,13 @@ def test_pickle(morph):
     assert (restored_analysis.prob, restored_analysis.inflect(Case="Gen")) == (0.5, "ежа")
     # Таблица и форма из другого словаря: разбор находится по написанию, лемме и тегу
     assert rumorph._rumorph._analysis(morph, (*state[:7], (0, 0))) == hedgehog
+    # Признаки в другом порядке (pickle 0.1.0): «одной» - NumForm и NumType раньше Number
+    one = morph.analyze("одной")[0]
+    _, (_, one_state) = one.__reduce__()
+    old_order = "|".join(sorted(one_state[3].split("|")))
+    assert old_order != one_state[3]
+    old_state = (*one_state[:3], old_order, *one_state[4:7], None)
+    assert rumorph._rumorph._analysis(morph, old_state) == one
     with pytest.raises(ValueError, match="Неизвестный источник"):
         rumorph._rumorph._analysis(morph, (*state[:6], "corpus", *state[7:]))
     with pytest.raises(ValueError, match="В словаре нет разбора"):

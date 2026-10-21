@@ -1,11 +1,11 @@
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use fst::MapBuilder;
 
 use crate::Error;
 use crate::alphabet::{Alphabet, MAX_KEY, yo_order};
 use crate::dictionary::{Entry, GuessIndex};
-use crate::format::{self, MAX_SPELLINGS, Sections, WordValue};
+use crate::format::{self, MAX_LIST, MAX_SPELLINGS, Sections, WordValue};
 
 /// Сборщик словаря из таблиц тегов, префиксов, суффиксов, парадигм, словоформ и частот
 ///
@@ -63,13 +63,30 @@ impl Builder {
     /// Добавляет тег UD и возвращает его номер; одинаковые теги получают один номер
     ///
     /// `feats` - признаки в записи CoNLL-U («Case=Gen|Number=Sing», пустая строка - без признаков)
+    /// в любом порядке: тег хранит их по алфавиту без учета регистра, как требует CoNLL-U
     pub fn add_ud_tag(&mut self, pos: &str, feats: &str, labels: &[&str]) -> Result<u16, Error> {
-        let fields = [pos, feats, &labels.join(",")];
+        let invalid_feats = || Error::Build(format!("неверные признаки UD {feats:?}"));
+        let mut pairs = Vec::new();
+        for feat in feats.split('|').filter(|_| !feats.is_empty()) {
+            match feat.split_once('=') {
+                Some((name, value)) if !name.is_empty() && !value.is_empty() => {
+                    pairs.push((name, value));
+                }
+                _ => return Err(invalid_feats()),
+            }
+        }
+        pairs.sort_by_cached_key(|&(name, _)| (name.to_ascii_lowercase(), name));
+        if pairs.windows(2).any(|pair| pair[0].0 == pair[1].0) {
+            return Err(invalid_feats());
+        }
+        let feats = pairs
+            .iter()
+            .map(|(name, value)| format!("{name}={value}"))
+            .collect::<Vec<_>>()
+            .join("|");
+        let fields = [pos, &feats, &labels.join(",")];
         if pos.is_empty() || fields.iter().any(|field| field.contains(['\t', '\n'])) {
             return Err(Error::Build(format!("неверный тег UD {fields:?}")));
-        }
-        if !feats.is_empty() && feats.split('|').any(|feat| feat.split_once('=').is_none()) {
-            return Err(Error::Build(format!("неверные признаки UD {feats:?}")));
         }
         let tag = fields.join("\t");
         if let Some(&number) = self.ud_numbers.get(&tag) {
@@ -145,6 +162,11 @@ impl Builder {
 
     /// Добавляет словоформу с разборами; повторные разборы дописываются
     pub fn add_word(&mut self, word: &str, entries: &[Entry]) -> Result<(), Error> {
+        if word.contains('\0') {
+            return Err(Error::Build(format!(
+                "словоформа {word:?} с символом U+0000"
+            )));
+        }
         let mut packed = Vec::with_capacity(entries.len());
         for entry in entries {
             let &(paradigm, _) = self.tables.get(entry.table as usize).ok_or_else(|| {
@@ -198,6 +220,11 @@ impl Builder {
         ending: &str,
         forms: &[(Entry, u32)],
     ) -> Result<(), Error> {
+        if ending.contains('\0') {
+            return Err(Error::Build(format!(
+                "окончание {ending:?} с символом U+0000"
+            )));
+        }
         let mut packed = Vec::with_capacity(forms.len());
         for &(entry, count) in forms {
             let &(paradigm, _) = self.tables.get(entry.table as usize).ok_or_else(|| {
@@ -220,6 +247,7 @@ impl Builder {
 
     /// Собирает словарь в бинарном формате
     pub fn build(&self) -> Result<Vec<u8>, Error> {
+        self.check()?;
         let mut paradigm_offsets = vec![0u32];
         let mut paradigms = Vec::new();
         for forms in &self.paradigms {
@@ -367,6 +395,40 @@ impl Builder {
             guesses: guesses.into_inner().map_err(build_error)?,
             guess_records,
         }))
+    }
+
+    /// Префиксы и суффиксы не повторяются (формы одной леммы сравниваются по их номерам),
+    /// а списки разборов, частот и форм для угадывания не длиннее, чем читает словарь
+    fn check(&self) -> Result<(), Error> {
+        for (what, items) in [("префикс", &self.prefixes), ("суффикс", &self.suffixes)]
+        {
+            let mut seen = HashSet::new();
+            if let Some(item) = items.iter().find(|item| !seen.insert(item.as_str())) {
+                return Err(Error::Build(format!("{what} {item:?} повторяется")));
+            }
+        }
+        let long = |what: &str, owner: &str, len: usize| {
+            (len > MAX_LIST).then(|| Error::Build(format!("у {owner} больше {MAX_LIST} {what}")))
+        };
+        for (word, entries) in &self.words {
+            if let Some(err) = long("разборов", &format!("словоформы {word:?}"), entries.len())
+            {
+                return Err(err);
+            }
+        }
+        for (word, pairs) in &self.probabilities {
+            if let Some(err) = long("частот", &format!("словоформы {word:?}"), pairs.len())
+            {
+                return Err(err);
+            }
+        }
+        for ((_, ending), forms) in &self.guesses {
+            if let Some(err) = long("форм", &format!("окончания {ending:?}"), forms.len())
+            {
+                return Err(err);
+            }
+        }
+        Ok(())
     }
 
     /// Буквы словоформ и окончаний по порядку: у «ё» в словоформе ключ пишется с «е»
@@ -570,6 +632,81 @@ mod tests {
         assert!(builder.add_ud_tag("", "", &[]).is_err());
         assert!(builder.add_ud_tag("VERB", "Aspect", &[]).is_err());
         assert!(builder.add_ud_tag("VERB", "Aspect=Perf\t", &[]).is_err());
+    }
+
+    #[test]
+    fn ud_features_in_conllu_order() {
+        let mut builder = builder();
+        // По алфавиту без учета регистра: Number раньше NumForm и NumType
+        let ordered = "Case=Gen|Number=Sing|NumForm=Word|NumType=Card";
+        let number = builder.add_ud_tag("NUM", ordered, &[]).unwrap();
+        for feats in [
+            "NumType=Card|NumForm=Word|Number=Sing|Case=Gen",
+            "Case=Gen|NumForm=Word|NumType=Card|Number=Sing",
+        ] {
+            assert_eq!(builder.add_ud_tag("NUM", feats, &[]).unwrap(), number);
+        }
+        let (strings, tags) = builder.ud_tables().unwrap();
+        let start = tags.len() - 11;
+        let names: Vec<&str> = (0..4)
+            .map(|at| strings[usize::from(tags[start + 2 + 2 * at])].as_str())
+            .collect();
+        assert_eq!(names, ["Case", "Number", "NumForm", "NumType"]);
+        for feats in ["Case=Gen|Case=Nom", "Case=", "=Gen", "Case=Gen|"] {
+            assert!(builder.add_ud_tag("NOUN", feats, &[]).is_err(), "{feats}");
+        }
+    }
+
+    #[test]
+    fn rejects_files_the_dictionary_cannot_read() {
+        let mut builder = builder();
+        builder.add_paradigm(&[(0, 0, 0)]).unwrap();
+        builder.add_table(0, &[(0, 0)]).unwrap();
+        builder
+            .add_word("еж", &vec![entry(0, 0); MAX_LIST])
+            .unwrap();
+        assert!(builder.build().is_ok());
+        builder.add_word("еж", &[entry(0, 0)]).unwrap();
+        let err = builder.build().err().unwrap();
+        assert!(err.to_string().contains("словоформы \"еж\""), "{err}");
+
+        let mut builder = self::builder();
+        builder.add_paradigm(&[(0, 0, 0)]).unwrap();
+        builder.add_table(0, &[(0, 0)]).unwrap();
+        let tags: Vec<String> = (0..=MAX_LIST).map(|tag| tag.to_string()).collect();
+        builder.tags = tags;
+        for tag in 0..=MAX_LIST {
+            builder.add_probability("еж", tag as u16, 1).unwrap();
+        }
+        let err = builder.build().err().unwrap();
+        assert!(err.to_string().contains("частот"), "{err}");
+
+        let mut builder = self::builder();
+        builder.add_paradigm(&[(0, 0, 0)]).unwrap();
+        builder.add_table(0, &[(0, 0)]).unwrap();
+        builder
+            .add_guesses(
+                GuessIndex::Common,
+                "а",
+                &vec![(entry(0, 0), 1); MAX_LIST + 1],
+            )
+            .unwrap();
+        let err = builder.build().err().unwrap();
+        assert!(err.to_string().contains("окончания \"а\""), "{err}");
+
+        // Повтор суффикса и символ U+0000
+        let mut builder = Builder::new(
+            Vec::new(),
+            vec![String::new()],
+            vec!["а".into(), "а".into()],
+        );
+        let err = builder.build().err().unwrap();
+        assert!(
+            err.to_string().contains("суффикс \"а\" повторяется"),
+            "{err}"
+        );
+        assert!(builder.add_word("е\0ж", &[]).is_err());
+        assert!(builder.add_guesses(GuessIndex::Common, "\0", &[]).is_err());
     }
 
     #[test]

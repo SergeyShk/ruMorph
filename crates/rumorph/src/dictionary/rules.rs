@@ -511,7 +511,7 @@ mod tests {
     /// Образец порядковых из цифр «1-й», «1-го» и сокращение «им»
     fn dictionary() -> Dictionary {
         let ordinal =
-            |case| format!("Case={case}|Gender=Masc|NumForm=Combi|NumType=Ord|Number=Sing");
+            |case| format!("Case={case}|Gender=Masc|Number=Sing|NumForm=Combi|NumType=Ord");
         dictionary_of(
             &[
                 (
@@ -558,7 +558,7 @@ mod tests {
     #[test]
     fn numerals_by_template() {
         let dict = dictionary();
-        let genitive = "Case=Gen|Gender=Masc|NumForm=Combi|NumType=Ord|Number=Sing";
+        let genitive = "Case=Gen|Gender=Masc|Number=Sing|NumForm=Combi|NumType=Ord";
         assert_eq!(
             rules(&dict, "2005-го"),
             [analysis("2005-й", "ADJ", genitive)]
@@ -578,7 +578,7 @@ mod tests {
 
     #[test]
     fn dictionary_numerals_weighted_by_syntagrus() {
-        let ordinal = |feats: &str| format!("{feats}|NumForm=Combi|NumType=Ord|Number=Plur");
+        let ordinal = |feats: &str| format!("{feats}|Number=Plur|NumForm=Combi|NumType=Ord");
         let dict = dictionary_of(
             &[(
                 "ADJ",
@@ -629,7 +629,7 @@ mod tests {
                     "90-",
                     vec![(
                         "х",
-                        "Case=Gen|NumForm=Combi|NumType=Ord|Number=Plur".to_owned(),
+                        "Case=Gen|Number=Plur|NumForm=Combi|NumType=Ord".to_owned(),
                     )],
                 ),
                 (
