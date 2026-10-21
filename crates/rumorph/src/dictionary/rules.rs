@@ -159,7 +159,7 @@ impl Dictionary {
                     Some(&(_, ordinal, foreign)) => (ordinal, foreign),
                     // «CV», «CI», «XL» - чаще латинские сокращения, чем римские числа
                     None if chars.len() == 2 && word.contains(['C', 'L']) => (1.0, 3.0),
-                    None => (2560.0, 8.0),
+                    None => (2566.0, 2.0),
                 };
             return self.shares(
                 word,
