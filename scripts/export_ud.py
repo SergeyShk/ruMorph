@@ -4,7 +4,8 @@
 Описание:
     Скачивает обучающие части UD_Russian-Taiga и UD_Russian-GSD (CC BY-SA 4.0) закрепленного
     релиза UD, проверяет их контрольные суммы и пишет, сколько раз каждая словоформа (в нижнем
-    регистре, «ё» как «е») размечена каждой парой «часть речи, лемма» (counts.tsv), и описание
+    регистре, «ё» как «е») размечена каждой парой «часть речи, лемма» (counts.tsv; лемма - в нижнем
+    регистре с «ё»: «все» и «всё» - разные леммы), и описание
     источников (sources.json). Скачанные файлы хранятся в каталоге выгрузки и повторно не
     скачиваются.
 
@@ -103,7 +104,7 @@ def export(output: Path) -> None:
                     # Многословные токены и пустые узлы - не словоформы
                     if "-" in columns[0] or "." in columns[0]:
                         continue
-                    counts[normal(columns[1]), columns[3], normal(columns[2])] += 1
+                    counts[normal(columns[1]), columns[3], columns[2].lower()] += 1
     with (output / "counts.tsv").open("w", encoding="utf-8") as file:
         for (word, pos, lemma), count in sorted(counts.items()):
             file.write(f"{word}\t{pos}\t{lemma}\t{count}\n")

@@ -86,26 +86,18 @@ fn shares(
                 dictionary
                     .ud_tag(analysis.ud)
                     .map_or(String::new(), |tag| tag.pos().to_owned()),
-                normal(&analysis.lemma),
+                analysis.lemma.to_lowercase(),
             )
         })
         .collect();
-    let count = |key: &(String, String)| {
-        pairs
-            .iter()
-            .filter(|(pos, lemma, _)| (pos, lemma) == (&key.0, &key.1))
-            .map(|&(_, _, count)| f64::from(count))
-            .sum::<f64>()
-    };
+    let counts = attributed(&keys, pairs);
     let mut distinct: Vec<&(String, String)> = keys.iter().collect();
     distinct.sort();
     distinct.dedup();
-    if distinct.len() < 2 || distinct.iter().all(|key| count(key) == 0.0) {
+    if distinct.len() < 2 || counts.values().all(|&count| count == 0.0) {
         return None;
     }
     let priors = priors(dictionary, &analyses);
-    // Разметки, которые не совпали ни с одним разбором, тоже входят в итог: они ослабляют корпус
-    let total: f64 = pairs.iter().map(|&(_, _, count)| f64::from(count)).sum();
     let mut mass: HashMap<&(String, String), (f64, usize)> = HashMap::new();
     for (key, prior) in keys.iter().zip(&priors) {
         let entry = mass.entry(key).or_default();
@@ -121,7 +113,7 @@ fn shares(
         } else {
             1.0 / key_size as f64
         };
-        let share = (count(key) * part + PRIOR_WEIGHT * prior) / (total + PRIOR_WEIGHT);
+        let share = counts.get(key).copied().unwrap_or_default() * part + PRIOR_WEIGHT * prior;
         let Some(entry) = analysis.entry else {
             continue;
         };
@@ -130,12 +122,44 @@ fn shares(
             None => shares.push((entry, share)),
         }
     }
+    let total: f64 = shares.iter().map(|(_, share)| share).sum();
+    // Ненулевая доля у каждого разбора: нулевой разбор при загрузке не отличить от разбора без частот
     Some(
         shares
             .into_iter()
-            .map(|(entry, share)| (entry, (share * 1e6).round() as u32))
+            .map(|(entry, share)| (entry, (share / total * 1e6).round().max(1.0) as u32))
             .collect(),
     )
+}
+
+/// Разметки корпуса по парам «часть речи, лемма» разборов: лемма сравнивается точно, а если
+/// такой пары у разборов нет - с точностью до «ё» (у формы «ещё» в корпусе бывает лемма «еще»)
+fn attributed<'k>(
+    keys: &'k [(String, String)],
+    pairs: &[(String, String, u32)],
+) -> HashMap<&'k (String, String), f64> {
+    let mut counts: HashMap<&(String, String), f64> = HashMap::new();
+    for (pos, lemma, count) in pairs {
+        let exact: Vec<&(String, String)> = keys
+            .iter()
+            .filter(|key| (&key.0, &key.1) == (pos, lemma))
+            .collect();
+        let matched = if exact.is_empty() {
+            let mut loose: Vec<&(String, String)> = keys
+                .iter()
+                .filter(|key| &key.0 == pos && normal(&key.1) == normal(lemma))
+                .collect();
+            loose.sort();
+            loose.dedup();
+            loose
+        } else {
+            exact[..1].to_vec()
+        };
+        for key in &matched {
+            *counts.entry(key).or_default() += f64::from(*count) / matched.len() as f64;
+        }
+    }
+    counts
 }
 
 /// Доли разборов в словаре: из частот, а без них - как у разбора после слияния: равные доли
@@ -221,5 +245,26 @@ mod tests {
         shares.sort_unstable();
         assert_eq!(shares, [233_333, 766_667]);
         assert!(read("стали\tVERB\tстать").is_err());
+    }
+
+    #[test]
+    fn matches_lemmas_up_to_yo_only_without_exact_pair() {
+        let key = |pos: &str, lemma: &str| (pos.to_owned(), lemma.to_owned());
+        let pair = |pos: &str, lemma: &str, count| (pos.to_owned(), lemma.to_owned(), count);
+        // «все» и «всё» - разные леммы, а лемма «еще» корпуса - «ещё» словаря
+        let keys = [key("PRON", "все"), key("PRON", "всё"), key("ADV", "ещё")];
+        let counts = attributed(
+            &keys,
+            &[
+                pair("PRON", "все", 445),
+                pair("PRON", "всё", 1996),
+                pair("ADV", "еще", 10),
+            ],
+        );
+        let get = |key: &(String, String)| counts.get(key).copied();
+        assert_eq!(
+            (get(&keys[0]), get(&keys[1]), get(&keys[2])),
+            (Some(445.0), Some(1996.0), Some(10.0))
+        );
     }
 }

@@ -5,9 +5,13 @@ The dictionary bundled with ruMorph (rumorph/data/ru.dict) is built from:
   P(tag | word) estimates from the OpenCorpora corpus, licensed under the Creative
   Commons Attribution-ShareAlike 3.0 Unported License (CC BY-SA 3.0);
 - counts of word form annotations in the training parts of the Universal Dependencies
-  treebanks UD_Russian-Taiga and UD_Russian-GSD, release 2.18
-  (https://universaldependencies.org), licensed under the Creative Commons
-  Attribution-ShareAlike 4.0 International License (CC BY-SA 4.0).
+  treebanks, release 2.18 (https://universaldependencies.org), licensed under the
+  Creative Commons Attribution-ShareAlike 4.0 International License (CC BY-SA 4.0):
+  - UD_Russian-Taiga (https://github.com/UniversalDependencies/UD_Russian-Taiga)
+    by Olga Lyashevskaya, Olga Rudina, Natalia Vlasova and Anna Zhuravleva;
+  - UD_Russian-GSD (https://github.com/UniversalDependencies/UD_Russian-GSD),
+    annotated and converted by Google, by Ryan McDonald, Vitaly Nikolaev and
+    Olga Lyashevskaya.
 
 The ruMorph dictionary is an adaptation of that data and is distributed under the
 Creative Commons Attribution-ShareAlike 4.0 International License (CC BY-SA 4.0):
