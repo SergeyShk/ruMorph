@@ -1,9 +1,10 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use fst::MapBuilder;
 
 use crate::Error;
-use crate::format::{self, Sections};
+use crate::alphabet::{Alphabet, MAX_KEY, yo_order};
+use crate::format::{self, Sections, WordValue};
 
 /// Индекс угадывания незнакомых слов по окончанию
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -18,13 +19,12 @@ impl GuessIndex {
     /// Наибольшая длина окончания в буквах
     pub const MAX_ENDING: usize = 5;
 
-    /// Ключ окончания в автомате угадывания
-    pub(crate) fn key(self, ending: &str) -> String {
-        let index = match self {
-            GuessIndex::Common => '0',
-            GuessIndex::Proper => '1',
-        };
-        format!("{index}{ending}")
+    /// Первый байт ключа окончания в автомате угадывания
+    pub(crate) fn byte(self) -> u8 {
+        match self {
+            GuessIndex::Common => 0,
+            GuessIndex::Proper => 1,
+        }
     }
 }
 
@@ -56,7 +56,7 @@ pub struct Builder {
     table_numbers: HashMap<(u16, Vec<u32>), u16>,
     words: BTreeMap<String, Vec<u32>>,
     probabilities: BTreeMap<String, Vec<(u16, u32)>>,
-    guesses: BTreeMap<String, Vec<(u32, u32)>>,
+    guesses: BTreeMap<(GuessIndex, String), Vec<(u32, u32)>>,
 }
 
 impl Builder {
@@ -244,7 +244,7 @@ impl Builder {
                 count,
             ));
         }
-        self.guesses.insert(index.key(ending), packed);
+        self.guesses.insert((index, ending.to_owned()), packed);
         Ok(())
     }
 
@@ -266,36 +266,101 @@ impl Builder {
             })
             .collect();
 
-        // Одинаковые списки разборов у разных словоформ хранятся один раз
+        let alphabet = self.alphabet();
+        let letters = Alphabet::new(&alphabet).map_err(|err| match err {
+            Error::Format(msg) => Error::Build(msg),
+            err => err,
+        })?;
+
+        // Одинаковые списки разборов у разных словоформ хранятся один раз; написания одного ключа
+        // («все» и «всё») - вместе
         let mut records = Vec::new();
-        let mut offsets: HashMap<&[u32], u64> = HashMap::new();
-        let mut words = MapBuilder::memory();
+        let mut offsets: HashMap<&[u32], u32> = HashMap::new();
+        let mut keys: BTreeMap<Vec<u8>, Spellings> = BTreeMap::new();
         for (word, packed) in &self.words {
+            let key = letters.spelling_key(word).ok_or_else(|| {
+                Error::Build(format!("словоформа {word:?} длиннее {MAX_KEY} букв"))
+            })?;
             let offset = *offsets.entry(packed).or_insert_with(|| {
-                let offset = records.len() as u64;
+                let offset = records.len() as u32;
                 records.push(packed.len() as u32);
                 records.extend_from_slice(packed);
                 offset
             });
-            words.insert(word, offset).map_err(build_error)?;
+            keys.entry(key.bytes().to_vec())
+                .or_default()
+                .variants
+                .push((key.yo, offset));
         }
 
+        // Частоты написаний, у которых нет ключа в словаре, не нужны: такие слова не разбираются
+        // по словарю
         let mut probability_records = Vec::new();
-        let mut probabilities = MapBuilder::memory();
         for (word, pairs) in &self.probabilities {
-            probabilities
-                .insert(word, probability_records.len() as u64)
-                .map_err(build_error)?;
+            let Some(key) = letters.spelling_key(word) else {
+                continue;
+            };
+            let Some(spellings) = keys.get_mut(key.bytes()) else {
+                continue;
+            };
+            spellings
+                .probabilities
+                .push((key.yo, probability_records.len() as u32));
             probability_records.push(pairs.len() as u32);
             for &(tag, millionths) in pairs {
-                probability_records.extend([tag as u32, millionths]);
+                probability_records.extend([u32::from(tag), millionths]);
             }
+        }
+
+        let mut variants = Vec::new();
+        let mut words = MapBuilder::memory();
+        for (key, mut spellings) in keys {
+            spellings.variants.sort_by(|a, b| yo_order(a.0, b.0));
+            let single = match (&spellings.variants[..], &spellings.probabilities[..]) {
+                (&[(yo, records)], []) => WordValue::Single {
+                    yo,
+                    records,
+                    probabilities: None,
+                }
+                .pack(),
+                (&[(yo, records)], &[(spelling, probabilities)]) if spelling == yo => {
+                    WordValue::Single {
+                        yo,
+                        records,
+                        probabilities: Some(probabilities),
+                    }
+                    .pack()
+                }
+                _ => None,
+            };
+            let value = match single {
+                Some(value) => value,
+                None => {
+                    let offset = u32::try_from(variants.len())
+                        .map_err(|_| Error::Build("слишком много написаний с «ё»".into()))?;
+                    for list in [&spellings.variants, &spellings.probabilities] {
+                        variants.push(list.len() as u32);
+                        for &(yo, offset) in list {
+                            variants.extend([yo as u32, (yo >> 32) as u32, offset]);
+                        }
+                    }
+                    WordValue::Many(offset).pack().unwrap_or_default()
+                }
+            };
+            words.insert(key, value).map_err(build_error)?;
         }
 
         let mut guess_records = Vec::new();
         let mut guess_offsets: HashMap<&[(u32, u32)], u64> = HashMap::new();
+        let mut guess_keys = BTreeMap::new();
+        for ((index, ending), forms) in &self.guesses {
+            let key = letters.key(index.byte(), ending).ok_or_else(|| {
+                Error::Build(format!("окончание {ending:?} длиннее {MAX_KEY} букв"))
+            })?;
+            guess_keys.insert(key.bytes().to_vec(), forms);
+        }
         let mut guesses = MapBuilder::memory();
-        for (key, forms) in &self.guesses {
+        for (key, forms) in guess_keys {
             let offset = *guess_offsets.entry(forms).or_insert_with(|| {
                 let offset = guess_records.len() as u64;
                 guess_records.push(forms.len() as u32);
@@ -307,10 +372,13 @@ impl Builder {
             guesses.insert(key, offset).map_err(build_error)?;
         }
 
+        let (ud_strings, ud_tags) = self.ud_tables()?;
         Ok(format::write(&Sections {
             meta: self.meta.clone(),
             tags: self.tags.clone(),
-            ud_tags: self.ud_tags.clone(),
+            ud_strings,
+            ud_tags,
+            alphabet,
             prefixes: self.prefixes.clone(),
             suffixes: self.suffixes.clone(),
             paradigm_offsets,
@@ -318,12 +386,73 @@ impl Builder {
             tables,
             words: words.into_inner().map_err(build_error)?,
             records,
-            probabilities: probabilities.into_inner().map_err(build_error)?,
+            variants,
             probability_records,
             guesses: guesses.into_inner().map_err(build_error)?,
             guess_records,
         }))
     }
+
+    /// Буквы словоформ и окончаний по порядку: у «ё» в словоформе ключ пишется с «е»
+    fn alphabet(&self) -> String {
+        let mut letters: BTreeSet<char> = self
+            .words
+            .keys()
+            .chain(self.guesses.keys().map(|(_, ending)| ending))
+            .flat_map(|word| word.chars())
+            .collect();
+        if letters.contains(&'ё') {
+            letters.insert('е');
+        }
+        letters.into_iter().collect()
+    }
+
+    /// Строки и теги UD номерами строк
+    fn ud_tables(&self) -> Result<(Vec<String>, Vec<u16>), Error> {
+        let mut strings = Vec::new();
+        let mut numbers = HashMap::new();
+        let mut number = |text: &str| -> Result<u16, Error> {
+            if let Some(&number) = numbers.get(text) {
+                return Ok(number);
+            }
+            let number = u16::try_from(strings.len())
+                .map_err(|_| Error::Build("больше 65 536 строк в тегах UD".into()))?;
+            strings.push(text.to_owned());
+            numbers.insert(text.to_owned(), number);
+            Ok(number)
+        };
+        let mut tags = Vec::new();
+        for tag in &self.ud_tags {
+            let mut fields = tag.split('\t');
+            let mut field = || fields.next().unwrap_or_default();
+            let (pos, feats, labels) = (field(), field(), field());
+            let feats: Vec<(&str, &str)> = feats
+                .split('|')
+                .filter_map(|feat| feat.split_once('='))
+                .collect();
+            let labels: Vec<&str> = labels
+                .split(',')
+                .filter(|label| !label.is_empty())
+                .collect();
+            tags.push(number(pos)?);
+            tags.push(feats.len() as u16);
+            for (name, value) in feats {
+                tags.extend([number(name)?, number(value)?]);
+            }
+            tags.push(labels.len() as u16);
+            for label in labels {
+                tags.push(number(label)?);
+            }
+        }
+        Ok((strings, tags))
+    }
+}
+
+/// Написания одного ключа и списки частот: места «ё» и начало списка
+#[derive(Default)]
+struct Spellings {
+    variants: Vec<(u64, u32)>,
+    probabilities: Vec<(u64, u32)>,
 }
 
 fn check_id(what: &str, id: u16, len: usize) -> Result<(), Error> {

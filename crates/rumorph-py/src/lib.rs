@@ -67,14 +67,10 @@ impl UdObjects {
         })
     }
 
-    fn from_tag(py: Python<'_>, tag: &rumorph::UdTag) -> PyResult<Self> {
-        let feats: Vec<(&str, &str)> = tag
-            .feats
-            .iter()
-            .map(|(name, value)| (name.as_str(), value.as_str()))
-            .collect();
-        let labels: Vec<&str> = tag.labels.iter().map(String::as_str).collect();
-        Self::new(py, &tag.pos, &feats, &labels)
+    fn from_tag(py: Python<'_>, tag: rumorph::UdTag) -> PyResult<Self> {
+        let feats: Vec<(&str, &str)> = tag.feats().collect();
+        let labels: Vec<&str> = tag.labels().collect();
+        Self::new(py, tag.pos(), &feats, &labels)
     }
 }
 
@@ -375,13 +371,14 @@ fn _analysis(py: Python<'_>, analyzer: Py<Analyzer>, state: AnalysisState) -> Py
     };
     let dictionary = &analyzer.get().shared.dictionary;
     let same = |analysis: &rumorph::Analysis| {
-        let tag = &dictionary.ud_tags()[usize::from(analysis.ud)];
-        analysis.word == word
-            && analysis.source == source
-            && analysis.lemma == lemma
-            && tag.pos == pos
-            && tag.feats_string() == feats
-            && tag.labels.join(",") == labels
+        dictionary.ud_tag(analysis.ud).is_some_and(|tag| {
+            analysis.word == word
+                && analysis.source == source
+                && analysis.lemma == lemma
+                && tag.pos() == pos
+                && tag.feats_string() == feats
+                && tag.labels().collect::<Vec<_>>().join(",") == labels
+        })
     };
     let found = entry
         .and_then(|(table, form)| {
@@ -412,11 +409,7 @@ struct Shared {
 
 impl Shared {
     fn new(dictionary: rumorph::Dictionary) -> Self {
-        let ud = dictionary
-            .ud_tags()
-            .iter()
-            .map(|_| PyOnceLock::new())
-            .collect();
+        let ud = dictionary.ud_tags().map(|_| PyOnceLock::new()).collect();
         Shared { dictionary, ud }
     }
 }
@@ -630,7 +623,8 @@ fn _analyzer(py: Python<'_>, path: Option<PathBuf>) -> PyResult<Analyzer> {
 ///     Разбирает словоформы по словарю OpenCorpora: лемма, часть речи и признаки UD,
 ///     вероятность. Регистр не важен, буква «е» в слове может обозначать «ё». Словарь
 ///     загружается один раз при создании анализатора; анализатор можно использовать
-///     из нескольких потоков
+///     из нескольких потоков. Файл словаря отображается в память и общий для процессов:
+///     пока анализатор существует, файл нельзя перезаписывать на месте
 ///
 /// Аргументы:
 ///     path (str | os.PathLike | None): Путь к файлу словаря; по умолчанию - словарь из пакета
@@ -885,7 +879,8 @@ impl Analyzer {
         let number = usize::from(analysis.ud);
         let shared = &this.shared;
         let ud = shared.ud[number].get_or_try_init(py, || {
-            UdObjects::from_tag(py, &shared.dictionary.ud_tags()[number])
+            let tag = shared.dictionary.ud_tag(analysis.ud);
+            UdObjects::from_tag(py, tag.ok_or_else(|| PyValueError::new_err("Нет тега UD"))?)
         })?;
         Ok(Analysis {
             inner: analysis,
