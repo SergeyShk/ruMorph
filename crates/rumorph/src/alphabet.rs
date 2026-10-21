@@ -31,7 +31,10 @@ impl Alphabet {
         for (index, letter) in letters.chars().enumerate() {
             let code = u8::try_from(index + 1)
                 .map_err(|_| Error::Format("больше 255 букв в алфавите".into()))?;
-            if letter == '\0' || alphabet.code(letter).is_some() {
+            if letter == '\0' {
+                return Err(Error::Format("символ U+0000 в алфавите".into()));
+            }
+            if alphabet.code(letter).is_some() {
                 return Err(Error::Format("буква алфавита повторяется".into()));
             }
             alphabet.letters[usize::from(code)] = letter;

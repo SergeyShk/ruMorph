@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 use std::fmt;
+use std::hash::{Hash, Hasher};
 
 use crate::Error;
 use crate::format::Strings;
@@ -33,7 +34,7 @@ impl<'d> UdTag<'d> {
         self.string(self.data[0])
     }
 
-    /// Признаки по алфавиту: («Case», «Gen»)
+    /// Признаки по алфавиту без учета регистра, как в CoNLL-U: («Case», «Gen»)
     pub fn feats(self) -> impl ExactSizeIterator<Item = (&'d str, &'d str)> {
         self.feat_numbers()
             .as_chunks::<2>()
@@ -79,6 +80,15 @@ impl PartialEq for UdTag<'_> {
 }
 
 impl Eq for UdTag<'_> {}
+
+impl Hash for UdTag<'_> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.pos().hash(state);
+        self.feats().len().hash(state);
+        self.feats().for_each(|feat| feat.hash(state));
+        self.labels().for_each(|label| label.hash(state));
+    }
+}
 
 impl fmt::Debug for UdTag<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -255,6 +265,8 @@ mod tests {
         assert_eq!(tags.get(1).unwrap().feats().len(), 0);
         // Одинаковые строки файла - одна строка
         assert_eq!(tags.numbers(2).unwrap().0, tags.numbers(0).unwrap().0);
+        let unique: std::collections::HashSet<UdTag> = tags.iter().chain(tags.iter()).collect();
+        assert_eq!(unique.len(), 3);
         assert!(tags.get(3).is_none());
         assert_eq!(
             format!("{:?}", tags.get(1).unwrap()),

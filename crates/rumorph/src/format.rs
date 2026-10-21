@@ -2,6 +2,7 @@
 //! и секции «длина u64 + данные + нули до границы 8 байт», числа little-endian. Секции чисел
 //! выровнены, поэтому читаются прямо из отображенного в память файла, без копий
 
+use std::io::{ErrorKind, Read};
 use std::ops::Range;
 
 use crate::Error;
@@ -9,9 +10,12 @@ use crate::Error;
 const MAGIC: &[u8; 8] = b"RUMORPH\0";
 /// Наибольшее число написаний одного ключа словоформы: в словаре OpenCorpora их не больше трех
 pub(crate) const MAX_SPELLINGS: usize = 8;
+/// Наибольшая длина списка разборов, частот или форм для угадывания
+pub(crate) const MAX_LIST: usize = 255;
 const VERSION: u32 = 5;
 const HEADER: usize = 16;
 const ALIGN: usize = 8;
+const SECTIONS: usize = 16;
 
 /// Содержимое словаря для записи в файл
 #[cfg(any(test, feature = "build"))]
@@ -27,6 +31,7 @@ pub(crate) struct Sections {
     pub ud_tags: Vec<u16>,
     /// Буквы словоформ и окончаний: байт буквы в ключах автоматов - ее номер с единицы
     pub alphabet: String,
+    /// Префиксы и суффиксы форм; строки в таблице не повторяются
     pub prefixes: Vec<String>,
     pub suffixes: Vec<String>,
     /// Начало каждой парадигмы в `paradigms` и общий конец
@@ -175,8 +180,8 @@ pub(crate) fn write(sections: &Sections) -> Vec<u8> {
     out
 }
 
-/// Границы секций файла: проверяются сигнатура, версия, контрольная сумма и длины секций
-pub(crate) fn layout(data: &[u8]) -> Result<Layout, Error> {
+/// Проверяет сигнатуру и версию формата в начале файла
+fn check_header(data: &[u8]) -> Result<(), Error> {
     if data.get(..MAGIC.len()) != Some(MAGIC.as_slice()) {
         return Err(Error::Format("нет сигнатуры словаря ruMorph".into()));
     }
@@ -189,12 +194,12 @@ pub(crate) fn layout(data: &[u8]) -> Result<Layout, Error> {
             "версия формата {version}, поддерживается {VERSION}"
         )));
     }
-    let checksum = u32::from_le_bytes([header[12], header[13], header[14], header[15]]);
-    if crc32fast::hash(&data[HEADER..]) != checksum {
-        return Err(Error::Format(
-            "контрольная сумма не совпадает: файл поврежден".into(),
-        ));
-    }
+    Ok(())
+}
+
+/// Границы секций файла: проверяются сигнатура, версия, длины секций и контрольная сумма
+pub(crate) fn layout(data: &[u8]) -> Result<Layout, Error> {
+    check_header(data)?;
     let mut at = HEADER;
     let mut section = |width: usize| -> Result<Range<usize>, Error> {
         let len = data.get(at..at + 8).ok_or_else(truncated)?;
@@ -233,13 +238,89 @@ pub(crate) fn layout(data: &[u8]) -> Result<Layout, Error> {
         guess_records: section(4)?,
     };
     if at != data.len() {
-        return Err(Error::Format("лишние данные после последней секции".into()));
+        return Err(extra_data());
+    }
+    // Сумма читает весь файл, поэтому считается после быстрых проверок
+    let checksum = u32::from_le_bytes(data[12..HEADER].try_into().map_err(|_| truncated())?);
+    if crc32fast::hash(&data[HEADER..]) != checksum {
+        return Err(Error::Format(
+            "контрольная сумма не совпадает: файл поврежден".into(),
+        ));
     }
     Ok(layout)
 }
 
+/// Читает словарь из потока: сигнатура и версия проверяются до чтения остатка, а секции
+/// читаются по мере поступления, поэтому поток без конца не читается целиком
+pub(crate) fn read(mut input: impl Read) -> Result<Storage, Error> {
+    let mut buffer = Buffer::default();
+    buffer.fill(&mut input, HEADER as u64)?;
+    check_header(buffer.bytes())?;
+    for _ in 0..SECTIONS {
+        if buffer.fill(&mut input, 8)? < 8 {
+            return Err(truncated());
+        }
+        let bytes = buffer.bytes();
+        let len = u64::from_le_bytes(
+            bytes[bytes.len() - 8..]
+                .try_into()
+                .map_err(|_| truncated())?,
+        );
+        let padded = len
+            .checked_next_multiple_of(ALIGN as u64)
+            .ok_or_else(truncated)?;
+        if buffer.fill(&mut input, padded)? < padded {
+            return Err(truncated());
+        }
+    }
+    if buffer.fill(&mut input, 1)? > 0 {
+        return Err(extra_data());
+    }
+    buffer.words.truncate(buffer.len.div_ceil(ALIGN));
+    Ok(Storage::Owned(buffer.words, buffer.len))
+}
+
+/// Байты потока, выровненные по 8: из них собирается словарь без второй копии
+#[derive(Default)]
+struct Buffer {
+    words: Vec<u64>,
+    len: usize,
+}
+
+impl Buffer {
+    fn bytes(&self) -> &[u8] {
+        &bytemuck::cast_slice(&self.words)[..self.len]
+    }
+
+    /// Дочитывает `count` байт; меньше - только в конце потока
+    fn fill(&mut self, input: &mut impl Read, count: u64) -> Result<u64, Error> {
+        const CHUNK: u64 = 1 << 16;
+        let mut done = 0;
+        while done < count {
+            let want = (count - done).min(CHUNK) as usize;
+            self.words.resize((self.len + want).div_ceil(ALIGN), 0);
+            let space = &mut bytemuck::cast_slice_mut::<u64, u8>(&mut self.words)
+                [self.len..self.len + want];
+            match input.read(space) {
+                Ok(0) => break,
+                Ok(read) => {
+                    self.len += read;
+                    done += read as u64;
+                }
+                Err(err) if err.kind() == ErrorKind::Interrupted => {}
+                Err(err) => return Err(err.into()),
+            }
+        }
+        Ok(done)
+    }
+}
+
 fn truncated() -> Error {
     Error::Format("файл обрезан".into())
+}
+
+fn extra_data() -> Error {
+    Error::Format("лишние данные после последней секции".into())
 }
 
 /// Байты словаря: отображенный в память файл, данные программы или копия, выровненная по 8 байт
@@ -546,6 +627,7 @@ pub(crate) mod tests {
         let storage = Storage::copy(&data);
         assert_eq!(storage.bytes(), data);
         assert_eq!(storage.bytes().as_ptr() as usize % ALIGN, 0);
+        let storage = storage.native(&layout);
         assert_eq!(numbers::<u32>(&storage.bytes()[layout.records]), [1, 0]);
     }
 
@@ -557,32 +639,40 @@ pub(crate) mod tests {
         let layout = layout(&data).unwrap();
         let storage = Storage::copy(&data);
         let swapped = storage.swapped(&layout);
+        // Числа файла записаны little-endian: после перестановки байт они читаются как big-endian
         assert_eq!(
             numbers::<u16>(&swapped.bytes()[layout.paradigms.clone()]),
-            [0x0100, 0x0201, 0]
+            [1u16, 0x0102, 0].map(|number| u16::from_ne_bytes(number.to_be_bytes()))
         );
         assert_eq!(
             numbers::<u32>(&swapped.bytes()[layout.records.clone()]),
-            [0x0100_0000, 0]
+            [1u32, 0].map(|number| u32::from_ne_bytes(number.to_be_bytes()))
         );
         // Строки и автоматы не меняются
         assert_eq!(
             swapped.bytes()[layout.words.clone()],
             storage.bytes()[layout.words.clone()]
         );
-        assert_eq!(storage.native(&layout).bytes(), data);
+        let native = storage.native(&layout);
+        assert_eq!(
+            numbers::<u16>(&native.bytes()[layout.paradigms.clone()]),
+            [1, 0x0102, 0]
+        );
     }
 
     #[test]
     fn rejects_damaged_files() {
         let data = write(&sample());
-        // Любой испорченный байт после заголовка ловит контрольная сумма
+        // Любой испорченный байт после заголовка ловит контрольная сумма или проверка длин секций
         for at in HEADER..data.len() {
             let mut damaged = data.clone();
             damaged[at] ^= 0x10;
-            let err = layout(&damaged).err().unwrap();
-            assert!(err.to_string().contains("контрольная сумма"), "{at}: {err}");
+            assert!(layout(&damaged).is_err(), "{at}");
         }
+        let mut damaged = data.clone();
+        damaged[HEADER + 8] ^= 0x10;
+        let err = layout(&damaged).err().unwrap();
+        assert!(err.to_string().contains("контрольная сумма"), "{err}");
         for len in 0..data.len() {
             assert!(
                 layout(&with_checksum(data[..len].to_vec())).is_err(),
@@ -593,6 +683,101 @@ pub(crate) mod tests {
         longer.extend_from_slice(&[0; 8]);
         let err = layout(&with_checksum(longer)).err().unwrap();
         assert!(err.to_string().contains("лишние данные"), "{err}");
+    }
+
+    #[test]
+    fn checks_sections_before_checksum() {
+        // Заголовок словаря и нули: длины секций нулевые, и остаток файла лишний
+        let mut data = write(&sample())[..HEADER].to_vec();
+        data.resize(1 << 20, 0);
+        let err = layout(&data).err().unwrap();
+        assert!(err.to_string().contains("лишние данные"), "{err}");
+    }
+
+    /// Поток, который отдает начало `head`, а затем нули без конца
+    struct Endless {
+        head: Vec<u8>,
+        at: usize,
+    }
+
+    impl Read for Endless {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            let rest = self.head.get(self.at..).unwrap_or_default();
+            let len = rest.len().min(buf.len());
+            buf[..len].copy_from_slice(&rest[..len]);
+            buf[len..].fill(0);
+            self.at += buf.len();
+            Ok(buf.len())
+        }
+    }
+
+    #[test]
+    fn reads_stream_by_sections() {
+        let data = write(&sample());
+        let storage = super::read(data.as_slice()).unwrap();
+        assert_eq!(storage.bytes(), data);
+        assert_eq!(storage.bytes().as_ptr() as usize % ALIGN, 0);
+        for len in 0..data.len() {
+            assert!(
+                matches!(super::read(&data[..len]), Err(Error::Format(_))),
+                "{len}"
+            );
+        }
+        let mut longer = data.clone();
+        longer.push(0);
+        let err = super::read(longer.as_slice()).err().unwrap();
+        assert!(err.to_string().contains("лишние данные"), "{err}");
+        // Длина секции больше потока: читается только то, что есть
+        let mut huge = data[..HEADER].to_vec();
+        huge.extend_from_slice(&(u64::MAX - 7).to_le_bytes());
+        huge.extend_from_slice(b"meta");
+        let err = super::read(huge.as_slice()).err().unwrap();
+        assert!(err.to_string().contains("файл обрезан"), "{err}");
+        let err = super::read(&huge[..HEADER + 4]).err().unwrap();
+        assert!(err.to_string().contains("файл обрезан"), "{err}");
+    }
+
+    #[test]
+    fn stops_reading_endless_stream() {
+        // Нули без сигнатуры (`/dev/zero`) и заголовок словаря с нулями после него
+        let err = super::read(Endless {
+            head: Vec::new(),
+            at: 0,
+        })
+        .err()
+        .unwrap();
+        assert!(err.to_string().contains("нет сигнатуры"), "{err}");
+        let head = write(&sample())[..HEADER].to_vec();
+        let err = super::read(Endless { head, at: 0 }).err().unwrap();
+        assert!(err.to_string().contains("лишние данные"), "{err}");
+    }
+
+    #[test]
+    fn reports_stream_errors() {
+        struct Broken;
+        impl Read for Broken {
+            fn read(&mut self, _: &mut [u8]) -> std::io::Result<usize> {
+                Err(std::io::Error::other("диск"))
+            }
+        }
+        assert!(matches!(super::read(Broken), Err(Error::Io(_))));
+        // Прерванное чтение повторяется
+        struct Interrupted(Vec<u8>, bool);
+        impl Read for Interrupted {
+            fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+                self.1 = !self.1;
+                if self.1 {
+                    return Err(ErrorKind::Interrupted.into());
+                }
+                let len = self.0.len().min(buf.len()).min(3);
+                buf[..len].copy_from_slice(&self.0[..len]);
+                self.0.drain(..len);
+                Ok(len)
+            }
+        }
+        let data = write(&sample());
+        let storage = super::read(Interrupted(data.clone(), false)).unwrap();
+        assert_eq!(storage.bytes(), data);
     }
 
     #[test]

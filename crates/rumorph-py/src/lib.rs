@@ -370,13 +370,21 @@ fn _analysis(py: Python<'_>, analyzer: Py<Analyzer>, state: AnalysisState) -> Py
         )));
     };
     let dictionary = &analyzer.get().shared.dictionary;
+    // Признаки сравниваются без учета порядка: до 0.2.0 он был другим
+    let mut wanted: Vec<&str> = feats.split('|').filter(|feat| !feat.is_empty()).collect();
+    wanted.sort_unstable();
     let same = |analysis: &rumorph::Analysis| {
         dictionary.ud_tag(analysis.ud).is_some_and(|tag| {
+            let mut own: Vec<String> = tag
+                .feats()
+                .map(|(name, value)| format!("{name}={value}"))
+                .collect();
+            own.sort_unstable();
             analysis.word == word
                 && analysis.source == source
                 && analysis.lemma == lemma
                 && tag.pos() == pos
-                && tag.feats_string() == feats
+                && own == wanted
                 && tag.labels().collect::<Vec<_>>().join(",") == labels
         })
     };

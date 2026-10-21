@@ -5,6 +5,7 @@ use super::{Analysis, Dictionary, Entry, Source};
 
 /// Индекс угадывания незнакомых слов по окончанию
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[non_exhaustive]
 pub enum GuessIndex {
     /// Нарицательные слова
     Common,
