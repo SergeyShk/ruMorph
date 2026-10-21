@@ -625,7 +625,14 @@ fn build(export: &Path, output: &Path) -> Result<(), Box<dyn Error>> {
     if let Some(parent) = output.parent() {
         fs::create_dir_all(parent)?;
     }
-    fs::write(output, &data).map_err(|err| format!("{}: {err}", output.display()))?;
+    // Новый файл заменяет старый переименованием: процесс, который держит старый словарь
+    // отображенным в память, дочитывает старый файл, а не падает
+    let mut temporary = output.as_os_str().to_owned();
+    temporary.push(".tmp");
+    let temporary = PathBuf::from(temporary);
+    fs::write(&temporary, &data)
+        .and_then(|()| fs::rename(&temporary, output))
+        .map_err(|err| format!("{}: {err}", output.display()))?;
     eprintln!(
         "{}: {} словоформ, {} тегов UD, {} таблиц словоизменения, {combined_count} лексем \
          объединено, {guess_endings} окончаний для угадывания, {:.1} МБ, {:.1} с",

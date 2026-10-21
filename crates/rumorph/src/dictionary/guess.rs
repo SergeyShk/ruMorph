@@ -98,8 +98,9 @@ impl Dictionary {
         for length in (1..=GuessIndex::MAX_ENDING.min(bounds.len().saturating_sub(1))).rev() {
             let ending = &lower[bounds[bounds.len() - length]..];
             let Some(forms) = self
-                .guesses
-                .get(index.key(ending))
+                .alphabet
+                .key(index.byte(), ending)
+                .and_then(|key| self.guesses.get(key.bytes()))
                 .and_then(|offset| self.guess_records_at(offset))
             else {
                 continue;
@@ -147,11 +148,11 @@ impl Dictionary {
         lower: &str,
     ) -> Option<(String, String)> {
         let start = *self.table_offsets.get(usize::from(table))? as usize;
-        let forms = self.paradigm(*self.tables.get(start)? as u16)?;
+        let forms = self.paradigm(*self.tables().get(start)? as u16)?;
         if usize::from(form) >= forms.len() / 3 {
             return None;
         }
-        let suffix = self.suffixes[usize::from(forms[usize::from(form)])].as_str();
+        let suffix = self.suffixes.at(usize::from(forms[usize::from(form)]));
         if lower.ends_with(suffix) {
             return Some((word.to_owned(), lower.to_owned()));
         }
@@ -178,11 +179,7 @@ impl Dictionary {
 
     /// Вес угаданного имени собственного по частоте его числа в SynTagRus
     fn proper_weight(&self, ud: u16) -> f64 {
-        let number = self.ud_tags[usize::from(ud)]
-            .feats
-            .iter()
-            .find(|(name, _)| name == "Number")
-            .map(|(_, value)| value.as_str());
+        let number = self.feat(ud, "Number");
         PROPER_NUMBER
             .iter()
             .find(|&&(known, _)| Some(known) == number)
@@ -191,11 +188,8 @@ impl Dictionary {
 
     /// Список форм для угадывания: пары `(таблица << 16) | форма`, число словоформ
     fn guess_records_at(&self, offset: u64) -> Option<&[[u32; 2]]> {
-        let start = usize::try_from(offset).ok()?;
-        let count = *self.guess_records.get(start)? as usize;
-        let end = count.checked_mul(2)?.checked_add(start)?.checked_add(1)?;
-        let (pairs, rest) = self.guess_records.get(start + 1..end)?.as_chunks::<2>();
-        rest.is_empty().then_some(pairs)
+        let pairs = super::list(self.guess_records(), u32::try_from(offset).ok()?, 2)?;
+        Some(pairs.as_chunks::<2>().0)
     }
 }
 

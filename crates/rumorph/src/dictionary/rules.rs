@@ -2,7 +2,7 @@
 //! аббревиатуры, сокращения с точкой и наречия вида «по-русски». Части речи и признаки - по соглашениям SynTagRus,
 //! доли неоднозначных разборов - по частотам в его обучающей части
 
-use super::{Analysis, Dictionary, Source, UdTag};
+use super::{Analysis, Dictionary, Source, UdTags};
 
 /// Символы вне символьных блоков Unicode, которые в UD - `SYM`, а не `PUNCT`
 const SYMBOLS: &[char] = &[
@@ -68,24 +68,8 @@ pub(super) struct Tags {
 
 impl Tags {
     /// Находит теги в `ud_tags` и добавляет недостающие
-    pub(super) fn add(ud_tags: &mut Vec<UdTag>) -> Self {
-        let mut tag = |pos: &str, feats: &[(&str, &str)]| {
-            let wanted = UdTag {
-                pos: pos.to_owned(),
-                feats: feats
-                    .iter()
-                    .map(|&(name, value)| (name.to_owned(), value.to_owned()))
-                    .collect(),
-                labels: Vec::new(),
-            };
-            match ud_tags.iter().position(|known| *known == wanted) {
-                Some(number) => number as u16,
-                None => {
-                    ud_tags.push(wanted);
-                    (ud_tags.len() - 1) as u16
-                }
-            }
-        };
+    pub(super) fn add(ud_tags: &mut UdTags) -> Self {
+        let mut tag = |pos: &str, feats: &[(&str, &str)]| ud_tags.find_or_add(pos, feats);
         let abbreviated = |name_type| [("Abbr", "Yes"), ("NameType", name_type)];
         Tags {
             punct: tag("PUNCT", &[]),
@@ -334,12 +318,7 @@ impl Dictionary {
     /// Словарные порядковые из цифр («90-е») получают те же доли по SynTagRus, что и разобранные
     /// по образцу: частот OpenCorpora у них нет или они мало что говорят
     pub(super) fn reweight_numerals(&self, analyses: &mut [Analysis]) {
-        let combi = |analysis: &Analysis| {
-            self.ud_tags[usize::from(analysis.ud)]
-                .feats
-                .iter()
-                .any(|(name, value)| name == "NumForm" && value == "Combi")
-        };
+        let combi = |analysis: &Analysis| self.has_code(analysis.ud, self.combined_numeral);
         if !analyses.iter().all(combi) {
             return;
         }
@@ -355,13 +334,7 @@ impl Dictionary {
 
     /// Доля разбора порядкового из цифр по его падежу, роду, числу и одушевленности
     fn numeral_weight(&self, ud: u16) -> f64 {
-        let feats = &self.ud_tags[usize::from(ud)].feats;
-        let feat = |name: &str| {
-            feats
-                .iter()
-                .find(|(known, _)| known == name)
-                .map_or("", |(_, value)| value.as_str())
-        };
+        let feat = |name: &str| self.feat(ud, name).unwrap_or_default();
         let key = (
             feat("Case"),
             feat("Gender"),
@@ -383,11 +356,9 @@ impl Dictionary {
         }
         // Сокращение - признак Abbr=Yes или помета Abbr у склоняемой аббревиатуры
         let abbreviated = |analysis: &Analysis| {
-            let tag = &self.ud_tags[usize::from(analysis.ud)];
-            tag.feats
-                .iter()
-                .any(|(name, value)| name == "Abbr" && value == "Yes")
-                || tag.labels.iter().any(|label| label == "Abbr")
+            self.ud
+                .get(analysis.ud)
+                .is_some_and(|tag| tag.feat("Abbr") == Some("Yes") || tag.has_label("Abbr"))
         };
         let mut analyses: Vec<Analysis> = self
             .merge(self.candidates(base))
@@ -567,8 +538,8 @@ mod tests {
                     (analysis.word.as_str(), analysis.source),
                     (word, Source::Rule)
                 );
-                let tag = &dict.ud_tags[usize::from(analysis.ud)];
-                (analysis.lemma, tag.pos.clone(), tag.feats_string())
+                let tag = dict.ud_tag(analysis.ud).unwrap();
+                (analysis.lemma, tag.pos().to_owned(), tag.feats_string())
             })
             .collect()
     }

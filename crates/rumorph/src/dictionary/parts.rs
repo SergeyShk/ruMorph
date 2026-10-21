@@ -3,7 +3,7 @@
 //! приставкой, поэтому лемма и формы - у целого слова
 
 use super::rules::cyrillic;
-use super::{Analysis, Dictionary, Source, UdTag};
+use super::{Analysis, Dictionary, Source};
 
 /// Частицы после дефиса: слово разбирается по первой части («сколь-нибудь», «смотри-ка»)
 const PARTICLES: &[&str] = &["то", "либо", "нибудь", "ка", "таки", "де", "с"];
@@ -164,7 +164,7 @@ impl Dictionary {
             let letter = stretched && part.chars().count() == 1;
             let analyses = found
                 .into_iter()
-                .filter(|analysis| !letter || self.ud_tags[usize::from(analysis.ud)].pos == "INTJ")
+                .filter(|analysis| !letter || self.pos(analysis.ud) == "INTJ")
                 .map(|analysis| Analysis {
                     word: word.to_owned(),
                     source: Source::Guess,
@@ -182,9 +182,7 @@ impl Dictionary {
         let analyses = self
             .analyze(right)
             .into_iter()
-            .filter(|analysis| {
-                HYPHENATED_CLASSES.contains(&self.ud_tags[usize::from(analysis.ud)].pos.as_str())
-            })
+            .filter(|analysis| HYPHENATED_CLASSES.contains(&self.pos(analysis.ud)))
             .filter_map(|analysis| {
                 // Обе части изменяются («дивана-кровати», «думал-думал»): лемма - из лемм частей,
                 // форм нет
@@ -226,33 +224,24 @@ impl Dictionary {
     /// и число (у глагола - форма, время, лицо, род и число), и это не начальная форма
     /// («дивана-кровати», но не «диван-кровать» и не «интернет-магазина»)
     fn inflected_together(&self, first: &Analysis, last: &Analysis) -> bool {
-        let (first_tag, last_tag) = (
-            &self.ud_tags[usize::from(first.ud)],
-            &self.ud_tags[usize::from(last.ud)],
-        );
-        fn feat<'a>(tag: &'a UdTag, name: &str) -> Option<&'a str> {
-            tag.feats
-                .iter()
-                .find(|(known, _)| known == name)
-                .map(|(_, value)| value.as_str())
-        }
-        let names: &[&str] = if feat(last_tag, "Case").is_some() {
+        let feat = |analysis: &Analysis, name: &str| self.feat(analysis.ud, name);
+        let names: &[&str] = if feat(last, "Case").is_some() {
             &["Case", "Number"]
         } else {
             &["VerbForm", "Tense", "Person", "Gender", "Number"]
         };
         first.lemma != first.word
-            && first_tag.pos == last_tag.pos
-            && matches!(first_tag.pos.as_str(), "NOUN" | "PROPN" | "ADJ" | "VERB")
+            && self.pos(first.ud) == self.pos(last.ud)
+            && matches!(self.pos(first.ud), "NOUN" | "PROPN" | "ADJ" | "VERB")
             && names
                 .iter()
-                .all(|name| feat(first_tag, name) == feat(last_tag, name))
+                .all(|name| feat(first, name) == feat(last, name))
     }
 
     /// У первой части есть более вероятное нарицательное существительное в начальной форме:
     /// «поп» в «поп-песен» - «поп», а не «попа» в родительном множественного
     fn rarer_than_lemma(&self, first: &Analysis, left_analyses: &[Analysis]) -> bool {
-        let noun = |analysis: &Analysis| self.ud_tags[usize::from(analysis.ud)].pos == "NOUN";
+        let noun = |analysis: &Analysis| self.pos(analysis.ud) == "NOUN";
         noun(first)
             && left_analyses
                 .iter()
@@ -296,7 +285,7 @@ impl Dictionary {
                 .merge(self.candidates(rest))
                 .into_iter()
                 .filter(|analysis| {
-                    let pos = self.ud_tags[usize::from(analysis.ud)].pos.as_str();
+                    let pos = self.pos(analysis.ud);
                     OPEN_CLASSES.contains(&pos)
                         && !(pos == "VERB" && ASPECT_PREFIXES.contains(prefix))
                 })
@@ -435,7 +424,7 @@ mod tests {
     fn first(dict: &Dictionary, word: &str) -> Option<(String, String, String)> {
         let analysis = dict.parts(word).into_iter().next()?;
         assert_eq!(analysis.source, Source::Guess);
-        let pos = dict.ud_tags[usize::from(analysis.ud)].pos.clone();
+        let pos = dict.pos(analysis.ud).to_owned();
         Some((analysis.word, analysis.lemma, pos))
     }
 
@@ -502,7 +491,7 @@ mod tests {
         assert_eq!(
             dict.parts("А-а")
                 .iter()
-                .map(|analysis| dict.ud_tags[usize::from(analysis.ud)].pos.as_str())
+                .map(|analysis| dict.pos(analysis.ud))
                 .collect::<Vec<_>>(),
             ["INTJ"]
         );

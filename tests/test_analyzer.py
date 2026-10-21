@@ -5,6 +5,7 @@ import math
 import os
 import pickle
 import shutil
+import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -416,6 +417,7 @@ def test_same_file_by_other_path(morph, tmp_path):
         assert Analyzer(path).analyze("стали")[0].labels is labels
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows не заменяет отображенный файл")
 def test_replaced_file_is_loaded_again(morph, tmp_path):
     # Файл, замененный другим с тем же размером и временем изменения, читается заново
     path = tmp_path / "ru.dict"
@@ -429,6 +431,16 @@ def test_replaced_file_is_loaded_again(morph, tmp_path):
     with pytest.raises(ValueError, match="неверный формат словаря"):
         Analyzer(path)
     assert old.lemmatize(["стали"]) == ["стать"]
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows не удаляет отображенный файл")
+def test_deleted_file_keeps_working(morph, tmp_path):
+    # Словарь отображен в память: удаленный файл живет, пока жив анализатор
+    path = tmp_path / "ru.dict"
+    shutil.copy(morph.path, path)
+    analyzer = Analyzer(path)
+    path.unlink()
+    assert analyzer.lemmatize(["стали", "ёжиком"]) == ["стать", "ёжик"]
 
 
 @pytest.mark.skipif(not hasattr(os, "fork"), reason="нет fork")

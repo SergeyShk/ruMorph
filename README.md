@@ -20,13 +20,14 @@
   <a href="https://github.com/SergeyShk/ruMorph/actions/workflows/ci.yml"><img src="https://github.com/SergeyShk/ruMorph/actions/workflows/ci.yml/badge.svg" alt="Сборка"></a>
   <a href="https://github.com/astral-sh/ruff"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json" alt="Ruff"></a>
   <a href="https://github.com/SergeyShk/ruMorph/blob/master/LICENSE.txt"><img src="https://img.shields.io/github/license/sergeyshk/rumorph.svg" alt="Лицензия"></a>
+  <a href="https://doi.org/10.5281/zenodo.23520738"><img src="https://zenodo.org/badge/DOI/10.5281/zenodo.23520738.svg" alt="DOI"></a>
 </p>
 
 ---
 
 **ruMorph** - морфологический анализатор русского языка: ядро на Rust и API для Python. Для словоформы анализатор находит по словарю [OpenCorpora](https://opencorpora.org) варианты разбора - начальную форму (лемму), часть речи и признаки [Universal Dependencies](https://universaldependencies.org/) - упорядочивает их по вероятности и строит формы слова.
 
-Разбор и лемматизация примерно в 5 раз быстрее, чем в pymorphy3 с ускорением `pymorphy3[fast]`, форма по признакам и согласование с количеством - в 15-18 раз; списки слов разбираются без GIL. Части речи, признаки и леммы следуют соглашениям трибанка SynTagRus, поэтому результат можно сравнивать с разметкой spaCy, Stanza и других инструментов на UD.
+Разбор и лемматизация в 6-8 раз быстрее, чем в pymorphy3 с ускорением `pymorphy3[fast]`, форма по признакам и согласование с количеством - в 15-18 раз; списки слов разбираются без GIL. Части речи, признаки и леммы следуют соглашениям трибанка SynTagRus, поэтому результат можно сравнивать с разметкой spaCy, Stanza и других инструментов на UD.
 
 * **[Анализатор](https://sergeyshk.github.io/ruMorph/analyzer/)** - разборы словоформы по убыванию вероятности, разбор списков слов и лемматизация без GIL, проверка словоформы по словарю
 * **[Части речи и признаки UD](https://sergeyshk.github.io/ruMorph/analysis/#ud)** - части речи, признаки и леммы в соглашениях SynTagRus; пометы OpenCorpora, у которых нет признака UD
@@ -255,13 +256,13 @@ ruMorph работает с тем же словарем OpenCorpora, что pym
 
 | Операция | ruMorph | pymorphy3 | pymorphy3[fast] |
 | :------- | :------ | :-------- | :-------------- |
-| Разбор словоформы | 474 | 20 | 105 |
-| Лемматизация | 810 | 22 | 170 |
-| Лемматизация в 4 потоках | 2 345 | - | - |
-| Форма по признакам | 1 400 | 76 | 76 |
-| Согласование с количеством | 1 307 | 85 | 85 |
+| Разбор словоформы | 629 | 20 | 105 |
+| Лемматизация | 1 391 | 22 | 170 |
+| Лемматизация в 4 потоках | 4 210 | - | - |
+| Форма по признакам | 1 338 | 76 | 76 |
+| Согласование с количеством | 1 284 | 85 | 85 |
 
-Импорт и загрузка словаря занимают 14 мс против 30 мс у pymorphy3, прирост памяти процесса - 21,5 МБ против 25,5 МБ у `pymorphy3[fast]`. Замер - на 128 251 словоформе тестовой части UD_Russian-SynTagRus, Apple M3 Pro, Python 3.11.
+Импорт и загрузка словаря занимают 5 мс против 30 мс у pymorphy3, прирост памяти процесса - 16,2 МБ против 25,5 МБ у `pymorphy3[fast]`; процессы делят словарь, и каждый следующий добавляет 1,4 МБ. Замер - на 128 251 словоформе тестовой части UD_Russian-SynTagRus, Apple M3 Pro, Python 3.11.
 
 Подробнее - в [документации](https://sergeyshk.github.io/ruMorph/performance/): все операции и как они измерены.
 
@@ -318,13 +319,14 @@ uv run pre-commit install
 
 ## Цитирование
 
-Если вы используете **ruMorph** в исследованиях или программах, пожалуйста, цитируйте библиотеку по следующей записи BibTeX - это помогает развитию и поддержке проекта. Те же метаданные лежат в [CITATION.cff](https://github.com/SergeyShk/ruMorph/blob/master/CITATION.cff) - GitHub показывает их по кнопке «Cite this repository».
+Если вы используете **ruMorph** в исследованиях или программах, пожалуйста, цитируйте библиотеку по следующей записи BibTeX - это помогает развитию и поддержке проекта. Те же метаданные лежат в [CITATION.cff](https://github.com/SergeyShk/ruMorph/blob/master/CITATION.cff) - GitHub показывает их по кнопке «Cite this repository». Concept DOI [10.5281/zenodo.23520738](https://doi.org/10.5281/zenodo.23520738) на Zenodo указывает на все версии библиотеки; DOI конкретной версии - на странице релиза.
 
 ```bibtex
 @software{ruMorph,
   author = {Sergey Shkarin},
   title = {{ruMorph, a fast morphological analyzer for Russian}},
   year = 2026,
+  doi = {10.5281/zenodo.23520738},
   url = {https://github.com/SergeyShk/ruMorph}
 }
 ```
