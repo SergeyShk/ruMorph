@@ -4,7 +4,7 @@ use std::borrow::Cow;
 use std::ffi::OsString;
 use std::fmt::Write as _;
 use std::fs::File;
-use std::io::{self, BufRead, BufReader, BufWriter, IsTerminal, Write};
+use std::io::{self, BufRead, BufReader, BufWriter, IsTerminal, Read, Write};
 use std::iter::Peekable;
 use std::path::{Path, PathBuf};
 
@@ -18,7 +18,7 @@ rumorph - морфологический анализ русского текс�
 Использование: rumorph [параметры] [файл ...]
 
 Файлы читаются по очереди, без файлов и вместо «-» - стандартный ввод; вход - в UTF-8.
-Результат пишется в стандартный вывод.
+Результат пишется в стандартный вывод или в файл параметра -o.
 
 Параметры:
   -f, --format ФОРМАТ    формат вывода:
@@ -31,6 +31,7 @@ rumorph - морфологический анализ русского текс�
                            tokens - токен в строке, пустая строка разделяет предложения
                            conllu - CoNLL-U: заполняются LEMMA, UPOS и FEATS
   -d, --dictionary ФАЙЛ  файл словаря ruMorph (по умолчанию - словарь пакета)
+  -o, --output ФАЙЛ      записать результат в файл
   -h, --help             показать эту справку и выйти
   -V, --version          показать версию и выйти
 ";
@@ -53,6 +54,9 @@ pub fn run(args: Vec<OsString>, version: &str, dictionary: Option<&Path>) -> u8 
         &mut io::stderr(),
     )
 }
+
+/// Буфер входа: вывод сбрасывается, когда буфер пуст и следующее чтение может ждать ввода
+const INPUT_BUFFER: usize = 1 << 16;
 
 /// Формат вывода
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -79,12 +83,14 @@ enum Command {
         format: Format,
         input: Input,
         dictionary: Option<PathBuf>,
+        output: Option<PathBuf>,
         files: Vec<OsString>,
     },
 }
 
 fn parse(args: Vec<OsString>) -> Result<Command, String> {
     let (mut format, mut input, mut dictionary) = (Format::Lemmas, Input::Text, None);
+    let mut output = None;
     let mut files = Vec::new();
     let mut options = true;
     let mut args = args.into_iter();
@@ -133,6 +139,11 @@ fn parse(args: Vec<OsString>) -> Result<Command, String> {
                 }
             }
             "-d" | "--dictionary" => dictionary = Some(PathBuf::from(value()?)),
+            "-o" | "--output" => {
+                output = Some(value()?)
+                    .filter(|value| value != "-")
+                    .map(PathBuf::from);
+            }
             _ => return Err(format!("неизвестный параметр {option}")),
         }
     }
@@ -140,6 +151,7 @@ fn parse(args: Vec<OsString>) -> Result<Command, String> {
         format,
         input,
         dictionary,
+        output,
         files,
     })
 }
@@ -156,19 +168,20 @@ fn execute(
     version: &str,
     default: Option<&Path>,
     interactive: bool,
-    stdin: &mut dyn BufRead,
+    stdin: &mut dyn Read,
     stdout: &mut dyn Write,
     stderr: &mut dyn Write,
 ) -> u8 {
     // Сообщение в stderr: если и он закрыт, сказать уже некому
     let mut report = |message: String| drop(writeln!(stderr, "rumorph: {message}"));
-    let (format, input, dictionary, files) = match parse(args) {
+    let (format, input, dictionary, output_path, files) = match parse(args) {
         Ok(Command::Run {
             format,
             input,
             dictionary,
+            output,
             files,
-        }) => (format, input, dictionary, files),
+        }) => (format, input, dictionary, output, files),
         Ok(Command::Help) => {
             let written = stdout
                 .write_all(HELP.as_bytes())
@@ -184,7 +197,8 @@ fn execute(
             return 2;
         }
     };
-    let dictionary = match load(dictionary.as_deref().or(default)) {
+    let dictionary_path = dictionary.as_deref().or(default);
+    let dictionary = match load(dictionary_path) {
         Ok(dictionary) => dictionary,
         Err(message) => {
             report(message);
@@ -196,22 +210,57 @@ fn execute(
     } else {
         files
     };
+    let mut file_output;
+    let output: &mut dyn Write = match &output_path {
+        Some(path) => {
+            // Файл вывода создается заново: вход или словарь, которые он затер бы, не разбираются.
+            // Устройство (/dev/null, /dev/stdout в терминале) создание не затирает
+            let mut sources = files
+                .iter()
+                .map(|file| (file != "-").then(|| Path::new(file)))
+                .chain(dictionary_path.map(Some));
+            let regular = std::fs::metadata(path).is_ok_and(|metadata| metadata.is_file());
+            if regular
+                && file_id(Some(path))
+                    .is_some_and(|id| sources.any(|source| file_id(source).as_ref() == Some(&id)))
+            {
+                report(format!(
+                    "{}: файл вывода совпадает с входным файлом или словарем",
+                    path.display()
+                ));
+                return 1;
+            }
+            match File::create(path) {
+                Ok(file) => {
+                    file_output = BufWriter::new(file);
+                    &mut file_output
+                }
+                Err(err) => {
+                    report(format!("{}: {}", path.display(), open_error(path, &err)));
+                    return 1;
+                }
+            }
+        }
+        None => stdout,
+    };
     let mut writer = Writer {
         dictionary: &dictionary,
         format,
-        output: stdout,
-        interactive,
+        output,
+        interactive: interactive && output_path.is_none(),
+        pending: false,
         sentence: 0,
     };
     let mut code = 0;
     for file in files {
-        let name = Path::new(&file).display().to_string();
+        let path = Path::new(&file);
+        let name = path.display().to_string();
         let result = if file == "-" {
             writer.process(input, stdin)
         } else {
-            match File::open(&file) {
-                Ok(opened) => writer.process(input, &mut BufReader::new(opened)),
-                Err(err) => Err(Failure::Read(err)),
+            match File::open(path) {
+                Ok(mut opened) => writer.process(input, &mut opened),
+                Err(err) => Err(Failure::Open(open_error(path, &err))),
             }
         };
         match result {
@@ -220,6 +269,10 @@ fn execute(
                 report(format!(
                     "{name}: строка {line}: не UTF-8, неверные байты заменены на U+FFFD"
                 ));
+                code = 1;
+            }
+            Err(Failure::Open(message)) => {
+                report(format!("{name}: {message}"));
                 code = 1;
             }
             Err(Failure::Read(err)) => {
@@ -276,7 +329,39 @@ fn describe(err: &io::Error) -> String {
     }
 }
 
+/// Ошибка открытия файла `path`: в Windows каталог не открывается с ошибкой «нет доступа»
+fn open_error(path: &Path, err: &io::Error) -> String {
+    if path.is_dir() {
+        "это каталог".into()
+    } else {
+        describe(err)
+    }
+}
+
+/// Файл на диске (`None` - стандартный ввод): на Unix - устройство и номер, поэтому жесткая
+/// ссылка и симлинк - тот же файл; иначе - канонический путь
+#[cfg(unix)]
+fn file_id(path: Option<&Path>) -> Option<(u64, u64)> {
+    use std::os::fd::AsFd;
+    use std::os::unix::fs::MetadataExt;
+    let metadata = match path {
+        Some(path) => std::fs::metadata(path).ok()?,
+        // По дескриптору: /dev/stdin в macOS - файл devfs, а не перенаправленный файл
+        None => File::from(io::stdin().as_fd().try_clone_to_owned().ok()?)
+            .metadata()
+            .ok()?,
+    };
+    Some((metadata.dev(), metadata.ino()))
+}
+
+#[cfg(not(unix))]
+fn file_id(path: Option<&Path>) -> Option<PathBuf> {
+    std::fs::canonicalize(path?).ok()
+}
+
 enum Failure {
+    /// Файл не открывается: сообщение
+    Open(String),
     /// Ошибка чтения входа
     Read(io::Error),
     /// Файл в другой кодировке: UTF-16 или неверные байты раньше первой строки UTF-8; номер
@@ -316,6 +401,8 @@ struct Writer<'a> {
     output: &'a mut dyn Write,
     /// Сбрасывать вывод после каждого предложения: в терминале разбор виден сразу
     interactive: bool,
+    /// Есть ли вывод после последнего сброса
+    pending: bool,
     /// Номер последнего предложения: `# sent_id` CoNLL-U
     sentence: usize,
 }
@@ -323,11 +410,24 @@ struct Writer<'a> {
 impl Writer<'_> {
     /// Читает вход построчно и пишет разбор каждого предложения; вывод - номер первой строки
     /// не в UTF-8, если такая была: неверные байты заменяются на U+FFFD
-    fn process(
-        &mut self,
-        input: Input,
-        reader: &mut dyn BufRead,
-    ) -> Result<Option<usize>, Failure> {
+    fn process(&mut self, input: Input, reader: &mut dyn Read) -> Result<Option<usize>, Failure> {
+        let mut reader = BufReader::with_capacity(INPUT_BUFFER, reader);
+        self.flush_pending().map_err(Failure::Write)?;
+        // Кодировка видна по началу входа: ASCII в начале файла в другой кодировке не выводится
+        let head = loop {
+            match reader.fill_buf() {
+                Ok(head) => break head,
+                Err(err) if err.kind() == io::ErrorKind::Interrupted => {}
+                Err(err) => return Err(Failure::Read(err)),
+            }
+        };
+        if let Some(line) = foreign_encoding(head) {
+            return Err(Failure::Encoding(line));
+        }
+        // Конец входа в терминале (Ctrl+D) не повторяется: второе чтение ждало бы ввода
+        if head.is_empty() {
+            return Ok(None);
+        }
         let mut bytes = Vec::new();
         let mut number = 0;
         let mut invalid = None;
@@ -337,11 +437,7 @@ impl Writer<'_> {
         let mut block = Block::default();
         loop {
             bytes.clear();
-            if reader
-                .read_until(b'\n', &mut bytes)
-                .map_err(Failure::Read)?
-                == 0
-            {
+            if self.read_line(&mut reader, &mut bytes)? == 0 {
                 break;
             }
             number += 1;
@@ -386,6 +482,37 @@ impl Writer<'_> {
         Ok(invalid)
     }
 
+    /// Строка входа с переводом строки; перед чтением, которое может ждать ввода (буфер пуст),
+    /// вывод сбрасывается: команду можно держать открытой и подавать ей текст по строке
+    fn read_line(
+        &mut self,
+        reader: &mut BufReader<&mut dyn Read>,
+        bytes: &mut Vec<u8>,
+    ) -> Result<usize, Failure> {
+        loop {
+            if reader.buffer().is_empty() {
+                self.flush_pending().map_err(Failure::Write)?;
+            }
+            let available = match reader.fill_buf() {
+                Ok(available) => available,
+                Err(err) if err.kind() == io::ErrorKind::Interrupted => continue,
+                Err(err) => return Err(Failure::Read(err)),
+            };
+            if available.is_empty() {
+                return Ok(bytes.len());
+            }
+            let (end, done) = match available.iter().position(|&byte| byte == b'\n') {
+                Some(at) => (at + 1, true),
+                None => (available.len(), false),
+            };
+            bytes.extend_from_slice(&available[..end]);
+            reader.consume(end);
+            if done {
+                return Ok(bytes.len());
+            }
+        }
+    }
+
     /// Предложение из токенов или CoNLL-U
     fn write_block(&mut self, block: &Block) -> io::Result<()> {
         if self.format == Format::Conllu && !block.lines.is_empty() {
@@ -409,7 +536,7 @@ impl Writer<'_> {
         if tokens.peek().is_none() {
             if keep_empty && self.format == Format::Lemmas {
                 writeln!(self.output)?;
-                self.flush_interactive()?;
+                self.end_sentence()?;
             }
             return Ok(());
         }
@@ -439,10 +566,11 @@ impl Writer<'_> {
             Format::Conllu => {
                 self.sentence += 1;
                 writeln!(self.output, "# sent_id = {}", self.sentence)?;
-                if let Some(text) = text {
-                    writeln!(self.output, "# text = {text}")?;
-                }
-                for (index, token) in tokens.enumerate() {
+                // Текст - из токенов и SpaceAfter: так он совпадает с ними, как требует CoNLL-U,
+                // и не несет переводов строки, пробелов по краям и невидимых разделителей
+                let tokens: Vec<Token> = tokens.collect();
+                writeln!(self.output, "# text = {}", sentence_text(&tokens))?;
+                for (index, token) in tokens.iter().enumerate() {
                     let analyses = self.dictionary.analyze(token.word);
                     let (pos, feats, _) = first(self.dictionary, &analyses);
                     let misc = if token.space_after {
@@ -490,7 +618,7 @@ impl Writer<'_> {
                 writeln!(self.output, "]}}")?;
             }
         }
-        self.flush_interactive()
+        self.end_sentence()
     }
 
     /// Предложение CoNLL-U с заполненными LEMMA, UPOS и FEATS
@@ -514,12 +642,22 @@ impl Writer<'_> {
             }
         }
         writeln!(self.output)?;
-        self.flush_interactive()
+        self.end_sentence()
     }
 
-    fn flush_interactive(&mut self) -> io::Result<()> {
+    /// Конец предложения: в терминале вывод сбрасывается сразу
+    fn end_sentence(&mut self) -> io::Result<()> {
+        self.pending = true;
         if self.interactive {
+            self.flush_pending()?;
+        }
+        Ok(())
+    }
+
+    fn flush_pending(&mut self) -> io::Result<()> {
+        if self.pending {
             self.output.flush()?;
+            self.pending = false;
         }
         Ok(())
     }
@@ -553,6 +691,42 @@ impl Writer<'_> {
             analysis.source.as_str()
         );
     }
+}
+
+/// Номер строки начала входа, по которой видна другая кодировка (cp1251, UTF-16): BOM UTF-16,
+/// NUL или неверный UTF-8 до первой строки UTF-8 с не-ASCII символами
+fn foreign_encoding(head: &[u8]) -> Option<usize> {
+    if head.starts_with(&[0xFF, 0xFE]) || head.starts_with(&[0xFE, 0xFF]) {
+        return Some(1);
+    }
+    for (index, line) in head.split(|&byte| byte == b'\n').enumerate() {
+        if line.contains(&0) {
+            return Some(index + 1);
+        }
+        if line.is_ascii() {
+            continue;
+        }
+        return match std::str::from_utf8(line) {
+            // Строка обрезана концом буфера посреди буквы: решит чтение строк
+            Err(err) if err.error_len().is_some() => Some(index + 1),
+            _ => None,
+        };
+    }
+    None
+}
+
+/// Текст предложения из токенов: пробел - после токена со `space_after`
+fn sentence_text(tokens: &[Token]) -> String {
+    let mut text = String::new();
+    let mut space = false;
+    for token in tokens {
+        if space {
+            text.push(' ');
+        }
+        text.push_str(token.word);
+        space = token.space_after;
+    }
+    text
 }
 
 /// Часть речи, признаки CoNLL-U и вероятность самого вероятного разбора
@@ -818,11 +992,21 @@ mod tests {
     fn parses_arguments() {
         let args = |items: &[&str]| parse(items.iter().map(OsString::from).collect());
         assert_eq!(
-            args(&["-f", "conllu", "--input=tokens", "-dru.dict", "a.txt", "-"]),
+            args(&[
+                "-f",
+                "conllu",
+                "--input=tokens",
+                "-dru.dict",
+                "a.txt",
+                "-",
+                "-o",
+                "b"
+            ]),
             Ok(Command::Run {
                 format: Format::Conllu,
                 input: Input::Tokens,
                 dictionary: Some(PathBuf::from("ru.dict")),
+                output: Some(PathBuf::from("b")),
                 files: vec!["a.txt".into(), "-".into()],
             })
         );
@@ -834,6 +1018,7 @@ mod tests {
                 format: Format::Lemmas,
                 input: Input::Text,
                 dictionary: None,
+                output: None,
                 files: vec!["-f".into()],
             })
         );
@@ -961,6 +1146,12 @@ mod tests {
              3\tраму\tрама\tNOUN\t_\tCase=Acc|Gender=Fem|Number=Sing\t_\t_\t_\tSpaceAfter=No\n\
              4\t.\t.\tPUNCT\t_\t_\t_\t_\t_\t_\n\n"
         );
+        // Текст CoNLL-U - из токенов: без CR, пробелов по краям и невидимых разделителей
+        let (_, conllu, _) = dict.run(&["-f", "conllu"], "Мама\rраму \u{200b}!  \t\n".as_bytes());
+        assert!(
+            conllu.starts_with("# sent_id = 1\n# text = Мама раму !\n1\tМама"),
+            "{conllu}"
+        );
         let (_, jsonl, _) = dict.run(&["-f", "jsonl"], "\"Раму\"".as_bytes());
         let punct = "{\"word\": \"\\\"\", \"analyses\": [{\"lemma\": \"\\\"\", \"pos\": \"PUNCT\", \
                      \"feats\": {}, \"labels\": [], \"prob\": 1, \"source\": \"rule\"}]}";
@@ -980,6 +1171,11 @@ mod tests {
         let dict = TestDictionary::new();
         let (_, lemmas, _) = dict.run(&["-i", "tokens"], "Мама\nмыла\n\n\nраму\n".as_bytes());
         assert_eq!(lemmas, "мама мыть\nрама\n");
+        let (_, conllu, _) = dict.run(&["-i", "tokens", "-f", "conllu"], "Мама\nмыла\n".as_bytes());
+        assert!(
+            conllu.starts_with("# sent_id = 1\n# text = Мама мыла\n1\tМама"),
+            "{conllu}"
+        );
         // Пробелы по краям и все после табуляции - не токен
         let (_, tsv, _) = dict.run(
             &["-i", "tokens", "-f", "tsv"],
@@ -1051,8 +1247,56 @@ mod tests {
                 (1, format!("rumorph: -: файл не в UTF-8 (строка {line})\n")),
                 "{input:?}"
             );
-            assert!(out.len() <= "abc\n".len(), "{out}");
+            // ASCII в начале файла в другой кодировке тоже не выводится
+            assert_eq!(out, "", "{input:?}");
         }
+    }
+
+    #[test]
+    fn writes_output_file() {
+        let dict = TestDictionary::new();
+        let dir = std::env::temp_dir().join(format!("rumorph-cli-out-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let (input, output) = (dir.join("in.txt"), dir.join("out.txt"));
+        std::fs::write(&input, "раму\n").unwrap();
+        let path = |path: &Path| path.to_str().unwrap().to_owned();
+        let (code, out, error) = dict.run(&["-o", &path(&output), &path(&input)], b"");
+        assert_eq!((code, out.as_str(), error.as_str()), (0, "", ""));
+        assert_eq!(std::fs::read_to_string(&output).unwrap(), "рама\n");
+        // Файл вывода, который совпадает с входным или словарем, не создается: они не затираются
+        let clash = |args: &[&str]| {
+            let (code, _, error) = dict.run(args, b"");
+            assert_eq!(code, 1, "{args:?}");
+            assert!(
+                error.ends_with("файл вывода совпадает с входным файлом или словарем\n"),
+                "{error}"
+            );
+        };
+        clash(&["-o", &path(&input), &path(&input)]);
+        clash(&["-o", &path(&dict.0)]);
+        #[cfg(unix)]
+        {
+            let link = dir.join("link.txt");
+            std::fs::hard_link(&input, &link).unwrap();
+            clash(&["-o", &path(&link), &path(&input)]);
+        }
+        assert_eq!(std::fs::read_to_string(&input).unwrap(), "раму\n");
+        // «-o -» - стандартный вывод; устройство - не входной файл, даже если вход - оно же
+        assert_eq!(dict.run(&["-o", "-"], "раму".as_bytes()).1, "рама\n");
+        #[cfg(unix)]
+        assert_eq!(dict.run(&["-o", "/dev/null", "/dev/null"], b"").0, 0);
+        // Каталог вместо файла - понятное сообщение и на входе, и на выходе
+        let (code, _, error) = dict.run(&[&path(&dir)], b"");
+        assert_eq!(
+            (code, error),
+            (1, format!("rumorph: {}: это каталог\n", dir.display()))
+        );
+        let (code, _, error) = dict.run(&["-o", &path(&dir)], b"");
+        assert_eq!(
+            (code, error),
+            (1, format!("rumorph: {}: это каталог\n", dir.display()))
+        );
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     /// Вывод, который считает сбросы и может отказать при сбросе
@@ -1103,9 +1347,76 @@ mod tests {
         assert_eq!(output.data, "рама\nрама\n".as_bytes());
         // По сбросу на предложение и последний
         assert_eq!(output.flushes, 3);
+        // В файл или канал - перед чтением, которое может ждать ввода, и в конце
         output.flushes = 0;
         assert_eq!(run_with(&dict, false, &mut output).0, 0);
-        assert_eq!(output.flushes, 1);
+        assert_eq!(output.flushes, 2);
+    }
+
+    #[test]
+    fn reads_end_of_input_once() {
+        // Конец ввода в терминале не повторяется: второе чтение ждало бы следующего Ctrl+D
+        struct Terminal(bool);
+        impl Read for Terminal {
+            fn read(&mut self, _: &mut [u8]) -> io::Result<usize> {
+                if std::mem::replace(&mut self.0, true) {
+                    return Err(io::Error::other("второе чтение после конца ввода"));
+                }
+                Ok(0)
+            }
+        }
+        let dict = TestDictionary::new();
+        let mut stderr = Vec::new();
+        let code = execute(
+            Vec::new(),
+            "",
+            Some(&dict.0),
+            true,
+            &mut Terminal(false),
+            &mut Vec::new(),
+            &mut stderr,
+        );
+        assert_eq!(
+            (code, String::from_utf8(stderr).unwrap()),
+            (0, String::new())
+        );
+    }
+
+    #[test]
+    fn flushes_before_waiting_for_input() {
+        // Вход по строке за чтение, как от программы, которая ждет ответа на каждую строку
+        struct Lines(Vec<&'static [u8]>);
+        impl Read for Lines {
+            fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+                let Some(line) = self.0.pop() else {
+                    return Ok(0);
+                };
+                buf[..line.len()].copy_from_slice(line);
+                Ok(line.len())
+            }
+        }
+        let dict = TestDictionary::new();
+        let mut output = Output {
+            data: Vec::new(),
+            flushes: 0,
+            failing: false,
+        };
+        let mut input = Lines(vec!["раму\n".as_bytes(), "раму\n".as_bytes()]);
+        let code = execute(
+            Vec::new(),
+            "",
+            Some(&dict.0),
+            false,
+            &mut input,
+            &mut output,
+            &mut Vec::new(),
+        );
+        assert_eq!(
+            (code, output.data.as_slice()),
+            (0, "рама\nрама\n".as_bytes())
+        );
+        // После каждой строки и в конце
+        assert_eq!(output.flushes, 3);
     }
 
     #[test]

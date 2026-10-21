@@ -21,10 +21,13 @@ echo "Мы стали друзьями в ковиде." | rumorph
 | `-f`, `--format` | `lemmas` | [Output format](#formats): `lemmas`, `conllu`, `tsv`, `jsonl` |
 | `-i`, `--input` | `text` | [Input](#input): `text`, `tokens`, `conllu` |
 | `-d`, `--dictionary` | the package dictionary | A ruMorph dictionary file |
+| `-o`, `--output` | the standard output | The result file; `-` is the standard output |
 | `-h`, `--help` | | Show the help |
 | `-V`, `--version` | | Show the version |
 
-Files are read one after another; without files and in place of `-` the standard input is read; the input is in UTF-8: a file in another encoding (cp1251, UTF-16) is not analyzed, and a single line with invalid bytes is analyzed with U+FFFD in their place. An option value is written separately or attached: `-f conllu`, `-fconllu`, `--format=conllu`. On a terminal the result appears right after each sentence.
+Files are read one after another; without files and in place of `-` the standard input is read; the input is in UTF-8: a file in another encoding (cp1251, UTF-16) is not analyzed, and a single line with invalid bytes is analyzed with U+FFFD in their place. An option value is written separately or attached: `-f conllu`, `-fconllu`, `--format=conllu`. On a terminal the result appears after each sentence, and in a pipe or a file whenever the command waits for the next input line: it can be kept open and fed text line by line.
+
+In Windows PowerShell 5.1 the `>` redirection and a pipeline (`Get-Content text.txt | rumorph`) corrupt Cyrillic: pass the file as an argument and write the result with the `-o` option (in PowerShell 7 they work too). Text passed with `echo` in cmd comes in the console encoding: run `chcp 65001` first. cmd and PowerShell do not expand file patterns (`*.txt`).
 
 ## Input { #input }
 
@@ -51,7 +54,7 @@ Lemmas separated by spaces, a line per sentence; an empty line of text stays emp
 
 ### conllu
 
-CoNLL-U: the number, token, lemma, part of speech and features, `SpaceAfter=No` on a token not followed by a space in the text, and the `sent_id` and `text` comments for a sentence of text.
+CoNLL-U: the number, token, lemma, part of speech and features, `SpaceAfter=No` on a token not followed by a space in the text, and the `sent_id` and `text` comments. The `text` is built from the tokens, as CoNLL-U requires: one space between tokens, no spaces at the ends and no invisible characters; for the `tokens` input it is the tokens separated by spaces.
 
 ``` bash
 echo "Мы стали друзьями в ковиде." | rumorph -f conllu
@@ -114,7 +117,7 @@ echo "Мы стали" | rumorph -f jsonl
 | Code | When |
 | :--- | :--- |
 | 0 | Success, including when the output is closed before the end (`rumorph text.txt \| head`) |
-| 1 | A file is missing or not in UTF-8, a line is not in UTF-8 (it is analyzed with U+FFFD), an invalid CoNLL-U line, the dictionary cannot be read, a write error; the other files are still analyzed |
+| 1 | A file is missing or not in UTF-8, a line is not in UTF-8 (it is analyzed with U+FFFD), an invalid CoNLL-U line, the dictionary cannot be read, the output file cannot be created or is an input file or the dictionary, a write error; the other files are still analyzed |
 | 2 | Invalid options |
 
 Error messages go to the standard error.

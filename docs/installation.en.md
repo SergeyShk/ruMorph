@@ -16,6 +16,12 @@ Pre-release versions `X.Y.Z.devN` are published only on TestPyPI:
 pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ --pre rumorph
 ```
 
+uv takes a package from the first index that has it, so it needs another order of indexes:
+
+``` bash
+uv pip install --extra-index-url https://test.pypi.org/simple/ --index-strategy unsafe-best-match --pre rumorph
+```
+
 ## Building from source
 
 On other platforms pip builds the package from source, which requires [Rust](https://www.rust-lang.org/tools/install) 1.88 or newer:
