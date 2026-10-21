@@ -8,7 +8,7 @@ use std::sync::Arc;
 use fst::Map;
 
 use crate::alphabet::{Alphabet, Key, yo_order};
-use crate::format::{self, Layout, Slice, Storage, Strings, WordValue};
+use crate::format::{self, Layout, MAX_SPELLINGS, Slice, Storage, Strings, WordValue};
 use crate::{Entry, Error};
 
 mod guess;
@@ -179,9 +179,6 @@ impl Spellings<'_> {
 fn unpack([low, high, offset]: [u32; 3]) -> (u64, u32) {
     (u64::from(low) | u64::from(high) << 32, offset)
 }
-
-/// Наибольшее число написаний одного ключа, которое берет разбор: в словаре их не больше трех
-const MAX_SPELLINGS: usize = 8;
 
 /// Написания ключа, которые подходят к запросу: места «ё» и начало списка разборов
 struct Matches {
@@ -1104,6 +1101,7 @@ impl Dictionary {
             len: 0,
         };
         for (own, records) in spellings.variants() {
+            // Написаний не больше `MAX_SPELLINGS`: это проверено при загрузке
             if own & yo == yo && matches.len < MAX_SPELLINGS {
                 matches.items[matches.len] = (own, records);
                 matches.len += 1;
@@ -1130,6 +1128,7 @@ impl Dictionary {
                 return invalid("список написаний обрезан");
             };
             if variants.is_empty()
+                || variants.len() > MAX_SPELLINGS
                 || variants
                     .iter()
                     .any(|&[_, _, offset]| offset as usize >= records)
@@ -2407,10 +2406,13 @@ pub(super) mod tests {
         let mut sections = format::tests::read(&data);
         sections.probability_records = vec![1, 99, 5];
         assert!(Dictionary::from_bytes(&format::write(&sections)).is_err());
-        // Список написаний: обрезанный, пустой, со ссылкой за пределы списков разборов или частот
+        // Список написаний: обрезанный, пустой, длиннее `MAX_SPELLINGS`, со ссылкой за пределы
+        // списков разборов или частот
+        let many = [vec![9], [0, 0, 0].repeat(9), vec![0]].concat();
         for variants in [
             vec![2, 0, 0, 0, 1, 0, 0],
             vec![0, 0],
+            many,
             vec![1, 0, 0, 9, 0],
             vec![1, 0, 0, 0, 1, 0, 0, 0],
             vec![256],

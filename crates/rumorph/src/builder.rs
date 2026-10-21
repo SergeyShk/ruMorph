@@ -4,7 +4,7 @@ use fst::MapBuilder;
 
 use crate::Error;
 use crate::alphabet::{Alphabet, MAX_KEY, yo_order};
-use crate::format::{self, Sections, WordValue};
+use crate::format::{self, MAX_SPELLINGS, Sections, WordValue};
 
 /// Индекс угадывания незнакомых слов по окончанию
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -315,6 +315,12 @@ impl Builder {
         let mut variants = Vec::new();
         let mut words = MapBuilder::memory();
         for (key, mut spellings) in keys {
+            if spellings.variants.len() > MAX_SPELLINGS {
+                let spelling = letters.decode(&key, 0);
+                return Err(Error::Build(format!(
+                    "у словоформы {spelling:?} больше {MAX_SPELLINGS} написаний с «ё»"
+                )));
+            }
             spellings.variants.sort_by(|a, b| yo_order(a.0, b.0));
             let single = match (&spellings.variants[..], &spellings.probabilities[..]) {
                 (&[(yo, records)], []) => WordValue::Single {
@@ -551,6 +557,28 @@ mod tests {
         assert!(builder.add_word("ежа", &[entry(0, 2)]).is_err());
         assert!(builder.add_word("еж", &[entry(0, 1)]).is_err());
         builder.add_word("ежа", &[entry(0, 1)]).unwrap();
+    }
+
+    #[test]
+    fn limits_spellings_of_one_key() {
+        let mut builder = builder();
+        builder.add_paradigm(&[(0, 0, 0)]).unwrap();
+        builder.add_table(0, &[(0, 0)]).unwrap();
+        // Восемь написаний ключа «ееее» укладываются, девятое - ошибка сборки
+        let spellings: Vec<String> = (0..9)
+            .map(|mask: u32| {
+                (0..4)
+                    .map(|at| if mask >> at & 1 == 1 { 'ё' } else { 'е' })
+                    .collect()
+            })
+            .collect();
+        for spelling in &spellings[..8] {
+            builder.add_word(spelling, &[entry(0, 0)]).unwrap();
+        }
+        assert!(builder.build().is_ok());
+        builder.add_word(&spellings[8], &[entry(0, 0)]).unwrap();
+        let err = builder.build().err().unwrap();
+        assert!(err.to_string().contains("\"ееее\""), "{err}");
     }
 
     #[test]

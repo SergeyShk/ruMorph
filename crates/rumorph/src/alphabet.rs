@@ -41,7 +41,11 @@ impl Alphabet {
                 _ => alphabet.other.push((letter, code)),
             }
         }
+        // Повтор буквы вне «а»-«я» и ASCII виден только после сортировки
         alphabet.other.sort_unstable();
+        if alphabet.other.windows(2).any(|pair| pair[0].0 == pair[1].0) {
+            return Err(Error::Format("буква алфавита повторяется".into()));
+        }
         Ok(alphabet)
     }
 
@@ -115,8 +119,13 @@ impl Alphabet {
 
     /// Написание ключа словоформы с «ё» на местах `yo`
     pub fn spelling(&self, key: &Key, yo: u64) -> String {
-        let mut spelling = String::with_capacity(2 * key.len);
-        for (at, &code) in key.bytes().iter().enumerate() {
+        self.decode(key.bytes(), yo)
+    }
+
+    /// Написание байтов ключа словоформы с «ё» на местах `yo`
+    pub fn decode(&self, bytes: &[u8], yo: u64) -> String {
+        let mut spelling = String::with_capacity(2 * bytes.len());
+        for (at, &code) in bytes.iter().enumerate() {
             match self.letters[usize::from(code)] {
                 'е' if yo >> at & 1 == 1 => spelling.push('ё'),
                 letter => spelling.push(letter),
@@ -203,6 +212,8 @@ mod tests {
     fn rejects_broken_alphabets() {
         assert!(Alphabet::new("абa").is_ok());
         assert!(Alphabet::new("аба").is_err());
+        assert!(Alphabet::new("’ё’").is_err());
+        assert!(Alphabet::new("’ёі").is_ok());
         assert!(Alphabet::new("а\0").is_err());
         let letters: String = ('\u{100}'..).take(256).collect();
         assert!(Alphabet::new(&letters).is_err());

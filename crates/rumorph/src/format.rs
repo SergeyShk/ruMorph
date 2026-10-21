@@ -7,6 +7,8 @@ use std::ops::Range;
 use crate::Error;
 
 const MAGIC: &[u8; 8] = b"RUMORPH\0";
+/// Наибольшее число написаний одного ключа словоформы: в словаре OpenCorpora их не больше трех
+pub(crate) const MAX_SPELLINGS: usize = 8;
 const VERSION: u32 = 5;
 const HEADER: usize = 16;
 const ALIGN: usize = 8;
