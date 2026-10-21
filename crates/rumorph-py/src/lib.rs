@@ -638,6 +638,20 @@ fn find_or_load(path: &Path) -> Result<Arc<Shared>, rumorph::Error> {
     }
 }
 
+/// Команда `rumorph` с аргументами `args`: код выхода; разбор аргументов, чтение и вывод -
+/// в ядре, словарь по умолчанию - словарь пакета
+#[pyfunction]
+fn _main(py: Python<'_>, args: Vec<std::ffi::OsString>) -> PyResult<u8> {
+    let path = default_path(py)?;
+    let version = package_version();
+    Ok(py.detach(|| rumorph::cli::run(args, &version, Some(&path))))
+}
+
+/// Версия крейта в записи PEP 440: «0.1.0-dev.12» - «0.1.0.dev12»
+fn package_version() -> String {
+    env!("CARGO_PKG_VERSION").replace("-dev.", ".dev")
+}
+
 /// Восстановление анализатора из pickle: словарь берется из загруженных в процессе
 #[pyfunction]
 fn _analyzer(py: Python<'_>, path: Option<PathBuf>) -> PyResult<Analyzer> {
@@ -1222,6 +1236,7 @@ fn _rumorph(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("FormNotFoundError", m.py().get_type::<FormNotFoundError>())?;
     m.add_function(wrap_pyfunction!(_analysis, m)?)?;
     m.add_function(wrap_pyfunction!(_analyzer, m)?)?;
+    m.add_function(wrap_pyfunction!(_main, m)?)?;
     let os = m.py().import("os")?;
     // На Windows fork нет
     if os.hasattr("register_at_fork")? {
@@ -1234,10 +1249,6 @@ fn _rumorph(m: &Bound<'_, PyModule>) -> PyResult<()> {
         handlers.set_item("after_in_child", wrap_pyfunction!(_after_fork_in_child, m)?)?;
         os.call_method("register_at_fork", (), Some(&handlers))?;
     }
-    // Версия крейта в записи PEP 440: «0.1.0-dev.12» - «0.1.0.dev12»
-    m.add(
-        "__version__",
-        env!("CARGO_PKG_VERSION").replace("-dev.", ".dev"),
-    )?;
+    m.add("__version__", package_version())?;
     Ok(())
 }

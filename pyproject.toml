@@ -40,6 +40,9 @@ classifiers = [
 ]
 dependencies = []
 
+[project.scripts]
+rumorph = "rumorph.__main__:main"
+
 [project.urls]
 Homepage = "https://github.com/SergeyShk/ruMorph"
 Repository = "https://github.com/SergeyShk/ruMorph"
@@ -156,4 +159,4 @@ branch = true
 [tool.coverage.report]
 fail_under = 90
 show_missing = true
-exclude_also = ["if TYPE_CHECKING:", "raise NotImplementedError"]
+exclude_also = ["if TYPE_CHECKING:", "raise NotImplementedError", "if __name__ == .__main__.:"]
