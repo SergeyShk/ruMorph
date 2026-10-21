@@ -83,7 +83,7 @@ Create the analyzer once: it loads the dictionary when created and can then be u
 
 ### Word analysis
 
-The `analyze` method returns the analyses of a word form by descending probability - `Analysis` objects with the lemma, the part of speech, the UD features, the dictionary labels, the probability and the source of the analysis. Case does not matter, and the letter «е» may stand for «ё». Analyses are immutable: they can be compared, put into sets and pickled.
+The `analyze` method returns the analyses of a word form by descending probability - `Analysis` objects with the lemma, the part of speech, the UD features, the dictionary labels, the probability and the source of the analysis. Case does not matter for the lookup but changes the shares of proper nouns («шаров» is «шар», «Шаров» is a surname), and the letter «е» may stand for «ё». Analyses are immutable: they can be compared, put into sets and pickled.
 
 ```python
 >>> from rumorph import Analyzer
