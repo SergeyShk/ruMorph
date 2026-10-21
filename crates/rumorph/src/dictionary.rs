@@ -1597,7 +1597,7 @@ pub(super) mod tests {
     }
 
     /// Формы лексемы: окончание и признаки UD
-    pub(super) type Forms = Vec<(&'static str, String)>;
+    pub(crate) type Forms = Vec<(&'static str, String)>;
 
     /// Лексемы «кот», «учёный», «сутки», «молоко», «новый» и «нести»
     fn lexicon() -> Dictionary {
@@ -1691,10 +1691,10 @@ pub(super) mod tests {
 
     /// Словарь из лексем «часть речи, основа, формы» с тегами OpenCorpora «часть речи признаки»
     /// и частотами `(словоформа, часть речи и признаки формы, доля в миллионных)`; лемма - форма 0
-    pub(super) fn dictionary_of(
+    pub(crate) fn dictionary_bytes_of(
         lexemes: &[(&str, &str, Forms)],
         probabilities: &[(&str, &str, u32)],
-    ) -> Dictionary {
+    ) -> Vec<u8> {
         let mut tags: Vec<String> = Vec::new();
         let mut suffixes: Vec<String> = Vec::new();
         for (pos, _, forms) in lexemes {
@@ -1739,7 +1739,14 @@ pub(super) mod tests {
                 .add_probability(word, id(&tags, tag), millionths)
                 .unwrap();
         }
-        Dictionary::from_bytes(&builder.build().unwrap()).unwrap()
+        builder.build().unwrap()
+    }
+
+    pub(crate) fn dictionary_of(
+        lexemes: &[(&str, &str, Forms)],
+        probabilities: &[(&str, &str, u32)],
+    ) -> Dictionary {
+        Dictionary::from_bytes(&dictionary_bytes_of(lexemes, probabilities)).unwrap()
     }
 
     /// Разбор словоформы с признаками `feats`

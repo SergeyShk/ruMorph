@@ -18,6 +18,12 @@ default = ["bundled"]
 bundled = ["dep:rumorph-dict-ru"]
 # Сборка своих словарей: Builder и GuessIndex
 build = []
+# Команда rumorph: cargo install rumorph --features cli
+cli = []
+
+[[bin]]
+name = "rumorph"
+required-features = ["cli"]
 
 [dependencies]
 bytemuck = "1.25.2"
