@@ -47,7 +47,7 @@ make docs-build  # mkdocs build --strict, если менялась докуме
 ## Как устроен репозиторий
 
 - `crates/rumorph/` - ядро анализатора на Rust: формат словаря, сборка (feature `build`), разбор и команда `rumorph` (feature `cli`, `src/cli.rs`; пакет Python вызывает ее из `python/rumorph/__main__.py`); публикуется на crates.io.
-- `crates/rumorph-dict-ru/` - крейт со словарем для `rumorph` (feature `bundled`): файл словаря в git не хранится, `build.rs` берет `python/rumorph/data/ru.dict`, а без него собирает крейт с пустым словарем.
+- `crates/rumorph-dict-ru/` - крейт со словарем для `rumorph` (feature `bundled`): файл словаря в git не хранится, `build.rs` берет `python/rumorph/data/ru.dict`, а без него собирает крейт с пустым словарем, только если задана переменная `RUMORPH_EMPTY_DICTIONARY=1` (ее задает `.cargo/config.toml` репозитория).
 - `crates/rumorph-build/` - сборка словаря из выгрузки pymorphy3-dicts-ru и перевод тегов OpenCorpora в UD (`ud.rs`).
 - `crates/rumorph-py/` - модуль Python `rumorph._rumorph` на PyO3.
 - `python/rumorph/` - пакет Python поверх модуля; `data/ru.dict` - собранный словарь.

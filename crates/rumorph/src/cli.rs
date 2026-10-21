@@ -633,7 +633,7 @@ impl<'a> Tokens<'a> {
     /// Соединяет ли графема `joiner` слово с графемой `next` после него
     fn joins(last: &str, joiner: &str, next: &str) -> bool {
         match joiner {
-            "-" | "\u{2010}" | "\u{2011}" | "'" | "’" => word(next),
+            "-" | "\u{2010}" | "\u{2011}" | "'" | "’" | "\u{2060}" | "\u{feff}" => word(next),
             "." | "," => {
                 last.chars().last().is_some_and(|c| c.is_ascii_digit())
                     && next.chars().next().is_some_and(|c| c.is_ascii_digit())
@@ -800,14 +800,16 @@ mod tests {
                 ("да".into(), true)
             ]
         );
-        // Невидимые символы разделяют токены, но пробелом не считаются; мягкий перенос - в слове
+        // Невидимые символы разделяют токены, но пробелом не считаются; мягкий перенос
+        // и соединитель слов - в слове
         assert_eq!(
-            words("при\u{200b}вет \u{feff}раму при\u{ad}вет"),
+            words("при\u{200b}вет \u{feff}раму при\u{ad}вет при\u{2060}вет"),
             [
                 ("при".into(), false),
                 ("вет".into(), true),
                 ("раму".into(), true),
-                ("при\u{ad}вет".into(), true)
+                ("при\u{ad}вет".into(), true),
+                ("при\u{2060}вет".into(), true)
             ]
         );
     }

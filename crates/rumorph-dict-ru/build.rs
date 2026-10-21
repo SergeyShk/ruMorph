@@ -1,7 +1,8 @@
 //! Файл словаря для `include_bytes!`: из пакета Python рабочего пространства (`make dictionary`)
 //! или из крейта (опубликованный крейт и CI перед публикацией). Пустой словарь - только
-//! с переменной `RUMORPH_EMPTY_DICTIONARY=1`, которую задает `.cargo/config.toml` репозитория:
-//! так проверяется код, которому словарь не нужен, а зависимость из git без словаря не собирается
+//! в рабочем пространстве и с переменной `RUMORPH_EMPTY_DICTIONARY=1`, которую задает
+//! `.cargo/config.toml` репозитория: так проверяется код, которому словарь не нужен, а крейт без
+//! словаря не упаковывается и зависимость из git без словаря не собирается
 
 use std::path::{Path, PathBuf};
 
@@ -16,7 +17,7 @@ fn main() {
     let empty = std::env::var_os("RUMORPH_EMPTY_DICTIONARY").is_some_and(|value| value == "1");
     let result = match candidates.iter().find(|path| path.is_file()) {
         Some(found) => std::fs::copy(found, &output).map(drop),
-        None if empty => {
+        None if empty && package.is_dir() => {
             println!(
                 "cargo::warning=словарь не собран (make dictionary): крейт собран с пустым словарем"
             );
