@@ -176,6 +176,26 @@ def test_threads(morph):
     assert results == [morph.lemmatize(chunk) for chunk in chunks]
 
 
+def test_analyses_of_threads(morph, tmp_path):
+    # Разборы держат анализатор через ручку своего потока: в других потоках они работают,
+    # а анализатор освобождается вместе с последним разбором
+    path = tmp_path / "ru.dict"
+    shutil.copy(morph.path, path)
+    analyzer = Analyzer(path)
+    references = sys.getrefcount(analyzer)
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        analyses = list(pool.map(analyzer.analyze, ["стали", "ежа", "мама", "кошки"] * 4))
+        forms = list(pool.map(lambda found: [form.word for form in found[0].forms()], analyses))
+        restored = list(pool.map(lambda found: pickle.loads(pickle.dumps(found)), analyses))
+    assert analyses == [analyzer.analyze(word) for word in ["стали", "ежа", "мама", "кошки"] * 4]
+    assert forms == [[form.word for form in found[0].forms()] for found in analyses]
+    assert restored == analyses
+    assert analyses[0][0].inflect(Number="Sing", Gender="Fem") == "стала"
+    assert sys.getrefcount(analyzer) > references
+    del analyses, restored
+    assert sys.getrefcount(analyzer) == references
+
+
 def test_analysis(morph):
     first, second = morph.analyze("ёж")[:2]
     assert first == morph.analyze("еж")[0]

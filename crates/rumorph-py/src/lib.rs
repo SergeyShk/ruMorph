@@ -1,6 +1,6 @@
 //! Модуль Python `rumorph._rumorph`
 
-use std::cell::UnsafeCell;
+use std::cell::{RefCell, UnsafeCell};
 use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io::ErrorKind;
@@ -112,7 +112,7 @@ struct Analysis {
     #[pyo3(get)]
     labels: Py<PyFrozenSet>,
     ud: Arc<UdText>,
-    analyzer: Py<Analyzer>,
+    handle: Arc<Handle>,
 }
 
 #[pymethods]
@@ -150,13 +150,14 @@ impl Analysis {
     ///     >>> [form.word for form in Analyzer().analyze("ёж")[0].forms()][:6]
     ///     ['ёж', 'ежа', 'ежу', 'ежа', 'ежом', 'еже']
     fn forms(&self, py: Python<'_>) -> PyResult<Vec<Analysis>> {
-        self.analyzer
+        self.handle
+            .analyzer
             .get()
             .shared
             .dictionary
             .forms(&self.inner)
             .into_iter()
-            .map(|form| Analyzer::to_py(py, &self.analyzer, form))
+            .map(|form| Analyzer::to_py(py, &self.handle, form))
             .collect()
     }
 
@@ -184,7 +185,7 @@ impl Analysis {
     ///     ('кошки', 'кошек')
     #[pyo3(signature = (**feats))]
     fn inflect(&self, feats: Option<&Bound<'_, PyDict>>) -> PyResult<String> {
-        let dictionary = &self.analyzer.get().shared.dictionary;
+        let dictionary = &self.handle.analyzer.get().shared.dictionary;
         let mut requested: Vec<(String, String)> = Vec::new();
         for (name, value) in feats.into_iter().flatten() {
             let name: String = name.extract()?;
@@ -256,7 +257,7 @@ impl Analysis {
     ///     >>> [f"{n} {ruble.agree(n)}" for n in (1, 2, 5, 21)]
     ///     ['1 рубль', '2 рубля', '5 рублей', '21 рубль']
     fn agree(&self, number: &Bound<'_, PyAny>) -> PyResult<String> {
-        let dictionary = &self.analyzer.get().shared.dictionary;
+        let dictionary = &self.handle.analyzer.get().shared.dictionary;
         let form = match count(number)? {
             Some(count) => dictionary.agree(&self.inner, count),
             None => dictionary.agree_fraction(&self.inner),
@@ -332,7 +333,7 @@ impl Analysis {
             self.inner.source.as_str().to_owned(),
             self.inner.entry.map(|entry| (entry.table, entry.form)),
         );
-        Ok((restore, (self.analyzer.clone_ref(py), state)))
+        Ok((restore, (self.handle.analyzer.clone_ref(py), state)))
     }
 }
 
@@ -397,7 +398,7 @@ fn _analysis(py: Python<'_>, analyzer: Py<Analyzer>, state: AnalysisState) -> Py
         )));
     };
     inner.prob = prob;
-    Analyzer::to_py(py, &analyzer, inner)
+    Analyzer::to_py(py, &Analyzer::handle(analyzer.bind(py)), inner)
 }
 
 /// Словарь и объекты его тегов UD: общие для анализаторов с одним файлом словаря
@@ -647,6 +648,19 @@ struct Analyzer {
     explicit: bool,
 }
 
+/// Анализатор для разборов одного потока. Разборы держат анализатор через ручку своего потока:
+/// в Python без GIL счетчик ссылок общего объекта, который меняют сразу несколько потоков,
+/// в несколько раз замедляет разбор
+struct Handle {
+    analyzer: Py<Analyzer>,
+}
+
+thread_local! {
+    /// Ручки анализаторов этого потока: адрес объекта анализатора и слабая ссылка - ручка живет,
+    /// пока живы ее разборы, и не держит анализатор дольше них
+    static HANDLES: RefCell<Vec<(usize, Weak<Handle>)>> = const { RefCell::new(Vec::new()) };
+}
+
 #[pymethods]
 impl Analyzer {
     #[new]
@@ -701,13 +715,13 @@ impl Analyzer {
     ///     [('стать', 'VERB', None), ('сталь', 'NOUN', 'Gen'), ('сталь', 'NOUN', 'Nom')]
     fn analyze(slf: &Bound<'_, Self>, word: &Bound<'_, PyAny>) -> PyResult<Vec<Analysis>> {
         let word = text(word)?;
-        let analyzer = slf.clone().unbind();
+        let handle = Self::handle(slf);
         slf.get()
             .shared
             .dictionary
             .analyze(&word)
             .into_iter()
-            .map(|analysis| Self::to_py(slf.py(), &analyzer, analysis))
+            .map(|analysis| Self::to_py(slf.py(), &handle, analysis))
             .collect()
     }
 
@@ -734,7 +748,7 @@ impl Analyzer {
         slf: &Bound<'_, Self>,
         words: &Bound<'_, PyAny>,
     ) -> PyResult<Vec<Vec<Analysis>>> {
-        let (py, analyzer) = (slf.py(), slf.clone().unbind());
+        let (py, handle) = (slf.py(), Self::handle(slf));
         let words = collect_words(words)?;
         let dictionary = &slf.get().shared.dictionary;
         let mut result = Vec::with_capacity(words.len());
@@ -749,7 +763,7 @@ impl Analyzer {
                 result.push(
                     analyses
                         .into_iter()
-                        .map(|analysis| Self::to_py(py, &analyzer, analysis))
+                        .map(|analysis| Self::to_py(py, &handle, analysis))
                         .collect::<PyResult<_>>()?,
                 );
             }
@@ -870,12 +884,39 @@ impl Analyzer {
         })
     }
 
+    /// Ручка анализатора для разборов этого потока
+    fn handle(slf: &Bound<'_, Self>) -> Arc<Handle> {
+        let address = slf.as_ptr() as usize;
+        let new = || {
+            Arc::new(Handle {
+                analyzer: slf.clone().unbind(),
+            })
+        };
+        // В завершающемся потоке ручек уже нет: ручка создается без запоминания
+        HANDLES
+            .try_with(|handles| {
+                let mut handles = handles.borrow_mut();
+                let found = handles
+                    .iter()
+                    .find(|(known, _)| *known == address)
+                    .and_then(|(_, handle)| handle.upgrade());
+                if let Some(handle) = found {
+                    return handle;
+                }
+                handles.retain(|(_, handle)| handle.strong_count() > 0);
+                let handle = new();
+                handles.push((address, Arc::downgrade(&handle)));
+                handle
+            })
+            .unwrap_or_else(|_| new())
+    }
+
     fn to_py(
         py: Python<'_>,
-        analyzer: &Py<Analyzer>,
+        handle: &Arc<Handle>,
         analysis: rumorph::Analysis,
     ) -> PyResult<Analysis> {
-        let this = analyzer.get();
+        let this = handle.analyzer.get();
         let number = usize::from(analysis.ud);
         let shared = &this.shared;
         let ud = shared.ud[number].get_or_try_init(py, || {
@@ -888,7 +929,7 @@ impl Analyzer {
             feats: ud.feats.clone_ref(py),
             labels: ud.labels.clone_ref(py),
             ud: Arc::clone(&ud.text),
-            analyzer: analyzer.clone_ref(py),
+            handle: Arc::clone(handle),
         })
     }
 }
