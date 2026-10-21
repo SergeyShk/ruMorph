@@ -1292,28 +1292,36 @@ struct Preferences {
     counting: Option<u16>,
 }
 
-/// Слово в составленной записи и с обычным дефисом: «и» со знаком краткой и «е» с диерезисом
-/// (разложенный Unicode, NFD) - «й» и «ё», неразрывный дефис и дефис U+2010 - «-»; `None`, если
-/// менять нечего
+/// Слово в составленной записи, с обычным дефисом и без знаков ударения и мягких переносов:
+/// «и» со знаком краткой и «е» с диерезисом (разложенный Unicode, NFD) - «й» и «ё», неразрывный
+/// дефис и дефис U+2010 - «-»; знак ударения после кириллической буквы и мягкий перенос
+/// убираются. `None`, если менять нечего
 fn normalized_input(word: &str) -> Option<String> {
-    if !word.contains(['\u{306}', '\u{308}', '\u{2010}', '\u{2011}']) {
+    const MARKS: [char; 7] = [
+        '\u{306}', '\u{308}', '\u{2010}', '\u{2011}', '\u{300}', '\u{301}', '\u{AD}',
+    ];
+    if !word.contains(MARKS) {
         return None;
     }
     let mut normal = String::with_capacity(word.len());
     for c in word.chars() {
-        let composed = match (normal.chars().last(), c) {
+        let last = normal.chars().last();
+        let composed = match (last, c) {
             (Some('и'), '\u{306}') => Some('й'),
             (Some('И'), '\u{306}') => Some('Й'),
             (Some('е'), '\u{308}') => Some('ё'),
             (Some('Е'), '\u{308}') => Some('Ё'),
             _ => None,
         };
+        let stress = matches!(c, '\u{300}' | '\u{301}') && last.is_some_and(rules::cyrillic);
         match (composed, c) {
             (Some(letter), _) => {
                 normal.pop();
                 normal.push(letter);
             }
             (None, '\u{2010}' | '\u{2011}') => normal.push('-'),
+            (None, '\u{AD}') => {}
+            (None, _) if stress => {}
             (None, c) => normal.push(c),
         }
     }
@@ -2690,6 +2698,16 @@ pub(super) mod tests {
         let dict = Dictionary::from_bytes(&format::write(&sections)).unwrap();
         let probs: Vec<f64> = dict.analyze("стали").iter().map(|a| a.prob).collect();
         assert_eq!(probs, [1.0 / 3.0; 3]);
+    }
+
+    #[test]
+    fn normalizes_stress_and_soft_hyphens() {
+        assert_eq!(normalized_input("Москва\u{301}"), Some("Москва".into()));
+        assert_eq!(normalized_input("за\u{300}мок"), Some("замок".into()));
+        assert_eq!(normalized_input("при\u{ad}вет"), Some("привет".into()));
+        // Знак ударения после латинской буквы - не ударение русского слова
+        assert_eq!(normalized_input("cafe\u{301}"), None);
+        assert_eq!(normalized_input("Москва"), None);
     }
 
     #[test]

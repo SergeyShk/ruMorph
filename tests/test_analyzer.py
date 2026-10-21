@@ -126,15 +126,21 @@ def test_not_a_token(morph, word):
         ("е\u0308ж", "ёж"),
         ("во\u2011вторых", "во-вторых"),
         ("какой\u2010то", "какой-то"),
+        ("Москва\u0301", "Москва"),
+        ("за\u0300мок", "замок"),
+        ("при\u00adвет", "привет"),
     ],
 )
 def test_normalized_input(morph, word, normal):
-    # Разложенные «й» и «ё» (NFD) и неразрывный дефис - как обычное написание
+    # Разложенные «й» и «ё» (NFD), неразрывный дефис, знаки ударения и мягкий перенос - как обычное
+    # написание
     assert morph.analyze(word) == morph.analyze(normal)
     assert morph.is_known(word)
 
 
-@pytest.mark.parametrize("word", ["Ma\u0308dchen", "і\u0308жак", "у\u0306", "\u0306"])
+@pytest.mark.parametrize(
+    "word", ["Ma\u0308dchen", "і\u0308жак", "у\u0306", "\u0306", "cafe\u0301"]
+)
 def test_combining_mark_elsewhere(morph, word):
     # Знак не после «и» или «е» ничего не составляет: слово разбирается как есть
     assert morph.analyze(word)
