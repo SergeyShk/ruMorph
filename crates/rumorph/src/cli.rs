@@ -1,10 +1,14 @@
 //! Команда `rumorph`: морфологический анализ текста из файлов и стандартного ввода
 
+use std::borrow::Cow;
 use std::ffi::OsString;
 use std::fmt::Write as _;
 use std::fs::File;
-use std::io::{self, BufRead, BufReader, BufWriter, Write};
+use std::io::{self, BufRead, BufReader, BufWriter, IsTerminal, Write};
+use std::iter::Peekable;
 use std::path::{Path, PathBuf};
+
+use unicode_segmentation::{GraphemeIndices, UnicodeSegmentation};
 
 use crate::{Analysis, Dictionary};
 
@@ -32,14 +36,18 @@ rumorph - морфологический анализ русского текс�
 ";
 
 /// Выполняет команду с аргументами `args` (без имени программы) и возвращает код выхода:
-/// 0 - успех, 1 - ошибка чтения файла или словаря, 2 - неверные аргументы. `version` печатает
-/// `--version`; `dictionary` - словарь по умолчанию, без него - словарь крейта `rumorph-dict-ru`
+/// 0 - успех, 1 - ошибка чтения файла, словаря или записи, 2 - неверные аргументы. `version`
+/// печатает `--version`; `dictionary` - словарь по умолчанию, без него - словарь крейта
+/// `rumorph-dict-ru`
 pub fn run(args: Vec<OsString>, version: &str, dictionary: Option<&Path>) -> u8 {
-    let mut output = BufWriter::new(io::stdout().lock());
+    let stdout = io::stdout();
+    let interactive = stdout.is_terminal();
+    let mut output = BufWriter::new(stdout.lock());
     execute(
         args,
         version,
         dictionary,
+        interactive,
         &mut io::stdin().lock(),
         &mut output,
         &mut io::stderr(),
@@ -147,6 +155,7 @@ fn execute(
     args: Vec<OsString>,
     version: &str,
     default: Option<&Path>,
+    interactive: bool,
     stdin: &mut dyn BufRead,
     stdout: &mut dyn Write,
     stderr: &mut dyn Write,
@@ -160,8 +169,16 @@ fn execute(
             dictionary,
             files,
         }) => (format, input, dictionary, files),
-        Ok(Command::Help) => return finish(stdout.write_all(HELP.as_bytes())),
-        Ok(Command::Version) => return finish(writeln!(stdout, "rumorph {version}")),
+        Ok(Command::Help) => {
+            let written = stdout
+                .write_all(HELP.as_bytes())
+                .and_then(|()| stdout.flush());
+            return written.map_or_else(|err| write_error(&err, &mut report), |()| 0);
+        }
+        Ok(Command::Version) => {
+            let written = writeln!(stdout, "rumorph {version}").and_then(|()| stdout.flush());
+            return written.map_or_else(|err| write_error(&err, &mut report), |()| 0);
+        }
         Err(message) => {
             report(format!("{message}\nСправка: rumorph --help"));
             return 2;
@@ -183,6 +200,7 @@ fn execute(
         dictionary: &dictionary,
         format,
         output: stdout,
+        interactive,
         sentence: 0,
     };
     let mut code = 0;
@@ -197,7 +215,13 @@ fn execute(
             }
         };
         match result {
-            Ok(()) => {}
+            Ok(None) => {}
+            Ok(Some(line)) => {
+                report(format!(
+                    "{name}: строка {line}: не UTF-8, неверные байты заменены на U+FFFD"
+                ));
+                code = 1;
+            }
             Err(Failure::Read(err)) => {
                 report(format!("{name}: {}", describe(&err)));
                 code = 1;
@@ -206,26 +230,22 @@ fn execute(
                 report(format!("{name}: строка {line}: {message}"));
                 code = 1;
             }
-            Err(Failure::Write(err)) if err.kind() == io::ErrorKind::BrokenPipe => return 0,
-            Err(Failure::Write(err)) => {
-                report(format!("ошибка записи: {err}"));
-                return 1;
-            }
+            Err(Failure::Write(err)) => return write_error(&err, &mut report),
         }
     }
-    match finish(writer.output.flush()) {
-        0 => code,
-        failed => failed,
+    match writer.output.flush() {
+        Ok(()) => code,
+        Err(err) => write_error(&err, &mut report).max(code),
     }
 }
 
-/// Код выхода после записи: закрытый канал (`rumorph ... | head`) - не ошибка
-fn finish(result: io::Result<()>) -> u8 {
-    match result {
-        Ok(()) => 0,
-        Err(err) if err.kind() == io::ErrorKind::BrokenPipe => 0,
-        Err(_) => 1,
+/// Код выхода после ошибки записи: закрытый канал (`rumorph ... | head`) - не ошибка
+fn write_error(err: &io::Error, report: &mut impl FnMut(String)) -> u8 {
+    if err.kind() == io::ErrorKind::BrokenPipe {
+        return 0;
     }
+    report(format!("ошибка записи: {err}"));
+    1
 }
 
 /// Словарь из файла `path`; без пути - словарь крейта `rumorph-dict-ru`
@@ -248,7 +268,6 @@ fn describe(err: &io::Error) -> String {
         io::ErrorKind::NotFound => "файл не найден".into(),
         io::ErrorKind::PermissionDenied => "нет доступа".into(),
         io::ErrorKind::IsADirectory => "это каталог".into(),
-        io::ErrorKind::InvalidData => "файл не в UTF-8".into(),
         _ => err.to_string(),
     }
 }
@@ -262,24 +281,25 @@ enum Failure {
 }
 
 /// Токен предложения: словоформа и есть ли после нее пробел в тексте
-struct Token {
-    word: String,
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Token<'a> {
+    word: &'a str,
     space_after: bool,
 }
 
 /// Строка предложения CoNLL-U: комментарий или строка без разбора как есть либо слово -
-/// номер токена и столбцы
+/// столбцы
 enum Line {
     Raw(String),
-    Word(usize, Vec<String>),
+    Word(Vec<String>),
 }
 
+/// Предложение из токенов или CoNLL-U: текст и строки; токены - слова строк
 #[derive(Default)]
-struct Sentence {
-    /// Текст предложения: строка входа или комментарий `# text` CoNLL-U
+struct Block {
+    /// Текст предложения: комментарий `# text` CoNLL-U
     text: Option<String>,
-    tokens: Vec<Token>,
-    /// Строки входа CoNLL-U
+    words: Vec<String>,
     lines: Vec<Line>,
 }
 
@@ -287,170 +307,203 @@ struct Writer<'a> {
     dictionary: &'a Dictionary,
     format: Format,
     output: &'a mut dyn Write,
+    /// Сбрасывать вывод после каждого предложения: в терминале разбор виден сразу
+    interactive: bool,
     /// Номер последнего предложения: `# sent_id` CoNLL-U
     sentence: usize,
 }
 
 impl Writer<'_> {
-    /// Читает вход построчно и пишет разбор каждого предложения
-    fn process(&mut self, input: Input, reader: &mut dyn BufRead) -> Result<(), Failure> {
-        let mut line = String::new();
+    /// Читает вход построчно и пишет разбор каждого предложения; вывод - номер первой строки
+    /// не в UTF-8, если такая была: неверные байты заменяются на U+FFFD
+    fn process(
+        &mut self,
+        input: Input,
+        reader: &mut dyn BufRead,
+    ) -> Result<Option<usize>, Failure> {
+        let mut bytes = Vec::new();
         let mut number = 0;
-        let mut sentence = Sentence::default();
+        let mut invalid = None;
+        let mut block = Block::default();
         loop {
-            line.clear();
-            let read = reader.read_line(&mut line).map_err(Failure::Read)?;
-            if read == 0 {
+            bytes.clear();
+            if reader
+                .read_until(b'\n', &mut bytes)
+                .map_err(Failure::Read)?
+                == 0
+            {
                 break;
             }
             number += 1;
-            let mut text = line.trim_end_matches(['\n', '\r']);
+            let decoded = String::from_utf8_lossy(&bytes);
+            if matches!(decoded, std::borrow::Cow::Owned(_)) && invalid.is_none() {
+                invalid = Some(number);
+            }
+            let mut text = decoded.trim_end_matches(['\n', '\r']);
             if number == 1 {
                 text = text.strip_prefix('\u{feff}').unwrap_or(text);
             }
             match input {
                 Input::Text => {
-                    let sentence = Sentence {
-                        text: Some(text.to_owned()),
-                        tokens: tokenize(text),
-                        lines: Vec::new(),
-                    };
-                    self.write(&sentence).map_err(Failure::Write)?;
+                    let tokens = Tokens::new(text).peekable();
+                    self.write_tokens(Some(text), tokens, true)
+                        .map_err(Failure::Write)?;
                 }
                 _ if text.trim().is_empty() => {
-                    self.write(&sentence).map_err(Failure::Write)?;
-                    sentence = Sentence::default();
+                    self.write_block(&block).map_err(Failure::Write)?;
+                    block = Block::default();
                 }
-                Input::Tokens => sentence.tokens.push(Token {
-                    word: text.to_owned(),
-                    space_after: true,
-                }),
-                Input::Conllu => conllu_line(&mut sentence, text)
+                Input::Tokens => {
+                    // Токен - до табуляции: так читается и таблица с токеном в первом столбце
+                    let token = text.split('\t').next().unwrap_or_default().trim();
+                    if !token.is_empty() {
+                        block.words.push(token.to_owned());
+                    }
+                }
+                Input::Conllu => conllu_line(&mut block, text)
                     .map_err(|message| Failure::Input(number, message))?,
             }
         }
-        if !sentence.tokens.is_empty() || !sentence.lines.is_empty() {
-            self.write(&sentence).map_err(Failure::Write)?;
-        }
-        Ok(())
+        self.write_block(&block).map_err(Failure::Write)?;
+        Ok(invalid)
     }
 
-    fn write(&mut self, sentence: &Sentence) -> io::Result<()> {
-        let empty = sentence.tokens.is_empty() && sentence.lines.is_empty();
-        // Пустая строка текста остается пустой строкой лемм; в остальных форматах ее нет
-        if empty && !(self.format == Format::Lemmas && sentence.text.is_some()) {
+    /// Предложение из токенов или CoNLL-U
+    fn write_block(&mut self, block: &Block) -> io::Result<()> {
+        if self.format == Format::Conllu && !block.lines.is_empty() {
+            return self.write_conllu_lines(block);
+        }
+        let tokens = block.words.iter().map(|word| Token {
+            word,
+            space_after: true,
+        });
+        self.write_tokens(block.text.as_deref(), tokens.peekable(), false)
+    }
+
+    /// Предложение в формате вывода: токены пишутся по одному, без разборов всего предложения
+    /// в памяти. Пустая строка текста (`keep_empty`) остается пустой строкой лемм
+    fn write_tokens<'t>(
+        &mut self,
+        text: Option<&str>,
+        mut tokens: Peekable<impl Iterator<Item = Token<'t>>>,
+        keep_empty: bool,
+    ) -> io::Result<()> {
+        if tokens.peek().is_none() {
+            if keep_empty && self.format == Format::Lemmas {
+                writeln!(self.output)?;
+                self.flush_interactive()?;
+            }
             return Ok(());
         }
-        let analyses: Vec<Vec<Analysis>> = sentence
-            .tokens
-            .iter()
-            .map(|token| self.dictionary.analyze(&token.word))
-            .collect();
-        let lemma = |index: usize| -> String {
-            analyses[index].first().map_or_else(
-                || sentence.tokens[index].word.to_lowercase(),
-                |analysis| analysis.lemma.clone(),
-            )
-        };
-        let mut out = String::new();
+        let mut piece = String::new();
         match self.format {
             Format::Lemmas => {
-                let lemmas: Vec<String> = (0..sentence.tokens.len()).map(lemma).collect();
-                out.push_str(&lemmas.join(" "));
-                out.push('\n');
+                for (index, token) in tokens.enumerate() {
+                    let analyses = self.dictionary.analyze(token.word);
+                    let separator = if index > 0 { " " } else { "" };
+                    write!(self.output, "{separator}{}", lemma(&analyses, token.word))?;
+                }
+                writeln!(self.output)?;
             }
             Format::Tsv => {
-                for (index, token) in sentence.tokens.iter().enumerate() {
-                    let (pos, feats, prob) = self.first(&analyses[index]);
-                    let _ = writeln!(
-                        out,
-                        "{}\t{}\t{pos}\t{feats}\t{prob}",
-                        token.word,
-                        lemma(index)
-                    );
+                for token in tokens {
+                    let analyses = self.dictionary.analyze(token.word);
+                    let (pos, feats, prob) = first(self.dictionary, &analyses);
+                    let lemma = lemma(&analyses, token.word);
+                    writeln!(
+                        self.output,
+                        "{}\t{lemma}\t{pos}\t{feats}\t{prob}",
+                        token.word
+                    )?;
                 }
-                out.push('\n');
-            }
-            Format::Conllu if !sentence.lines.is_empty() => {
-                for line in &sentence.lines {
-                    match line {
-                        Line::Raw(text) => out.push_str(text),
-                        Line::Word(index, columns) => {
-                            let (pos, feats, _) = self.first(&analyses[*index]);
-                            let mut columns = columns.clone();
-                            columns[2] = lemma(*index);
-                            columns[3] = pos.to_owned();
-                            columns[5] = feats;
-                            out.push_str(&columns.join("\t"));
-                        }
-                    }
-                    out.push('\n');
-                }
-                out.push('\n');
+                writeln!(self.output)?;
             }
             Format::Conllu => {
                 self.sentence += 1;
-                let _ = writeln!(out, "# sent_id = {}", self.sentence);
-                if let Some(text) = &sentence.text {
-                    let _ = writeln!(out, "# text = {text}");
+                writeln!(self.output, "# sent_id = {}", self.sentence)?;
+                if let Some(text) = text {
+                    writeln!(self.output, "# text = {text}")?;
                 }
-                let last = sentence.tokens.len().saturating_sub(1);
-                for (index, token) in sentence.tokens.iter().enumerate() {
-                    let (pos, feats, _) = self.first(&analyses[index]);
-                    let misc = if token.space_after || index == last {
+                for (index, token) in tokens.enumerate() {
+                    let analyses = self.dictionary.analyze(token.word);
+                    let (pos, feats, _) = first(self.dictionary, &analyses);
+                    let misc = if token.space_after {
                         "_"
                     } else {
                         "SpaceAfter=No"
                     };
-                    let _ = writeln!(
-                        out,
+                    writeln!(
+                        self.output,
                         "{}\t{}\t{}\t{pos}\t_\t{feats}\t_\t_\t_\t{misc}",
                         index + 1,
                         token.word,
-                        lemma(index)
-                    );
+                        lemma(&analyses, token.word)
+                    )?;
                 }
-                out.push('\n');
+                writeln!(self.output)?;
             }
             Format::Jsonl => {
-                out.push('{');
-                if let Some(text) = &sentence.text {
-                    out.push_str("\"text\": ");
-                    json_string(&mut out, text);
-                    out.push_str(", ");
+                piece.push('{');
+                if let Some(text) = text {
+                    piece.push_str("\"text\": ");
+                    json_string(&mut piece, text);
+                    piece.push_str(", ");
                 }
-                out.push_str("\"tokens\": [");
-                for (index, token) in sentence.tokens.iter().enumerate() {
+                piece.push_str("\"tokens\": [");
+                self.output.write_all(piece.as_bytes())?;
+                for (index, token) in tokens.enumerate() {
+                    piece.clear();
                     if index > 0 {
-                        out.push_str(", ");
+                        piece.push_str(", ");
                     }
-                    out.push_str("{\"word\": ");
-                    json_string(&mut out, &token.word);
-                    out.push_str(", \"analyses\": [");
-                    for (number, analysis) in analyses[index].iter().enumerate() {
+                    piece.push_str("{\"word\": ");
+                    json_string(&mut piece, token.word);
+                    piece.push_str(", \"analyses\": [");
+                    for (number, analysis) in self.dictionary.analyze(token.word).iter().enumerate()
+                    {
                         if number > 0 {
-                            out.push_str(", ");
+                            piece.push_str(", ");
                         }
-                        self.json_analysis(&mut out, analysis);
+                        self.json_analysis(&mut piece, analysis);
                     }
-                    out.push_str("]}");
+                    piece.push_str("]}");
+                    self.output.write_all(piece.as_bytes())?;
                 }
-                out.push_str("]}\n");
+                writeln!(self.output, "]}}")?;
             }
         }
-        self.output.write_all(out.as_bytes())
+        self.flush_interactive()
     }
 
-    /// Часть речи, признаки CoNLL-U и вероятность самого вероятного разбора
-    fn first(&self, analyses: &[Analysis]) -> (&str, String, f64) {
-        let Some(analysis) = analyses.first() else {
-            return ("X", "_".into(), 0.0);
-        };
-        match self.dictionary.ud_tag(analysis.ud) {
-            Some(tag) if tag.feats().len() > 0 => (tag.pos(), tag.feats_string(), analysis.prob),
-            Some(tag) => (tag.pos(), "_".into(), analysis.prob),
-            None => ("X", "_".into(), analysis.prob),
+    /// Предложение CoNLL-U с заполненными LEMMA, UPOS и FEATS
+    fn write_conllu_lines(&mut self, block: &Block) -> io::Result<()> {
+        for line in &block.lines {
+            match line {
+                Line::Raw(text) => writeln!(self.output, "{text}")?,
+                Line::Word(columns) => {
+                    let analyses = self.dictionary.analyze(&columns[1]);
+                    let (pos, feats, _) = first(self.dictionary, &analyses);
+                    let lemma = lemma(&analyses, &columns[1]);
+                    let [id, form, _, _, xpos, _, rest @ ..] = &columns[..] else {
+                        continue;
+                    };
+                    writeln!(
+                        self.output,
+                        "{id}\t{form}\t{lemma}\t{pos}\t{xpos}\t{feats}\t{}",
+                        rest.join("\t")
+                    )?;
+                }
+            }
         }
+        writeln!(self.output)?;
+        self.flush_interactive()
+    }
+
+    fn flush_interactive(&mut self) -> io::Result<()> {
+        if self.interactive {
+            self.output.flush()?;
+        }
+        Ok(())
     }
 
     fn json_analysis(&self, out: &mut String, analysis: &Analysis) {
@@ -484,14 +537,34 @@ impl Writer<'_> {
     }
 }
 
+/// Часть речи, признаки CoNLL-U и вероятность самого вероятного разбора
+fn first<'d>(dictionary: &'d Dictionary, analyses: &[Analysis]) -> (&'d str, String, f64) {
+    let Some(analysis) = analyses.first() else {
+        return ("X", "_".into(), 0.0);
+    };
+    match dictionary.ud_tag(analysis.ud) {
+        Some(tag) if tag.feats().len() > 0 => (tag.pos(), tag.feats_string(), analysis.prob),
+        Some(tag) => (tag.pos(), "_".into(), analysis.prob),
+        None => ("X", "_".into(), analysis.prob),
+    }
+}
+
+/// Лемма самого вероятного разбора; без разборов - токен в нижнем регистре
+fn lemma<'a>(analyses: &'a [Analysis], word: &str) -> Cow<'a, str> {
+    match analyses.first() {
+        Some(analysis) => Cow::Borrowed(&analysis.lemma),
+        None => Cow::Owned(word.to_lowercase()),
+    }
+}
+
 /// Строка CoNLL-U в предложение: комментарий, слово или многословный токен и пустой узел,
 /// которые остаются как есть
-fn conllu_line(sentence: &mut Sentence, line: &str) -> Result<(), String> {
+fn conllu_line(block: &mut Block, line: &str) -> Result<(), String> {
     if let Some(comment) = line.strip_prefix('#') {
         if let Some(text) = comment.trim_start().strip_prefix("text = ") {
-            sentence.text = Some(text.to_owned());
+            block.text = Some(text.to_owned());
         }
-        sentence.lines.push(Line::Raw(line.to_owned()));
+        block.lines.push(Line::Raw(line.to_owned()));
         return Ok(());
     }
     let columns: Vec<String> = line.split('\t').map(str::to_owned).collect();
@@ -502,73 +575,103 @@ fn conllu_line(sentence: &mut Sentence, line: &str) -> Result<(), String> {
         ));
     }
     if columns[0].parse::<usize>().is_err() {
-        sentence.lines.push(Line::Raw(line.to_owned()));
+        block.lines.push(Line::Raw(line.to_owned()));
         return Ok(());
     }
-    sentence.tokens.push(Token {
-        word: columns[1].clone(),
-        space_after: true,
-    });
-    sentence
-        .lines
-        .push(Line::Word(sentence.tokens.len() - 1, columns));
+    block.words.push(columns[1].clone());
+    block.lines.push(Line::Word(columns));
     Ok(())
 }
 
-/// Буква или цифра слова, в том числе знак ударения и мягкий перенос внутри слова
-fn word_char(c: char) -> bool {
-    c.is_alphanumeric() || ('\u{300}'..='\u{36F}').contains(&c) || c == '\u{AD}'
+/// Графема-буква или цифра: с ней идут знаки ударения и другие комбинирующие знаки
+fn word(grapheme: &str) -> bool {
+    grapheme.chars().next().is_some_and(char::is_alphanumeric)
 }
 
-/// Токены строки текста: слова (с дефисами и апострофами между буквами), числа (с точкой
-/// или запятой между цифрами) и знаки; одинаковые знаки подряд («...», «!!!») - один токен
-fn tokenize(line: &str) -> Vec<Token> {
-    let chars: Vec<(usize, char)> = line.char_indices().collect();
-    let mut tokens: Vec<Token> = Vec::new();
-    let mut i = 0;
-    while i < chars.len() {
-        let (start, c) = chars[i];
-        if c.is_whitespace() {
-            if let Some(last) = tokens.last_mut() {
-                last.space_after = true;
-            }
-            i += 1;
-            continue;
+/// Разделитель токенов: пробел или невидимый символ (пробел нулевой ширины, соединитель слов,
+/// BOM), после которого нет пробела в тексте
+fn separator(grapheme: &str) -> bool {
+    grapheme
+        .chars()
+        .all(|c| c.is_whitespace() || matches!(c, '\u{200b}' | '\u{2060}' | '\u{feff}'))
+}
+
+/// Токены строки текста по графемам: слова (с дефисами и апострофами между буквами, мягкими
+/// переносами), числа (с точкой или запятой между цифрами) и знаки; одинаковые знаки подряд
+/// («...», «!!!») - один токен, эмодзи с модификаторами и флаги - одна графема
+struct Tokens<'a> {
+    line: &'a str,
+    graphemes: Peekable<GraphemeIndices<'a>>,
+}
+
+impl<'a> Tokens<'a> {
+    fn new(line: &'a str) -> Self {
+        Tokens {
+            line,
+            graphemes: line.grapheme_indices(true).peekable(),
         }
-        let mut end = i + 1;
-        if word_char(c) {
-            loop {
-                while end < chars.len() && word_char(chars[end].1) {
-                    end += 1;
+    }
+
+    /// Соединяет ли графема `joiner` слово с графемой `next` после него
+    fn joins(last: &str, joiner: &str, next: &str) -> bool {
+        match joiner {
+            "-" | "\u{2010}" | "\u{2011}" | "'" | "’" => word(next),
+            "." | "," => {
+                last.chars().last().is_some_and(|c| c.is_ascii_digit())
+                    && next.chars().next().is_some_and(|c| c.is_ascii_digit())
+            }
+            _ => false,
+        }
+    }
+}
+
+impl<'a> Iterator for Tokens<'a> {
+    type Item = Token<'a>;
+
+    fn next(&mut self) -> Option<Token<'a>> {
+        let (start, first) = loop {
+            let (at, grapheme) = self.graphemes.next()?;
+            if !separator(grapheme) {
+                break (at, grapheme);
+            }
+        };
+        let (mut end, mut last) = (start + first.len(), first);
+        if word(first) {
+            while let Some(&(at, grapheme)) = self.graphemes.peek() {
+                if word(grapheme) || grapheme == "\u{ad}" {
+                    self.graphemes.next();
+                    (end, last) = (at + grapheme.len(), grapheme);
+                    continue;
                 }
-                let joined = chars.get(end).zip(chars.get(end + 1)).is_some_and(
-                    |(&(_, joiner), &(_, next))| {
-                        let before = chars[end - 1].1;
-                        match joiner {
-                            '-' | '\u{2010}' | '\u{2011}' | '\'' | '’' => word_char(next),
-                            '.' | ',' => before.is_ascii_digit() && next.is_ascii_digit(),
-                            _ => false,
-                        }
-                    },
-                );
-                if !joined {
-                    break;
+                let mut ahead = self.graphemes.clone();
+                ahead.next();
+                match ahead.next() {
+                    Some((at, next)) if Self::joins(last, grapheme, next) => {
+                        self.graphemes.next();
+                        self.graphemes.next();
+                        (end, last) = (at + next.len(), next);
+                    }
+                    _ => break,
                 }
-                end += 1;
             }
         } else {
-            while end < chars.len() && chars[end].1 == c {
-                end += 1;
+            while let Some(&(at, grapheme)) = self.graphemes.peek() {
+                if grapheme != first {
+                    break;
+                }
+                self.graphemes.next();
+                end = at + grapheme.len();
             }
         }
-        let stop = chars.get(end).map_or(line.len(), |&(at, _)| at);
-        tokens.push(Token {
-            word: line[start..stop].to_owned(),
-            space_after: false,
-        });
-        i = end;
+        let space_after = self
+            .graphemes
+            .peek()
+            .is_none_or(|&(_, grapheme)| grapheme.chars().all(char::is_whitespace));
+        Some(Token {
+            word: &self.line[start..end],
+            space_after,
+        })
     }
-    tokens
 }
 
 /// Строка JSON с экранированием
@@ -596,9 +699,8 @@ mod tests {
     use crate::dictionary::tests::dictionary_bytes_of;
 
     fn words(line: &str) -> Vec<(String, bool)> {
-        tokenize(line)
-            .into_iter()
-            .map(|token| (token.word, token.space_after))
+        Tokens::new(line)
+            .map(|token| (token.word.to_owned(), token.space_after))
             .collect()
     }
 
@@ -649,7 +751,7 @@ mod tests {
             [
                 ("Ну".into(), false),
                 (",".into(), false),
-                ("да".into(), false)
+                ("да".into(), true)
             ]
         );
         assert_eq!(
@@ -662,7 +764,23 @@ mod tests {
             [
                 ("-".into(), false),
                 ("кто".into(), false),
-                ("-".into(), false)
+                ("-".into(), true)
+            ]
+        );
+        // Эмодзи с селектором, тоном кожи, флаг и семья через ZWJ - по одному токену
+        let tokens: Vec<String> = words("❤️ 👍🏽 🇷🇺 👨‍👩‍👧!!")
+            .into_iter()
+            .map(|(word, _)| word)
+            .collect();
+        assert_eq!(tokens, ["❤️", "👍🏽", "🇷🇺", "👨‍👩‍👧", "!!"]);
+        // Невидимые символы разделяют токены, но пробелом не считаются; мягкий перенос - в слове
+        assert_eq!(
+            words("при\u{200b}вет \u{feff}раму при\u{ad}вет"),
+            [
+                ("при".into(), false),
+                ("вет".into(), true),
+                ("раму".into(), true),
+                ("при\u{ad}вет".into(), true)
             ]
         );
     }
@@ -751,10 +869,12 @@ mod tests {
             let mut stderr = Vec::new();
             let code = {
                 let mut tee = Tee(stdout, &mut captured);
+                let interactive = false;
                 execute(
                     args,
                     "1.2.3",
                     Some(&self.0),
+                    interactive,
                     &mut input,
                     &mut tee,
                     &mut stderr,
@@ -831,6 +951,15 @@ mod tests {
         let dict = TestDictionary::new();
         let (_, lemmas, _) = dict.run(&["-i", "tokens"], "Мама\nмыла\n\n\nраму\n".as_bytes());
         assert_eq!(lemmas, "мама мыть\nрама\n");
+        // Пробелы по краям и все после табуляции - не токен
+        let (_, tsv, _) = dict.run(
+            &["-i", "tokens", "-f", "tsv"],
+            "  мыла \tVERB\n\tX\n".as_bytes(),
+        );
+        assert_eq!(
+            tsv,
+            "мыла\tмыть\tVERB\tGender=Fem|Number=Sing|Tense=Past\t1\n\n"
+        );
         let conllu = "# text = Мама мыла\n1-2\tМамамыла\t_\t_\t_\t_\t_\t_\t_\t_\n\
                       1\tМама\t_\t_\tNN\t_\t2\tnsubj\t_\t_\n2\tмыла\t_\t_\tVB\t_\t0\troot\t_\t_\n";
         let (code, out, _) = dict.run(&["-i", "conllu", "-f", "conllu"], conllu.as_bytes());
@@ -871,8 +1000,80 @@ mod tests {
             (code, error.as_str()),
             (1, "rumorph: нет.dict: файл не найден\n")
         );
-        let (code, _, error) = dict.run(&[], b"\xff\n");
-        assert_eq!((code, error.as_str()), (1, "rumorph: -: файл не в UTF-8\n"));
+        // Строка не в UTF-8 разбирается с U+FFFD вместо неверных байт, разбор идет дальше
+        let (code, out, error) = dict.run(&[], b"\xd0\xff\n\xd0\xa0\xd0\xb0\xd0\xbc\xd1\x83\n");
+        assert_eq!((code, out.as_str()), (1, "\u{fffd}\u{fffd}\nрама\n"));
+        assert_eq!(
+            error,
+            "rumorph: -: строка 1: не UTF-8, неверные байты заменены на U+FFFD\n"
+        );
+    }
+
+    /// Вывод, который считает сбросы и может отказать при сбросе
+    struct Output {
+        data: Vec<u8>,
+        flushes: usize,
+        failing: bool,
+    }
+
+    impl Write for Output {
+        fn write(&mut self, data: &[u8]) -> io::Result<usize> {
+            self.data.extend_from_slice(data);
+            Ok(data.len())
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            self.flushes += 1;
+            if self.failing {
+                return Err(io::Error::other("диск полон"));
+            }
+            Ok(())
+        }
+    }
+
+    fn run_with(dict: &TestDictionary, interactive: bool, output: &mut Output) -> (u8, String) {
+        let mut stderr = Vec::new();
+        let code = execute(
+            Vec::new(),
+            "",
+            Some(&dict.0),
+            interactive,
+            &mut "раму\nраму\n".as_bytes(),
+            output,
+            &mut stderr,
+        );
+        (code, String::from_utf8(stderr).unwrap())
+    }
+
+    #[test]
+    fn flushes_terminal_after_each_sentence() {
+        let dict = TestDictionary::new();
+        let mut output = Output {
+            data: Vec::new(),
+            flushes: 0,
+            failing: false,
+        };
+        assert_eq!(run_with(&dict, true, &mut output), (0, String::new()));
+        assert_eq!(output.data, "рама\nрама\n".as_bytes());
+        // По сбросу на предложение и последний
+        assert_eq!(output.flushes, 3);
+        output.flushes = 0;
+        assert_eq!(run_with(&dict, false, &mut output).0, 0);
+        assert_eq!(output.flushes, 1);
+    }
+
+    #[test]
+    fn reports_failed_final_write() {
+        let dict = TestDictionary::new();
+        let mut output = Output {
+            data: Vec::new(),
+            flushes: 0,
+            failing: true,
+        };
+        assert_eq!(
+            run_with(&dict, false, &mut output),
+            (1, "rumorph: ошибка записи: диск полон\n".into())
+        );
     }
 
     #[test]
