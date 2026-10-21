@@ -31,7 +31,7 @@ pub fn read(text: &str) -> Result<Counts, String> {
     Ok(counts)
 }
 
-/// Словоформа или лемма в записи счетчиков: нижний регистр, «ё» как «е»
+/// Запись без регистра и «ё»: словоформа в счетчиках, лемма при сравнении с точностью до «ё»
 fn normal(text: &str) -> String {
     text.to_lowercase().replace('ё', "е")
 }
