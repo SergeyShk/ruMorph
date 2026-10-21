@@ -880,7 +880,7 @@ fn _analyzer(py: Python<'_>, path: Option<PathBuf>) -> PyResult<Py<Analyzer>> {
 ///     >>> from rumorph import Analyzer
 ///     >>> morph = Analyzer()
 ///     >>> [(analysis.lemma, round(analysis.prob, 3)) for analysis in morph.analyze("стали")][:2]
-///     [('стать', 0.975), ('сталь', 0.011)]
+///     [('стать', 0.988), ('сталь', 0.005)]
 #[pyclass(frozen, module = "rumorph")]
 struct Analyzer {
     shared: Arc<Shared>,
@@ -1106,6 +1106,11 @@ impl Analyzer {
             .into_iter()
             .map(|(spelling, tag, lemma, prob)| (spelling, tag.to_owned(), lemma, prob))
             .collect()
+    }
+
+    /// Доли разборов словоформы - по частотам корпуса UD (для сверки с pymorphy3 в тестах)
+    fn _table_frequencies(&self, word: &str) -> bool {
+        self.shared.dictionary.table_frequencies(word)
     }
 
     /// Описание источника словаря в JSON (для проверки словаря в тестах)
