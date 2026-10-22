@@ -1656,7 +1656,8 @@ fn same_up_to_yo(a: &str, b: &str) -> bool {
 
 /// Слово капсом: в нем есть буквы, и все заглавные
 fn caps(word: &str) -> bool {
-    word.chars().any(char::is_alphabetic) && !word.chars().any(char::is_lowercase)
+    // Строчная буква обычно первая: проверка букв по таблицам Unicode до нее не доходит
+    !word.chars().any(char::is_lowercase) && word.chars().any(char::is_alphabetic)
 }
 
 /// Форма в регистре слова, от которого формы строились в нижнем регистре: капсом, если слово
