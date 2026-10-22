@@ -645,7 +645,7 @@ impl Dictionary {
     /// написание запроса («недалеко», а не «недалёко»). Без частот каждый слитый разбор получает
     /// равную долю, и порядок словаря сохраняется
     fn merge(&self, mut merged: Vec<Analysis>) -> Vec<Analysis> {
-        let yo_count = |word: &str| word.chars().filter(|&ch| ch == 'ё').count();
+        let yo_count = |word: &str| word.chars().filter(|&ch| matches!(ch, 'ё' | 'Ё')).count();
         let core = |analysis: &Analysis| self.ud_core.get(usize::from(analysis.ud));
         // Слитые разборы собираются в начале списка
         let mut kept = 0;
@@ -1166,6 +1166,12 @@ impl Dictionary {
             .concat(),
             _ => self.spell(lexeme, form),
         };
+        // Окончание формы слова капсом - тоже заглавными: «ЧАТБОТОВЕД» - «ЧАТБОТОВЕДА»
+        let word = if caps(&analysis.word) {
+            word.to_uppercase()
+        } else {
+            word
+        };
         Analysis {
             word,
             lemma: analysis.lemma.clone(),
@@ -1600,16 +1606,21 @@ fn normalized_marks(word: &str) -> Option<String> {
 fn same_up_to_yo(a: &str, b: &str) -> bool {
     a == b
         || (a.len() == b.len()
-            && a.chars()
-                .zip(b.chars())
-                .all(|(x, y)| x == y || matches!((x, y), ('е', 'ё') | ('ё', 'е'))))
+            && a.chars().zip(b.chars()).all(|(x, y)| {
+                x == y || matches!((x, y), ('е', 'ё') | ('ё', 'е') | ('Е', 'Ё') | ('Ё', 'Е'))
+            }))
+}
+
+/// Слово капсом: в нем есть буквы, и все заглавные
+fn caps(word: &str) -> bool {
+    word.chars().any(char::is_alphabetic) && !word.chars().any(char::is_lowercase)
 }
 
 /// Форма в регистре слова, от которого формы строились в нижнем регистре: капсом, если слово
 /// капсом («ПИН-КОДАМ»), иначе общее начало слова и формы - в регистре слова («УрО» → «УрО»,
 /// «Уру»), а без общего начала - с заглавной первой буквой («Покринжовее» → «Кринжового»)
 fn capitalized_like(original: &str, form: Analysis) -> Analysis {
-    if original.chars().any(char::is_alphabetic) && !original.chars().any(char::is_lowercase) {
+    if caps(original) {
         return Analysis {
             word: form.word.to_uppercase(),
             ..form
@@ -2350,6 +2361,13 @@ pub(super) mod tests {
     }
 
     #[test]
+    fn spellings_up_to_yo() {
+        // Угадывание в смешанном регистре ставит заглавную «Ё» на место заглавной «Е»
+        assert!(same_up_to_yo("жилем", "жилём") && same_up_to_yo("ЖилЕм", "ЖилЁм"));
+        assert!(!same_up_to_yo("ЖилЕм", "Жилём") && !same_up_to_yo("жилем", "жилам"));
+    }
+
+    #[test]
     fn merged_analyses_share_forms() {
         // «мешать» непереходный и переходный - одна таблица, как их объединяет сборщик;
         // причастие есть только у переходного
@@ -2481,6 +2499,14 @@ pub(super) mod tests {
             .map(|form| form.word)
             .collect();
         assert_eq!(forms, ["Зумов", "Зумова"]);
+        // У слова капсом с нулевым окончанием окончания форм тоже заглавные
+        let entry = Entry {
+            form: 0,
+            ..analyses[0].entry.unwrap()
+        };
+        let caps = dict.analysis("ЗУМОВ", entry, Source::Guess).unwrap();
+        let forms: Vec<String> = dict.forms(&caps).into_iter().map(|f| f.word).collect();
+        assert_eq!(forms, ["ЗУМОВ", "ЗУМОВА"]);
         // Слитное название в смешанном регистре угадывается, как слово с заглавной
         let mixed: Vec<(String, f64)> = dict
             .analyze("ЗуМова")
@@ -2559,6 +2585,12 @@ pub(super) mod tests {
             .map(|form| form.word)
             .collect();
         assert_eq!(forms, ["Ёнок", "Ёнка"]);
+        // Длинное слово капсом: написание угаданного разбора - с «ё» суффикса, формы капсом
+        let caps = dict.analyze("СЛОНЕНКА");
+        let young = caps.iter().find(|a| a.lemma == "слонёнок").unwrap();
+        assert_eq!(young.word, "СЛОНЁНКА");
+        let forms: Vec<String> = dict.forms(young).into_iter().map(|f| f.word).collect();
+        assert_eq!(forms, ["СЛОНЁНОК", "СЛОНЁНКА"]);
     }
 
     #[test]

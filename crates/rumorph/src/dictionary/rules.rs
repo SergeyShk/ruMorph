@@ -288,8 +288,9 @@ impl Dictionary {
                     for analysis in &mut analyses {
                         analysis.prob *= 1.0 - share;
                     }
+                    // Написание угаданного разбора с «ё» из суффикса: по нему строятся формы
                     analyses.extend(guessed.into_iter().map(|analysis| Analysis {
-                        word: word.to_owned(),
+                        word: analysis.word.to_uppercase(),
                         prob: analysis.prob * share,
                         ..analysis
                     }));
