@@ -697,6 +697,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#words" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Own words
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#methods" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -906,6 +917,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#words" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Own words
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#methods" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1009,15 +1031,15 @@
 
 
 <h1 id="analyzer">Analyzer<a class="headerlink" href="#analyzer" title="Permanent link">&para;</a></h1>
-<div class="signature highlight"><pre><span></span><code><span class="n">Analyzer</span><span class="p">(</span><span class="n">path</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+<div class="signature highlight"><pre><span></span><code><span class="n">Analyzer</span><span class="p">(</span><span class="n">path</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">words</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
 </code></pre></div>
 <p>Morphological analyzer: for a word form it finds all <a href="../analysis/">analyses</a> in the OpenCorpora dictionary - the initial form, the part of speech and the <a href="https://universaldependencies.org/">Universal Dependencies</a> features - and orders them by probability. The dictionary is loaded when the first analyzer is created: analyzers with the same dictionary file in a process share it, so a new analyzer is created instantly. The last loaded dictionary stays in the process even without analyzers, so process pool tasks and an analyzer created for a single call do not load the dictionary again.</p>
 <p>Exceptions:</p>
 <ul>
 <li><code>FileNotFoundError</code> - the dictionary file does not exist;</li>
 <li><code>OSError</code> - the dictionary file cannot be read: no access, the path points to a directory;</li>
-<li><code>ValueError</code> - the file is not a ruMorph dictionary or is damaged;</li>
-<li><code>TypeError</code> - a path that is neither a string nor <code>PathLike</code>.</li>
+<li><code>ValueError</code> - the file is not a ruMorph dictionary or is damaged, or an <a href="#words">own word</a> has no sample in the dictionary, its sample is ambiguous or the word does not inflect like it;</li>
+<li><code>TypeError</code> - a path that is neither a string nor <code>PathLike</code>, or own words that are not a mapping of strings.</li>
 </ul>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Code</label><label for="__tabbed_1_2">Result</label></div>
 <div class="tabbed-content">
@@ -1051,9 +1073,31 @@
 <td style="text-align: left;"><code>None</code></td>
 <td style="text-align: left;">Path to the dictionary file; by default, the dictionary from the package</td>
 </tr>
+<tr>
+<td style="text-align: left;"><code>words</code></td>
+<td style="text-align: left;"><code>Mapping[str, str \| tuple[str, str]]</code></td>
+<td style="text-align: left;"><code>None</code></td>
+<td style="text-align: left;"><a href="#words">Own words</a> and their samples</td>
+</tr>
 </tbody>
 </table>
 <p>The object keeps the dictionary path in <code>path</code> of type <code>Path</code>, read-only. The dictionary file is mapped into memory: processes with the same file share its memory, so every further process with an analyzer takes about 1.4 MB. While an analyzer exists, the file must not be overwritten in place, but it can be replaced with a new file; on Windows an open file can be neither replaced nor deleted. The last loaded dictionary stays open even after the analyzers are deleted - until a dictionary from another file is loaded or the process exits: to release the file of your own dictionary, for example before deleting it on Windows, delete its analyzers and analyses and create an analyzer with the package dictionary: <code>Analyzer()</code>. A dictionary is trusted data, like code: loading rejects a damaged file but not every deliberately crafted one, so dictionaries from untrusted sources should not be loaded.</p>
+<h2 id="words">Own words<a class="headerlink" href="#words" title="Permanent link">&para;</a></h2>
+<p>A word that is not in the dictionary can be added after a sample - a dictionary word that inflects the same way: «зумер» like «геймер», «кринж» like «пляж». The word and the sample are written in the same form, usually the initial one. The own word gets all forms of the sample with its own stem and then behaves like a dictionary word: <code>source</code> is <code>"dictionary"</code>, <code>is_known</code> finds it, <code>forms</code>, <code>inflect</code> and <code>agree</code> work. If the sample has lexemes of different parts of speech («печь» is a noun and a verb), the sample is a pair with the UD part of speech: <code>{"зечь": ("печь", "VERB")}</code>; otherwise the analyzer is not created. Own words belong to this analyzer only, and pickle saves them with it.</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="2:2"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Code</label><label for="__tabbed_2_2">Result</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="n">morph</span> <span class="o">=</span> <span class="n">Analyzer</span><span class="p">(</span><span class="n">words</span><span class="o">=</span><span class="p">{</span><span class="s2">"зумер"</span><span class="p">:</span> <span class="s2">"геймер"</span><span class="p">,</span> <span class="s2">"кринж"</span><span class="p">:</span> <span class="s2">"пляж"</span><span class="p">})</span>
+<span class="n">zoomer</span> <span class="o">=</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"зумерами"</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+<span class="n">zoomer</span><span class="o">.</span><span class="n">lemma</span><span class="p">,</span> <span class="n">zoomer</span><span class="o">.</span><span class="n">inflect</span><span class="p">(</span><span class="n">Case</span><span class="o">=</span><span class="s2">"Dat"</span><span class="p">,</span> <span class="n">Number</span><span class="o">=</span><span class="s2">"Sing"</span><span class="p">),</span> <span class="n">morph</span><span class="o">.</span><span class="n">lemmatize</span><span class="p">([</span><span class="s2">"кринжем"</span><span class="p">])</span>
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code>('зумер', 'зумеру', ['кринж'])
+</code></pre></div>
+</div>
+</div>
+</div>
 <h2 id="methods">Methods<a class="headerlink" href="#methods" title="Permanent link">&para;</a></h2>
 <div class="metric-card">
 <h3 id="analyze">Analyses of a word form<a class="headerlink" href="#analyze" title="Permanent link">&para;</a></h3>
@@ -1083,7 +1127,7 @@
 <ul>
 <li><code>TypeError</code> - a word that is not a string.</li>
 </ul>
-<div class="tabbed-set tabbed-alternate" data-tabs="2:2"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Code</label><label for="__tabbed_2_2">Result</label></div>
+<div class="tabbed-set tabbed-alternate" data-tabs="3:2"><input checked="checked" id="__tabbed_3_1" name="__tabbed_3" type="radio" /><input id="__tabbed_3_2" name="__tabbed_3" type="radio" /><div class="tabbed-labels"><label for="__tabbed_3_1">Code</label><label for="__tabbed_3_2">Result</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
 <div class="highlight"><pre><span></span><code><span class="p">[(</span><span class="n">a</span><span class="o">.</span><span class="n">lemma</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">pos</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">feats</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"Case"</span><span class="p">),</span> <span class="nb">round</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">prob</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"стали"</span><span class="p">)]</span>
@@ -1131,7 +1175,7 @@
 <ul>
 <li><code>TypeError</code> - a string instead of a collection of words, a word that is not a string.</li>
 </ul>
-<div class="tabbed-set tabbed-alternate" data-tabs="3:2"><input checked="checked" id="__tabbed_3_1" name="__tabbed_3" type="radio" /><input id="__tabbed_3_2" name="__tabbed_3" type="radio" /><div class="tabbed-labels"><label for="__tabbed_3_1">Code</label><label for="__tabbed_3_2">Result</label></div>
+<div class="tabbed-set tabbed-alternate" data-tabs="4:2"><input checked="checked" id="__tabbed_4_1" name="__tabbed_4" type="radio" /><input id="__tabbed_4_2" name="__tabbed_4" type="radio" /><div class="tabbed-labels"><label for="__tabbed_4_1">Code</label><label for="__tabbed_4_2">Result</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
 <div class="highlight"><pre><span></span><code><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">analyses</span><span class="p">)</span> <span class="k">for</span> <span class="n">analyses</span> <span class="ow">in</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze_many</span><span class="p">([</span><span class="s2">"мама"</span><span class="p">,</span> <span class="s2">"мыла"</span><span class="p">,</span> <span class="s2">"раму"</span><span class="p">])]</span>
@@ -1172,7 +1216,7 @@
 <ul>
 <li><code>TypeError</code> - a string instead of a collection of words, a word that is not a string.</li>
 </ul>
-<div class="tabbed-set tabbed-alternate" data-tabs="4:2"><input checked="checked" id="__tabbed_4_1" name="__tabbed_4" type="radio" /><input id="__tabbed_4_2" name="__tabbed_4" type="radio" /><div class="tabbed-labels"><label for="__tabbed_4_1">Code</label><label for="__tabbed_4_2">Result</label></div>
+<div class="tabbed-set tabbed-alternate" data-tabs="5:2"><input checked="checked" id="__tabbed_5_1" name="__tabbed_5" type="radio" /><input id="__tabbed_5_2" name="__tabbed_5" type="radio" /><div class="tabbed-labels"><label for="__tabbed_5_1">Code</label><label for="__tabbed_5_2">Result</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
 <div class="highlight"><pre><span></span><code><span class="n">morph</span><span class="o">.</span><span class="n">lemmatize</span><span class="p">(</span><span class="s2">"Мы стали друзьями в ковиде"</span><span class="o">.</span><span class="n">split</span><span class="p">())</span>
@@ -1213,7 +1257,7 @@
 <ul>
 <li><code>TypeError</code> - a word that is not a string.</li>
 </ul>
-<div class="tabbed-set tabbed-alternate" data-tabs="5:2"><input checked="checked" id="__tabbed_5_1" name="__tabbed_5" type="radio" /><input id="__tabbed_5_2" name="__tabbed_5" type="radio" /><div class="tabbed-labels"><label for="__tabbed_5_1">Code</label><label for="__tabbed_5_2">Result</label></div>
+<div class="tabbed-set tabbed-alternate" data-tabs="6:2"><input checked="checked" id="__tabbed_6_1" name="__tabbed_6" type="radio" /><input id="__tabbed_6_2" name="__tabbed_6" type="radio" /><div class="tabbed-labels"><label for="__tabbed_6_1">Code</label><label for="__tabbed_6_2">Result</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
 <div class="highlight"><pre><span></span><code><span class="n">morph</span><span class="o">.</span><span class="n">is_known</span><span class="p">(</span><span class="s2">"Ежи"</span><span class="p">),</span> <span class="n">morph</span><span class="o">.</span><span class="n">is_known</span><span class="p">(</span><span class="s2">"вайб"</span><span class="p">)</span>
@@ -1230,7 +1274,7 @@
 <p>The package dictionary is built from the <a href="https://opencorpora.org">OpenCorpora</a> dictionary: about 3.1 million word forms. The probabilities of analyses come from the OpenCorpora corpus and are refined by the annotation of the Universal Dependencies treebanks <a href="https://github.com/UniversalDependencies/UD_Russian-Taiga">UD_Russian-Taiga</a> and <a href="https://github.com/UniversalDependencies/UD_Russian-GSD">UD_Russian-GSD</a>: this way «ничего» is more often a pronoun than an adverb. Word forms missing from every corpus get equally probable analyses. The dictionary is distributed under the <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a> license.</p>
 <h2 id="parallel">Threads and processes<a class="headerlink" href="#parallel" title="Permanent link">&para;</a></h2>
 <p>One analyzer can be used from several threads: <code>analyze_many</code> and <code>lemmatize</code> release the GIL and process lists in parallel, and on the free-threaded Python 3.14t <code>analyze</code>, <code>is_known</code>, <code>inflect</code> and <code>agree</code> run in parallel too. A shared analyzer is not slower than a separate one per thread, so there is no need for an analyzer per thread. Without the GIL threads are limited by deleting the analysis objects: <code>forms</code> hardly speeds up in threads and <code>analyze_many</code> on long lists speeds up weakly, so such lists are better analyzed in chunks of a thousand or two words. The analyzer and analyses are pickled, so they work with <code>multiprocessing</code> and joblib: processes share the dictionary mapped into memory, however many analyses they receive. A pickle keeps the dictionary path: unpickling takes the analyzer with the same path whose analyses are in the thread, otherwise loads the dictionary from the path or, if the file is gone, takes the dictionary loaded from it in the process. Python 3.14 subinterpreters (<code>InterpreterPoolExecutor</code>) are not supported: use threads or processes. Passing analyses between processes costs more than the analysis itself, so in processes it is better to get lemmas and analysis fields, and analyses in threads.</p>
-<div class="tabbed-set tabbed-alternate" data-tabs="6:2"><input checked="checked" id="__tabbed_6_1" name="__tabbed_6" type="radio" /><input id="__tabbed_6_2" name="__tabbed_6" type="radio" /><div class="tabbed-labels"><label for="__tabbed_6_1">Code</label><label for="__tabbed_6_2">Result</label></div>
+<div class="tabbed-set tabbed-alternate" data-tabs="7:2"><input checked="checked" id="__tabbed_7_1" name="__tabbed_7" type="radio" /><input id="__tabbed_7_2" name="__tabbed_7" type="radio" /><div class="tabbed-labels"><label for="__tabbed_7_1">Code</label><label for="__tabbed_7_2">Result</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
 <div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">concurrent.futures</span><span class="w"> </span><span class="kn">import</span> <span class="n">ThreadPoolExecutor</span>
