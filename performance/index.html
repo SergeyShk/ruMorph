@@ -1026,7 +1026,7 @@
 
 
 <h1 id="_1">Сравнение<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h1>
-<p>ruMorph разбирает слово без контекста, как pymorphy3 и mystem, и среди них он самый точный: на трех тестовых наборах UD у первого разбора верны часть речи и лемма у 90-94 % слов против 79-85 % у pymorphy3 и mystem. И самый быстрый: 684 тыс. токенов в секунду, в 29 раз быстрее pymorphy3 и в 9 раз быстрее mystem, а на короткий текст вместе с загрузкой отвечает за 5 мс. Теггер с контекстом Stanza точнее в признаках, но в 230 раз медленнее и на короткий текст отвечает за 2 с.</p>
+<p>ruMorph разбирает слово без контекста, как pymorphy3 и mystem, и среди них он самый точный: на трех тестовых наборах UD у первого разбора верны часть речи и лемма у 90-94 % слов против 79-85 % у pymorphy3 и mystem. И самый быстрый: 709 тыс. токенов в секунду, в 30 раз быстрее pymorphy3 и в 9 раз быстрее mystem, а на короткий текст вместе с загрузкой отвечает за 5 мс. Теггер с контекстом Stanza точнее в признаках, но в 260 раз медленнее и на короткий текст отвечает за 2 с.</p>
 <h2 id="quality">Качество<a class="headerlink" href="#quality" title="Permanent link">&para;</a></h2>
 <p>Эталон - тестовые части трибанков <a href="https://github.com/UniversalDependencies/UD_Russian-SynTagRus">UD_Russian-SynTagRus</a>, <a href="https://github.com/UniversalDependencies/UD_Russian-Taiga">UD_Russian-Taiga</a> и <a href="https://github.com/UniversalDependencies/UD_Russian-GSD">UD_Russian-GSD</a> из релиза UD 2.18: каждая система получает их токены, знаки препинания не считаются, леммы сравниваются без учета регистра и с «е» вместо «ё». Соглашения разметки у трибанков разные, поэтому сравнивать стоит системы на одном наборе, а не наборы между собой.</p>
 <h3 id="context-free">Без контекста<a class="headerlink" href="#context-free" title="Permanent link">&para;</a></h3>
@@ -1157,7 +1157,7 @@
 <td style="text-align: left;">ruMorph</td>
 <td style="text-align: left;">93,8</td>
 <td style="text-align: left;"><strong>96,3</strong></td>
-<td style="text-align: left;">72,8</td>
+<td style="text-align: left;">72,9</td>
 </tr>
 <tr>
 <td style="text-align: left;">Stanza</td>
@@ -1350,7 +1350,7 @@
 <td style="text-align: left;">93,8</td>
 <td style="text-align: left;">80,8</td>
 <td style="text-align: left;">93,2</td>
-<td style="text-align: left;">72,8</td>
+<td style="text-align: left;">72,9</td>
 <td style="text-align: left;">71,2</td>
 </tr>
 <tr>
@@ -1408,7 +1408,7 @@
 <h3 id="text">Разбор текста<a class="headerlink" href="#text" title="Permanent link">&para;</a></h3>
 <p>Время разбора текста вместе с импортом и загрузкой системы в новом процессе, секунд, по обеим осям - логарифмическая шкала:</p>
 <p><img alt="Время разбора текста с загрузкой от объема текста" src="../img/speed.svg" /></p>
-<p>На коротком тексте почти все время уходит на загрузку: ruMorph отвечает за 5 мс, pymorphy3 и mystem - за 20-40 мс, Slovnet - за 0,2 с, spaCy - за 1,2-1,4 с, Stanza - за 2 с. На длинном решает скорость разбора, токенов в секунду без загрузки, больше - лучше:</p>
+<p>На коротком тексте почти все время уходит на загрузку: ruMorph отвечает за 5 мс, pymorphy3 и mystem - за 20-40 мс, Slovnet - за 0,2 с, spaCy - за 1,1-1,3 с, Stanza - за 2 с. На длинном решает скорость разбора, токенов в секунду без загрузки, больше - лучше:</p>
 <table>
 <thead>
 <tr>
@@ -1419,27 +1419,27 @@
 <tbody>
 <tr>
 <td style="text-align: left;">ruMorph</td>
-<td style="text-align: left;"><strong>684 151</strong></td>
+<td style="text-align: left;"><strong>709 381</strong></td>
 </tr>
 <tr>
 <td style="text-align: left;">mystem</td>
-<td style="text-align: left;">79 046</td>
+<td style="text-align: left;">82 191</td>
 </tr>
 <tr>
 <td style="text-align: left;">Slovnet (Natasha)</td>
-<td style="text-align: left;">44 323</td>
+<td style="text-align: left;">45 286</td>
 </tr>
 <tr>
 <td style="text-align: left;">pymorphy3</td>
-<td style="text-align: left;">23 843</td>
+<td style="text-align: left;">23 484</td>
 </tr>
 <tr>
 <td style="text-align: left;">spaCy ru_core_news_sm</td>
-<td style="text-align: left;">8 878</td>
+<td style="text-align: left;">8 627</td>
 </tr>
 <tr>
 <td style="text-align: left;">Stanza</td>
-<td style="text-align: left;">2 983</td>
+<td style="text-align: left;">2 738</td>
 </tr>
 </tbody>
 </table>
@@ -1457,44 +1457,44 @@
 <tbody>
 <tr>
 <td style="text-align: left;">Разбор словоформы: <code>analyze</code> в цикле, <code>parse</code></td>
-<td style="text-align: left;">732</td>
+<td style="text-align: left;">675</td>
 <td style="text-align: left;">20</td>
-<td style="text-align: left;">105</td>
+<td style="text-align: left;">104</td>
 </tr>
 <tr>
 <td style="text-align: left;">Разбор списка: <code>analyze_many</code></td>
-<td style="text-align: left;">754</td>
+<td style="text-align: left;">701</td>
 <td style="text-align: left;">-</td>
 <td style="text-align: left;">-</td>
 </tr>
 <tr>
 <td style="text-align: left;">Лемматизация: <code>lemmatize</code>, <code>parse(word)[0].normal_form</code></td>
-<td style="text-align: left;">1 404</td>
+<td style="text-align: left;">1 340</td>
 <td style="text-align: left;">22</td>
-<td style="text-align: left;">170</td>
+<td style="text-align: left;">169</td>
 </tr>
 <tr>
 <td style="text-align: left;">Лемматизация в 4 потоках: <code>lemmatize</code></td>
-<td style="text-align: left;">4 275</td>
+<td style="text-align: left;">4 148</td>
 <td style="text-align: left;">-</td>
 <td style="text-align: left;">-</td>
 </tr>
 <tr>
 <td style="text-align: left;">Форма по признакам: <code>inflect(Case="Gen")</code>, <code>inflect({"gent"})</code></td>
-<td style="text-align: left;">1 399</td>
+<td style="text-align: left;">1 407</td>
 <td style="text-align: left;">76</td>
 <td style="text-align: left;">76</td>
 </tr>
 <tr>
 <td style="text-align: left;">Согласование с количеством: <code>agree(5)</code>, <code>make_agree_with_number(5)</code></td>
-<td style="text-align: left;">1 417</td>
+<td style="text-align: left;">1 352</td>
 <td style="text-align: left;">85</td>
-<td style="text-align: left;">85</td>
+<td style="text-align: left;">84</td>
 </tr>
 <tr>
 <td style="text-align: left;">Формы лексемы: <code>forms()</code>, <code>lexeme</code></td>
-<td style="text-align: left;">101</td>
-<td style="text-align: left;">32</td>
+<td style="text-align: left;">75</td>
+<td style="text-align: left;">31</td>
 <td style="text-align: left;">32</td>
 </tr>
 </tbody>
@@ -1513,19 +1513,19 @@
 <tbody>
 <tr>
 <td style="text-align: left;">Импорт и загрузка словаря</td>
-<td style="text-align: left;">4 мс</td>
-<td style="text-align: left;">30 мс</td>
+<td style="text-align: left;">5 мс</td>
 <td style="text-align: left;">31 мс</td>
+<td style="text-align: left;">33 мс</td>
 </tr>
 <tr>
 <td style="text-align: left;">Прирост памяти процесса</td>
-<td style="text-align: left;">16,0 МБ</td>
+<td style="text-align: left;">16,5 МБ</td>
 <td style="text-align: left;">34,5 МБ</td>
 <td style="text-align: left;">25,5 МБ</td>
 </tr>
 <tr>
 <td style="text-align: left;">Каждый следующий процесс</td>
-<td style="text-align: left;">1,4 МБ</td>
+<td style="text-align: left;">1,2 МБ</td>
 <td style="text-align: left;">32,5 МБ</td>
 <td style="text-align: left;">23,1 МБ</td>
 </tr>
@@ -1535,9 +1535,9 @@
 <h2 id="method">Как измерено<a class="headerlink" href="#method" title="Permanent link">&para;</a></h2>
 <ul>
 <li>Качество и разбор текста - скрипт <a href="https://github.com/SergeyShk/ruMorph/blob/master/scripts/compare.py"><code>scripts/compare.py</code></a>: <code>uv run --with rumorph==X.Y.Z scripts/compare.py build/compare --chart docs/img/speed.svg</code>, где <code>X.Y.Z</code> - версия ruMorph (без <code>--with</code> - версия из <code>scripts/compare.py.lock</code>, вместо версии можно дать путь к колесу). Он ставит системы в отдельное окружение, версии всех пакетов которого закреплены в <code>scripts/compare.py.lock</code>, до замеров скачивает тестовые части трибанков, модели и mystem с проверкой контрольных сумм и разбирает эталонные токены. Таблицы перевода частей речи, падежа и числа pymorphy3 и mystem в UD - в начале скрипта.</li>
-<li>Версии: Python 3.11, ruMorph 0.3.0.dev8 (колесо из репозитория), pymorphy3 2.0.6 со словарем pymorphy3-dicts-ru 2.4.417150.4580142, mystem 3.1 через pymystem3 0.2.0 без снятия омонимии (для качества - каждое слово отдельно; программа для macOS собрана под x86_64 и работает через Rosetta 2), spaCy 3.8.16 с моделью ru_core_news_sm 3.8.0, Stanza 1.15.0 с моделью по умолчанию на процессоре (torch 2.14.1), Slovnet 0.6.0 с моделями slovnet_morph_news_v1 и navec_news_v1. Компьютер - Apple M3 Pro, macOS 26.</li>
+<li>Версии: Python 3.11, ruMorph 0.3.0, pymorphy3 2.0.6 со словарем pymorphy3-dicts-ru 2.4.417150.4580142, mystem 3.1 через pymystem3 0.2.0 без снятия омонимии (для качества - каждое слово отдельно; программа для macOS собрана под x86_64 и работает через Rosetta 2), spaCy 3.8.16 с моделью ru_core_news_sm 3.8.0, Stanza 1.15.0 с моделью по умолчанию на процессоре (torch 2.14.1), Slovnet 0.6.0 с моделями slovnet_morph_news_v1 и navec_news_v1. Компьютер - Apple M3 Pro, macOS 26.</li>
 <li>Скорость разбора текста - 157 706 токенов тестовой части SynTagRus со знаками препинания в одном потоке: токенов в секунду - лучший из двух разборов всей части после загрузки, точки графика - импорт, загрузка и разбор первых 10-100 000 токенов в новом процессе. Замеряется только вызов системы: mystem получает предложение целиком, spaCy разбирает предложения через <code>nlp.pipe</code>.</li>
-<li>Операции и память - ruMorph 0.2.0, pymorphy3 2.0.6, <code>pymorphy3[fast]</code> - то же с расширением DAWG на C++; 128 251 словоформа тестовой части SynTagRus без знаков препинания, лучшее из трех прогонов в одном потоке, кроме строки с потоками. <code>inflect</code> - родительный падеж первых разборов с падежом, <code>agree</code> - первые разборы существительных с числом 5, <code>forms</code> - первые разборы первых 20 000 слов. Память - прирост резидентной памяти процесса (<code>ps -o rss</code>) после импорта и создания анализатора, время - импорт, создание анализатора и первый разбор; следующий процесс - прирост памяти, которую процесс не делит с другими (USS), в каждом из четырех процессов <code>multiprocessing</code>.</li>
+<li>Операции и память - ruMorph 0.3.0, pymorphy3 2.0.6, <code>pymorphy3[fast]</code> - то же с расширением DAWG на C++; 128 251 словоформа тестовой части SynTagRus без знаков препинания, лучшее из трех прогонов в одном потоке, кроме строки с потоками. <code>inflect</code> - родительный падеж первых разборов с падежом, <code>agree</code> - первые разборы существительных с числом 5, <code>forms</code> - первые разборы первых 20 000 слов. Память - прирост резидентной памяти процесса (<code>ps -o rss</code>) после импорта и создания анализатора, время - импорт, создание анализатора и первый разбор; следующий процесс - прирост памяти, которую процесс не делит с другими (USS), в каждом из четырех процессов <code>multiprocessing</code>.</li>
 </ul>
 
 

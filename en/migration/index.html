@@ -1242,7 +1242,7 @@
 <li><strong>Analyses</strong> that coincide in UD (the conjunction and the adverb «так») are merged into one with the sum of their probabilities, so there may be fewer analyses than in pymorphy.</li>
 <li><strong>Forms</strong> from <code>inflect</code> and <code>agree</code> are strings, not analyses; when there is no form, they raise <a href="../exceptions/"><code>FormNotFoundError</code></a>, a subclass of <code>LookupError</code>.</li>
 <li><strong>Tokens outside the dictionary</strong> are <a href="../analysis/#rules">analyzed by rules</a> with UD parts of speech and features: «2005-го» is an ordinal adjective in the genitive with forms («2005-му»), not an indeclinable noun as in pymorphy3.</li>
-<li><strong>Speed.</strong> Analysis and lemmatization are 7-8 times faster than with <code>pymorphy3[fast]</code> and 37-64 times faster than with pymorphy3 without it, and lists of words are processed without the GIL, see <a href="../performance/">Comparison</a>.</li>
+<li><strong>Speed.</strong> Analysis and lemmatization are 6-8 times faster than with <code>pymorphy3[fast]</code> and 34-62 times faster than with pymorphy3 without it, and lists of words are processed without the GIL, see <a href="../performance/">Comparison</a>.</li>
 </ul>
 
 
