@@ -179,8 +179,11 @@ impl Dictionary {
         // Протяжка в середине слова и заикание вместе с протяжкой («не-е-ет», «Н-ну-у») - разборы
         // словарного слова без них
         if let Some(plain) = unstretched(word) {
-            let analyses: Vec<Analysis> = self
-                .merge(self.candidates(&plain))
+            // Доли - как у того же слова без протяжки: с поправками на числительные и регистр
+            let mut found = self.merge(self.candidates(&plain));
+            self.reweight_numerals(&mut found);
+            self.weigh_by_case(&plain, &mut found);
+            let analyses: Vec<Analysis> = found
                 .into_iter()
                 .map(|analysis| Analysis {
                     word: word.to_owned(),

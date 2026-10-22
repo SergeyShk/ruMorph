@@ -83,7 +83,8 @@ def test_guessed_inflection(morph):
     assert {form.lemma for form in morph.analyze("чатботу")[0].forms()} == {"чатбот"}
 
 
-@pytest.mark.parametrize("word", ["вайб1", "Б" + "е" * 200])
+# Короткие слова в смешанном регистре - чаще единицы измерения: их не угадать по окончанию
+@pytest.mark.parametrize("word", ["вайб1", "Б" + "е" * 200, "МГц", "кГц", "дБ", "мВ"])
 def test_not_guessed(morph, word):
     assert [(a.pos, a.source) for a in morph.analyze(word)] == [("X", "rule")]
 
@@ -99,6 +100,8 @@ def test_not_guessed(morph, word):
         # Слитное название - как слово с заглавной, аббревиатура с окончанием - по основе
         ("ЛайфНьюс", "лайфньюс", "PROPN"),
         ("РосПил", "роспил", "PROPN"),
+        # Название, которое кончается заглавной буквой, сохраняет конец в лемме
+        ("РусАЛ", "русал", "PROPN"),
         ("МЭРТа", "мэрт", "PROPN"),
     ],
 )

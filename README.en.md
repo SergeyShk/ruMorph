@@ -146,7 +146,6 @@ Numbers, signs, Latin script and abbreviations are analyzed by rules, their `sou
 *   initials «А.» - a first name, a patronymic or a surname with `Abbr=Yes`
 *   abbreviations with a dot «т.», «им.» - the analyses of the dictionary abbreviation, uppercase acronyms «НКО» - `PROPN` or `NOUN` with `Abbr=Yes`
 *   adverbs «по-бурятски», «по-молодому» - `ADV`
-*   words with a drawl or a stutter through hyphens «не-е-ет», «с-спасибо» - the analyses of the dictionary word without them
 *   other tokens «км/ч», «100%-ный» - `X` without features, the lemma is the token in lowercase
 
 The shares of ambiguous analyses come from the frequencies in the UD Taiga and GSD treebanks, the shares of proper nouns take the case into account: «Земли» is first of all the planet (PROPN), «земли» is NOUN.
@@ -175,7 +174,7 @@ See the [documentation](https://sergeyshk.github.io/ruMorph/en/analysis/#rules).
 For a word in Cyrillic that is not in the dictionary, the analyzer guesses the analyses by its ending: it takes the forms of dictionary words with the same ending - their part of speech, features and inflection. The `source` of such analyses is `"guess"`.
 
 *   A lowercase word is guessed as a common noun or another common word, a capitalized word mostly as a proper name: a surname, a first name, a place
-*   A hyphenated word is analyzed by its last part: «крэш-тестов» - «крэш-тест», «Мак-Киннона» - «мак-киннон»
+*   A hyphenated word is analyzed by its last part: «крэш-тестов» - «крэш-тест», «Мак-Киннона» - «мак-киннон», and a word with a drawl or a stutter by the dictionary word without them: «не-е-ет» - «нет», «с-спасибо» - «спасибо»
 *   A word with a known prefix - «эко», «анти», «супер», «микро» and others - is analyzed by the dictionary word without it: «экодомов» - «экодом»
 *   A guessed analysis has forms, and they keep the capital letters: «Мак-Киннона» in the dative - «Мак-Киннону»
 *   A word that must be analyzed exactly can be added after a sample - a dictionary word that inflects the same way: `Analyzer(words={"зумер": "геймер"})`
