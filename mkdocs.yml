@@ -8,7 +8,7 @@ nav:
       - О проекте: index.md
       - Установка: installation.md
       - Переход с pymorphy: migration.md
-      - Скорость и память: performance.md
+      - Сравнение: performance.md
       - Исключения: exceptions.md
       - Авторы: authors.md
     - Анализатор: analyzer.md
@@ -71,7 +71,7 @@ plugins:
             О проекте: About
             Установка: Installation
             Переход с pymorphy: Migrating from pymorphy
-            Скорость и память: Speed and memory
+            Сравнение: Comparison
             Исключения: Exceptions
             Авторы: Authors
             Анализатор: Analyzer

@@ -38,7 +38,7 @@ Analysis and lemmatization are 7-8 times faster than in pymorphy3 with the `pymo
 * **[Inflection](https://sergeyshk.github.io/ruMorph/en/inflection/)** - forms of a lexeme, a form by UD features, agreement with a number
 * **[The rumorph command](https://sergeyshk.github.io/ruMorph/en/cli/)** - analysis of files and streams: lemmas, CoNLL-U, TSV and JSON Lines
 * **[Migrating from pymorphy](https://sergeyshk.github.io/ruMorph/en/migration/)** - pymorphy2 and pymorphy3 calls, parts of speech and grammemes and their counterparts
-* **[Speed and memory](https://sergeyshk.github.io/ruMorph/en/performance/)** - analysis, lemmatization and inflection compared with pymorphy3, dictionary loading and memory
+* **[Comparison](https://sergeyshk.github.io/ruMorph/en/performance/)** - accuracy and speed compared with pymorphy3, mystem, spaCy, Stanza and Slovnet, dictionary loading and memory
 
 > [!NOTE]
 > Early version: before 1.0 the API may change between 0.x versions, changes are described in the release notes.
@@ -274,23 +274,21 @@ See the [documentation](https://sergeyshk.github.io/ruMorph/en/migration/) for a
 </details>
 
 <details>
-<summary><b>Speed and memory</b></summary>
+<summary><b>Comparison</b></summary>
 
 <br>
 
-Thousands of words or analyses per second, higher is better:
+The share of words whose first analysis has the right part of speech and lemma, % (test parts of the UD 2.18 treebanks):
 
-| Operation | ruMorph | pymorphy3 | pymorphy3[fast] |
-| :-------- | :------ | :-------- | :-------------- |
-| Word analysis | 732 | 20 | 105 |
-| Lemmatization | 1,404 | 22 | 170 |
-| Lemmatization in 4 threads | 4,275 | - | - |
-| Form by features | 1,399 | 76 | 76 |
-| Agreement with a number | 1,417 | 85 | 85 |
+| System | SynTagRus | Taiga | GSD | Tokens per second |
+| :----- | :-------- | :---- | :-- | :---------------- |
+| ruMorph | **93.7** | **90.5** | **92.1** | **684,151** |
+| pymorphy3 | 84.8 | 82.9 | 84.3 | 23,843 |
+| mystem | 81.9 | 79.4 | 79.9 | 79,046 |
 
-Importing and loading the dictionary takes 4 ms against 30 ms for pymorphy3, the process memory grows by 16.0 MB against 25.5 MB with `pymorphy3[fast]`; processes share the dictionary, and every further one adds 1.4 MB. Measured on the 128,251 word forms of the UD_Russian-SynTagRus test set, Apple M3 Pro, Python 3.11.
+The context tagger Stanza is more accurate in features but handles 2,983 tokens per second. ruMorph answers a short text together with loading in 5 ms against 0.2-2 s for the taggers, processes share the dictionary, and every further one adds 1.4 MB. Measured on Apple M3 Pro, Python 3.11.
 
-See the [documentation](https://sergeyshk.github.io/ruMorph/en/performance/) for all the operations and how they were measured.
+See the [documentation](https://sergeyshk.github.io/ruMorph/en/performance/) for context taggers, the chart of speed by text size, operations compared with pymorphy3, memory and how it was measured.
 
 </details>
 
@@ -330,7 +328,7 @@ Bug reports, ideas and pull requests are welcome - the [issues](https://github.c
 *   **crates/rumorph-dict-ru** - the crate with the dictionary for `rumorph` on crates.io
 *   **crates/rumorph-py** - the Python module `rumorph._rumorph` built with PyO3
 *   **python/rumorph** - the Python package
-*   **scripts** - exporting the pymorphy3-dicts-ru dictionary and checking the installed package before publishing
+*   **scripts** - exporting the pymorphy3-dicts-ru dictionary and the UD treebank counts, checking the installed package before publishing and comparing with other analyzers
 *   **docs** - MkDocs documentation in Russian and English
 *   **tests** - tests of the Python package
 

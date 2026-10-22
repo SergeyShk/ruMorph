@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 420" width="780" height="420">
+<line x1="70" y1="370.0" x2="540" y2="370.0" stroke="#888" stroke-opacity="0.3"/>
+<text x="62" y="374.0" text-anchor="end" font-family="sans-serif" font-size="13" fill="#888">0.001</text>
+<line x1="70" y1="300.0" x2="540" y2="300.0" stroke="#888" stroke-opacity="0.3"/>
+<text x="62" y="304.0" text-anchor="end" font-family="sans-serif" font-size="13" fill="#888">0.01</text>
+<line x1="70" y1="230.0" x2="540" y2="230.0" stroke="#888" stroke-opacity="0.3"/>
+<text x="62" y="234.0" text-anchor="end" font-family="sans-serif" font-size="13" fill="#888">0.1</text>
+<line x1="70" y1="160.0" x2="540" y2="160.0" stroke="#888" stroke-opacity="0.3"/>
+<text x="62" y="164.0" text-anchor="end" font-family="sans-serif" font-size="13" fill="#888">1</text>
+<line x1="70" y1="90.0" x2="540" y2="90.0" stroke="#888" stroke-opacity="0.3"/>
+<text x="62" y="94.0" text-anchor="end" font-family="sans-serif" font-size="13" fill="#888">10</text>
+<line x1="70" y1="20.0" x2="540" y2="20.0" stroke="#888" stroke-opacity="0.3"/>
+<text x="62" y="24.0" text-anchor="end" font-family="sans-serif" font-size="13" fill="#888">100</text>
+<line x1="70.0" y1="20" x2="70.0" y2="370" stroke="#888" stroke-opacity="0.3"/>
+<text x="70.0" y="388" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#888">10</text>
+<line x1="187.5" y1="20" x2="187.5" y2="370" stroke="#888" stroke-opacity="0.3"/>
+<text x="187.5" y="388" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#888">100</text>
+<line x1="305.0" y1="20" x2="305.0" y2="370" stroke="#888" stroke-opacity="0.3"/>
+<text x="305.0" y="388" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#888">1,000</text>
+<line x1="422.5" y1="20" x2="422.5" y2="370" stroke="#888" stroke-opacity="0.3"/>
+<text x="422.5" y="388" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#888">10,000</text>
+<line x1="540.0" y1="20" x2="540.0" y2="370" stroke="#888" stroke-opacity="0.3"/>
+<text x="540.0" y="388" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#888">100,000</text>
+<text x="305.0" y="412" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#888">tokens</text>
+<text x="16" y="195.0" transform="rotate(-90 16 195.0)" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#888">seconds</text>
+<polyline points="70.0,318.6 187.5,315.7 305.0,309.7 422.5,278.4 540.0,216.3" fill="none" stroke="#1e88e5" stroke-width="2.5"/>
+<circle cx="70.0" cy="318.6" r="3.5" fill="#1e88e5"/>
+<circle cx="187.5" cy="315.7" r="3.5" fill="#1e88e5"/>
+<circle cx="305.0" cy="309.7" r="3.5" fill="#1e88e5"/>
+<circle cx="422.5" cy="278.4" r="3.5" fill="#1e88e5"/>
+<circle cx="540.0" cy="216.3" r="3.5" fill="#1e88e5"/>
+<line x1="556" y1="30" x2="580" y2="30" stroke="#1e88e5" stroke-width="2.5"/>
+<text x="588" y="34" font-family="sans-serif" font-size="13" fill="#888">ruMorph</text>
+<polyline points="70.0,278.2 187.5,273.1 305.0,243.6 422.5,187.7 540.0,115.8" fill="none" stroke="#e53935" stroke-width="2.5"/>
+<circle cx="70.0" cy="278.2" r="3.5" fill="#e53935"/>
+<circle cx="187.5" cy="273.1" r="3.5" fill="#e53935"/>
+<circle cx="305.0" cy="243.6" r="3.5" fill="#e53935"/>
+<circle cx="422.5" cy="187.7" r="3.5" fill="#e53935"/>
+<circle cx="540.0" cy="115.8" r="3.5" fill="#e53935"/>
+<line x1="556" y1="52" x2="580" y2="52" stroke="#e53935" stroke-width="2.5"/>
+<text x="588" y="56" font-family="sans-serif" font-size="13" fill="#888">pymorphy3</text>
+<polyline points="70.0,259.6 187.5,257.9 305.0,249.6 422.5,214.2 540.0,153.0" fill="none" stroke="#43a047" stroke-width="2.5"/>
+<circle cx="70.0" cy="259.6" r="3.5" fill="#43a047"/>
+<circle cx="187.5" cy="257.9" r="3.5" fill="#43a047"/>
+<circle cx="305.0" cy="249.6" r="3.5" fill="#43a047"/>
+<circle cx="422.5" cy="214.2" r="3.5" fill="#43a047"/>
+<circle cx="540.0" cy="153.0" r="3.5" fill="#43a047"/>
+<line x1="556" y1="74" x2="580" y2="74" stroke="#43a047" stroke-width="2.5"/>
+<text x="588" y="78" font-family="sans-serif" font-size="13" fill="#888">mystem</text>
+<polyline points="70.0,148.8 187.5,155.0 305.0,155.0 422.5,136.3 540.0,82.7" fill="none" stroke="#fb8c00" stroke-width="2.5"/>
+<circle cx="70.0" cy="148.8" r="3.5" fill="#fb8c00"/>
+<circle cx="187.5" cy="155.0" r="3.5" fill="#fb8c00"/>
+<circle cx="305.0" cy="155.0" r="3.5" fill="#fb8c00"/>
+<circle cx="422.5" cy="136.3" r="3.5" fill="#fb8c00"/>
+<circle cx="540.0" cy="82.7" r="3.5" fill="#fb8c00"/>
+<line x1="556" y1="96" x2="580" y2="96" stroke="#fb8c00" stroke-width="2.5"/>
+<text x="588" y="100" font-family="sans-serif" font-size="13" fill="#888">spaCy ru_core_news_sm</text>
+<polyline points="70.0,137.0 187.5,139.7 305.0,135.5 422.5,107.8 540.0,48.8" fill="none" stroke="#8e24aa" stroke-width="2.5"/>
+<circle cx="70.0" cy="137.0" r="3.5" fill="#8e24aa"/>
+<circle cx="187.5" cy="139.7" r="3.5" fill="#8e24aa"/>
+<circle cx="305.0" cy="135.5" r="3.5" fill="#8e24aa"/>
+<circle cx="422.5" cy="107.8" r="3.5" fill="#8e24aa"/>
+<circle cx="540.0" cy="48.8" r="3.5" fill="#8e24aa"/>
+<line x1="556" y1="118" x2="580" y2="118" stroke="#8e24aa" stroke-width="2.5"/>
+<text x="588" y="122" font-family="sans-serif" font-size="13" fill="#888">Stanza</text>
+<polyline points="70.0,208.1 187.5,209.4 305.0,207.4 422.5,187.9 540.0,135.2" fill="none" stroke="#00acc1" stroke-width="2.5"/>
+<circle cx="70.0" cy="208.1" r="3.5" fill="#00acc1"/>
+<circle cx="187.5" cy="209.4" r="3.5" fill="#00acc1"/>
+<circle cx="305.0" cy="207.4" r="3.5" fill="#00acc1"/>
+<circle cx="422.5" cy="187.9" r="3.5" fill="#00acc1"/>
+<circle cx="540.0" cy="135.2" r="3.5" fill="#00acc1"/>
+<line x1="556" y1="140" x2="580" y2="140" stroke="#00acc1" stroke-width="2.5"/>
+<text x="588" y="144" font-family="sans-serif" font-size="13" fill="#888">Slovnet (Natasha)</text>
+</svg>

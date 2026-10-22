@@ -51,13 +51,13 @@
 
     [:octicons-arrow-right-24: Переход с pymorphy](migration.md)
 
--   :material-speedometer:{ .lg .middle } __Скорость и память__
+-   :material-speedometer:{ .lg .middle } __Сравнение__
 
     ---
 
-    Разбор, лемматизация и словоизменение в сравнении с pymorphy3, загрузка словаря и память
+    Точность и скорость в сравнении с pymorphy3, mystem, spaCy, Stanza и Slovnet, загрузка словаря и память
 
-    [:octicons-arrow-right-24: Скорость и память](performance.md)
+    [:octicons-arrow-right-24: Сравнение](performance.md)
 
 -   :material-alert-circle-outline:{ .lg .middle } __Исключения__
 
