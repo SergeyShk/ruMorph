@@ -6,6 +6,8 @@ use std::collections::{BTreeMap, HashMap};
 
 use rumorph::{Analysis, Dictionary, Entry};
 
+use crate::ud;
+
 /// Вес долей словаря против счетчиков корпуса - как столько же разметок: подобран по
 /// SynTagRus train (часть речи и лемма первого разбора)
 const PRIOR_WEIGHT: f64 = 5.0;
@@ -46,6 +48,7 @@ fn normal(text: &str) -> String {
 /// разборы хотя бы двух пар «часть речи, лемма» и разметки хотя бы одной из них. Список - для
 /// словоформы через «е» и для каждого ее написания с «ё» в словаре
 pub fn blend(dictionary: &Dictionary, counts: &Counts) -> Vec<(String, Vec<(Entry, u32)>)> {
+    let rates = capitalized_rates(counts);
     let mut lists = Vec::new();
     for (word, pairs) in counts {
         let mut spellings: Vec<String> = dictionary
@@ -57,7 +60,7 @@ pub fn blend(dictionary: &Dictionary, counts: &Counts) -> Vec<(String, Vec<(Entr
         spellings.sort();
         spellings.dedup();
         for spelling in std::iter::once(word).chain(&spellings) {
-            if let Some(list) = shares(dictionary, spelling, pairs) {
+            if let Some(list) = shares(dictionary, spelling, pairs, &rates) {
                 lists.push((spelling.clone(), list));
             }
         }
@@ -65,12 +68,32 @@ pub fn blend(dictionary: &Dictionary, counts: &Counts) -> Vec<(String, Vec<(Entr
     lists
 }
 
-/// Доли форм таблиц словоформы `word` по счетчикам `pairs`; `None`, если счетчики разборы не
-/// различают
+/// Доля разметок слов с заглавной буквы у каждой части речи, кроме имен собственных, - чаще всего
+/// это слово в начале предложения - и у всех таких разметок вместе (для остальных частей речи)
+fn capitalized_rates(counts: &Counts) -> (HashMap<&str, f64>, f64) {
+    let mut sums: HashMap<&str, (f64, f64)> = HashMap::new();
+    for (pos, _, count, capitalized) in counts.values().flatten() {
+        if pos != "PROPN" && pos != "PUNCT" {
+            let sum = sums.entry(pos.as_str()).or_default();
+            sum.0 += f64::from(*capitalized);
+            sum.1 += f64::from(*count);
+        }
+    }
+    let (capitalized, all) = (sums.values()).fold((0.0, 0.0), |(a, b), (c, d)| (a + c, b + d));
+    let rates = (sums.into_iter())
+        .filter(|(_, (_, all))| *all > 0.0)
+        .map(|(pos, (capitalized, all))| (pos, capitalized / all))
+        .collect();
+    (rates, if all > 0.0 { capitalized / all } else { 0.0 })
+}
+
+/// Доли форм таблиц словоформы `word` по счетчикам `pairs` и долям слов с заглавной `rates`;
+/// `None`, если счетчики разборы не различают
 fn shares(
     dictionary: &Dictionary,
     word: &str,
     pairs: &[(String, String, u32, u32)],
+    rates: &(HashMap<&str, f64>, f64),
 ) -> Option<Vec<(Entry, u32)>> {
     let analyses = dictionary.candidate_analyses(word);
     if analyses.is_empty() || analyses.iter().any(|analysis| analysis.entry.is_none()) {
@@ -96,13 +119,10 @@ fn shares(
             )
         })
         .collect();
-    let select = |count: fn(&(String, String, u32, u32)) -> u32| -> Vec<(String, String, f64)> {
-        (pairs.iter())
-            .map(|pair| (pair.0.clone(), pair.1.clone(), f64::from(count(pair))))
-            .collect()
-    };
-    let counts = attributed(&keys, &select(|pair| pair.2));
-    let capitalized = attributed(&keys, &select(|pair| pair.3));
+    let pairs: Vec<(String, String, f64)> = (pairs.iter())
+        .map(|(pos, lemma, count, _)| (pos.clone(), lemma.clone(), f64::from(*count)))
+        .collect();
+    let counts = attributed(&keys, &pairs);
     let mut distinct: Vec<&(String, String)> = keys.iter().collect();
     distinct.sort();
     distinct.dedup();
@@ -116,9 +136,7 @@ fn shares(
         entry.0 += prior;
         entry.1 += 1;
     }
-    // Доля каждого разбора по всем разметкам и по разметкам слов с заглавной; у имени
-    // собственного вторая доля словаря - с тем же множителем, что во время разбора
-    let mut rows: Vec<(Entry, f64, f64, bool)> = Vec::new();
+    let mut rows: Vec<(Entry, f64, f64, &str, bool)> = Vec::new();
     for ((analysis, key), prior) in analyses.iter().zip(&keys).zip(&priors) {
         let (key_mass, key_size) = mass[key];
         // Разметки пары делятся между ее разборами по долям словаря, без них - поровну
@@ -127,43 +145,40 @@ fn shares(
         } else {
             1.0 / key_size as f64
         };
-        let get = |counts: &HashMap<&(String, String), f64>| {
-            counts.get(key).copied().unwrap_or_default() * part
-        };
-        let proper = key.0 == "PROPN";
-        let boost = if proper {
-            Dictionary::TITLECASE_PROPN
-        } else {
-            1.0
-        };
+        let corpus = counts.get(key).copied().unwrap_or_default() * part;
         let Some(entry) = analysis.entry else {
             continue;
         };
-        rows.push((
-            entry,
-            get(&counts) + PRIOR_WEIGHT * prior,
-            get(&capitalized) + PRIOR_WEIGHT * prior * boost,
-            proper,
-        ));
+        let copy = ud::PROPER_COPIES.iter().any(|&(lemma, _)| lemma == key.1);
+        rows.push((entry, corpus, PRIOR_WEIGHT * prior, key.0.as_str(), copy));
     }
-    // Во время разбора доля имени собственного у слова с заглавной умножается на
-    // `TITLECASE_PROPN`, а у строчного почти обнуляется. Поэтому доля имени собственного
-    // задается так, чтобы у слова с заглавной ее отношение к другим разборам было как
-    // у разметок слов с заглавной: «Земли» чаще PROPN, хотя «земли» почти всегда NOUN
-    let (mut common, mut common_capitalized) = (0.0, 0.0);
-    for &(_, all, capitalized, proper) in &rows {
-        if !proper {
-            common += all;
-            common_capitalized += capitalized;
+    // Имя собственное почти всегда пишется с заглавной, а другое слово - с долей `rates` своей
+    // части речи, поэтому у слова с заглавной отношение имени собственного к остальным - как
+    // к сумме их долей, умноженных на `rates`. Во время разбора доля имени собственного у слова
+    // с заглавной умножается на `TITLECASE_PROPN`, у строчного - почти обнуляется: здесь разметки
+    // имени собственного масштабируются под это отношение («Земли» - чаще PROPN, «земли» - NOUN).
+    // Доля словаря масштабируется только у копий `ud::PROPER_COPIES`: у других имен собственных
+    // («Любим», «Данна») она не говорит о частоте
+    let (mut common, mut expected) = (0.0, 0.0);
+    for &(_, corpus, prior, pos, _) in &rows {
+        if pos != "PROPN" {
+            common += corpus + prior;
+            expected += (corpus + prior) * rates.0.get(pos).copied().unwrap_or(rates.1);
         }
     }
-    let mixed = rows.iter().any(|row| row.3) && common_capitalized > 0.0;
+    let scale = if rows.iter().any(|row| row.3 == "PROPN") && expected > 0.0 {
+        common / (Dictionary::TITLECASE_PROPN * expected)
+    } else {
+        1.0
+    };
     let mut shares: Vec<(Entry, f64)> = Vec::new();
-    for (entry, all, capitalized, proper) in rows {
-        let share = if proper && mixed {
-            capitalized * common / (Dictionary::TITLECASE_PROPN * common_capitalized)
+    for (entry, corpus, prior, pos, copy) in rows {
+        let share = if pos == "PROPN" && copy {
+            (corpus + prior) * scale
+        } else if pos == "PROPN" {
+            corpus * scale + prior
         } else {
-            all
+            corpus + prior
         };
         match shares.iter_mut().find(|(known, _)| *known == entry) {
             Some((_, known)) => *known += share,
@@ -296,7 +311,8 @@ mod tests {
         assert!(read("стали\tVERB\tстать\t1\t2").is_err());
     }
 
-    /// «земли» - нарицательное и имя собственное, без частот словаря
+    /// «земли» и «воли» - нарицательные и имена собственные, без частот словаря; «земля» - из
+    /// `ud::PROPER_COPIES`
     fn proper_dictionary() -> Dictionary {
         let tags = vec!["NOUN".to_owned()];
         let suffixes = ["я", "и", "ей"].map(String::from).to_vec();
@@ -313,10 +329,13 @@ mod tests {
             .add_table(paradigm, &[(0, proper), (0, proper), (0, proper)])
             .unwrap();
         let entry = |table, form| Entry { table, form };
-        for (word, form) in [("земля", 0), ("земли", 1), ("землей", 2)] {
-            builder
-                .add_word(word, &[entry(common, form), entry(named, form)])
-                .unwrap();
+        for stem in ["земл", "вол"] {
+            for (suffix, form) in [("я", 0), ("и", 1), ("ей", 2)] {
+                let entries = [entry(common, form), entry(named, form)];
+                builder
+                    .add_word(&format!("{stem}{suffix}"), &entries)
+                    .unwrap();
+            }
         }
         Dictionary::from_bytes(&builder.build().unwrap()).unwrap()
     }
@@ -324,12 +343,14 @@ mod tests {
     #[test]
     fn proper_noun_shares_by_capitalized_words() {
         let dictionary = proper_dictionary();
-        // «земли»: NOUN 221 раз, из них 10 с заглавной, PROPN 36 раз с заглавной; «землей» - только
-        // строчное NOUN
-        let counts = read(
-            "земли\tNOUN\tземля\t221\t10\nземли\tPROPN\tземля\t36\t36\nземлей\tNOUN\tземля\t5\t0\n",
-        )
-        .unwrap();
+        // NOUN с заглавной - 20 из 452 разметок; «землей» и «волей» - только строчные NOUN
+        let mut text = String::new();
+        for lemma in ["земля", "воля"] {
+            let stem = lemma.trim_end_matches('я');
+            text += &format!("{stem}и\tNOUN\t{lemma}\t221\t10\n{stem}и\tPROPN\t{lemma}\t36\t36\n");
+            text += &format!("{stem}ей\tNOUN\t{lemma}\t5\t0\n");
+        }
+        let counts = read(&text).unwrap();
         let lists: BTreeMap<String, Vec<(Entry, u32)>> =
             blend(&dictionary, &counts).into_iter().collect();
         let share = |word: &str, table: u16| {
@@ -337,14 +358,16 @@ mod tests {
             let found = list.iter().find(|(entry, _)| entry.table == table).unwrap();
             f64::from(found.1) / 1e6
         };
-        let title = Dictionary::TITLECASE_PROPN;
-        // С заглавной PROPN к NOUN - как разметки с заглавной с долями словаря 1/2 и весом 5:
-        // (36 + 2,5 × 3) / (10 + 2,5)
-        let ratio = share("земли", 1) * title / share("земли", 0);
-        assert!((ratio - 43.5 / 12.5).abs() < 1e-3, "{ratio}");
-        // Без разметок с заглавной - доли словаря с множителем регистра, как без частот
-        let ratio = share("землей", 1) * title / share("землей", 0);
-        assert!((ratio - title).abs() < 1e-3, "{ratio}");
+        let (title, rate) = (Dictionary::TITLECASE_PROPN, 20.0 / 452.0);
+        let ratio = |word: &str| share(word, 1) * title / share(word, 0);
+        let close = |ratio: f64, expected: f64| (ratio / expected - 1.0).abs() < 1e-4;
+        // С заглавной PROPN к NOUN - как доли без поправки (разметки и доли словаря 1/2 с весом 5),
+        // где доля NOUN умножена на долю NOUN с заглавной: 38,5 / (223,5 × 20 / 452)
+        assert!(close(ratio("земли"), 38.5 / (223.5 * rate)));
+        assert!(close(ratio("землей"), 2.5 / (7.5 * rate)));
+        // Не копия: масштабируются только разметки, доля словаря - с множителем во время разбора
+        assert!(close(ratio("воли"), (36.0 / rate + 2.5 * title) / 223.5));
+        assert!(close(ratio("волей"), 2.5 * title / 7.5));
     }
 
     #[test]
