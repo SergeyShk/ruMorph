@@ -551,6 +551,21 @@ def test_own_words_errors(words, error, message):
         Analyzer(words=words)
 
 
+def test_own_words_with_separators():
+    # Табуляция, перевод строки и пустая часть речи не прячутся за копию с похожей записью
+    morph = Analyzer(words={"зумер": "геймер"})
+    for words in [
+        {"зумер": ("геймер", "")},
+        {"зумер": "геймер\t"},
+        {"зумер": "геймер\t\nбумер\tзумер"},
+        {"кот\tстол": "NOUN"},
+        {"зумер": ("печь", "VERB\r")},
+    ]:
+        with pytest.raises(ValueError):
+            Analyzer(words=words)
+    assert morph.analyze("зумерами")[0].lemma == "зумер"
+
+
 def test_own_words_items_error():
     # Ошибка внутри items() не подменяется ошибкой «не словарь»
     class Broken:
@@ -620,6 +635,13 @@ def test_pickle_from_other_dictionary(morph):
     )
     assert old.forms() == [old]
     assert pickle.loads(pickle.dumps(old)) == old
+    # Без других форм разбор согласуется с количеством, только если сам подходит
+    table = morph.analyze("стол")[0]
+    _, (_, state) = table.__reduce__()
+    chair = restore(analyzer, (state[0], "стул", *state[2:]))
+    assert (chair.agree(1), chair.inflect(Case="Acc")) == ("стол", "стол")
+    with pytest.raises(rumorph.FormNotFoundError):
+        chair.agree(5)
     # Тега нет (в 0.2.0 у «Нидерландов» не было рода): берется разбор, у которого признак добавился
     netherlands = morph.analyze("Нидерландов")[0]
     _, (_, state) = netherlands.__reduce__()

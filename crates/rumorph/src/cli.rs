@@ -294,7 +294,7 @@ fn execute(
                 report(format!("{name}: строка {line}: {message}"));
                 code = 1;
             }
-            Err(Failure::Write(err)) => return write_error(&err, &mut report),
+            Err(Failure::Write(err)) => return write_error(&err, &mut report).max(code),
         }
     }
     match writer.output.flush() {
@@ -1545,6 +1545,13 @@ mod tests {
         assert_eq!(
             dict.run_into(&[], "раму\n".as_bytes(), &mut Closed),
             (0, String::new(), String::new())
+        );
+        // Закрытый канал не отменяет ошибку прежнего файла, сколько бы ни было вывода
+        let long = "раму\n".repeat(100_000);
+        let (code, _, error) = dict.run_into(&["нет.txt", "-"], long.as_bytes(), &mut Closed);
+        assert_eq!(
+            (code, error.as_str()),
+            (1, "rumorph: нет.txt: файл не найден\n")
         );
     }
 
