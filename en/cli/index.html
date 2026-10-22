@@ -1135,7 +1135,15 @@
 </tr>
 <tr>
 <td style="text-align: left;">1</td>
-<td style="text-align: left;">A file is missing or not in UTF-8, a line is not in UTF-8 (it is analyzed with U+FFFD), an invalid CoNLL-U line, the dictionary cannot be read, the output file cannot be created or is an input file or the dictionary, a write error; the other files are still analyzed</td>
+<td style="text-align: left;">An input file is missing, cannot be read or is not in UTF-8, a line is not in UTF-8 (it is analyzed with U+FFFD), an invalid CoNLL-U line; the other files are still analyzed</td>
+</tr>
+<tr>
+<td style="text-align: left;">1</td>
+<td style="text-align: left;">The dictionary cannot be read, the own words file has an error (it is missing or not in UTF-8, an invalid line, a word does not inflect like its sample), the output file cannot be created or is an input file, the dictionary or the own words file; nothing is analyzed</td>
+</tr>
+<tr>
+<td style="text-align: left;">1</td>
+<td style="text-align: left;">A write error; the analysis stops</td>
 </tr>
 <tr>
 <td style="text-align: left;">2</td>

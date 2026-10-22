@@ -799,12 +799,12 @@
 <tr>
 <td style="text-align: left;"><code>ValueError</code></td>
 <td style="text-align: left;">-</td>
-<td style="text-align: left;">Признака или значения нет в словаре (<code>inflect</code>); количество - бесконечность или NaN (<code>agree</code>); файл не словарь ruMorph или поврежден (<a href="../analyzer/"><code>Analyzer</code></a>)</td>
+<td style="text-align: left;">Признака или значения нет в словаре (<code>inflect</code>); количество - бесконечность или NaN (<code>agree</code>); файл не словарь ruMorph или поврежден (<a href="../analyzer/"><code>Analyzer</code></a>); у <a href="../analyzer/#words">своего слова</a> нет образца в словаре, образец неоднозначен, слово не изменяется по нему или в слове пробел, управляющий или невидимый символ (<code>Analyzer(words=...)</code>)</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>TypeError</code></td>
 <td style="text-align: left;">-</td>
-<td style="text-align: left;">Аргумент не того типа: слово или значение признака не строка, количество не число, путь к словарю не строка и не <code>PathLike</code>, строка вместо набора слов (<a href="../analyzer/#analyze_many"><code>analyze_many</code></a>, <a href="../analyzer/#lemmatize"><code>lemmatize</code></a>)</td>
+<td style="text-align: left;">Аргумент не того типа: слово или значение признака не строка, количество не число, путь к словарю не строка и не <code>PathLike</code>, строка вместо набора слов (<a href="../analyzer/#analyze_many"><code>analyze_many</code></a>, <a href="../analyzer/#lemmatize"><code>lemmatize</code></a>), <a href="../analyzer/#words">свои слова</a> не словарь строк (<code>Analyzer(words=...)</code>)</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>FileNotFoundError</code></td>
