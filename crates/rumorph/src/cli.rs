@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 
 use unicode_segmentation::{GraphemeIndices, UnicodeSegmentation};
 
-use crate::{Analysis, Dictionary};
+use crate::{Analysis, Dictionary, Sample};
 
 const HELP: &str = "\
 rumorph - морфологический анализ русского текста: леммы, части речи и признаки Universal Dependencies
@@ -31,6 +31,8 @@ rumorph - морфологический анализ русского текс�
                            tokens - токен в строке, пустая строка разделяет предложения
                            conllu - CoNLL-U: заполняются LEMMA, UPOS и FEATS
   -d, --dictionary ФАЙЛ  файл словаря ruMorph (по умолчанию - словарь пакета)
+  -w, --words ФАЙЛ       свои слова: в строке слово и образец (словарное слово в той же форме)
+                         через табуляцию, а если у образца несколько частей речи - и часть речи
   -o, --output ФАЙЛ      записать результат в файл
   -h, --help             показать эту справку и выйти
   -V, --version          показать версию и выйти
@@ -83,6 +85,7 @@ enum Command {
         format: Format,
         input: Input,
         dictionary: Option<PathBuf>,
+        words: Vec<PathBuf>,
         output: Option<PathBuf>,
         files: Vec<OsString>,
     },
@@ -90,7 +93,7 @@ enum Command {
 
 fn parse(args: Vec<OsString>) -> Result<Command, String> {
     let (mut format, mut input, mut dictionary) = (Format::Lemmas, Input::Text, None);
-    let mut output = None;
+    let (mut words, mut output) = (Vec::new(), None);
     let mut files = Vec::new();
     let mut options = true;
     let mut args = args.into_iter();
@@ -139,6 +142,7 @@ fn parse(args: Vec<OsString>) -> Result<Command, String> {
                 }
             }
             "-d" | "--dictionary" => dictionary = Some(PathBuf::from(value()?)),
+            "-w" | "--words" => words.push(PathBuf::from(value()?)),
             "-o" | "--output" => {
                 output = Some(value()?)
                     .filter(|value| value != "-")
@@ -151,6 +155,7 @@ fn parse(args: Vec<OsString>) -> Result<Command, String> {
         format,
         input,
         dictionary,
+        words,
         output,
         files,
     })
@@ -174,14 +179,15 @@ fn execute(
 ) -> u8 {
     // Сообщение в stderr: если и он закрыт, сказать уже некому
     let mut report = |message: String| drop(writeln!(stderr, "rumorph: {message}"));
-    let (format, input, dictionary, output_path, files) = match parse(args) {
+    let (format, input, dictionary, words, output_path, files) = match parse(args) {
         Ok(Command::Run {
             format,
             input,
             dictionary,
+            words,
             output,
             files,
-        }) => (format, input, dictionary, output, files),
+        }) => (format, input, dictionary, words, output, files),
         Ok(Command::Help) => {
             let written = stdout
                 .write_all(HELP.as_bytes())
@@ -198,7 +204,7 @@ fn execute(
         }
     };
     let dictionary_path = dictionary.as_deref().or(default);
-    let dictionary = match load(dictionary_path) {
+    let dictionary = match load(dictionary_path).and_then(|loaded| add_words(loaded, &words)) {
         Ok(dictionary) => dictionary,
         Err(message) => {
             report(message);
@@ -218,7 +224,8 @@ fn execute(
             let mut sources = files
                 .iter()
                 .map(|file| (file != "-").then(|| Path::new(file)))
-                .chain(dictionary_path.map(Some));
+                .chain(dictionary_path.map(Some))
+                .chain(words.iter().map(|path| Some(path.as_path())));
             let regular = std::fs::metadata(path).is_ok_and(|metadata| metadata.is_file());
             if regular
                 && file_id(Some(path))
@@ -317,6 +324,32 @@ fn load(path: Option<&Path>) -> Result<Dictionary, String> {
         #[cfg(not(feature = "bundled"))]
         None => Err("словарь не задан: укажите файл словаря в --dictionary".into()),
     }
+}
+
+/// Свои слова из файлов `paths`: в строке слово, образец и, если нужно, часть речи образца через
+/// табуляцию; пустые строки и строки с «#» в начале пропускаются
+fn add_words(mut dictionary: Dictionary, paths: &[PathBuf]) -> Result<Dictionary, String> {
+    for path in paths {
+        let name = path.display();
+        let bytes = std::fs::read(path).map_err(|err| format!("{name}: {}", describe(&err)))?;
+        let text = String::from_utf8(bytes).map_err(|_| format!("{name}: файл не в UTF-8"))?;
+        let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
+        for (number, line) in text.lines().enumerate() {
+            if line.trim().is_empty() || line.starts_with('#') {
+                continue;
+            }
+            let at = |message: &dyn std::fmt::Display| {
+                format!("{name}: строка {}: {message}", number + 1)
+            };
+            let word = match *line.split('\t').collect::<Vec<_>>().as_slice() {
+                [word, like] => (word, Sample::from(like)),
+                [word, like, pos] => (word, Sample::from((like, pos))),
+                _ => return Err(at(&"нужны слово и образец через табуляцию")),
+            };
+            dictionary = dictionary.with_words([word]).map_err(|err| at(&err))?;
+        }
+    }
+    Ok(dictionary)
 }
 
 /// Ошибка ввода-вывода по-русски для частых случаев
@@ -997,6 +1030,7 @@ mod tests {
                 "conllu",
                 "--input=tokens",
                 "-dru.dict",
+                "--words=w.tsv",
                 "a.txt",
                 "-",
                 "-o",
@@ -1006,6 +1040,7 @@ mod tests {
                 format: Format::Conllu,
                 input: Input::Tokens,
                 dictionary: Some(PathBuf::from("ru.dict")),
+                words: vec![PathBuf::from("w.tsv")],
                 output: Some(PathBuf::from("b")),
                 files: vec!["a.txt".into(), "-".into()],
             })
@@ -1018,6 +1053,7 @@ mod tests {
                 format: Format::Lemmas,
                 input: Input::Text,
                 dictionary: None,
+                words: Vec::new(),
                 output: None,
                 files: vec!["-f".into()],
             })
@@ -1250,6 +1286,45 @@ mod tests {
             // ASCII в начале файла в другой кодировке тоже не выводится
             assert_eq!(out, "", "{input:?}");
         }
+    }
+
+    #[test]
+    fn adds_own_words() {
+        let dict = TestDictionary::new();
+        let dir = std::env::temp_dir().join(format!("rumorph-cli-words-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let words = dir.join("words.tsv");
+        std::fs::write(
+            &words,
+            "\u{feff}# свои слова\n\nпилить\tмыть\nкрама\tрама\tNOUN\n",
+        )
+        .unwrap();
+        let path = words.to_str().unwrap();
+        let (code, out, error) = dict.run(&["-w", path], "пилила краму".as_bytes());
+        assert_eq!(
+            (code, out.as_str(), error.as_str()),
+            (0, "пилить крама\n", "")
+        );
+        for (text, message) in [
+            (
+                "пилить\n",
+                "строка 1: нужны слово и образец через табуляцию",
+            ),
+            ("кот\tпёс\n", "строка 1: Образца «пёс» нет в словаре"),
+        ] {
+            std::fs::write(&words, text).unwrap();
+            let (code, _, error) = dict.run(&["--words", path], b"");
+            assert_eq!((code, error), (1, format!("rumorph: {path}: {message}\n")));
+        }
+        // Файл вывода не затирает файл своих слов
+        std::fs::write(&words, "крама\tрама\n").unwrap();
+        let (code, _, error) = dict.run(&["-w", path, "-o", path], b"");
+        assert_eq!(code, 1);
+        assert!(
+            error.contains("совпадает с входным файлом или словарем"),
+            "{error}"
+        );
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
