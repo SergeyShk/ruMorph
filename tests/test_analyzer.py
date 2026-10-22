@@ -184,7 +184,18 @@ def test_feats_order_and_probabilities(morph, word):
 
 
 @pytest.mark.parametrize(
-    ("word", "pos"), [("шаров", "NOUN"), ("Шаров", "PROPN"), ("роза", "NOUN"), ("Роза", "PROPN")]
+    ("word", "pos"),
+    [
+        ("шаров", "NOUN"),
+        ("Шаров", "PROPN"),
+        ("роза", "NOUN"),
+        ("Роза", "PROPN"),
+        ("земли", "NOUN"),
+        ("Земли", "PROPN"),
+        ("луной", "NOUN"),
+        ("Луной", "PROPN"),
+        ("Кремле", "PROPN"),
+    ],
 )
 def test_proper_nouns_by_letter_case(morph, word, pos):
     # Строчное слово - нарицательное, с заглавной буквы чаще имя собственное

@@ -515,7 +515,7 @@ fn build(export: &Path, ud: &Path, output: &Path) -> Result<(), Box<dyn Error>> 
     // Местоимения «то», «всё», «все» (PRON) - отдельные лексемы поверх форм «тот» и «весь»,
     // которые в OpenCorpora есть только как местоименные прилагательные; словоформа получает
     // и разбор местоимения
-    let mut pronoun_entries: HashMap<(usize, u16), Vec<Entry>> = HashMap::new();
+    let mut extra_entries: HashMap<(usize, u16), Vec<Entry>> = HashMap::new();
     for (lexeme, (paradigm, stem, _)) in lexemes.iter().enumerate() {
         let layout = &paradigms[*paradigm as usize];
         let count = layout.len() / 3;
@@ -548,7 +548,7 @@ fn build(export: &Path, ud: &Path, output: &Path) -> Result<(), Box<dyn Error>> 
             }
             let table = builder.add_table(pronoun_paradigm, &cells)?;
             for (number, &(form, _)) in forms.iter().enumerate() {
-                pronoun_entries
+                extra_entries
                     .entry((lexeme, form as u16))
                     .or_default()
                     .push(Entry {
@@ -556,6 +556,60 @@ fn build(export: &Path, ud: &Path, output: &Path) -> Result<(), Box<dyn Error>> 
                         form: number as u16,
                     });
             }
+        }
+    }
+
+    // Имена собственные из `ud::PROPER_COPIES` («Земля», «Луна») - лексемы из форм единственного
+    // числа нарицательного существительного: словоформа получает и разбор PROPN
+    for (lexeme, (paradigm, stem, cells)) in lexemes.iter().enumerate() {
+        let layout = &paradigms[*paradigm as usize];
+        let count = layout.len() / 3;
+        let tag_of = |form: usize| tags[layout[count + form] as usize].as_str();
+        let lemma = spell(*paradigm, stem, 0);
+        let Some(&(_, name_type)) = ud::PROPER_COPIES.iter().find(|(word, _)| *word == lemma)
+        else {
+            continue;
+        };
+        if !tag_of(0).starts_with("NOUN,") {
+            continue;
+        }
+        let forms: Vec<usize> = (0..count)
+            .filter(|&form| {
+                tag_of(form)
+                    .split([',', ' '])
+                    .any(|grammeme| grammeme == "sing")
+            })
+            .collect();
+        let layout_forms: Vec<(u16, u16, u16)> = forms
+            .iter()
+            .map(|&form| (layout[form], layout[count + form], layout[2 * count + form]))
+            .collect();
+        let copy_paradigm = add_paradigm(&mut builder, &mut paradigm_numbers, layout_forms)?;
+        let mut copy_cells = Vec::with_capacity(forms.len());
+        for &form in &forms {
+            let mut converted = ud::convert(tag_of(form), ud::lemma_class(&lemma));
+            converted.pos = "PROPN";
+            converted.feats.insert("NameType", name_type);
+            let labels: Vec<&str> = converted.labels.iter().map(String::as_str).collect();
+            let feats = ud::feats_string(&converted.feats);
+            let lemma_form = forms
+                .iter()
+                .position(|&known| known == usize::from(cells[form].0))
+                .unwrap_or(0);
+            copy_cells.push((
+                lemma_form as u16,
+                builder.add_ud_tag(converted.pos, &feats, &labels)?,
+            ));
+        }
+        let table = builder.add_table(copy_paradigm, &copy_cells)?;
+        for (number, &form) in forms.iter().enumerate() {
+            extra_entries
+                .entry((lexeme, form as u16))
+                .or_default()
+                .push(Entry {
+                    table,
+                    form: number as u16,
+                });
         }
     }
 
@@ -579,8 +633,8 @@ fn build(export: &Path, ud: &Path, output: &Path) -> Result<(), Box<dyn Error>> 
                 form: mapped.get(usize::from(form)).copied().unwrap_or(form),
             };
             entries.push(entry);
-            if let Some(pronouns) = pronoun_entries.get(&(lexeme, form)) {
-                entries.extend(pronouns);
+            if let Some(extra) = extra_entries.get(&(lexeme, form)) {
+                entries.extend(extra);
             }
             let ud = lexemes[lexeme].2[usize::from(form)].1;
             let Some(index) = ud_guesses[usize::from(ud)] else {

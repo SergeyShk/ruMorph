@@ -71,7 +71,7 @@ Numbers, punctuation, Latin words and abbreviations are analyzed by rules, their
 | adverbs «по-бурятски», «по-молодому» | `ADV` with `Degree=Pos` |
 | other tokens: «км/ч», «РосПил» | `X` without features, the lemma is the token in lowercase |
 
-The shares of ambiguous analyses come from the frequencies in the UD Taiga and GSD treebanks. The letters «й» and «ё» in decomposed Unicode and the non-breaking hyphen are converted to the usual ones, and stress marks (also in the composed letters «ѐ», «ѝ»), soft hyphens and invisible word joiners (U+2060, U+FEFF) are removed: «Москва́» is analyzed as «Москва». Latin letters that look like Cyrillic ones in a Cyrillic word are read as Cyrillic («cтали» with a Latin «c» is «стали»), and Cyrillic ones in a Latin word as Latin.
+The shares of ambiguous analyses come from the frequencies in the UD Taiga and GSD treebanks, the shares of proper nouns take the case into account. As in SynTagRus, «Земля», «Луна», «Солнце», «Кремль», «Дума» and a few other common nouns are also proper nouns when capitalized: «Земли» is first of all PROPN, «земли» is NOUN. The letters «й» and «ё» in decomposed Unicode and the non-breaking hyphen are converted to the usual ones, and stress marks (also in the composed letters «ѐ», «ѝ»), soft hyphens and invisible word joiners (U+2060, U+FEFF) are removed: «Москва́» is analyzed as «Москва». Latin letters that look like Cyrillic ones in a Cyrillic word are read as Cyrillic («cтали» with a Latin «c» is «стали»), and Cyrillic ones in a Latin word as Latin.
 
 === "Code"
 

@@ -9,6 +9,18 @@ from pymorphy3.units.by_lookup import DictionaryAnalyzer
 
 from rumorph import Analyzer
 
+# Существительные, у форм единственного числа которых сборщик добавляет разбор PROPN
+# (`ud::PROPER_COPIES`)
+PROPER_COPIES = {
+    "вселенная",
+    "дума",
+    "земля",
+    "кремль",
+    "луна",
+    "солнце",
+    "христос",
+}
+
 
 @pytest.fixture(scope="module")
 def pymorphy():
@@ -47,7 +59,8 @@ def dictionary_parses(pymorphy, word):
 def changed_by_build(parses):
     """Словоформы, разборы которых сборщик намеренно меняет: вводный союз при другом разборе,
     предикатив при кратком прилагательном среднего рода, местоимения «то», «всё», «все» поверх
-    «тот» и «весь», варианты «б», «ж», «чтоб» в лексемах основных слов"""
+    «тот» и «весь», варианты «б», «ж», «чтоб» в лексемах основных слов, имена собственные
+    поверх нарицательных («Земля»)"""
     tags = [set(str(parse.tag).replace(" ", ",").split(",")) for parse in parses]
     return (
         (any({"CONJ", "Prnt"} <= tag for tag in tags) and len(parses) > 1)
@@ -57,6 +70,10 @@ def changed_by_build(parses):
         )
         or any(parse.normal_form in ("тот", "весь") and "Apro" in parse.tag for parse in parses)
         or any(parse.normal_form in ("б", "ж", "чтоб") for parse in parses)
+        or any(
+            parse.normal_form in PROPER_COPIES and {"NOUN", "sing"} <= tag
+            for parse, tag in zip(parses, tags, strict=True)
+        )
     )
 
 
@@ -135,3 +152,10 @@ def test_same_analyses(pymorphy, unsorted, words):
             checked["same order"] += 1
     assert checked["same analyses"] > 40_000
     assert checked["same order"] > 0.95 * (checked["same analyses"] - checked["UD frequencies"])
+
+
+def test_proper_copies():
+    morph = Analyzer()
+    for lemma in PROPER_COPIES:
+        analyses = morph.analyze(lemma.capitalize())
+        assert any(a.pos == "PROPN" and a.lemma == lemma for a in analyses), lemma
