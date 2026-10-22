@@ -48,6 +48,7 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from importlib import metadata
 from pathlib import Path
+from typing import NamedTuple
 
 # Набор, файл, коммит релиза UD 2.18 и SHA-256
 DATASETS = {
@@ -175,6 +176,8 @@ MYSTEM_CASE = {
     "зват": "Voc",
 }
 NUMBER = {"sing": "Sing", "plur": "Plur", "ед": "Sing", "мн": "Plur"}
+# Процессоры Stanza: токены даны, нужны часть речи, признаки и лемма
+STANZA_PROCESSORS = "tokenize,pos,lemma"
 # Объем текста для графика скорости, токенов
 SIZES = (10, 100, 1_000, 10_000, 100_000)
 
@@ -241,9 +244,9 @@ def sentences(path: Path) -> list[list[Token]]:
     return [sentence for sentence in result if sentence]
 
 
-def mystem_binary(data: Path) -> Path:
+def mystem_path(data: Path) -> Path:
     """
-    Программа mystem в каталоге данных: архив скачивается по HTTPS с проверкой SHA-256
+    Путь к программе mystem в каталоге данных
 
     Аргументы:
         data (Path): Каталог данных
@@ -251,32 +254,58 @@ def mystem_binary(data: Path) -> Path:
     Вывод:
         Path: Путь к программе
     """
-    name = {
-        "darwin": "mystem-3.1-macosx.tar.gz",
-        "linux": "mystem-3.1-linux-64bit.tar.gz",
-        "win32": "mystem-3.1-win-64bit.zip",
-    }[sys.platform]
-    binary = data / "mystem" / ("mystem.exe" if sys.platform == "win32" else "mystem")
-    if binary.exists():
-        return binary
-    archive = download(DOWNLOADS[name][0], data / name, DOWNLOADS[name][1])
-    binary.parent.mkdir(parents=True, exist_ok=True)
-    if name.endswith(".zip"):
-        with zipfile.ZipFile(archive) as packed:
-            packed.extract(binary.name, binary.parent)
-    else:
-        with tarfile.open(archive) as packed:
-            packed.extract(binary.name, binary.parent, filter="data")
-    binary.chmod(0o755)
-    return binary
+    return data / "mystem" / ("mystem.exe" if sys.platform == "win32" else "mystem")
 
 
-# Разбор предложений системой: свой API (его время замеряется) и перевод его ответа в разборы
+def prepare(name: str, data: Path) -> None:
+    """
+    Модели и программы системы в каталоге данных - до замеров: архивы скачиваются по HTTPS
+    с проверкой SHA-256
+
+    Аргументы:
+        name (str): Имя системы
+        data (Path): Каталог данных
+    """
+    if name == "mystem" and not mystem_path(data).exists():
+        archive = {
+            "darwin": "mystem-3.1-macosx.tar.gz",
+            "linux": "mystem-3.1-linux-64bit.tar.gz",
+            "win32": "mystem-3.1-win-64bit.zip",
+        }[sys.platform]
+        packed = download(DOWNLOADS[archive][0], data / archive, DOWNLOADS[archive][1])
+        binary = mystem_path(data)
+        binary.parent.mkdir(parents=True, exist_ok=True)
+        if archive.endswith(".zip"):
+            with zipfile.ZipFile(packed) as files:
+                files.extract(binary.name, binary.parent)
+        else:
+            with tarfile.open(packed) as files:
+                files.extract(binary.name, binary.parent, filter="data")
+        binary.chmod(0o755)
+    if name == "slovnet":
+        for file in ("navec_news_v1_1B_250K_300d_100q.tar", "slovnet_morph_news_v1.tar"):
+            download(DOWNLOADS[file][0], data / file, DOWNLOADS[file][1])
+    if name == "stanza":
+        import stanza
+
+        directory = str(data / "stanza")
+        stanza.download("ru", model_dir=directory, processors=STANZA_PROCESSORS, verbose=False)
+
+
 Analyze = Callable[[list[list[str]]], object]
 Convert = Callable[[list[list[str]], object], list[list[list[Candidate]]]]
 
 
-def rumorph_system(data: Path) -> tuple[Analyze, Convert]:
+class System(NamedTuple):
+    """Разбор предложений системой своим API, перевод его ответа в разборы и вызов для замера
+    скорости, если он другой"""
+
+    analyze: Analyze
+    convert: Convert
+    timed: Analyze | None = None
+
+
+def rumorph_system(data: Path) -> System:
     """ruMorph: все разборы токена по убыванию вероятности"""
     from rumorph import Analyzer
 
@@ -288,10 +317,10 @@ def rumorph_system(data: Path) -> tuple[Analyze, Convert]:
             [[(a.lemma, a.pos, dict(a.feats)) for a in next(analyses)] for _ in s] for s in text
         ]
 
-    return (lambda text: morph.analyze_many([w for s in text for w in s])), convert
+    return System(lambda text: morph.analyze_many([w for s in text for w in s]), convert)
 
 
-def pymorphy_system(data: Path) -> tuple[Analyze, Convert]:
+def pymorphy_system(data: Path) -> System:
     """pymorphy3: все разборы токена, часть речи, падеж и число - по таблицам"""
     import pymorphy3
 
@@ -303,6 +332,9 @@ def pymorphy_system(data: Path) -> tuple[Analyze, Convert]:
         pos = PYMORPHY_POS.get(tag.POS or str(tag).split(",")[0].split(" ")[0], "X")
         if pos == "NOUN" and tag.grammemes & PYMORPHY_PROPER:
             pos = "PROPN"
+        # Местоименное прилагательное («который», «этот») - DET, как APRO у mystem
+        if pos == "ADJ" and "Apro" in tag.grammemes:
+            pos = "DET"
         feats = {}
         if tag.case in PYMORPHY_CASE:
             feats["Case"] = PYMORPHY_CASE[tag.case]
@@ -313,7 +345,7 @@ def pymorphy_system(data: Path) -> tuple[Analyze, Convert]:
     def convert(text: list[list[str]], found: object) -> list[list[list[Candidate]]]:
         return [[[candidate(p) for p in parses] for parses in s] for s in found]
 
-    return (lambda text: [[morph.parse(word) for word in s] for s in text]), convert
+    return System(lambda text: [[morph.parse(word) for word in s] for s in text], convert)
 
 
 def mystem_candidates(word: str, items: list[dict]) -> list[Candidate]:
@@ -339,11 +371,12 @@ def mystem_candidates(word: str, items: list[dict]) -> list[Candidate]:
     return result or [(word.lower(), "X", {})]
 
 
-def mystem_system(data: Path) -> tuple[Analyze, Convert]:
-    """mystem без снятия омонимии: все разборы токена, разобранного отдельно"""
+def mystem_system(data: Path) -> System:
+    """mystem без снятия омонимии: все разборы токена, разобранного отдельно; скорость - на
+    предложениях целиком: по одному слову замер мерил бы обмен с программой"""
     from pymystem3 import Mystem
 
-    mystem = Mystem(mystem_bin=str(mystem_binary(data)), disambiguation=False, entire_input=False)
+    mystem = Mystem(mystem_bin=str(mystem_path(data)), disambiguation=False, entire_input=False)
 
     def convert(text: list[list[str]], found: object) -> list[list[list[Candidate]]]:
         return [
@@ -351,10 +384,14 @@ def mystem_system(data: Path) -> tuple[Analyze, Convert]:
             for s, f in zip(text, found, strict=True)
         ]
 
-    return (lambda text: [[mystem.analyze(word) for word in s] for s in text]), convert
+    return System(
+        lambda text: [[mystem.analyze(word) for word in s] for s in text],
+        convert,
+        lambda text: [mystem.analyze(" ".join(s)) for s in text],
+    )
 
 
-def spacy_system(data: Path) -> tuple[Analyze, Convert]:
+def spacy_system(data: Path) -> System:
     """spaCy ru_core_news_sm: теггер и лемматизатор на эталонных токенах"""
     import spacy
     from spacy.tokens import Doc
@@ -362,31 +399,22 @@ def spacy_system(data: Path) -> tuple[Analyze, Convert]:
     nlp = spacy.load("ru_core_news_sm", exclude=["parser", "ner", "attribute_ruler"])
 
     def analyze(text: list[list[str]]) -> object:
-        docs = []
-        for sentence in text:
-            doc = Doc(nlp.vocab, words=sentence)
-            for _, component in nlp.pipeline:
-                doc = component(doc)
-            docs.append(doc)
-        return docs
+        return list(nlp.pipe(Doc(nlp.vocab, words=sentence) for sentence in text))
 
     def convert(text: list[list[str]], docs: object) -> list[list[list[Candidate]]]:
         return [[[(t.lemma_, t.pos_, t.morph.to_dict())] for t in doc] for doc in docs]
 
-    return analyze, convert
+    return System(analyze, convert)
 
 
-def stanza_system(data: Path) -> tuple[Analyze, Convert]:
+def stanza_system(data: Path) -> System:
     """Stanza: теггер и лемматизатор модели по умолчанию на эталонных токенах"""
     import stanza
 
-    directory = str(data / "stanza")
-    processors = "tokenize,pos,lemma"
-    stanza.download("ru", model_dir=directory, processors=processors, verbose=False)
     nlp = stanza.Pipeline(
         "ru",
-        dir=directory,
-        processors=processors,
+        dir=str(data / "stanza"),
+        processors=STANZA_PROCESSORS,
         tokenize_pretokenized=True,
         download_method=None,
         use_gpu=False,
@@ -399,19 +427,16 @@ def stanza_system(data: Path) -> tuple[Analyze, Convert]:
     def convert(text: list[list[str]], doc: object) -> list[list[list[Candidate]]]:
         return [[[(w.lemma, w.upos, feats(w))] for w in s.words] for s in doc.sentences]
 
-    return nlp, convert
+    return System(nlp, convert)
 
 
-def slovnet_system(data: Path) -> tuple[Analyze, Convert]:
+def slovnet_system(data: Path) -> System:
     """Slovnet, морфология Natasha: часть речи и признаки, без лемм"""
     from navec import Navec
     from slovnet import Morph
 
-    paths = {}
-    for file in ("navec_news_v1_1B_250K_300d_100q.tar", "slovnet_morph_news_v1.tar"):
-        paths[file] = download(DOWNLOADS[file][0], data / file, DOWNLOADS[file][1])
-    morph = Morph.load(str(paths["slovnet_morph_news_v1.tar"]), batch_size=32)
-    morph.navec(Navec.load(str(paths["navec_news_v1_1B_250K_300d_100q.tar"])))
+    morph = Morph.load(str(data / "slovnet_morph_news_v1.tar"), batch_size=32)
+    morph.navec(Navec.load(str(data / "navec_news_v1_1B_250K_300d_100q.tar")))
 
     def candidate(tag: str) -> Candidate:
         pos, *feats = tag.split("|")
@@ -420,7 +445,7 @@ def slovnet_system(data: Path) -> tuple[Analyze, Convert]:
     def convert(text: list[list[str]], markups: object) -> list[list[list[Candidate]]]:
         return [[[candidate(t.tag)] for t in m.tokens] for m in markups]
 
-    return (lambda text: list(morph.map(text))), convert
+    return System(lambda text: list(morph.map(text)), convert)
 
 
 SYSTEMS = {
@@ -530,7 +555,8 @@ def speed_run(name: str, data: Path, size: int) -> None:
         if size and count >= size:
             break
     start = time.perf_counter()
-    analyze, _ = SYSTEMS[name](data)
+    system = SYSTEMS[name](data)
+    analyze = system.timed or system.analyze
     loaded = time.perf_counter()
     analyze(text)
     first = time.perf_counter()
@@ -675,7 +701,8 @@ def evaluate(systems: list[str], data: Path) -> dict:
         gold[dataset] = sentences(download(url, data / name, digest))
     results: dict = {}
     for name in systems:
-        analyze, convert = SYSTEMS[name](data)
+        prepare(name, data)
+        analyze, convert, _ = SYSTEMS[name](data)
         quality = {}
         for dataset, text in gold.items():
             words = [[token.word for token in sentence] for sentence in text]
@@ -713,16 +740,16 @@ def main() -> None:
     if args.speed_run:
         speed_run(args.speed_run[0], data, int(args.speed_run[1]))
         return
-    # Версии Python и пакетов окружения - для описания замера
-    packages = ["rumorph", "pymorphy3", "pymorphy3-dicts-ru", "pymystem3", "spacy"]
-    packages += ["ru-core-news-sm", "stanza", "torch", "slovnet", "navec"]
-    environment = {"python": sys.version.split()[0]}
-    environment |= {package: metadata.version(package) for package in packages}
-    (data / "environment.json").write_text(json.dumps(environment, indent=2), encoding="utf-8")
     if args.report:
         results = json.loads((data / "results.json").read_text(encoding="utf-8"))
     else:
         results = evaluate(args.systems, data)
+        # Версии Python и пакетов окружения - для описания замера
+        packages = ["rumorph", "pymorphy3", "pymorphy3-dicts-ru", "pymystem3", "spacy"]
+        packages += ["ru-core-news-sm", "stanza", "torch", "slovnet", "navec"]
+        environment = {"python": sys.version.split()[0]}
+        environment |= {package: metadata.version(package) for package in packages}
+        (data / "environment.json").write_text(json.dumps(environment, indent=2), encoding="utf-8")
         (data / "results.json").write_text(
             json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8"
         )

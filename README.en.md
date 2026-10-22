@@ -282,11 +282,11 @@ The share of words whose first analysis has the right part of speech and lemma, 
 
 | System | SynTagRus | Taiga | GSD | Tokens per second |
 | :----- | :-------- | :---- | :-- | :---------------- |
-| ruMorph | **93.7** | **90.5** | **92.1** | **647,922** |
-| pymorphy3 | 81.4 | 79.8 | 83.1 | 23,216 |
-| mystem | 81.9 | 79.4 | 79.9 | 33,171 |
+| ruMorph | **93.7** | **90.5** | **92.1** | **684,151** |
+| pymorphy3 | 84.8 | 82.9 | 84.3 | 23,843 |
+| mystem | 81.9 | 79.4 | 79.9 | 79,046 |
 
-Context taggers are more accurate in features but much slower: Stanza handles 2,795 tokens per second, spaCy ru_core_news_sm 6,977. The ruMorph dictionary loads in 5 ms against 0.2-2.6 s for the taggers, processes share the dictionary, and every further one adds 1.4 MB. Measured on Apple M3 Pro, Python 3.11.
+The context tagger Stanza is more accurate in features but handles 2,983 tokens per second. ruMorph answers a short text together with loading in 5 ms against 0.2-2 s for the taggers, processes share the dictionary, and every further one adds 1.4 MB. Measured on Apple M3 Pro, Python 3.11.
 
 See the [documentation](https://sergeyshk.github.io/ruMorph/en/performance/) for context taggers, the chart of speed by text size, operations compared with pymorphy3, memory and how it was measured.
 
