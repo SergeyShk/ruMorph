@@ -34,6 +34,9 @@ type Records = Vec<(u16, u16, String)>;
 /// Лексема выгрузки: парадигма, основа и пары «форма леммы, тег UD» ее форм
 type SourceLexeme = (u16, String, Vec<(u16, u16)>);
 
+/// Наречие и формы COMP прилагательных - его сравнительная степень: лексема и номера форм
+type Comparatives = (usize, Vec<(usize, Vec<usize>)>);
+
 /// Ключ перевода в UD: тег OpenCorpora, класс леммы, счетная форма, вид аббревиатуры и род
 /// существительного, у которого есть только множественное число
 type UdKey = (
@@ -412,20 +415,32 @@ fn build(export: &Path, ud: &Path, output: &Path) -> Result<(), Box<dyn Error>> 
             .push(lexeme);
     }
     let mut placed: Vec<(u16, Vec<u16>)> = vec![(0, Vec::new()); lexemes.len()];
+    // Разборы словоформы сверх ее записи в выгрузке: копии форм с другим разбором
+    let mut extra_entries: HashMap<(usize, u16), Vec<Entry>> = HashMap::new();
     let mut combined_count = 0;
     for members in groups.values_mut() {
         // Основное слово раньше варианта: его форма - начальная форма объединенной лексемы
         members.sort_by_key(|lexeme| variant_mains.contains_key(lexeme));
         let members = &*members;
         if let [lexeme] = members.as_slice() {
-            let (paradigm, _, cells) = &lexemes[*lexeme];
+            let (paradigm, stem, cells) = &lexemes[*lexeme];
             let layout = &paradigms[*paradigm as usize];
             let count = layout.len() / 3;
             let form_tags: Vec<&str> = (0..count)
                 .map(|form| tags[layout[count + form] as usize].as_str())
                 .collect();
             let copies = female_plurals(&form_tags, cells);
-            if copies.is_empty() {
+            // Копии форм с другим родом («двух»): на них, в отличие от копий фамилий, ссылается словоформа
+            let base = spell(*paradigm, stem, 0);
+            let mut genders = Vec::new();
+            for (form, tag) in form_tags.iter().enumerate() {
+                for converted in ud::numeral_genders(&base, tag) {
+                    let labels: Vec<&str> = converted.labels.iter().map(String::as_str).collect();
+                    let feats = ud::feats_string(&converted.feats);
+                    genders.push((form, builder.add_ud_tag(converted.pos, &feats, &labels)?));
+                }
+            }
+            if copies.is_empty() && genders.is_empty() {
                 placed[*lexeme] = (builder.add_table(*paradigm, cells)?, Vec::new());
                 continue;
             }
@@ -437,8 +452,21 @@ fn build(export: &Path, ud: &Path, output: &Path) -> Result<(), Box<dyn Error>> 
                 forms.push(forms[form]);
                 cells.push((lemma_form, cells[form].1));
             }
+            let mut referenced = Vec::with_capacity(genders.len());
+            for &(form, ud) in &genders {
+                referenced.push((form as u16, cells.len() as u16));
+                forms.push(forms[form]);
+                cells.push((cells[form].0, ud));
+            }
             let paradigm = add_paradigm(&mut builder, &mut paradigm_numbers, forms)?;
-            placed[*lexeme] = (builder.add_table(paradigm, &cells)?, Vec::new());
+            let table = builder.add_table(paradigm, &cells)?;
+            placed[*lexeme] = (table, Vec::new());
+            for (form, copy) in referenced {
+                extra_entries
+                    .entry((*lexeme, form))
+                    .or_default()
+                    .push(Entry { table, form: copy });
+            }
             continue;
         }
         combined_count += members.len();
@@ -515,7 +543,6 @@ fn build(export: &Path, ud: &Path, output: &Path) -> Result<(), Box<dyn Error>> 
     // Местоимения «то», «всё», «все» (PRON) - отдельные лексемы поверх форм «тот» и «весь»,
     // которые в OpenCorpora есть только как местоименные прилагательные; словоформа получает
     // и разбор местоимения
-    let mut extra_entries: HashMap<(usize, u16), Vec<Entry>> = HashMap::new();
     for (lexeme, (paradigm, stem, _)) in lexemes.iter().enumerate() {
         let layout = &paradigms[*paradigm as usize];
         let count = layout.len() / 3;
@@ -532,21 +559,13 @@ fn build(export: &Path, ud: &Path, output: &Path) -> Result<(), Box<dyn Error>> 
                 .iter()
                 .position(|&(form, _)| tags[layout[count + form] as usize].contains("nomn"))
                 .unwrap_or(0) as u16;
-            let layout_forms: Vec<(u16, u16, u16)> = forms
-                .iter()
-                .map(|&(form, _)| (layout[form], layout[count + form], layout[2 * count + form]))
-                .collect();
-            let pronoun_paradigm = add_paradigm(&mut builder, &mut paradigm_numbers, layout_forms)?;
-            let mut cells = Vec::with_capacity(forms.len());
-            for (_, converted) in forms {
-                let labels: Vec<&str> = converted.labels.iter().map(String::as_str).collect();
-                let feats = ud::feats_string(&converted.feats);
-                cells.push((
-                    lemma_form,
-                    builder.add_ud_tag(converted.pos, &feats, &labels)?,
-                ));
-            }
-            let table = builder.add_table(pronoun_paradigm, &cells)?;
+            let table = copy_table(
+                &mut builder,
+                &mut paradigm_numbers,
+                layout,
+                forms,
+                lemma_form,
+            )?;
             for (number, &(form, _)) in forms.iter().enumerate() {
                 extra_entries
                     .entry((lexeme, form as u16))
@@ -554,6 +573,169 @@ fn build(export: &Path, ud: &Path, output: &Path) -> Result<(), Box<dyn Error>> 
                     .push(Entry {
                         table,
                         form: number as u16,
+                    });
+            }
+        }
+    }
+
+    // Разборы, которые различает только контекст («есть» - AUX и VERB, «один» - NUM и DET), -
+    // лексемы из копий форм с леммой исходной лексемы: словоформа получает и разбор копии
+    for (lexeme, (paradigm, stem, cells)) in lexemes.iter().enumerate() {
+        let layout = &paradigms[*paradigm as usize];
+        let count = layout.len() / 3;
+        let base = spell(*paradigm, stem, 0);
+        let forms: Vec<(usize, ud::Ud)> = (0..count)
+            .filter_map(|form| {
+                ud::context_copy(&base, &tags[layout[count + form] as usize])
+                    .map(|converted| (form, converted))
+            })
+            .collect();
+        let Some(&(first, _)) = forms.first() else {
+            continue;
+        };
+        let lemma = usize::from(cells[first].0);
+        let Some(lemma_form) = forms.iter().position(|&(form, _)| form == lemma) else {
+            continue;
+        };
+        let table = copy_table(
+            &mut builder,
+            &mut paradigm_numbers,
+            layout,
+            &forms,
+            lemma_form as u16,
+        )?;
+        for (number, &(form, _)) in forms.iter().enumerate() {
+            extra_entries
+                .entry((lexeme, form as u16))
+                .or_default()
+                .push(Entry {
+                    table,
+                    form: number as u16,
+                });
+        }
+    }
+
+    // Сравнительная степень наречия («раньше» - «рано»): формы COMP прилагательного копиями
+    // переходят в лексему наречия из одной формы (с объединенными с ней), словоформа получает
+    // и разбор наречия. Слово, которое и так наречие («больше»), копии не получает
+    let mut adverbs: HashMap<String, usize> = HashMap::new();
+    for (lexeme, (paradigm, stem, _)) in lexemes.iter().enumerate() {
+        let layout = &paradigms[*paradigm as usize];
+        if layout.len() == 3 && tags[layout[1] as usize].starts_with("ADVB") {
+            adverbs.entry(spell(*paradigm, stem, 0)).or_insert(lexeme);
+        }
+    }
+    let mut comparatives: BTreeMap<usize, Comparatives> = BTreeMap::new();
+    for (lexeme, (paradigm, stem, _)) in lexemes.iter().enumerate() {
+        let layout = &paradigms[*paradigm as usize];
+        let count = layout.len() / 3;
+        let tag_of = |form: usize| tags[layout[count + form] as usize].as_str();
+        if !tag_of(0).starts_with("ADJF") {
+            continue;
+        }
+        let forms: Vec<usize> = (0..count)
+            .filter(|&form| {
+                tag_of(form).starts_with("COMP")
+                    && !adverbs.contains_key(&spell(*paradigm, stem, form))
+            })
+            .collect();
+        if forms.is_empty() {
+            continue;
+        }
+        let short: Vec<String> = (0..count)
+            .filter(|&form| {
+                let grammemes: Vec<&str> = tag_of(form).split([',', ' ']).collect();
+                grammemes[0] == "ADJS" && grammemes.contains(&"neut") && grammemes.contains(&"sing")
+            })
+            .map(|form| spell(*paradigm, stem, form))
+            .collect();
+        let lemma = spell(*paradigm, stem, 0);
+        if let Some(&adverb) = ud::positive_adverbs(&lemma, &short)
+            .iter()
+            .find_map(|word| adverbs.get(word))
+        {
+            (comparatives.entry(root(&mut parents, adverb)))
+                .or_insert((adverb, Vec::new()))
+                .1
+                .push((lexeme, forms));
+        }
+    }
+    let source_lexeme = |lexeme: usize, forms: &[usize], ud: &dyn Fn(usize) -> u16| {
+        let (paradigm, stem, cells) = &lexemes[lexeme];
+        let layout = &paradigms[*paradigm as usize];
+        let count = layout.len() / 3;
+        lexemes::Lexeme {
+            stem: stem.clone(),
+            forms: forms
+                .iter()
+                .map(|&form| lexemes::Form {
+                    prefix: prefixes[layout[2 * count + form] as usize].clone(),
+                    suffix: suffixes[layout[form] as usize].clone(),
+                    tag: layout[count + form],
+                    lemma_form: cells[form].0,
+                    ud: ud(form),
+                })
+                .collect(),
+        }
+    };
+    for (group, (adverb, sources)) in &comparatives {
+        let (group, adverb) = (&groups[group], *adverb);
+        let word = spell(lexemes[adverb].0, &lexemes[adverb].1, 0);
+        let mut members: Vec<lexemes::Lexeme> = group
+            .iter()
+            .map(|&lexeme| {
+                let count = paradigms[lexemes[lexeme].0 as usize].len() / 3;
+                let forms: Vec<usize> = (0..count).collect();
+                source_lexeme(lexeme, &forms, &|form| lexemes[lexeme].2[form].1)
+            })
+            .collect();
+        for (lexeme, forms) in sources {
+            let layout = &paradigms[lexemes[*lexeme].0 as usize];
+            let count = layout.len() / 3;
+            let mut uds = HashMap::new();
+            for &form in forms {
+                let converted = ud::comparative_adverb(&tags[layout[count + form] as usize], &word);
+                let labels: Vec<&str> = converted.labels.iter().map(String::as_str).collect();
+                let feats = ud::feats_string(&converted.feats);
+                uds.insert(form, builder.add_ud_tag(converted.pos, &feats, &labels)?);
+            }
+            members.push(source_lexeme(*lexeme, forms, &|form| uds[&form]));
+        }
+        let (mut combined, numbers) = lexemes::combine(&members);
+        let position = group
+            .iter()
+            .position(|&lexeme| lexeme == adverb)
+            .unwrap_or(0);
+        let lemma_form = numbers[position][usize::from(lexemes[adverb].2[0].0)];
+        for &number in numbers[group.len()..].iter().flatten() {
+            combined.forms[usize::from(number)].lemma_form = lemma_form;
+        }
+        let mut forms = Vec::with_capacity(combined.forms.len());
+        for form in &combined.forms {
+            forms.push((
+                builder.add_suffix(&form.suffix)?,
+                form.tag,
+                prefix_numbers[form.prefix.as_str()],
+            ));
+        }
+        let paradigm = add_paradigm(&mut builder, &mut paradigm_numbers, forms)?;
+        let cells: Vec<(u16, u16)> = combined
+            .forms
+            .iter()
+            .map(|form| (form.lemma_form, form.ud))
+            .collect();
+        let table = builder.add_table(paradigm, &cells)?;
+        for (&lexeme, mapped) in group.iter().zip(&numbers) {
+            placed[lexeme] = (table, mapped.clone());
+        }
+        for ((lexeme, forms), mapped) in sources.iter().zip(&numbers[group.len()..]) {
+            for (&form, &number) in forms.iter().zip(mapped) {
+                extra_entries
+                    .entry((*lexeme, form as u16))
+                    .or_default()
+                    .push(Entry {
+                        table,
+                        form: number,
                     });
             }
         }
@@ -763,6 +945,33 @@ fn female_plurals(tags: &[&str], cells: &[(u16, u16)]) -> Vec<(usize, u16)> {
         .filter(|&form| has(form, &["plur", "Surn"]) && usize::from(cells[form].0) != female)
         .map(|form| (form, female as u16))
         .collect()
+}
+
+/// Таблица лексемы из копий форм `forms` парадигмы `layout` с разборами копий и формой леммы
+/// `lemma_form` среди них
+fn copy_table(
+    builder: &mut Builder,
+    paradigm_numbers: &mut HashMap<Vec<(u16, u16, u16)>, u16>,
+    layout: &[u16],
+    forms: &[(usize, ud::Ud)],
+    lemma_form: u16,
+) -> Result<u16, rumorph::Error> {
+    let count = layout.len() / 3;
+    let layout_forms: Vec<(u16, u16, u16)> = forms
+        .iter()
+        .map(|&(form, _)| (layout[form], layout[count + form], layout[2 * count + form]))
+        .collect();
+    let paradigm = add_paradigm(builder, paradigm_numbers, layout_forms)?;
+    let mut cells = Vec::with_capacity(forms.len());
+    for (_, converted) in forms {
+        let labels: Vec<&str> = converted.labels.iter().map(String::as_str).collect();
+        let feats = ud::feats_string(&converted.feats);
+        cells.push((
+            lemma_form,
+            builder.add_ud_tag(converted.pos, &feats, &labels)?,
+        ));
+    }
+    builder.add_table(paradigm, &cells)
 }
 
 /// Номер парадигмы с формами `forms`: существующей или новой
