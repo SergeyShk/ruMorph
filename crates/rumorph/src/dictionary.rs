@@ -869,11 +869,13 @@ impl Dictionary {
             && ["ова", "ева", "ёва", "ина", "ына"]
                 .iter()
                 .any(|ending| analysis.lemma.ends_with(ending));
-        let declension = (lexeme_forms.as_ref())
-            .is_some_and(|(lexeme, forms)| self.adjectival_declension(lexeme, forms));
+        let declension = || {
+            (lexeme_forms.as_ref())
+                .is_some_and(|(lexeme, forms)| self.adjectival_declension(lexeme, forms))
+        };
         let adjectival = matches!(tag.pos(), "ADJ" | "DET")
             || feat("VerbForm") == Some("Part")
-            || (nominal && (female_surname || declension));
+            || (nominal && (female_surname || declension()));
         if !adjectival && !nominal {
             return None;
         }
@@ -909,10 +911,18 @@ impl Dictionary {
             None => &[],
         };
         let Some((lexeme, forms)) = lexeme_forms else {
-            // Разбор без формы таблицы - своя единственная форма, как в `inflect`
+            // Разбор без формы таблицы - своя единственная форма, как в `inflect`. Запасная цель
+            // другого числа - для слов без единственного, а их без форм не узнать
+            fn number<'a>(feats: &[(&str, &'a str)]) -> Option<&'a str> {
+                feats
+                    .iter()
+                    .find_map(|&(name, value)| (name == "Number").then_some(value))
+            }
+            let first = targets.first().and_then(|feats| number(feats));
             let own = analysis.entry.is_none()
                 && targets
                     .iter()
+                    .filter(|feats| number(feats) == first)
                     .any(|feats| feats.iter().all(|&(name, value)| feat(name) == Some(value)));
             return own.then(|| Analysis {
                 prob: 1.0,
