@@ -623,6 +623,18 @@ def test_deleted_file_keeps_working(morph, tmp_path):
         assert pool.submit(pickle.loads, blob).result().lemma == "стать"
 
 
+def test_own_words_release_file(morph, tmp_path):
+    # Копия словаря со своими словами освобождает файл вместе со словарем: в Windows файл
+    # удаляется, как только остался только анализатор со словарем пакета
+    path = tmp_path / "ru.dict"
+    shutil.copy(morph.path, path)
+    analyzer = Analyzer(path, words={"зумер": "геймер"})
+    assert analyzer.analyze("зумерами")[0].lemma == "зумер"
+    del analyzer
+    Analyzer()
+    path.unlink()
+
+
 @pytest.mark.skipif(sys.platform == "win32", reason="Windows не удаляет отображенный файл")
 def test_deleted_file_with_own_words(morph, tmp_path):
     path = tmp_path / "ru.dict"

@@ -215,13 +215,13 @@ impl Dictionary {
         recorded || self.own_entries(&key).any(|own| own == entry)
     }
 
-    /// Разборы своих слов с ключом `key`, кроме совпавших с разборами словаря в `analyses`
-    /// по написанию, лемме, части речи и признакам; без частот
+    /// Разборы своих слов с ключом `key`, кроме совпавших с уже собранными разборами `analyses`
+    /// по написанию, лемме, части речи и признакам (словарное слово или слово по двум образцам
+    /// не получает лишней доли); без частот
     pub(super) fn own_candidates(&self, key: &Key, analyses: &mut Vec<Analysis>) {
         let Some(forms) = self.own_words.get(key.bytes()) else {
             return;
         };
-        let dictionary = analyses.len();
         let core = |ud: u16| self.ud_core.get(usize::from(ud)).copied();
         for own in forms {
             // Место «ё» запроса - «ё» и у своего слова, а «е» запроса может обозначать «ё»
@@ -233,7 +233,7 @@ impl Dictionary {
                 continue;
             };
             let (lemma, ud) = (self.lemma(&lexeme, entry.form), lexeme.ud(entry.form));
-            let known = analyses[..dictionary].iter().any(|analysis| {
+            let known = analyses.iter().any(|analysis| {
                 analysis.word == own.spelling
                     && analysis.lemma == lemma
                     && core(analysis.ud) == core(ud)

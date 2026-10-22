@@ -503,6 +503,17 @@ struct Shared {
     ud: Vec<OnceLock<Box<UdObjects>>>,
     /// Путь, по которому словарь загружен
     path: PathBuf,
+    /// Копии словаря со своими словами: последняя держится, пока жив сам словарь, поэтому разборы
+    /// из pickle в задачах пула не собирают свои слова заново, а файл освобождается вместе
+    /// со словарем
+    copies: Mutex<WordCopies>,
+}
+
+/// Копии словаря со своими словами и последняя собранная
+#[derive(Default)]
+struct WordCopies {
+    entries: Vec<(Arc<Vec<OwnWord>>, Weak<Shared>)>,
+    last: Option<Arc<Shared>>,
 }
 
 impl Shared {
@@ -512,6 +523,7 @@ impl Shared {
             dictionary,
             ud,
             path: path.to_owned(),
+            copies: Mutex::default(),
         }
     }
 }
@@ -868,25 +880,6 @@ fn _analyzer(
     }
 }
 
-/// Словарь со своими словами, собранный в процессе: общий словарь, свои слова и копия словаря с ними
-struct WordDictionary {
-    base: Weak<Shared>,
-    words: Arc<Vec<OwnWord>>,
-    shared: Weak<Shared>,
-}
-
-/// Собранные словари со своими словами; последний держится и без анализаторов, как последний
-/// загруженный словарь, поэтому разборы из pickle в задачах пула не собирают слова заново
-struct WordDictionaries {
-    entries: Vec<WordDictionary>,
-    last: Option<Arc<Shared>>,
-}
-
-static WORD_DICTIONARIES: Mutex<WordDictionaries> = Mutex::new(WordDictionaries {
-    entries: Vec::new(),
-    last: None,
-});
-
 /// Морфологический анализатор
 ///
 /// Описание:
@@ -1222,24 +1215,17 @@ impl Analyzer {
     /// Анализатор `base` со своими словами: копия его словаря со своими словами собирается один
     /// раз на словарь и набор слов
     fn with_words(py: Python<'_>, base: Analyzer, words: Vec<OwnWord>) -> PyResult<Self> {
-        let registry = || {
-            WORD_DICTIONARIES
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-        };
+        let copies = || (base.shared.copies.lock()).unwrap_or_else(PoisonError::into_inner);
         let found = {
-            let mut built = registry();
-            built
+            let mut copies = copies();
+            copies
                 .entries
-                .retain(|entry| entry.shared.strong_count() > 0);
-            built
+                .retain(|(_, shared)| shared.strong_count() > 0);
+            copies
                 .entries
                 .iter()
-                .filter(|entry| *entry.words == words)
-                .filter(|entry| {
-                    (entry.base.upgrade()).is_some_and(|known| Arc::ptr_eq(&known, &base.shared))
-                })
-                .find_map(|entry| Some((entry.shared.upgrade()?, Arc::clone(&entry.words))))
+                .filter(|(known, _)| **known == words)
+                .find_map(|(known, shared)| Some((shared.upgrade()?, Arc::clone(known))))
         };
         if let Some((shared, words)) = found {
             return Ok(Analyzer {
@@ -1264,15 +1250,13 @@ impl Analyzer {
             Arc::new(Shared::new(dictionary, &base.path)),
             Arc::new(words),
         );
-        // Прежний последний словарь освобождается после снятия блокировки
+        // Прежняя последняя копия освобождается после снятия блокировки
         let previous = {
-            let mut built = registry();
-            built.entries.push(WordDictionary {
-                base: Arc::downgrade(&base.shared),
-                words: Arc::clone(&words),
-                shared: Arc::downgrade(&shared),
-            });
-            built.last.replace(Arc::clone(&shared))
+            let mut copies = copies();
+            copies
+                .entries
+                .push((Arc::clone(&words), Arc::downgrade(&shared)));
+            copies.last.replace(Arc::clone(&shared))
         };
         drop(previous);
         Ok(Analyzer {

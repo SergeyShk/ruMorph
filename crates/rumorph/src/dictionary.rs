@@ -2123,6 +2123,32 @@ pub(super) mod tests {
     }
 
     #[test]
+    fn own_word_after_two_samples() {
+        // Одинаковые разборы по двум образцам из разных таблиц - один разбор, без лишней доли
+        let noun = |case: &str| format!("Case={case}|Number=Sing");
+        let dict = || {
+            dictionary_of(
+                &[
+                    ("NOUN", "бо", vec![("й", noun("Nom")), ("я", noun("Gen"))]),
+                    ("NOUN", "стро", vec![("й", noun("Nom")), ("ю", noun("Dat"))]),
+                    ("DET", "мо", vec![("й", "Case=Nom".to_owned())]),
+                ],
+                &[("мой", "DET Case=Nom", 900_000)],
+            )
+        };
+        let probs = |dict: Dictionary| -> Vec<f64> {
+            dict.analyze("мой").iter().map(|a| a.prob).collect()
+        };
+        let one = probs(dict().with_words([("мой", "бой")]).unwrap());
+        let two = probs(
+            dict()
+                .with_words([("мой", "бой"), ("мой", "строй")])
+                .unwrap(),
+        );
+        assert_eq!((one.len(), &one), (2, &two));
+    }
+
+    #[test]
     fn forms_of_lexeme() {
         let dict = lexicon();
         let forms: Vec<String> = dict
