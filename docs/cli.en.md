@@ -118,7 +118,9 @@ echo "Мы стали" | rumorph -f jsonl
 | Code | When |
 | :--- | :--- |
 | 0 | Success, including when the output is closed before the end (`rumorph text.txt \| head`) |
-| 1 | A file is missing or not in UTF-8, a line is not in UTF-8 (it is analyzed with U+FFFD), an invalid CoNLL-U line, the dictionary cannot be read, the output file cannot be created or is an input file or the dictionary, a write error; the other files are still analyzed |
+| 1 | An input file is missing or not in UTF-8, a line is not in UTF-8 (it is analyzed with U+FFFD), an invalid CoNLL-U line; the other files are still analyzed |
+| 1 | The dictionary cannot be read, the own words file has an error (it is missing or not in UTF-8, an invalid line, a word does not inflect like its sample), the output file cannot be created or is an input file, the dictionary or the own words file; nothing is analyzed |
+| 1 | A write error; the analysis stops |
 | 2 | Invalid options |
 
 Error messages go to the standard error.

@@ -108,6 +108,6 @@ Prebuilt wheels and building from source are described on the [Installation](ins
     *   **crates/rumorph-dict-ru** - the crate with the dictionary for `rumorph` on crates.io
     *   **crates/rumorph-py** - the Python module `rumorph._rumorph` on PyO3
     *   **python/rumorph** - the Python package
-    *   **scripts** - exporting the pymorphy3-dicts-ru dictionary
+    *   **scripts** - exporting the pymorphy3-dicts-ru dictionary and the UD treebank counts, checking the installed package before publishing and comparing with other analyzers
     *   **docs** - MkDocs documentation in Russian and English
     *   **tests** - tests of the Python package

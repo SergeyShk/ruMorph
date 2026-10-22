@@ -51,7 +51,7 @@ make docs-build  # mkdocs build --strict, если менялась докуме
 - `crates/rumorph-build/` - сборка словаря из выгрузки pymorphy3-dicts-ru, перевод тегов OpenCorpora в UD (`ud.rs`) и частоты разборов по счетчикам трибанков UD (`frequencies.rs`).
 - `crates/rumorph-py/` - модуль Python `rumorph._rumorph` на PyO3.
 - `python/rumorph/` - пакет Python поверх модуля; `data/ru.dict` - собранный словарь.
-- `scripts/` - выгрузка словаря pymorphy3-dicts-ru и счетчиков трибанков UD, проверка установленного пакета перед публикацией.
+- `scripts/` - выгрузка словаря pymorphy3-dicts-ru и счетчиков трибанков UD, проверка установленного пакета перед публикацией и сравнение с другими анализаторами (`compare.py`, зависимости закреплены в `compare.py.lock`).
 - `tests/` - тесты пакета Python; `tests/test_pymorphy.py` сверяет разборы с pymorphy3 на частых словоформах, `tests/test_docs.py` - два языка документации.
 - `docs/` - документация MkDocs (Material), `mkdocs.yml` - навигация и перевод ее на английский.
 - `.github/workflows/` - CI (`ci.yml`), публикация (`publish.yml`: словарь собирается один раз и входит в колеса для Linux, macOS и Windows и в исходники), документация (`docs.yml`).
