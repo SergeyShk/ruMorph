@@ -25,8 +25,10 @@
     и число - тоже; признаки UD целиком сравниваются только у систем с признаками UD. Скорость -
     токены в секунду на SynTagRus test без загрузки (лучший из двух прогонов), а для графика -
     полное время с импортом и загрузкой в отдельном процессе на тексте разного объема. Пишет
-    таблицы Markdown, results.json в каталог данных и график SVG. ruMorph - версия с PyPI или
-    колесо из `--with`: сборка `--with-editable` отладочная, ее скорость не показательна.
+    таблицы Markdown, results.json в каталог данных (прогон части систем обновляет только их
+    результаты) и график SVG. Версии всех пакетов закреплены в compare.py.lock; ruMorph - версия
+    из него или колесо из `--with`: сборка `--with-editable` отладочная, ее скорость
+    не показательна.
 
 Пример использования:
     uv run scripts/compare.py build/compare --chart docs/img/speed.svg
@@ -740,19 +742,20 @@ def main() -> None:
     if args.speed_run:
         speed_run(args.speed_run[0], data, int(args.speed_run[1]))
         return
+    saved = data / "results.json"
     if args.report:
-        results = json.loads((data / "results.json").read_text(encoding="utf-8"))
+        results = json.loads(saved.read_text(encoding="utf-8"))
     else:
-        results = evaluate(args.systems, data)
+        # Прогон части систем обновляет только их результаты
+        results = json.loads(saved.read_text(encoding="utf-8")) if saved.exists() else {}
+        results |= evaluate(args.systems, data)
         # Версии Python и пакетов окружения - для описания замера
         packages = ["rumorph", "pymorphy3", "pymorphy3-dicts-ru", "pymystem3", "spacy"]
         packages += ["ru-core-news-sm", "stanza", "torch", "slovnet", "navec"]
         environment = {"python": sys.version.split()[0]}
         environment |= {package: metadata.version(package) for package in packages}
         (data / "environment.json").write_text(json.dumps(environment, indent=2), encoding="utf-8")
-        (data / "results.json").write_text(
-            json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
+        saved.write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8")
     free = [name for name in CONTEXT_FREE if name in results]
     contextual = [name for name in ("rumorph", *CONTEXTUAL) if name in results]
     print("## Без контекста\n")

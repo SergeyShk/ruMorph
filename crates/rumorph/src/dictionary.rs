@@ -79,6 +79,22 @@ pub struct Analysis {
     pub entry: Option<Entry>,
 }
 
+impl Analysis {
+    /// Разбор без формы таблицы и тега OpenCorpora: его единственная форма - он сам. Например,
+    /// сохраненный разбор, которого нет в словаре другой версии
+    pub fn new(word: String, lemma: String, ud: u16, prob: f64, source: Source) -> Self {
+        Analysis {
+            word,
+            lemma,
+            ud,
+            tag: None,
+            prob,
+            source,
+            entry: None,
+        }
+    }
+}
+
 /// Тег UD для подбора формы: номер строки части речи, коды значений признаков
 /// из `Dictionary::features` по порядку (0 - признака нет) и номера строк помет
 struct Codes<'a> {
@@ -843,7 +859,7 @@ impl Dictionary {
             "Par" => "Gen",
             case => case,
         };
-        let (lexeme, forms) = self.lexeme_forms(analysis)?;
+        let lexeme_forms = self.lexeme_forms(analysis);
         let nominal = matches!(tag.pos(), "NOUN" | "PROPN");
         // Женские фамилии на -ова, -ина («Иванова») склоняются как краткие прилагательные:
         // «две Ивановы»; несклоняемые («Абрамович») и на согласный («Брик») - нет
@@ -853,44 +869,69 @@ impl Dictionary {
             && ["ова", "ева", "ёва", "ина", "ына"]
                 .iter()
                 .any(|ending| analysis.lemma.ends_with(ending));
+        let declension = || {
+            (lexeme_forms.as_ref())
+                .is_some_and(|(lexeme, forms)| self.adjectival_declension(lexeme, forms))
+        };
         let adjectival = matches!(tag.pos(), "ADJ" | "DET")
             || feat("VerbForm") == Some("Part")
-            || (nominal && (female_surname || self.adjectival_declension(&lexeme, &forms)));
+            || (nominal && (female_surname || declension()));
         if !adjectival && !nominal {
             return None;
         }
         let gen_sing = [("Case", "Gen"), ("Number", "Sing")];
         let gen_plur = [("Case", "Gen"), ("Number", "Plur")];
-        let counting = self.preferences.counting.as_slice();
-        let Some(number) = number else {
-            let form = [&gen_sing[..], &gen_plur[..]]
-                .into_iter()
-                .find_map(|feats| self.closest(analysis, &lexeme, &forms, feats, &[]))?;
-            return Some(self.form(analysis, &lexeme, form));
-        };
-        let one = number % 10 == 1 && number % 100 != 11;
-        let few = (2..=4).contains(&(number % 10)) && !(12..=14).contains(&(number % 100));
-        let animate = feat("Animacy") == Some("Anim");
         let sing = [("Case", case), ("Number", "Sing")];
         let plur = [("Case", case), ("Number", "Plur")];
         let plur_inanimate = [("Case", case), ("Number", "Plur"), ("Animacy", "Inan")];
-        let targets: Vec<&[(&str, &str)]> = if one {
-            vec![&sing, &plur]
-        } else if !matches!(case, "Nom" | "Acc") {
-            vec![&plur]
-        } else if case == "Acc" && animate && (adjectival || (few && number < 5)) {
-            // «вижу двух котов», «вижу двадцать два учёных», но «вижу двадцать два кота»
-            vec![&gen_plur]
-        } else if adjectival && few && feat("Gender") == Some("Fem") {
-            vec![&plur_inanimate, &plur]
-        } else if few && !adjectival {
-            vec![&gen_sing, &gen_plur]
-        } else {
-            vec![&gen_plur]
+        let targets: Vec<&[(&str, &str)]> = match number {
+            None => vec![&gen_sing, &gen_plur],
+            Some(number) => {
+                let one = number % 10 == 1 && number % 100 != 11;
+                let few = (2..=4).contains(&(number % 10)) && !(12..=14).contains(&(number % 100));
+                let animate = feat("Animacy") == Some("Anim");
+                if one {
+                    vec![&sing, &plur]
+                } else if !matches!(case, "Nom" | "Acc") {
+                    vec![&plur]
+                } else if case == "Acc" && animate && (adjectival || (few && number < 5)) {
+                    // «вижу двух котов», «вижу двадцать два учёных», но «вижу двадцать два кота»
+                    vec![&gen_plur]
+                } else if adjectival && few && feat("Gender") == Some("Fem") {
+                    vec![&plur_inanimate, &plur]
+                } else if few && !adjectival {
+                    vec![&gen_sing, &gen_plur]
+                } else {
+                    vec![&gen_plur]
+                }
+            }
+        };
+        let prefer = match number {
+            Some(_) => self.preferences.counting.as_slice(),
+            None => &[],
+        };
+        let Some((lexeme, forms)) = lexeme_forms else {
+            // Разбор без формы таблицы - своя единственная форма, как в `inflect`. Запасная цель
+            // другого числа - для слов без единственного, а их без форм не узнать
+            fn number<'a>(feats: &[(&str, &'a str)]) -> Option<&'a str> {
+                feats
+                    .iter()
+                    .find_map(|&(name, value)| (name == "Number").then_some(value))
+            }
+            let first = targets.first().and_then(|feats| number(feats));
+            let own = analysis.entry.is_none()
+                && targets
+                    .iter()
+                    .filter(|feats| number(feats) == first)
+                    .any(|feats| feats.iter().all(|&(name, value)| feat(name) == Some(value)));
+            return own.then(|| Analysis {
+                prob: 1.0,
+                ..analysis.clone()
+            });
         };
         let form = targets
             .into_iter()
-            .find_map(|feats| self.closest(analysis, &lexeme, &forms, feats, counting))?;
+            .find_map(|feats| self.closest(analysis, &lexeme, &forms, feats, prefer))?;
         Some(self.form(analysis, &lexeme, form))
     }
 

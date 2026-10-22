@@ -534,11 +534,52 @@ def test_own_words_like_dictionary_words():
         ("зумер", TypeError, "Свои слова должны быть словарем «слово: образец», а не str"),
         ({"зумер": 1}, TypeError, "Образец должен быть строкой или парой строк"),
         ({1: "кот"}, TypeError, "Свое слово должно быть строкой, а не int"),
+        (
+            type("Items", (), {"items": lambda self: [1]})(),
+            TypeError,
+            "Элемент items() своих слов должен быть парой «слово, образец», а не int",
+        ),
+        (
+            type("Items", (), {"items": lambda self: [("а", "б", "в")]})(),
+            TypeError,
+            "Элемент items() своих слов должен быть парой «слово, образец», а не кортежем из 3 элементов",
+        ),
     ],
 )
 def test_own_words_errors(words, error, message):
     with pytest.raises(error, match=re.escape(message)):
         Analyzer(words=words)
+
+
+def test_own_words_with_separators():
+    # Табуляция, перевод строки и пустая часть речи не прячутся за копию с похожей записью
+    morph = Analyzer(words={"зумер": "геймер"})
+    for words in [
+        {"зумер": ("геймер", "")},
+        {"зумер": "геймер\t"},
+        {"зумер": "геймер\t\nбумер\tзумер"},
+        {"кот\tстол": "NOUN"},
+        {"зумер": ("печь", "VERB\r")},
+    ]:
+        with pytest.raises(ValueError):
+            Analyzer(words=words)
+    assert morph.analyze("зумерами")[0].lemma == "зумер"
+
+
+def test_own_words_items_error():
+    # Ошибка внутри items() не подменяется ошибкой «не словарь»
+    class Broken:
+        def items(self):
+            raise RuntimeError("нет связи с базой")
+
+    with pytest.raises(RuntimeError, match="нет связи с базой"):
+        Analyzer(words=Broken())
+
+
+def test_own_words_with_surrogate():
+    # Непарный суррогат заменяется на U+FFFD, как в запросе
+    morph = Analyzer(words={"зу\udcffмер": "геймер"})
+    assert morph.analyze("зу\udcffмерами")[0].lemma == "зу\ufffdмер"
 
 
 def test_pickle(morph):
@@ -575,8 +616,37 @@ def test_pickle(morph):
     assert rumorph._rumorph._analysis(morph, old_state) == one
     with pytest.raises(ValueError, match="Неизвестный источник"):
         rumorph._rumorph._analysis(morph, (*state[:6], "corpus", *state[7:]))
-    with pytest.raises(ValueError, match="В словаре нет разбора"):
+    with pytest.raises(ValueError, match="сохранен со словарем другой версии"):
         rumorph._rumorph._analysis(morph, (*state[:3], "Case", *state[4:]))
+
+
+def test_pickle_from_other_dictionary(morph):
+    # Разбор, сохраненный со словарем другой версии (в 0.2.0 у сокращения «в» лемма «в»),
+    # восстанавливается как сохранен, но без других форм
+    analysis = next(a for a in morph.analyze("в") if a.pos == "NOUN")
+    restore, (analyzer, state) = analysis.__reduce__()
+    old = restore(analyzer, (state[0], "в", *state[2:]))
+    assert (old.word, old.lemma, old.pos, old.feats, old.prob) == (
+        "в",
+        "в",
+        "NOUN",
+        analysis.feats,
+        analysis.prob,
+    )
+    assert old.forms() == [old]
+    assert pickle.loads(pickle.dumps(old)) == old
+    # Без других форм разбор согласуется с количеством, только если сам подходит
+    table = morph.analyze("стол")[0]
+    _, (_, state) = table.__reduce__()
+    chair = restore(analyzer, (state[0], "стул", *state[2:]))
+    assert (chair.agree(1), chair.inflect(Case="Acc")) == ("стол", "стол")
+    with pytest.raises(rumorph.FormNotFoundError):
+        chair.agree(5)
+    # Тега нет (в 0.2.0 у «Нидерландов» не было рода): берется разбор, у которого признак добавился
+    netherlands = morph.analyze("Нидерландов")[0]
+    _, (_, state) = netherlands.__reduce__()
+    genderless = "|".join(feat for feat in state[3].split("|") if not feat.startswith("Gender="))
+    assert restore(analyzer, (*state[:3], genderless, *state[4:7], None)) == netherlands
 
 
 def test_pickled_analyses_share_tag_objects(morph):
@@ -667,6 +737,24 @@ def test_deleted_file_with_own_words(morph, tmp_path):
     # В другом потоке ручки анализатора нет: берется словарь, загруженный из этого файла
     with ThreadPoolExecutor(1) as pool:
         assert pool.submit(pickle.loads, blob).result().lemma == "зумер"
+    # Словарь файла держит и анализатор со своими словами, когда последним загружен другой
+    Analyzer()
+    with ThreadPoolExecutor(1) as pool:
+        assert pool.submit(pickle.loads, pickle.dumps(analyzer)).result().path == path
+
+
+def test_pickle_with_many_own_words():
+    # Свои слова в pickle - одна строка, и в другом потоке копия словаря находится по ней
+    words: dict[str, str | tuple[str, str]] = {
+        f"зумер{chr(ord('а') + i // 32)}{chr(ord('а') + i % 32)}": "геймер" for i in range(1000)
+    }
+    words["зечь"] = ("печь", "VERB")
+    analyzer = Analyzer(words=words)
+    blob = pickle.dumps([analyzer.analyze("зечет")[0], analyzer.analyze("зумербб")[0]])
+    with ThreadPoolExecutor(1) as pool:
+        verb, noun = pool.submit(pickle.loads, blob).result()
+    assert (verb.lemma, verb.pos, noun.lemma) == ("зечь", "VERB", "зумербб")
+    assert pickle.loads(pickle.dumps(analyzer)).analyze("зумербб")[0].source == "dictionary"
 
 
 @pytest.mark.skipif(not hasattr(os, "fork"), reason="нет fork")

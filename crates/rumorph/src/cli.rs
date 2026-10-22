@@ -232,7 +232,7 @@ fn execute(
                     .is_some_and(|id| sources.any(|source| file_id(source).as_ref() == Some(&id)))
             {
                 report(format!(
-                    "{}: файл вывода совпадает с входным файлом или словарем",
+                    "{}: файл вывода совпадает с входным файлом, словарем или файлом слов",
                     path.display()
                 ));
                 return 1;
@@ -294,7 +294,7 @@ fn execute(
                 report(format!("{name}: строка {line}: {message}"));
                 code = 1;
             }
-            Err(Failure::Write(err)) => return write_error(&err, &mut report),
+            Err(Failure::Write(err)) => return write_error(&err, &mut report).max(code),
         }
     }
     match writer.output.flush() {
@@ -339,7 +339,7 @@ fn add_words(mut dictionary: Dictionary, paths: &[PathBuf]) -> Result<Dictionary
         })?;
         let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
         for (number, line) in text.lines().enumerate() {
-            if line.trim().is_empty() || line.starts_with('#') {
+            if line.trim().is_empty() || line.trim_start().starts_with('#') {
                 continue;
             }
             let at = |message: &dyn std::fmt::Display| {
@@ -1306,7 +1306,7 @@ mod tests {
         let words = dir.join("words.tsv");
         std::fs::write(
             &words,
-            "\u{feff}# свои слова\n\nпилить \tмыть\t\nкрама\t рама\tNOUN \n",
+            "\u{feff}# свои слова\n\n  # с отступом\nпилить \tмыть\t\nкрама\t рама\tNOUN \n",
         )
         .unwrap();
         let path = words.to_str().unwrap();
@@ -1341,7 +1341,7 @@ mod tests {
         let (code, _, error) = dict.run(&["-w", path, "-o", path], b"");
         assert_eq!(code, 1);
         assert!(
-            error.contains("совпадает с входным файлом или словарем"),
+            error.contains("совпадает с входным файлом, словарем или файлом слов"),
             "{error}"
         );
         std::fs::remove_dir_all(&dir).unwrap();
@@ -1358,12 +1358,14 @@ mod tests {
         let (code, out, error) = dict.run(&["-o", &path(&output), &path(&input)], b"");
         assert_eq!((code, out.as_str(), error.as_str()), (0, "", ""));
         assert_eq!(std::fs::read_to_string(&output).unwrap(), "рама\n");
-        // Файл вывода, который совпадает с входным или словарем, не создается: они не затираются
+        // Файл вывода, который совпадает с входным, словарем или файлом слов, не создается
         let clash = |args: &[&str]| {
             let (code, _, error) = dict.run(args, b"");
             assert_eq!(code, 1, "{args:?}");
             assert!(
-                error.ends_with("файл вывода совпадает с входным файлом или словарем\n"),
+                error.ends_with(
+                    "файл вывода совпадает с входным файлом, словарем или файлом слов\n"
+                ),
                 "{error}"
             );
         };
@@ -1543,6 +1545,13 @@ mod tests {
         assert_eq!(
             dict.run_into(&[], "раму\n".as_bytes(), &mut Closed),
             (0, String::new(), String::new())
+        );
+        // Закрытый канал не отменяет ошибку прежнего файла, сколько бы ни было вывода
+        let long = "раму\n".repeat(100_000);
+        let (code, _, error) = dict.run_into(&["нет.txt", "-"], long.as_bytes(), &mut Closed);
+        assert_eq!(
+            (code, error.as_str()),
+            (1, "rumorph: нет.txt: файл не найден\n")
         );
     }
 

@@ -383,6 +383,27 @@ def test_agree_errors(morph, word, number):
             morph.analyze(word)[0].agree(2.5)
 
 
+def test_agree_without_forms(morph):
+    # У угаданного слова через дефис форм лексемы нет: согласуется только сам разбор
+    def answer(word, case, number, count):
+        found = next(
+            a
+            for a in morph.analyze(word)
+            if (a.feats.get("Case"), a.feats.get("Number")) == (case, number)
+        )
+        try:
+            return found.agree(count)
+        except FormNotFoundError:
+            return None
+
+    assert answer("примы-балерины", "Gen", "Sing", 1) == "примы-балерины"
+    assert answer("прим-балерин", "Gen", "Plur", 2) == "прим-балерин"
+    # Запасная цель множественного числа - только для слов без единственного
+    assert answer("примы-балерины", "Nom", "Plur", 1) is None
+    assert answer("прим-балерин", "Gen", "Plur", 1) is None
+    assert answer("прим-балерин", "Gen", "Plur", 1.5) is None
+
+
 @pytest.mark.parametrize("word", ["мешаемый", "передох", "брызжет", "кошкою", "лесу"])
 def test_pickled_forms(morph, word):
     forms = morph.analyze(word)[0].forms()

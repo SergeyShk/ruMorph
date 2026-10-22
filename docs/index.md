@@ -108,6 +108,6 @@ pip install rumorph
     *   **crates/rumorph-dict-ru** - крейт со словарем для `rumorph` на crates.io
     *   **crates/rumorph-py** - модуль Python `rumorph._rumorph` на PyO3
     *   **python/rumorph** - пакет Python
-    *   **scripts** - выгрузка словаря pymorphy3-dicts-ru
+    *   **scripts** - выгрузка словаря pymorphy3-dicts-ru и счетчиков трибанков UD, проверка установленного пакета перед публикацией и сравнение с другими анализаторами
     *   **docs** - документация MkDocs на русском и английском
     *   **tests** - тесты пакета Python
