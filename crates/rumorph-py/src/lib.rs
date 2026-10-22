@@ -11,7 +11,8 @@ use std::time::SystemTime;
 
 use pyo3::create_exception;
 use pyo3::exceptions::{
-    PyFileNotFoundError, PyLookupError, PyOSError, PyOverflowError, PyTypeError, PyValueError,
+    PyAttributeError, PyFileNotFoundError, PyLookupError, PyOSError, PyOverflowError, PyTypeError,
+    PyValueError,
 };
 use pyo3::intern;
 use pyo3::prelude::*;
@@ -1433,34 +1434,71 @@ fn text(word: &Bound<'_, PyAny>) -> PyResult<String> {
     lossy(word)
 }
 
-/// Свои слова из словаря Python: слово - образец или пара «образец, часть речи»
+/// Свои слова из словаря Python: слово - образец или пара «образец, часть речи»; непарные
+/// суррогаты заменяются на U+FFFD, как в запросе
 fn own_words(words: &Bound<'_, PyAny>) -> PyResult<Vec<OwnWord>> {
+    let py = words.py();
     let not_mapping = || type_error("Свои слова должны быть словарем «слово: образец»", words);
     if words.is_instance_of::<PyString>() {
         return Err(not_mapping());
     }
-    let items = words.call_method0("items").map_err(|_| not_mapping())?;
+    // Ошибка внутри items() своего Mapping - его собственная, а не «не словарь»
+    let items = match words.getattr(intern!(py, "items")) {
+        Ok(items) => items.call0()?,
+        Err(err) if err.is_instance_of::<PyAttributeError>(py) => return Err(not_mapping()),
+        Err(err) => return Err(err),
+    };
+    let iterator = items.try_iter().map_err(|err| {
+        if err.is_instance_of::<PyTypeError>(py) {
+            not_mapping()
+        } else {
+            err
+        }
+    })?;
     let mut result = Vec::new();
-    for item in items.try_iter()? {
-        let (word, sample): (Bound<'_, PyAny>, Bound<'_, PyAny>) = item?.extract()?;
-        let word: String = word
-            .extract()
-            .map_err(|_| type_error("Свое слово должно быть строкой", &word))?;
-        let (like, pos) = match sample.extract::<String>() {
-            Ok(like) => (like, None),
-            Err(_) => {
-                let (like, pos) = sample.extract::<(String, String)>().map_err(|_| {
-                    type_error(
-                        "Образец должен быть строкой или парой строк «образец, часть речи»",
-                        &sample,
-                    )
-                })?;
-                (like, Some(pos))
-            }
+    for item in iterator {
+        let item = item?;
+        let pair = item.cast::<PyTuple>().ok().filter(|pair| pair.len() == 2);
+        let Some(pair) = pair else {
+            let message = "Элемент items() своих слов должен быть парой «слово, образец»";
+            return Err(match item.cast::<PyTuple>() {
+                Ok(tuple) => PyTypeError::new_err(format!(
+                    "{message}, а не кортежем из {} элементов",
+                    tuple.len()
+                )),
+                Err(_) => type_error(message, &item),
+            });
         };
-        result.push((word, like, pos));
+        let (word, sample) = (pair.get_item(0)?, pair.get_item(1)?);
+        let Ok(word) = word.cast::<PyString>() else {
+            return Err(type_error("Свое слово должно быть строкой", &word));
+        };
+        let Some((like, pos)) = sample_strings(&sample) else {
+            return Err(type_error(
+                "Образец должен быть строкой или парой строк «образец, часть речи»",
+                &sample,
+            ));
+        };
+        let pos = pos.map(|pos| lossy(&pos)).transpose()?;
+        result.push((lossy(word)?, lossy(&like)?, pos));
     }
     Ok(result)
+}
+
+/// Образец и часть речи: строка или пара строк
+fn sample_strings<'py>(
+    sample: &Bound<'py, PyAny>,
+) -> Option<(Bound<'py, PyString>, Option<Bound<'py, PyString>>)> {
+    if let Ok(like) = sample.cast::<PyString>() {
+        return Some((like.clone(), None));
+    }
+    let pair = sample
+        .cast::<PyTuple>()
+        .ok()
+        .filter(|pair| pair.len() == 2)?;
+    let like = pair.get_item(0).ok()?.cast_into::<PyString>().ok()?;
+    let pos = pair.get_item(1).ok()?.cast_into::<PyString>().ok()?;
+    Some((like, Some(pos)))
 }
 
 /// TypeError с типом полученного значения: «Слово должно быть строкой, а не int»

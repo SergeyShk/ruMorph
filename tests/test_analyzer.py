@@ -534,11 +534,37 @@ def test_own_words_like_dictionary_words():
         ("зумер", TypeError, "Свои слова должны быть словарем «слово: образец», а не str"),
         ({"зумер": 1}, TypeError, "Образец должен быть строкой или парой строк"),
         ({1: "кот"}, TypeError, "Свое слово должно быть строкой, а не int"),
+        (
+            type("Items", (), {"items": lambda self: [1]})(),
+            TypeError,
+            "Элемент items() своих слов должен быть парой «слово, образец», а не int",
+        ),
+        (
+            type("Items", (), {"items": lambda self: [("а", "б", "в")]})(),
+            TypeError,
+            "Элемент items() своих слов должен быть парой «слово, образец», а не кортежем из 3 элементов",
+        ),
     ],
 )
 def test_own_words_errors(words, error, message):
     with pytest.raises(error, match=re.escape(message)):
         Analyzer(words=words)
+
+
+def test_own_words_items_error():
+    # Ошибка внутри items() не подменяется ошибкой «не словарь»
+    class Broken:
+        def items(self):
+            raise RuntimeError("нет связи с базой")
+
+    with pytest.raises(RuntimeError, match="нет связи с базой"):
+        Analyzer(words=Broken())
+
+
+def test_own_words_with_surrogate():
+    # Непарный суррогат заменяется на U+FFFD, как в запросе
+    morph = Analyzer(words={"зу\udcffмер": "геймер"})
+    assert morph.analyze("зу\udcffмерами")[0].lemma == "зу\ufffdмер"
 
 
 def test_pickle(morph):
