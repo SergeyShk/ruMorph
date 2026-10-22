@@ -51,13 +51,13 @@
 
     [:octicons-arrow-right-24: Migrating from pymorphy](migration.md)
 
--   :material-speedometer:{ .lg .middle } __Speed and memory__
+-   :material-speedometer:{ .lg .middle } __Comparison__
 
     ---
 
-    Analysis, lemmatization and inflection compared with pymorphy3, dictionary loading and memory
+    Accuracy and speed compared with pymorphy3, mystem, spaCy, Stanza and Slovnet, dictionary loading and memory
 
-    [:octicons-arrow-right-24: Speed and memory](performance.md)
+    [:octicons-arrow-right-24: Comparison](performance.md)
 
 -   :material-alert-circle-outline:{ .lg .middle } __Exceptions__
 
