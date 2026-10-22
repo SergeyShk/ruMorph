@@ -160,6 +160,21 @@ def test_abbreviation_with_dot(morph):
     assert [a.pos for a in morph.analyze("вайб.")] == ["X"]
 
 
+def test_abbreviation_lemmas(morph):
+    lemmas: dict[str, set[str]] = {}
+    for a in morph.analyze("т"):
+        lemmas.setdefault(a.pos, set()).add(a.lemma)
+    assert lemmas["NOUN"] == {"тонна", "том"}
+    assert lemmas["ADJ"] == {"т"}
+    # «л» - название места остается сокращением
+    assert {(a.pos, a.lemma) for a in morph.analyze("л") if a.pos in {"NOUN", "PROPN"}} == {
+        ("NOUN", "литр"),
+        ("PROPN", "л"),
+    }
+    forms = [form for a in morph.analyze("т") for form in a.forms()]
+    assert pickle.loads(pickle.dumps(forms)) == forms
+
+
 def test_capitalized_abbreviation(morph):
     assert summary(morph, "НКО") == [
         ("НКО", "нко", "PROPN", {"Abbr": "Yes", "NameType": "Com"}),
@@ -198,7 +213,7 @@ def test_pickled_rule_analyses(morph):
 
 def test_lemmatize(morph):
     assert morph.lemmatize(["В", "2008", "г.", "Apple", "выпустила", "iPhone", ",", "а", "НКО", "—", "нет"]) == [
-        "в", "2008", "г", "apple", "выпустить", "iphone", ",", "а", "нко", "—", "нет",
+        "в", "2008", "год", "apple", "выпустить", "iphone", ",", "а", "нко", "—", "нет",
     ]  # fmt: skip
 
 

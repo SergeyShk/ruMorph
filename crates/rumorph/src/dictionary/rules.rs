@@ -45,6 +45,66 @@ const NUMERAL_FEATS: &[(&str, &str, &str, &str, f64)] = &[
     ("Acc", "", "Plur", "Anim", 1.0),
 ];
 
+/// Полные леммы сокращений-существительных, как в SynTagRus: сокращение, граммема рода или
+/// одушевленности его тега OpenCorpora и лемма, по алфавиту. В OpenCorpora лемма сокращения -
+/// оно само
+const ABBREVIATION_LEMMAS: &[(&str, &str, &str)] = &[
+    ("в", "masc", "век"),
+    ("вв", "masc", "век"),
+    ("г", "anim", "господин"),
+    ("г", "inan", "год"),
+    ("гг", "masc", "год"),
+    ("гц", "masc", "герц"),
+    ("долл", "masc", "доллар"),
+    ("квт", "masc", "киловатт"),
+    ("кг", "masc", "килограмм"),
+    ("км", "masc", "километр"),
+    ("л", "masc", "литр"),
+    ("м", "masc", "метр"),
+    ("мг", "masc", "миллиграмм"),
+    ("мин", "femn", "минута"),
+    ("мкм", "masc", "микрометр"),
+    ("млн", "masc", "миллион"),
+    ("млрд", "masc", "миллиард"),
+    ("мм", "masc", "миллиметр"),
+    ("нм", "masc", "нанометр"),
+    ("п", "masc", "пункт"),
+    ("прим", "neut", "примечание"),
+    ("проф", "anim", "профессор"),
+    ("проц", "masc", "процент"),
+    ("руб", "masc", "рубль"),
+    ("сек", "femn", "секунда"),
+    ("см", "masc", "сантиметр"),
+    ("ст", "femn", "статья"),
+    ("стр", "femn", "страница"),
+    ("стр", "neut", "строение"),
+    ("т", "femn", "тонна"),
+    ("т", "masc", "том"),
+    ("трлн", "masc", "триллион"),
+    ("тыс", "femn", "тысяча"),
+    ("ул", "femn", "улица"),
+    ("ч", "femn", "часть"),
+    ("ч", "masc", "час"),
+    ("чел", "anim", "человек"),
+    ("шт", "femn", "штука"),
+    ("э", "femn", "эра"),
+];
+
+/// Граммемы из `ABBREVIATION_LEMMAS`: номер бита в `abbreviation_grammemes`
+const ABBREVIATION_GRAMMEMES: [&str; 5] = ["masc", "femn", "neut", "anim", "inan"];
+
+/// Биты граммем `ABBREVIATION_GRAMMEMES` тега OpenCorpora существительного-сокращения и старший
+/// бит; у других тегов - 0
+pub(super) fn abbreviation_grammemes(tag: &str) -> u8 {
+    let grammemes = || tag.split([',', ' ']);
+    if !tag.starts_with("NOUN,") || !grammemes().any(|grammeme| grammeme == "Abbr") {
+        return 0;
+    }
+    (ABBREVIATION_GRAMMEMES.iter().enumerate())
+        .filter(|&(_, name)| grammemes().any(|grammeme| grammeme == *name))
+        .fold(1 << 7, |bits, (bit, _)| bits | 1 << bit)
+}
+
 /// Падежные окончания количественных числительных из цифр: «5-ти», «2-х», «3-мя», «4-м»
 const CARDINAL_ENDINGS: &[&str] = &[
     "ти", "ть", "х", "ух", "ех", "ми", "мя", "м", "ем", "ём", "у",
@@ -382,6 +442,32 @@ impl Dictionary {
         analyses.sort_by(|a, b| b.prob.total_cmp(&a.prob));
     }
 
+    /// Полная лемма сокращения-существительного из `ABBREVIATION_LEMMAS` с тегом OpenCorpora
+    /// `tag` и тегом UD `ud`
+    pub(super) fn abbreviation_lemma(
+        &self,
+        lemma: &str,
+        tag: u16,
+        ud: u16,
+    ) -> Option<&'static str> {
+        // Проверка идет на каждом кандидате разбора, у «в» и «с» - на 12 формах сокращения
+        let bits = *self.abbreviation_grammemes.get(usize::from(tag))?;
+        if bits == 0 || self.proper_nouns.get(usize::from(ud)) == Some(&true) {
+            return None;
+        }
+        let start = ABBREVIATION_LEMMAS.partition_point(|&(short, _, _)| short < lemma);
+        ABBREVIATION_LEMMAS[start..]
+            .iter()
+            .take_while(|&&(short, _, _)| short == lemma)
+            .find(|&&(_, grammeme, _)| {
+                let bit = ABBREVIATION_GRAMMEMES
+                    .iter()
+                    .position(|&name| name == grammeme);
+                bit.is_some_and(|bit| bits & 1 << bit != 0)
+            })
+            .map(|&(_, _, full)| full)
+    }
+
     /// Доля разбора порядкового из цифр по его падежу, роду, числу и одушевленности
     fn numeral_weight(&self, ud: u16) -> f64 {
         let feat = |name: &str| self.feat(ud, name).unwrap_or_default();
@@ -603,6 +689,20 @@ mod tests {
 
     fn analysis(lemma: &str, pos: &str, feats: &str) -> (String, String, String) {
         (lemma.to_owned(), pos.to_owned(), feats.to_owned())
+    }
+
+    #[test]
+    fn abbreviation_lemma_table() {
+        assert!(ABBREVIATION_LEMMAS.is_sorted_by_key(|&(short, _, _)| short));
+        for &(_, grammeme, _) in ABBREVIATION_LEMMAS {
+            assert!(ABBREVIATION_GRAMMEMES.contains(&grammeme), "{grammeme}");
+        }
+        assert_eq!(
+            abbreviation_grammemes("NOUN,inan,masc,Fixd,Abbr sing,nomn"),
+            0b1001_0001
+        );
+        assert_eq!(abbreviation_grammemes("ADJF,Fixd,Abbr masc,sing,nomn"), 0);
+        assert_eq!(abbreviation_grammemes("NOUN,inan,masc sing,nomn"), 0);
     }
 
     #[test]
