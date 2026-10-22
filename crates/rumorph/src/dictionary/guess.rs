@@ -71,20 +71,39 @@ impl Dictionary {
         } else {
             PROPER_SHARE
         };
-        let indexes: &[(GuessIndex, f64)] = if chars.iter().all(|c| c.is_lowercase()) {
-            &[(GuessIndex::Common, 1.0)]
-        } else if chars[1..].iter().all(|c| c.is_lowercase()) || abbreviation_with_ending {
-            &[
-                (GuessIndex::Proper, proper),
-                (GuessIndex::Common, 1.0 - proper),
-            ]
-        } else {
-            return Vec::new();
-        };
+        // Смешанный регистр: заглавные внутри строчного слова («прихАдите») и аббревиатура
+        // с суффиксом («КВНщиками», «ЗОЖное», «НКФин»), если она не аббревиатура с падежным
+        // окончанием, - как строчное слово, слитное название («ЛайфНьюс») - как слово с заглавной
+        let lowercase_tail = capitals >= 2 && chars[capitals..].iter().all(|c| c.is_lowercase());
+        let common = chars.iter().all(|c| c.is_lowercase())
+            || chars[0].is_lowercase()
+            || (lowercase_tail && !abbreviation_with_ending);
+        let title: &[(GuessIndex, f64)] = &[
+            (GuessIndex::Proper, proper),
+            (GuessIndex::Common, 1.0 - proper),
+        ];
+        if common {
+            return self.guess_with(&[(GuessIndex::Common, 1.0)], word, &lower, None);
+        }
+        let analyses = self.guess_with(title, word, &lower, stem.as_deref());
+        if analyses.is_empty() && lowercase_tail {
+            return self.guess_with(&[(GuessIndex::Common, 1.0)], word, &lower, None);
+        }
+        analyses
+    }
+
+    /// Разборы по индексам угадывания `indexes` с их долями
+    fn guess_with(
+        &self,
+        indexes: &[(GuessIndex, f64)],
+        word: &str,
+        lower: &str,
+        stem: Option<&str>,
+    ) -> Vec<Analysis> {
         let mut analyses = Vec::new();
         for &(index, share) in indexes {
             let found: Vec<(Analysis, f64)> = self
-                .guess_in(index, word, &lower, stem.as_deref())
+                .guess_in(index, word, lower, stem)
                 .into_iter()
                 .map(|(analysis, count)| {
                     let weight = match index {

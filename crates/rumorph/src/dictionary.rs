@@ -2414,7 +2414,15 @@ pub(super) mod tests {
             .map(|form| form.word)
             .collect();
         assert_eq!(forms, ["Зумов", "Зумова"]);
-        assert_eq!(dict.analyze("ЗуМова"), dict.fallback("ЗуМова"));
+        // Слитное название в смешанном регистре угадывается, как слово с заглавной
+        let mixed: Vec<(String, f64)> = dict
+            .analyze("ЗуМова")
+            .into_iter()
+            .map(|a| (a.lemma, a.prob))
+            .collect();
+        let capitalized: Vec<(String, f64)> =
+            analyses.into_iter().map(|a| (a.lemma, a.prob)).collect();
+        assert_eq!(mixed, capitalized);
     }
 
     #[test]

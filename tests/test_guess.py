@@ -83,9 +83,28 @@ def test_guessed_inflection(morph):
     assert {form.lemma for form in morph.analyze("чатботу")[0].forms()} == {"чатбот"}
 
 
-@pytest.mark.parametrize("word", ["ВаЙб", "ЗуМер", "вайб1", "Б" + "е" * 200])
+@pytest.mark.parametrize("word", ["вайб1", "Б" + "е" * 200])
 def test_not_guessed(morph, word):
     assert [(a.pos, a.source) for a in morph.analyze(word)] == [("X", "rule")]
+
+
+@pytest.mark.parametrize(
+    ("word", "lemma", "pos"),
+    [
+        # Заглавные внутри строчного слова и аббревиатура с суффиксом - как строчное слово
+        ("прихАдите", "прихадить", "VERB"),
+        ("КВНщиками", "квнщик", "NOUN"),
+        ("ЗОЖное", "зожный", "ADJ"),
+        ("НКФин", "нкфин", "NOUN"),
+        # Слитное название - как слово с заглавной, аббревиатура с окончанием - по основе
+        ("ЛайфНьюс", "лайфньюс", "PROPN"),
+        ("РосПил", "роспил", "PROPN"),
+        ("МЭРТа", "мэрт", "PROPN"),
+    ],
+)
+def test_mixed_case(morph, word, lemma, pos):
+    first = morph.analyze(word)[0]
+    assert (first.lemma, first.pos, first.source) == (lemma, pos, "guess")
 
 
 def test_order_of_sources(morph):
