@@ -162,7 +162,7 @@ impl Dictionary {
             };
             // Протянутая буква - междометие («А-а»), а не союз или сокращение («Ш-ш»)
             let letter = stretched && part.chars().count() == 1;
-            let analyses = found
+            let analyses: Vec<Analysis> = found
                 .into_iter()
                 .filter(|analysis| !letter || self.pos(analysis.ud) == "INTJ")
                 .map(|analysis| Analysis {
@@ -172,7 +172,26 @@ impl Dictionary {
                     ..analysis
                 })
                 .collect();
-            return normalized(self.merge(analyses));
+            if !analyses.is_empty() {
+                return normalized(self.merge(analyses));
+            }
+        }
+        // Протяжка в середине слова и заикание вместе с протяжкой («не-е-ет», «Н-ну-у») - разборы
+        // словарного слова без них
+        if let Some(plain) = unstretched(word) {
+            let analyses: Vec<Analysis> = self
+                .merge(self.candidates(&plain))
+                .into_iter()
+                .map(|analysis| Analysis {
+                    word: word.to_owned(),
+                    source: Source::Guess,
+                    entry: None,
+                    ..analysis
+                })
+                .collect();
+            if !analyses.is_empty() {
+                return normalized(analyses);
+            }
         }
         // Последняя часть - знаменательное слово, а не предлог или буква («К-за», «Коба-Т»)
         if right.chars().count() < 2 {
@@ -370,6 +389,35 @@ pub(super) fn with_particle(form: Analysis, particle: &str) -> Analysis {
     }
 }
 
+/// Слово с протяжкой или заиканием через дефис («не-е-ет», «Н-ну-у», «с-спасибо») без них:
+/// на каждом дефисе буквы по обе стороны одинаковые и сливаются, а это гласная или первая
+/// буква слова («кот-то» - частица). `None`, если слово не такое или от него остается буква
+fn unstretched(word: &str) -> Option<String> {
+    if !word.contains('-') || !word.chars().all(|c| c == '-' || cyrillic(c)) {
+        return None;
+    }
+    let mut parts = word.split('-');
+    let mut previous = parts.next()?;
+    let mut result = previous.to_owned();
+    for part in parts {
+        let last = result.chars().last()?.to_lowercase().next()?;
+        let mut letters = part.chars();
+        let single = previous.chars().count() == 1;
+        if letters.next()?.to_lowercase().next()? != last || !(single || VOWELS.contains(last)) {
+            return None;
+        }
+        // Протянутая буква («у» в «ну-у») ничего не добавляет
+        if !part.chars().all(|c| c.to_lowercase().next() == Some(last)) {
+            result.push_str(letters.as_str());
+        }
+        previous = part;
+    }
+    (result.chars().count() > 1).then_some(result)
+}
+
+/// Гласные: их протягивают в середине слова («та-а-ак»)
+const VOWELS: &str = "аеёиоуыэюя";
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -481,6 +529,24 @@ mod tests {
             .unwrap();
         assert_eq!(restored.lemma, "кот-то");
         assert_eq!(first(&dict, "кот-то-то"), None);
+    }
+
+    #[test]
+    fn unstretched_words() {
+        for (word, plain) in [
+            ("не-е-ет", Some("нет")),
+            ("Н-ну-у", Some("Ну")),
+            ("с-спасибо", Some("спасибо")),
+            ("та-а-ак", Some("так")),
+            ("капита-ан", Some("капитан")),
+            ("ну-ууу", Some("ну")),
+            ("кот-то", None),
+            ("Ой-ой-ой", None),
+            ("А-а-а", None),
+            ("iPhone-е", None),
+        ] {
+            assert_eq!(unstretched(word).as_deref(), plain, "{word}");
+        }
     }
 
     #[test]
