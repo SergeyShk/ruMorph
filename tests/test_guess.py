@@ -108,6 +108,13 @@ def test_not_guessed(morph, word):
 def test_mixed_case(morph, word, lemma, pos):
     first = morph.analyze(word)[0]
     assert (first.lemma, first.pos, first.source) == (lemma, pos, "guess")
+    # Формы сохраняют регистр общего со словом начала
+    assert word in [form.word for form in first.forms()]
+
+
+def test_mixed_case_forms(morph):
+    assert [form.word for form in morph.analyze("УрО")[0].forms()][:3] == ["УрО", "Ура", "Уру"]
+    assert morph.analyze("ФПиКА")[0].inflect(Case="Dat") == "ФПиКе"
 
 
 def test_order_of_sources(morph):
