@@ -34,9 +34,6 @@ type Records = Vec<(u16, u16, String)>;
 /// Лексема выгрузки: парадигма, основа и пары «форма леммы, тег UD» ее форм
 type SourceLexeme = (u16, String, Vec<(u16, u16)>);
 
-/// Наречие и формы COMP прилагательных - его сравнительная степень: лексема и номера форм
-type Comparatives = (usize, Vec<(usize, Vec<usize>)>);
-
 /// Ключ перевода в UD: тег OpenCorpora, класс леммы, счетная форма, вид аббревиатуры и род
 /// существительного, у которого есть только множественное число
 type UdKey = (
@@ -615,9 +612,9 @@ fn build(export: &Path, ud: &Path, output: &Path) -> Result<(), Box<dyn Error>> 
         }
     }
 
-    // Сравнительная степень наречия («раньше» - «рано»): формы COMP прилагательного копиями
-    // переходят в лексему наречия из одной формы (с объединенными с ней), словоформа получает
-    // и разбор наречия. Слово, которое и так наречие («больше»), копии не получает
+    // Сравнительная степень наречия («раньше» - «рано»): лексема из наречия из одной формы и копий
+    // форм COMP прилагательного, словоформа получает и разбор наречия. Таблица самого наречия
+    // не меняется: свое слово по образцу наречия получает одну форму, как раньше
     let mut adverbs: HashMap<String, usize> = HashMap::new();
     for (lexeme, (paradigm, stem, _)) in lexemes.iter().enumerate() {
         let layout = &paradigms[*paradigm as usize];
@@ -625,7 +622,7 @@ fn build(export: &Path, ud: &Path, output: &Path) -> Result<(), Box<dyn Error>> 
             adverbs.entry(spell(*paradigm, stem, 0)).or_insert(lexeme);
         }
     }
-    let mut comparatives: BTreeMap<usize, Comparatives> = BTreeMap::new();
+    let mut comparatives: BTreeMap<usize, Vec<(usize, Vec<usize>)>> = BTreeMap::new();
     for (lexeme, (paradigm, stem, _)) in lexemes.iter().enumerate() {
         let layout = &paradigms[*paradigm as usize];
         let count = layout.len() / 3;
@@ -634,10 +631,7 @@ fn build(export: &Path, ud: &Path, output: &Path) -> Result<(), Box<dyn Error>> 
             continue;
         }
         let forms: Vec<usize> = (0..count)
-            .filter(|&form| {
-                tag_of(form).starts_with("COMP")
-                    && !adverbs.contains_key(&spell(*paradigm, stem, form))
-            })
+            .filter(|&form| tag_of(form).starts_with("COMP"))
             .collect();
         if forms.is_empty() {
             continue;
@@ -654,9 +648,9 @@ fn build(export: &Path, ud: &Path, output: &Path) -> Result<(), Box<dyn Error>> 
             .iter()
             .find_map(|word| adverbs.get(word))
         {
-            (comparatives.entry(root(&mut parents, adverb)))
-                .or_insert((adverb, Vec::new()))
-                .1
+            comparatives
+                .entry(adverb)
+                .or_default()
                 .push((lexeme, forms));
         }
     }
@@ -678,17 +672,9 @@ fn build(export: &Path, ud: &Path, output: &Path) -> Result<(), Box<dyn Error>> 
                 .collect(),
         }
     };
-    for (group, (adverb, sources)) in &comparatives {
-        let (group, adverb) = (&groups[group], *adverb);
+    for (&adverb, sources) in &comparatives {
         let word = spell(lexemes[adverb].0, &lexemes[adverb].1, 0);
-        let mut members: Vec<lexemes::Lexeme> = group
-            .iter()
-            .map(|&lexeme| {
-                let count = paradigms[lexemes[lexeme].0 as usize].len() / 3;
-                let forms: Vec<usize> = (0..count).collect();
-                source_lexeme(lexeme, &forms, &|form| lexemes[lexeme].2[form].1)
-            })
-            .collect();
+        let mut members = vec![source_lexeme(adverb, &[0], &|_| lexemes[adverb].2[0].1)];
         for (lexeme, forms) in sources {
             let layout = &paradigms[lexemes[*lexeme].0 as usize];
             let count = layout.len() / 3;
@@ -702,13 +688,9 @@ fn build(export: &Path, ud: &Path, output: &Path) -> Result<(), Box<dyn Error>> 
             members.push(source_lexeme(*lexeme, forms, &|form| uds[&form]));
         }
         let (mut combined, numbers) = lexemes::combine(&members);
-        let position = group
-            .iter()
-            .position(|&lexeme| lexeme == adverb)
-            .unwrap_or(0);
-        let lemma_form = numbers[position][usize::from(lexemes[adverb].2[0].0)];
-        for &number in numbers[group.len()..].iter().flatten() {
-            combined.forms[usize::from(number)].lemma_form = lemma_form;
+        let lemma_form = numbers[0][0];
+        for form in &mut combined.forms {
+            form.lemma_form = lemma_form;
         }
         let mut forms = Vec::with_capacity(combined.forms.len());
         for form in &combined.forms {
@@ -725,10 +707,7 @@ fn build(export: &Path, ud: &Path, output: &Path) -> Result<(), Box<dyn Error>> 
             .map(|form| (form.lemma_form, form.ud))
             .collect();
         let table = builder.add_table(paradigm, &cells)?;
-        for (&lexeme, mapped) in group.iter().zip(&numbers) {
-            placed[lexeme] = (table, mapped.clone());
-        }
-        for ((lexeme, forms), mapped) in sources.iter().zip(&numbers[group.len()..]) {
+        for ((lexeme, forms), mapped) in sources.iter().zip(&numbers[1..]) {
             for (&form, &number) in forms.iter().zip(mapped) {
                 extra_entries
                     .entry((*lexeme, form as u16))

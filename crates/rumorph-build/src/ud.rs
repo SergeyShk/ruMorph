@@ -509,6 +509,24 @@ const ADJECTIVE_LABELS: &[(&str, &str)] = &[
     ("Trad", "NameType"),
 ];
 
+/// Тип местоимения, местоименного прилагательного или наречия с частью речи UD `pos`
+fn pronoun_type(pos: &str, lemma: &str) -> Option<&'static str> {
+    if !matches!(pos, "PRON" | "DET" | "ADV") {
+        return None;
+    }
+    PRONOUN_TYPES
+        .iter()
+        .find(|&&(table_pos, word, _)| table_pos == pos && word == lemma)
+        .map(|&(_, _, kind)| kind)
+        .or_else(|| pronoun_series(lemma))
+        .or_else(|| {
+            RARE_PRONOUN_TYPES
+                .iter()
+                .find(|&&(word, _)| word == lemma && pos != "ADV")
+                .map(|&(_, kind)| kind)
+        })
+}
+
 fn has(grammemes: &[&str], grammeme: &str) -> bool {
     grammemes.contains(&grammeme)
 }
@@ -797,21 +815,8 @@ pub fn convert(tag: &str, lemma: &str) -> Ud {
     if pos == "NUM" {
         feats.insert("NumForm", "Word");
     }
-    if matches!(pos, "PRON" | "DET" | "ADV") {
-        let kind = PRONOUN_TYPES
-            .iter()
-            .find(|&&(table_pos, word, _)| table_pos == pos && word == lemma)
-            .map(|&(_, _, kind)| kind)
-            .or_else(|| pronoun_series(lemma))
-            .or_else(|| {
-                RARE_PRONOUN_TYPES
-                    .iter()
-                    .find(|&&(word, _)| word == lemma && pos != "ADV")
-                    .map(|&(_, kind)| kind)
-            });
-        if let Some(kind) = kind {
-            feats.insert("PronType", kind);
-        }
+    if let Some(kind) = pronoun_type(pos, lemma) {
+        feats.insert("PronType", kind);
     }
     if pos == "DET" && g("Fixd") && POSSESSIVE.contains(&lemma) {
         // «его», «её», «их» в SynTagRus - Poss=Yes|PronType=Prs без падежа, рода и числа
@@ -933,10 +938,12 @@ pub fn numeral_genders(base: &str, tag: &str) -> Vec<Ud> {
 /// Наречия, которые могут быть положительной степенью сравнительной формы прилагательного
 /// `lemma` с краткими формами среднего рода `short`: сама краткая форма («хорошо» - «лучше»),
 /// основа на «-о» («поздно» - «позже») и она же с одной «н» («рано» - «раньше»); у «меньше»
-/// положительная степень другого корня - «мало»
+/// положительная степень другого корня - «мало», а «малее», «меньшее» «малого» - не наречия
 pub fn positive_adverbs(lemma: &str, short: &[String]) -> Vec<String> {
-    if lemma == "маленький" {
-        return vec!["мало".into()];
+    match lemma {
+        "маленький" => return vec!["мало".into()],
+        "малый" => return Vec::new(),
+        _ => {}
     }
     let mut adverbs = short.to_vec();
     if let Some(stem) = ["ий", "ый", "ой"]
@@ -952,9 +959,13 @@ pub fn positive_adverbs(lemma: &str, short: &[String]) -> Vec<String> {
 }
 
 /// Сравнительная степень наречия `adverb` - форма COMP прилагательного с тегом `tag`
+/// и типом местоименного наречия («меньше» - `PronType=Tot`, как «мало»)
 pub fn comparative_adverb(tag: &str, adverb: &str) -> Ud {
     let mut ud = convert(tag, lemma_class(adverb));
     ud.pos = "ADV";
+    if let Some(kind) = pronoun_type(ud.pos, adverb) {
+        ud.feats.insert("PronType", kind);
+    }
     ud
 }
 
@@ -1582,6 +1593,11 @@ mod tests {
         assert_eq!(positive_adverbs("поздний", &[]), ["поздно"]);
         assert_eq!(positive_adverbs("ранний", &[]), ["ранно", "рано"]);
         assert_eq!(positive_adverbs("маленький", &[]), ["мало"]);
+        assert!(positive_adverbs("малый", &["мало".to_string()]).is_empty());
+        assert_eq!(
+            feats_string(&comparative_adverb("COMP,Qual", "мало").feats),
+            "Degree=Cmp|PronType=Tot"
+        );
         let ud = comparative_adverb("COMP,Qual", "поздно");
         assert_eq!(
             (ud.pos, feats_string(&ud.feats), ud.labels),
