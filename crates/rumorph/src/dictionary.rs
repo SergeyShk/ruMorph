@@ -40,6 +40,7 @@ pub enum Source {
 }
 
 impl Source {
+    /// Имя источника: `dictionary`, `rule` или `guess`
     pub fn as_str(self) -> &'static str {
         match self {
             Source::Dictionary => "dictionary",
@@ -72,6 +73,7 @@ pub struct Analysis {
     pub tag: Option<u16>,
     /// Вероятность разбора; сумма по всем разборам словоформы равна 1
     pub prob: f64,
+    /// Откуда взят разбор
     pub source: Source,
     /// Форма таблицы словоизменения; у разборов без лексемы (число, знак, латиница) ее нет
     pub entry: Option<Entry>,

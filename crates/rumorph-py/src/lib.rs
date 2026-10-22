@@ -1237,9 +1237,9 @@ impl Analyzer {
         let dictionary = py
             .detach(|| {
                 let samples = words.iter().map(|(word, like, pos)| {
-                    let sample = rumorph::Sample {
-                        word: like,
-                        pos: pos.as_deref(),
+                    let sample = match pos {
+                        Some(pos) => rumorph::Sample::from((like.as_str(), pos.as_str())),
+                        None => rumorph::Sample::from(like.as_str()),
                     };
                     (word.as_str(), sample)
                 });

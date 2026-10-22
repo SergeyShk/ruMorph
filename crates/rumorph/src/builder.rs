@@ -31,6 +31,8 @@ pub struct Builder {
 }
 
 impl Builder {
+    /// Сборщик с тегами OpenCorpora, префиксами и суффиксами форм: на них ссылаются парадигмы
+    /// по номерам
     pub fn new(tags: Vec<String>, prefixes: Vec<String>, suffixes: Vec<String>) -> Self {
         let mut suffix_numbers = HashMap::new();
         for (number, suffix) in suffixes.iter().enumerate() {
