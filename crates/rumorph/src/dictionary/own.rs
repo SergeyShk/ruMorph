@@ -3,15 +3,21 @@
 use std::collections::HashMap;
 use std::hash::{BuildHasherDefault, Hasher};
 
-use super::{Analysis, Dictionary, Entry, Source};
+use super::rules::token;
+use super::{Analysis, Dictionary, Entry, Source, normalized_input};
 use crate::Error;
 use crate::alphabet::Key;
 
 /// Образец своего слова: словарное слово в той же форме, что и свое слово (обычно в начальной),
 /// и часть речи UD, если у образца есть лексемы разных частей речи («печь» - NOUN и VERB)
+///
+/// Создается из слова (`"геймер".into()`) или пары «слово, часть речи» (`("печь", "VERB").into()`)
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct Sample<'a> {
+    /// Словарное слово
     pub word: &'a str,
+    /// Часть речи UD (`"VERB"`): нужна, если у образца лексемы разных частей речи
     pub pos: Option<&'a str>,
 }
 
@@ -60,10 +66,11 @@ impl Hasher for KeyHasher {
 
 impl Dictionary {
     /// Словарь со своими словами: слово получает формы лексем образца со своей основой («зумер»
-    /// по образцу «геймер» - «зумера», «зумерами»), разборы как у словарных слов. Если образец -
-    /// начальная форма, берутся лексемы с этой леммой; лексемы одной части речи берутся все.
-    /// Образцом может быть и свое слово, добавленное раньше. Словарь со своими словами
-    /// и без них - `dictionary.clone().with_words(...)`: копия делит отображенный файл
+    /// по образцу «геймер» - «зумера», «зумерами»), разборы как у словарных слов. Слово и образец
+    /// приводятся, как запрос `analyze`. Если образец - начальная форма, берутся лексемы с этой
+    /// леммой; лексемы одной части речи берутся все. Образцом может быть и свое слово, добавленное
+    /// раньше. Словарь со своими словами и без них - `dictionary.clone().with_words(...)`: копия
+    /// делит отображенный файл
     ///
     /// ```
     /// # #[cfg(feature = "bundled")] {
@@ -78,8 +85,8 @@ impl Dictionary {
     /// # Errors
     ///
     /// `Error::Word`, если образца нет в словаре, у него лексемы разных частей речи, а часть речи
-    /// не задана, или слово не изменяется по образцу: у образца другое окончание или у слова нет
-    /// основы
+    /// не задана, слово не изменяется по образцу (у образца другое окончание или у слова нет
+    /// основы) или в слове пробел, управляющий или невидимый символ
     pub fn with_words<'a, S: Into<Sample<'a>>>(
         mut self,
         words: impl IntoIterator<Item = (&'a str, S)>,
@@ -115,9 +122,24 @@ impl Dictionary {
     /// Формы слова `word` по образцу `sample`: написание и форма таблицы каждой формы, на которую
     /// у образца есть запись (копии форм - «ивановы» в женской лексеме - не берутся)
     fn sample_forms(&self, word: &str, sample: Sample<'_>) -> Result<Vec<(String, Entry)>, Error> {
-        let (word, like) = (word.to_lowercase(), sample.word.to_lowercase());
+        // Слово и образец приводятся, как запрос `analyze`: без ударений, с кириллицей вместо
+        // латинских двойников
+        let normal = |text: &str| {
+            normalized_input(text)
+                .as_deref()
+                .unwrap_or(text)
+                .to_lowercase()
+        };
+        let (word, like) = (normal(word), normal(sample.word));
         if word.trim().is_empty() {
             return Err(Error::Word("Свое слово пустое".into()));
+        }
+        if !token(&word.chars().collect::<Vec<_>>()) {
+            return Err(Error::Word(format!(
+                "Свое слово «{}» с пробелом, управляющим или невидимым символом не найдется \
+                 в тексте",
+                word.escape_debug()
+            )));
         }
         let pos = |analysis: &Analysis| self.ud_tag(analysis.ud).map_or("", |tag| tag.pos());
         let mut analyses: Vec<Analysis> = self

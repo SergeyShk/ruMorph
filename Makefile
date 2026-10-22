@@ -40,7 +40,7 @@ $(UD_STAMP): $(SCRIPTS_PATH)/export_ud.py | deps
 	uv run python $(SCRIPTS_PATH)/export_ud.py $(UD_PATH)
 	touch $@
 
-$(DICTIONARY): $(EXPORT_STAMP) $(UD_STAMP) crates/rumorph/src/format.rs crates/rumorph/src/builder.rs $(wildcard crates/rumorph-build/src/*.rs)
+$(DICTIONARY): $(EXPORT_STAMP) $(UD_STAMP) $(wildcard crates/rumorph/src/*.rs crates/rumorph/src/dictionary/*.rs crates/rumorph-build/src/*.rs)
 	cargo run --release --locked -p rumorph-build -- $(EXPORT_PATH) $(UD_PATH) $(DICTIONARY)
 
 lock: uv ## Обновить lock-файлы до последних версий зависимостей

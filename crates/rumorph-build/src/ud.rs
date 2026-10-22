@@ -977,28 +977,30 @@ pub fn lemma_class(lemma: &str) -> &str {
 
 /// Род существительного, у которого есть только множественное число (Pltm) и нет рода в теге,
 /// по склонению, как в SynTagRus: именительный на -а, -я - средний («ворота», «уста»),
-/// родительный на -ов, -ев, -ей - мужской («выборов», «саней»), иначе - женский («суток»,
-/// «денег»). У несклоняемых («СМИ») и склоняемых как прилагательные («данные») рода нет.
-/// Формы - тег и написание
+/// родительный на -ов, -ев, -ей - мужской («выборов», «саней»; из двух форм родительного хватает
+/// одной: «шорт» и «шортов»), иначе - женский («суток», «денег»). У несклоняемых («СМИ»)
+/// и склоняемых как прилагательные («данные») рода нет. Формы - тег и написание
 pub fn plural_only_gender(forms: &[(&str, String)]) -> Option<&'static str> {
-    let find = |case: &str| {
-        forms.iter().find_map(|(tag, word)| {
+    let find = |case: &'static str| {
+        forms.iter().filter_map(move |(tag, word)| {
             let grammemes: Vec<&str> = tag.split([',', ' ']).collect();
             let genderless = grammemes.contains(&"Pltm") && grammemes.contains(&"GNdr");
             (genderless && grammemes.contains(&case)).then_some(word.as_str())
         })
     };
-    let nominative = find("nomn")?;
-    let genitive = find("gent")?;
-    if nominative == genitive || genitive.ends_with("ых") || genitive.ends_with("их") {
+    let nominative = find("nomn").next()?;
+    let genitives: Vec<&str> = find("gent").collect();
+    let adjectival = |genitive: &&str| genitive.ends_with("ых") || genitive.ends_with("их");
+    if genitives.is_empty() || genitives.contains(&nominative) || genitives.iter().any(adjectival) {
         return None;
     }
     Some(if nominative.ends_with(['а', 'я']) {
         "Neut"
-    } else if ["ов", "ев", "ёв", "ей"]
-        .iter()
-        .any(|ending| genitive.ends_with(ending))
-    {
+    } else if genitives.iter().any(|genitive| {
+        ["ов", "ев", "ёв", "ей"]
+            .iter()
+            .any(|ending| genitive.ends_with(ending))
+    }) {
         "Masc"
     } else {
         "Fem"
@@ -1040,6 +1042,12 @@ mod tests {
         }
         for (nominative, genitive) in [("сми", "сми"), ("данные", "данных")] {
             assert_eq!(plural_only_gender(&forms(nominative, genitive)), None);
+        }
+        // Из двух форм родительного мужской род дает любая на -ов, -ев, -ей
+        for genitives in [["шорт", "шортов"], ["шортов", "шорт"]] {
+            let mut two = forms("шорты", genitives[0]);
+            two.push(("NOUN,inan,GNdr,Pltm plur,gent", genitives[1].to_owned()));
+            assert_eq!(plural_only_gender(&two), Some("Masc"), "{genitives:?}");
         }
         let gendered = [
             ("NOUN,inan,femn,Pltm plur,nomn", "ворота".to_owned()),

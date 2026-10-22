@@ -288,8 +288,9 @@ impl Dictionary {
                     for analysis in &mut analyses {
                         analysis.prob *= 1.0 - share;
                     }
+                    // Написание угаданного разбора с «ё» из суффикса: по нему строятся формы
                     analyses.extend(guessed.into_iter().map(|analysis| Analysis {
-                        word: word.to_owned(),
+                        word: analysis.word.to_uppercase(),
                         prob: analysis.prob * share,
                         ..analysis
                     }));
@@ -419,7 +420,7 @@ impl Dictionary {
             return;
         }
         let (mut letters, mut first_lower, mut rest_lower) = (0, false, true);
-        for c in word.chars().filter(|c| c.is_alphabetic()) {
+        for c in word.chars().filter(|&c| cyrillic(c) || c.is_alphabetic()) {
             if letters == 0 {
                 first_lower = c.is_lowercase();
             } else {
@@ -525,7 +526,7 @@ const RANGE: [char; 3] = ['-', '–', '—'];
 
 /// Токен, который может получить разбор: непустой, без пробелов, управляющих и невидимых
 /// символов и не из одних соединителей эмодзи
-fn token(chars: &[char]) -> bool {
+pub(super) fn token(chars: &[char]) -> bool {
     !chars.is_empty()
         && !chars
             .iter()

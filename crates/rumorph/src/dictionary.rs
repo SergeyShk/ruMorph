@@ -40,6 +40,7 @@ pub enum Source {
 }
 
 impl Source {
+    /// Имя источника: `dictionary`, `rule` или `guess`
     pub fn as_str(self) -> &'static str {
         match self {
             Source::Dictionary => "dictionary",
@@ -72,6 +73,7 @@ pub struct Analysis {
     pub tag: Option<u16>,
     /// Вероятность разбора; сумма по всем разборам словоформы равна 1
     pub prob: f64,
+    /// Откуда взят разбор
     pub source: Source,
     /// Форма таблицы словоизменения; у разборов без лексемы (число, знак, латиница) ее нет
     pub entry: Option<Entry>,
@@ -523,16 +525,20 @@ impl Dictionary {
         for (group, &(yo, records)) in groups.iter_mut().zip(matches.as_slice()) {
             let spelling = self.alphabet.spelling(&key, yo);
             let start = analyses.len();
+            let records = self.records_at(records).unwrap_or_default();
+            analyses.reserve(records.len());
             // Формы лексемы идут подряд (у сокращения «в» их 12): одна лемма ищется один раз
             let mut previous = None;
-            for &entry in self.records_at(records).unwrap_or_default() {
+            for &entry in records {
                 let (table, form) = ((entry >> 16) as u16, entry as u16);
                 let Some(lexeme) = self.lexeme(table, form, &spelling) else {
                     continue;
                 };
                 let tag = lexeme.tag(form);
                 let bits = self.abbreviation_grammemes.get(usize::from(tag)).copied();
-                let key = Some((table, lexeme.stem, lexeme.lemma_form(form), bits));
+                // Основы форм лексемы - один отрезок написания: сравниваются без сравнения строк
+                let stem = (lexeme.stem.as_ptr(), lexeme.stem.len());
+                let key = Some((table, stem, lexeme.lemma_form(form), bits));
                 let lemma = match analyses.last() {
                     Some(last) if previous == key => last.lemma.clone(),
                     _ => self.lemma(&lexeme, form),
@@ -641,7 +647,7 @@ impl Dictionary {
     /// написание запроса («недалеко», а не «недалёко»). Без частот каждый слитый разбор получает
     /// равную долю, и порядок словаря сохраняется
     fn merge(&self, mut merged: Vec<Analysis>) -> Vec<Analysis> {
-        let yo_count = |word: &str| word.chars().filter(|&ch| ch == 'ё').count();
+        let yo_count = |word: &str| word.chars().filter(|&ch| matches!(ch, 'ё' | 'Ё')).count();
         let core = |analysis: &Analysis| self.ud_core.get(usize::from(analysis.ud));
         // Слитые разборы собираются в начале списка
         let mut kept = 0;
@@ -1162,6 +1168,12 @@ impl Dictionary {
             .concat(),
             _ => self.spell(lexeme, form),
         };
+        // Окончание формы слова капсом - тоже заглавными: «ЧАТБОТОВЕД» - «ЧАТБОТОВЕДА»
+        let word = if caps(&analysis.word) {
+            word.to_uppercase()
+        } else {
+            word
+        };
         Analysis {
             word,
             lemma: analysis.lemma.clone(),
@@ -1452,6 +1464,14 @@ struct Preferences {
 /// Слово в обычной записи: знаки и буквы-двойники (`normalized_marks`, `unified_script`)
 /// приведены к обычным. `None`, если менять нечего
 fn normalized_input(word: &str) -> Option<String> {
+    // Слово из ASCII или из кириллицы с цифрами и знаками ASCII: менять нечего
+    if word.is_ascii()
+        || word
+            .chars()
+            .all(|c| rules::cyrillic(c) || (c.is_ascii() && !c.is_ascii_alphabetic()))
+    {
+        return None;
+    }
     let unified = unified_script(word);
     normalized_marks(unified.as_deref().unwrap_or(word)).or(unified)
 }
@@ -1588,16 +1608,21 @@ fn normalized_marks(word: &str) -> Option<String> {
 fn same_up_to_yo(a: &str, b: &str) -> bool {
     a == b
         || (a.len() == b.len()
-            && a.chars()
-                .zip(b.chars())
-                .all(|(x, y)| x == y || matches!((x, y), ('е', 'ё') | ('ё', 'е'))))
+            && a.chars().zip(b.chars()).all(|(x, y)| {
+                x == y || matches!((x, y), ('е', 'ё') | ('ё', 'е') | ('Е', 'Ё') | ('Ё', 'Е'))
+            }))
+}
+
+/// Слово капсом: в нем есть буквы, и все заглавные
+fn caps(word: &str) -> bool {
+    word.chars().any(char::is_alphabetic) && !word.chars().any(char::is_lowercase)
 }
 
 /// Форма в регистре слова, от которого формы строились в нижнем регистре: капсом, если слово
 /// капсом («ПИН-КОДАМ»), иначе общее начало слова и формы - в регистре слова («УрО» → «УрО»,
 /// «Уру»), а без общего начала - с заглавной первой буквой («Покринжовее» → «Кринжового»)
 fn capitalized_like(original: &str, form: Analysis) -> Analysis {
-    if original.chars().any(char::is_alphabetic) && !original.chars().any(char::is_lowercase) {
+    if caps(original) {
         return Analysis {
             word: form.word.to_uppercase(),
             ..form
@@ -2168,6 +2193,42 @@ pub(super) mod tests {
     }
 
     #[test]
+    fn own_words_in_query_spelling() {
+        // Слово и образец приводятся, как запрос: ударение, мягкий перенос, неразрывный дефис
+        // и латинские двойники не мешают найти слово
+        let dict = lexicon()
+            .with_words([
+                ("бо\u{301}т", "кот"),
+                ("xот", "ко\u{301}т"),
+                ("ро\u{AD}т", "кот"),
+                ("бот\u{2011}кот", "кот"),
+            ])
+            .unwrap();
+        for (word, lemma) in [
+            ("ботами", "бот"),
+            ("хотами", "хот"),
+            ("xотами", "хот"),
+            ("ротами", "рот"),
+            ("бот-котами", "бот-кот"),
+            ("бот\u{2011}котами", "бот-кот"),
+        ] {
+            let analysis = &dict.analyze(word)[0];
+            assert_eq!(
+                (analysis.lemma.as_str(), analysis.source),
+                (lemma, Source::Dictionary),
+                "{word}"
+            );
+            assert!(dict.is_known(word), "{word}");
+        }
+        for word in [" бот", "бот\n", "бо т", "бо\u{200B}т"] {
+            let Err(Error::Word(message)) = lexicon().with_words([(word, "кот")]) else {
+                panic!("{word:?}");
+            };
+            assert!(message.contains("не найдется в тексте"), "{message}");
+        }
+    }
+
+    #[test]
     fn forms_of_lexeme() {
         let dict = lexicon();
         let forms: Vec<String> = dict
@@ -2302,6 +2363,13 @@ pub(super) mod tests {
     }
 
     #[test]
+    fn spellings_up_to_yo() {
+        // Угадывание в смешанном регистре ставит заглавную «Ё» на место заглавной «Е»
+        assert!(same_up_to_yo("жилем", "жилём") && same_up_to_yo("ЖилЕм", "ЖилЁм"));
+        assert!(!same_up_to_yo("ЖилЕм", "Жилём") && !same_up_to_yo("жилем", "жилам"));
+    }
+
+    #[test]
     fn merged_analyses_share_forms() {
         // «мешать» непереходный и переходный - одна таблица, как их объединяет сборщик;
         // причастие есть только у переходного
@@ -2433,6 +2501,14 @@ pub(super) mod tests {
             .map(|form| form.word)
             .collect();
         assert_eq!(forms, ["Зумов", "Зумова"]);
+        // У слова капсом с нулевым окончанием окончания форм тоже заглавные
+        let entry = Entry {
+            form: 0,
+            ..analyses[0].entry.unwrap()
+        };
+        let caps = dict.analysis("ЗУМОВ", entry, Source::Guess).unwrap();
+        let forms: Vec<String> = dict.forms(&caps).into_iter().map(|f| f.word).collect();
+        assert_eq!(forms, ["ЗУМОВ", "ЗУМОВА"]);
         // Слитное название в смешанном регистре угадывается, как слово с заглавной
         let mixed: Vec<(String, f64)> = dict
             .analyze("ЗуМова")
@@ -2511,6 +2587,12 @@ pub(super) mod tests {
             .map(|form| form.word)
             .collect();
         assert_eq!(forms, ["Ёнок", "Ёнка"]);
+        // Длинное слово капсом: написание угаданного разбора - с «ё» суффикса, формы капсом
+        let caps = dict.analyze("СЛОНЕНКА");
+        let young = caps.iter().find(|a| a.lemma == "слонёнок").unwrap();
+        assert_eq!(young.word, "СЛОНЁНКА");
+        let forms: Vec<String> = dict.forms(young).into_iter().map(|f| f.word).collect();
+        assert_eq!(forms, ["СЛОНЁНОК", "СЛОНЁНКА"]);
     }
 
     #[test]

@@ -332,7 +332,11 @@ fn add_words(mut dictionary: Dictionary, paths: &[PathBuf]) -> Result<Dictionary
     for path in paths {
         let name = path.display();
         let bytes = std::fs::read(path).map_err(|err| format!("{name}: {}", describe(&err)))?;
-        let text = String::from_utf8(bytes).map_err(|_| format!("{name}: файл не в UTF-8"))?;
+        let text = String::from_utf8(bytes).map_err(|err| {
+            let valid = &err.as_bytes()[..err.utf8_error().valid_up_to()];
+            let line = valid.iter().filter(|&&byte| byte == b'\n').count() + 1;
+            format!("{name}: строка {line}: не UTF-8")
+        })?;
         let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
         for (number, line) in text.lines().enumerate() {
             if line.trim().is_empty() || line.starts_with('#') {
@@ -341,8 +345,14 @@ fn add_words(mut dictionary: Dictionary, paths: &[PathBuf]) -> Result<Dictionary
             let at = |message: &dyn std::fmt::Display| {
                 format!("{name}: строка {}: {message}", number + 1)
             };
-            let word = match *line.split('\t').collect::<Vec<_>>().as_slice() {
-                [word, like] => (word, Sample::from(like)),
+            // Пробелы по краям полей - от выравнивания столбцов, пустая часть речи - не задана
+            let word = match *line
+                .split('\t')
+                .map(str::trim)
+                .collect::<Vec<_>>()
+                .as_slice()
+            {
+                [word, like] | [word, like, ""] => (word, Sample::from(like)),
                 [word, like, pos] => (word, Sample::from((like, pos))),
                 _ => return Err(at(&"нужны слово и образец через табуляцию")),
             };
@@ -1296,7 +1306,7 @@ mod tests {
         let words = dir.join("words.tsv");
         std::fs::write(
             &words,
-            "\u{feff}# свои слова\n\nпилить\tмыть\nкрама\tрама\tNOUN\n",
+            "\u{feff}# свои слова\n\nпилить \tмыть\t\nкрама\t рама\tNOUN \n",
         )
         .unwrap();
         let path = words.to_str().unwrap();
@@ -1307,10 +1317,20 @@ mod tests {
         );
         for (text, message) in [
             (
-                "пилить\n",
+                "пилить\n".as_bytes(),
                 "строка 1: нужны слово и образец через табуляцию",
             ),
-            ("кот\tпёс\n", "строка 1: Образца «пёс» нет в словаре"),
+            (
+                "кот\tпёс\n".as_bytes(),
+                "строка 1: Образца «пёс» нет в словаре",
+            ),
+            (
+                "крама\tрама\nк т\tрама\n".as_bytes(),
+                "строка 2: Свое слово «к т» с пробелом, управляющим или невидимым символом не \
+                 найдется в тексте",
+            ),
+            // «к», табуляция, «к», затем «ва» в cp1251
+            (b"\xd0\xba\t\xd0\xba\n\xe2\xe0\n", "строка 2: не UTF-8"),
         ] {
             std::fs::write(&words, text).unwrap();
             let (code, _, error) = dict.run(&["--words", path], b"");

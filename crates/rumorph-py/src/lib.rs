@@ -902,8 +902,8 @@ fn _analyzer(
 ///     OSError: Если файл словаря не читается
 ///     TypeError: Если свои слова - не словарь строк
 ///     ValueError: Если файл не является словарем ruMorph или поврежден, образца нет в словаре,
-///         у него лексемы разных частей речи без указания части речи или слово не изменяется
-///         по образцу
+///         у него лексемы разных частей речи без указания части речи, слово не изменяется
+///         по образцу или в слове пробел или невидимый символ
 ///
 /// Пример использования:
 ///     >>> from rumorph import Analyzer
@@ -1237,9 +1237,9 @@ impl Analyzer {
         let dictionary = py
             .detach(|| {
                 let samples = words.iter().map(|(word, like, pos)| {
-                    let sample = rumorph::Sample {
-                        word: like,
-                        pos: pos.as_deref(),
+                    let sample = match pos {
+                        Some(pos) => rumorph::Sample::from((like.as_str(), pos.as_str())),
+                        None => rumorph::Sample::from(like.as_str()),
                     };
                     (word.as_str(), sample)
                 });

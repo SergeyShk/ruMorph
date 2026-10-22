@@ -16,6 +16,8 @@ pub(crate) const MAX_LIST: usize = 255;
 /// Бит длины списка частот: ключи списка - формы таблиц `(таблица << 16) | форма`, а не теги
 pub(crate) const ENTRY_KEYS: u32 = 1 << 31;
 const VERSION: u32 = 6;
+/// Самый старый читаемый формат: в формате 5 нет списков частот по формам таблиц, остальное как в 6
+const OLDEST_VERSION: u32 = 5;
 const HEADER: usize = 16;
 const ALIGN: usize = 8;
 const SECTIONS: usize = 16;
@@ -193,9 +195,9 @@ fn check_header(data: &[u8]) -> Result<(), Error> {
         return Err(truncated());
     };
     let version = u32::from_le_bytes([header[8], header[9], header[10], header[11]]);
-    if version != VERSION {
+    if !(OLDEST_VERSION..=VERSION).contains(&version) {
         return Err(Error::Format(format!(
-            "версия формата {version}, поддерживается {VERSION}"
+            "версия формата {version}, поддерживаются {OLDEST_VERSION}-{VERSION}"
         )));
     }
     Ok(())
@@ -813,6 +815,8 @@ pub(crate) mod tests {
         data[MAGIC.len()..MAGIC.len() + 4].copy_from_slice(&4u32.to_le_bytes());
         let err = layout(&data).err().unwrap();
         assert!(err.to_string().contains("версия формата 4"), "{err}");
+        data[MAGIC.len()..MAGIC.len() + 4].copy_from_slice(&5u32.to_le_bytes());
+        assert!(layout(&data).is_ok());
     }
 
     #[test]
