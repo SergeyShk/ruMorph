@@ -396,6 +396,34 @@ def test_comparative_degree(morph):
     }
     # «выше» в лексеме наречия «высоко» - наречие, а не прилагательное
     assert all(a.pos != "ADJ" for a in morph.analyze("выше"))
+    # Сравнительная степень прилагательного - и наречия с леммой положительной степени
+    adverb = next(a for a in morph.analyze("раньше") if a.pos == "ADV")
+    assert (adverb.lemma, adverb.feats["Degree"]) == ("рано", "Cmp")
+    assert [form.word for form in adverb.forms()] == ["рано", "раньше", "пораньше"]
+    assert adverb.inflect(Degree="Pos") == "рано"
+    assert [form.word for form in morph.analyze("рано")[0].forms()] == ["рано"]
+    lesser = next(a for a in morph.analyze("меньше") if a.pos == "ADV")
+    assert (lesser.lemma, lesser.feats["PronType"]) == ("мало", "Tot")
+    assert all(a.pos != "ADV" for a in morph.analyze("меньшее"))
+
+
+@pytest.mark.parametrize(
+    ("word", "lemma", "pos", "feats"),
+    [
+        ("есть", "быть", "VERB", {"Tense": "Pres"}),
+        ("бы", "бы", "PART", {}),
+        ("это", "это", "PART", {}),
+        ("одной", "один", "DET", {"Case": "Gen", "PronType": "Ind"}),
+        ("другу", "друг", "PRON", {"Case": "Dat", "PronType": "Rcp"}),
+        ("двум", "два", "NUM", {"Case": "Dat", "Gender": "Fem"}),
+        ("хочется", "хотеться", "VERB", {"Person": "3"}),
+    ],
+)
+def test_context_analyses(morph, word, lemma, pos, feats):
+    """Разборы, которые различает только контекст, есть среди разборов словоформы"""
+    analyses = [a for a in morph.analyze(word) if (a.lemma, a.pos) == (lemma, pos)]
+    assert any(feats.items() <= a.feats.items() for a in analyses), word
+    assert all(form.lemma == lemma for form in analyses[0].forms())
 
 
 def test_adjective_proper_names_are_labels(morph):
@@ -483,6 +511,9 @@ def test_own_words():
     assert copied == analysis
     assert restored.analyze("зумеру")[0].lemma == "зумер"
     assert Analyzer(words={}).analyze("зумерами")[0].source == "guess"
+    # Образец-наречие дает одну форму: сравнительная степень другого корня не переносится
+    adverb = Analyzer(words={"кринжово": "рано"}).analyze("кринжово")[0]
+    assert (adverb.pos, [form.word for form in adverb.forms()]) == ("ADV", ["кринжово"])
 
 
 @pytest.mark.parametrize(

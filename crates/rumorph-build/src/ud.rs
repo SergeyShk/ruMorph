@@ -145,7 +145,6 @@ const POS_EXCEPTIONS: &[(&str, &str, &str)] = &[
     ("PRCL", "там", "ADV"),
     ("PRCL", "угодно", "ADV"),
     ("PRCL", "хоть", "ADV"),
-    ("PRCL", "это", "PRON"),
     ("PRCL", "якобы", "ADV"),
     ("PRED", "беда", "NOUN"),
     ("PRED", "видно", "ADV"),
@@ -489,8 +488,8 @@ const SUPPLETIVE_SUPERLATIVES: &[&str] = &[
 /// Прилагательные без пометы Supr, которые в SynTagRus в превосходной степени
 const SUPERLATIVES: &[&str] = &["дальнейший"];
 
-/// Частицы, которые в UD - местоимения среднего рода: «это», «всё»
-const PARTICLE_PRONOUNS: &[&str] = &["всё", "это"];
+/// Частицы, которые в UD - местоимения среднего рода: «всё»
+const PARTICLE_PRONOUNS: &[&str] = &["всё"];
 
 /// Неодушевленные местоимения без «что» в лемме
 const INANIMATE_PRONOUNS: &[&str] = &["всё", "многое", "прочее", "сие", "то", "это"];
@@ -509,6 +508,24 @@ const ADJECTIVE_LABELS: &[(&str, &str)] = &[
     ("Surn", "NameType"),
     ("Trad", "NameType"),
 ];
+
+/// Тип местоимения, местоименного прилагательного или наречия с частью речи UD `pos`
+fn pronoun_type(pos: &str, lemma: &str) -> Option<&'static str> {
+    if !matches!(pos, "PRON" | "DET" | "ADV") {
+        return None;
+    }
+    PRONOUN_TYPES
+        .iter()
+        .find(|&&(table_pos, word, _)| table_pos == pos && word == lemma)
+        .map(|&(_, _, kind)| kind)
+        .or_else(|| pronoun_series(lemma))
+        .or_else(|| {
+            RARE_PRONOUN_TYPES
+                .iter()
+                .find(|&&(word, _)| word == lemma && pos != "ADV")
+                .map(|&(_, kind)| kind)
+        })
+}
 
 fn has(grammemes: &[&str], grammeme: &str) -> bool {
     grammemes.contains(&grammeme)
@@ -682,6 +699,15 @@ pub fn convert(tag: &str, lemma: &str) -> Ud {
     if g("impr") && !feats.contains_key("Person") {
         feats.insert("Person", if g("incl") { "1" } else { "2" });
     }
+    // Безличный глагол («хочется») в OpenCorpora без лица, в UD - третье лицо
+    if oc == "VERB" && g("Impe") && !g("past") {
+        feats.insert("Person", "3");
+    }
+    // Род «двух», «двум» в OpenCorpora не указан, в UD он - по существительному: здесь мужской,
+    // женский и средний - копии форм (`numeral_genders`)
+    if lemma == "два" && !feats.contains_key("Gender") && feats.get("Case") != Some(&"Nom") {
+        feats.insert("Gender", "Masc");
+    }
     if verbal {
         let form = match oc {
             "VERB" => "Fin",
@@ -789,21 +815,8 @@ pub fn convert(tag: &str, lemma: &str) -> Ud {
     if pos == "NUM" {
         feats.insert("NumForm", "Word");
     }
-    if matches!(pos, "PRON" | "DET" | "ADV") {
-        let kind = PRONOUN_TYPES
-            .iter()
-            .find(|&&(table_pos, word, _)| table_pos == pos && word == lemma)
-            .map(|&(_, _, kind)| kind)
-            .or_else(|| pronoun_series(lemma))
-            .or_else(|| {
-                RARE_PRONOUN_TYPES
-                    .iter()
-                    .find(|&&(word, _)| word == lemma && pos != "ADV")
-                    .map(|&(_, kind)| kind)
-            });
-        if let Some(kind) = kind {
-            feats.insert("PronType", kind);
-        }
+    if let Some(kind) = pronoun_type(pos, lemma) {
+        feats.insert("PronType", kind);
     }
     if pos == "DET" && g("Fixd") && POSSESSIVE.contains(&lemma) {
         // «его», «её», «их» в SynTagRus - Poss=Yes|PronType=Prs без падежа, рода и числа
@@ -866,6 +879,94 @@ pub fn substantive_pronoun(base: &str, tag: &str) -> Option<(&'static str, Ud)> 
             .extend([("Animacy", "Inan"), ("Gender", "Neut"), ("Number", "Sing")]);
     }
     Some((lemma, ud))
+}
+
+/// Разбор, который различает только контекст, - копия формы с тегом `tag` лексемы `base` с другой
+/// частью речи: у «быть» - и VERB (бытийное «есть»), у «бы» - и PART, у «один» - и DET
+/// («одна женщина»), у единственного числа «друг» - и взаимное местоимение («друг друга»)
+pub fn context_copy(base: &str, tag: &str) -> Option<Ud> {
+    if !matches!(base, "быть" | "бы" | "один" | "друг") {
+        return None;
+    }
+    let mut ud = convert(tag, lemma_class(base));
+    let case = ud.feats.get("Case").copied();
+    match (base, ud.pos) {
+        ("быть", "AUX") => ud.pos = "VERB",
+        ("бы", "AUX") => {
+            ud.pos = "PART";
+            ud.feats.clear();
+        }
+        ("один", "NUM") => {
+            ud.pos = "DET";
+            ud.feats.remove("NumForm");
+            ud.feats.remove("NumType");
+            ud.feats.insert("PronType", "Ind");
+        }
+        ("друг", "NOUN")
+            if ud.feats.get("Number") == Some(&"Sing")
+                && matches!(case, Some("Nom" | "Gen" | "Dat" | "Acc" | "Ins" | "Loc")) =>
+        {
+            ud.pos = "PRON";
+            ud.feats.retain(|&name, _| name == "Case");
+            ud.feats.insert("PronType", "Rcp");
+        }
+        _ => return None,
+    }
+    Some(ud)
+}
+
+/// Копии формы «два» без рода в OpenCorpora («двух», «двум»): женский и средний род
+pub fn numeral_genders(base: &str, tag: &str) -> Vec<Ud> {
+    let genderless = !(tag.split([',', ' '])).any(|g| matches!(g, "masc" | "femn" | "neut"));
+    if base != "два" || !genderless {
+        return Vec::new();
+    }
+    let ud = convert(tag, lemma_class(base));
+    if ud.feats.get("Gender") != Some(&"Masc") {
+        return Vec::new();
+    }
+    ["Fem", "Neut"]
+        .into_iter()
+        .map(|gender| {
+            let mut copy = ud.clone();
+            copy.feats.insert("Gender", gender);
+            copy
+        })
+        .collect()
+}
+
+/// Наречия, которые могут быть положительной степенью сравнительной формы прилагательного
+/// `lemma` с краткими формами среднего рода `short`: сама краткая форма («хорошо» - «лучше»),
+/// основа на «-о» («поздно» - «позже») и она же с одной «н» («рано» - «раньше»); у «меньше»
+/// положительная степень другого корня - «мало», а «малее», «меньшее» «малого» - не наречия
+pub fn positive_adverbs(lemma: &str, short: &[String]) -> Vec<String> {
+    match lemma {
+        "маленький" => return vec!["мало".into()],
+        "малый" => return Vec::new(),
+        _ => {}
+    }
+    let mut adverbs = short.to_vec();
+    if let Some(stem) = ["ий", "ый", "ой"]
+        .iter()
+        .find_map(|ending| lemma.strip_suffix(ending))
+    {
+        adverbs.push(format!("{stem}о"));
+        if let Some(single) = stem.strip_suffix("нн") {
+            adverbs.push(format!("{single}но"));
+        }
+    }
+    adverbs
+}
+
+/// Сравнительная степень наречия `adverb` - форма COMP прилагательного с тегом `tag`
+/// и типом местоименного наречия («меньше» - `PronType=Tot`, как «мало»)
+pub fn comparative_adverb(tag: &str, adverb: &str) -> Ud {
+    let mut ud = convert(tag, lemma_class(adverb));
+    ud.pos = "ADV";
+    if let Some(kind) = pronoun_type(ud.pos, adverb) {
+        ud.feats.insert("PronType", kind);
+    }
+    ud
 }
 
 /// Признаки, которых нет у несклоняемых аббревиатур и сокращений слов
@@ -960,7 +1061,7 @@ pub fn lemma_class(lemma: &str) -> &str {
             PARTICLE_PRONOUNS,
             INANIMATE_PRONOUNS,
             REFLEXIVE,
-            &["быть", "бы", "должный", "себя"],
+            &["быть", "бы", "два", "должный", "себя"],
         ]
         .iter()
         .any(|list| list.contains(&lemma))
@@ -1113,6 +1214,15 @@ mod tests {
             summary("GRND,impf,intr pres", "смеяться").1,
             "Aspect=Imp|Tense=Pres|VerbForm=Conv|Voice=Mid"
         );
+        assert_eq!(
+            summary("VERB,impf,intr,Impe sing,pres,indc", "хотеться").1,
+            "Aspect=Imp|Mood=Ind|Number=Sing|Person=3|Tense=Pres|VerbForm=Fin|Voice=Mid"
+        );
+        assert!(
+            !summary("VERB,impf,intr,Impe neut,sing,past,indc", "хотеться")
+                .1
+                .contains("Person")
+        );
     }
 
     #[test]
@@ -1218,14 +1328,8 @@ mod tests {
         );
         assert_eq!(summary("NUMR,nomn", "много").0, "NUM");
         assert_eq!(summary("CONJ", "чтобы").1, "Mood=Cnd");
-        assert_eq!(
-            summary("PRCL", "это"),
-            (
-                "PRON".into(),
-                "Animacy=Inan|Case=Nom|Gender=Neut|Number=Sing|PronType=Dem".into(),
-                vec![]
-            )
-        );
+        // Частица «это» («это он сделал») остается частицей рядом с местоимением NPRO
+        assert_eq!(summary("PRCL", "это"), ("PART".into(), "".into(), vec![]));
         assert_eq!(summary("ADVB", "более").1, "Degree=Cmp|PronType=Tot");
         assert_eq!(summary("ADVB", "наиболее").1, "Degree=Sup|PronType=Tot");
         assert_eq!(summary("PREP", "в").0, "ADP");
@@ -1433,6 +1537,72 @@ mod tests {
         assert_eq!(pronoun("весь", "ADJF,Subx,Apro inan,plur,accs"), None);
         assert_eq!(pronoun("тот", "ADJF,Subx,Apro masc,sing,gent"), None);
         assert_eq!(pronoun("этот", "ADJF,Apro neut,sing,gent"), None);
+    }
+
+    #[test]
+    fn context_copies() {
+        let copy = |base: &str, tag: &str| {
+            context_copy(base, tag).map(|ud| (ud.pos, feats_string(&ud.feats)))
+        };
+        assert_eq!(
+            copy("быть", "VERB,impf,intr sing,3per,pres,indc"),
+            Some((
+                "VERB",
+                "Mood=Ind|Number=Sing|Person=3|Tense=Pres|VerbForm=Fin|Voice=Act".into()
+            ))
+        );
+        assert_eq!(copy("бы", "PRCL"), Some(("PART", "".into())));
+        assert_eq!(
+            copy("один", "ADJF,Apro,Anum femn,sing,gent"),
+            Some(("DET", "Case=Gen|Gender=Fem|Number=Sing|PronType=Ind".into()))
+        );
+        assert_eq!(
+            copy("друг", "NOUN,anim,masc sing,ablt"),
+            Some(("PRON", "Case=Ins|PronType=Rcp".into()))
+        );
+        assert_eq!(copy("друг", "NOUN,anim,masc plur,ablt"), None);
+        assert_eq!(copy("друг", "NOUN,anim,masc sing,voct"), None);
+        assert_eq!(copy("стать", "VERB,perf,intr sing,3per,futr,indc"), None);
+    }
+
+    #[test]
+    fn numeral_gender_copies() {
+        let genders: Vec<String> = numeral_genders("два", "NUMR gent")
+            .iter()
+            .map(|ud| feats_string(&ud.feats))
+            .collect();
+        assert_eq!(
+            genders,
+            [
+                "Case=Gen|Gender=Fem|NumForm=Word|NumType=Card",
+                "Case=Gen|Gender=Neut|NumForm=Word|NumType=Card"
+            ]
+        );
+        assert_eq!(
+            summary("NUMR gent", "два").1,
+            "Case=Gen|Gender=Masc|NumForm=Word|NumType=Card"
+        );
+        assert!(numeral_genders("два", "NUMR masc,nomn").is_empty());
+        assert!(numeral_genders("три", "NUMR gent").is_empty());
+    }
+
+    #[test]
+    fn comparative_adverbs() {
+        let short = ["хорошо".to_string()];
+        assert_eq!(positive_adverbs("хороший", &short)[0], "хорошо");
+        assert_eq!(positive_adverbs("поздний", &[]), ["поздно"]);
+        assert_eq!(positive_adverbs("ранний", &[]), ["ранно", "рано"]);
+        assert_eq!(positive_adverbs("маленький", &[]), ["мало"]);
+        assert!(positive_adverbs("малый", &["мало".to_string()]).is_empty());
+        assert_eq!(
+            feats_string(&comparative_adverb("COMP,Qual", "мало").feats),
+            "Degree=Cmp|PronType=Tot"
+        );
+        let ud = comparative_adverb("COMP,Qual", "поздно");
+        assert_eq!(
+            (ud.pos, feats_string(&ud.feats), ud.labels),
+            ("ADV", "Degree=Cmp".into(), vec!["Qual".to_string()])
+        );
     }
 
     #[test]
