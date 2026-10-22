@@ -148,7 +148,7 @@ Numbers, signs, Latin script and abbreviations are analyzed by rules, their `sou
 *   adverbs «по-бурятски», «по-молодому» - `ADV`
 *   other tokens «км/ч», «РосПил» - `X` without features, the lemma is the token in lowercase
 
-The shares of ambiguous analyses come from the frequencies in the UD Taiga and GSD treebanks.
+The shares of ambiguous analyses come from the frequencies in the UD Taiga and GSD treebanks, the shares of proper nouns take the case into account: «Земли» is first of all the planet (PROPN), «земли» is NOUN.
 
 ```python
 >>> from rumorph import Analyzer

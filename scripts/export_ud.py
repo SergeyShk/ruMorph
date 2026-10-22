@@ -4,8 +4,8 @@
 Описание:
     Скачивает обучающие части UD_Russian-Taiga и UD_Russian-GSD (CC BY-SA 4.0) закрепленного
     релиза UD, проверяет их контрольные суммы и пишет, сколько раз каждая словоформа (в нижнем
-    регистре, «ё» как «е») размечена каждой парой «часть речи, лемма» (counts.tsv; лемма - в нижнем
-    регистре с «ё»: «все» и «всё» - разные леммы), и описание
+    регистре, «ё» как «е») размечена каждой парой «часть речи, лемма» всего и с заглавной буквы
+    (counts.tsv; лемма - в нижнем регистре с «ё»: «все» и «всё» - разные леммы), и описание
     источников (sources.json). Скачанные файлы хранятся в каталоге выгрузки и повторно не
     скачиваются.
 
@@ -91,6 +91,7 @@ def export(output: Path) -> None:
     raw = output / "raw"
     raw.mkdir(parents=True, exist_ok=True)
     counts: Counter[tuple[str, str, str]] = Counter()
+    capitalized: Counter[tuple[str, str, str]] = Counter()
     for treebank, (commit, files) in SOURCES.items():
         for name, digest in files.items():
             path = raw / name
@@ -104,10 +105,12 @@ def export(output: Path) -> None:
                     # Многословные токены и пустые узлы - не словоформы
                     if "-" in columns[0] or "." in columns[0]:
                         continue
-                    counts[normal(columns[1]), columns[3], columns[2].lower()] += 1
+                    key = normal(columns[1]), columns[3], columns[2].lower()
+                    counts[key] += 1
+                    capitalized[key] += columns[1][:1].isupper()
     with (output / "counts.tsv").open("w", encoding="utf-8") as file:
         for (word, pos, lemma), count in sorted(counts.items()):
-            file.write(f"{word}\t{pos}\t{lemma}\t{count}\n")
+            file.write(f"{word}\t{pos}\t{lemma}\t{count}\t{capitalized[word, pos, lemma]}\n")
     sources = {
         "release": RELEASE,
         "treebanks": list(SOURCES),
