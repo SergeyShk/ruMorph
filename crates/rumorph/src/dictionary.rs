@@ -13,12 +13,14 @@ use crate::format::{
 };
 
 mod guess;
+mod own;
 mod parts;
 mod rules;
 mod ud;
 
 #[cfg(any(test, feature = "build"))]
 pub use guess::GuessIndex;
+pub use own::Sample;
 use parts::with_particle;
 pub use ud::UdTag;
 use ud::UdTags;
@@ -118,8 +120,9 @@ impl Lexeme<'_> {
 
 /// Словарь словоформ
 ///
-/// Файл словаря отображается в память: процессы с одним словарем делят его память. Пока словарь
-/// открыт, файл нельзя перезаписывать на месте
+/// Файл словаря отображается в память: процессы с одним словарем делят его память, а копия
+/// (`clone`) - отображенный файл. Пока словарь открыт, файл нельзя перезаписывать на месте
+#[derive(Clone)]
 pub struct Dictionary {
     storage: Arc<Storage>,
     layout: Layout,
@@ -139,6 +142,8 @@ pub struct Dictionary {
     proper_nouns: Vec<bool>,
     /// Граммемы сокращения-существительного для `ABBREVIATION_LEMMAS`: по номеру тега OpenCorpora
     abbreviation_grammemes: Vec<u8>,
+    /// Свои слова (`with_words`): словоформа с «е» вместо «ё» - написания и формы таблиц
+    own_words: HashMap<String, Vec<(String, Entry)>>,
     features: BTreeMap<String, BTreeSet<String>>,
     alphabet: Alphabet,
     prefixes: Strings,
@@ -324,6 +329,7 @@ impl Dictionary {
             combined_numeral: None,
             proper_nouns: Vec::new(),
             abbreviation_grammemes: Vec::new(),
+            own_words: HashMap::new(),
             meta,
             alphabet,
             layout,
@@ -497,10 +503,10 @@ impl Dictionary {
     /// Разборы словаря до слияния с вероятностями P(тег | словоформа); без частот вероятности нулевые
     fn candidates(&self, word: &str) -> Vec<Analysis> {
         let Some(key) = self.alphabet.input_key(word) else {
-            return Vec::new();
+            return self.only_own_candidates(word);
         };
         let Some(spellings) = self.spellings(&key) else {
-            return Vec::new();
+            return self.only_own_candidates(word);
         };
         let matches = self.matches(&spellings, key.yo);
         let mut analyses: Vec<Analysis> = Vec::new();
@@ -555,7 +561,20 @@ impl Dictionary {
             };
             *group = (start, analyses.len(), table);
         }
+        // Свои слова - без частот: у них средняя доля разборов с частотами
+        if !self.own_words.is_empty() {
+            self.own_candidates(word, &mut analyses);
+        }
         self.assign_probabilities(&groups[..matches.len], input.is_some(), &mut analyses);
+        analyses
+    }
+
+    /// Разборы словоформы, которой нет в автомате: только свои слова
+    fn only_own_candidates(&self, word: &str) -> Vec<Analysis> {
+        let mut analyses = Vec::new();
+        if !self.own_words.is_empty() {
+            self.own_candidates(word, &mut analyses);
+        }
         analyses
     }
 
@@ -694,13 +713,22 @@ impl Dictionary {
                         || (lexeme.affixes(form) == lexeme.affixes(entry.form)
                             && lexeme.tag(form) == lexeme.tag(entry.form)))
             };
-            let key = self.alphabet.spelling_key(word)?;
-            let (_, offset) = self
-                .spellings(&key)?
-                .variants()
-                .find(|&(yo, _)| yo == key.yo)?;
-            if !self.records_at(offset)?.iter().any(|&packed| same(packed)) {
-                return None;
+            let own = !self.own_words.is_empty()
+                && self.own_forms(&lower).is_some_and(|forms| {
+                    forms.iter().any(|(spelling, own)| {
+                        *spelling == lower
+                            && same((u32::from(own.table) << 16) | u32::from(own.form))
+                    })
+                });
+            if !own {
+                let key = self.alphabet.spelling_key(word)?;
+                let (_, offset) = self
+                    .spellings(&key)?
+                    .variants()
+                    .find(|&(yo, _)| yo == key.yo)?;
+                if !self.records_at(offset)?.iter().any(|&packed| same(packed)) {
+                    return None;
+                }
             }
         }
         Some(Analysis {
@@ -1081,24 +1109,29 @@ impl Dictionary {
 
     /// Лексема словоформы `word` - формы `form` таблицы `table`
     fn lexeme<'a>(&'a self, table: u16, form: u16, word: &'a str) -> Option<Lexeme<'a>> {
-        let start = *self.table_offsets.get(usize::from(table))? as usize;
-        let tables = self.tables();
-        let forms = self.paradigm(*tables.get(start)? as u16)?;
-        let cells = tables.get(start + 1..start + 1 + forms.len() / 3)?;
-        if usize::from(form) >= cells.len() {
+        let mut lexeme = self.table_lexeme(table, "")?;
+        if usize::from(form) >= lexeme.cells.len() {
             return None;
         }
-        let mut lexeme = Lexeme {
-            table,
-            forms,
-            cells,
-            stem: "",
-        };
         let (prefix, suffix) = lexeme.affixes(form);
         lexeme.stem = word
             .strip_prefix(self.prefixes.at(prefix))?
             .strip_suffix(self.suffixes.at(suffix))?;
         Some(lexeme)
+    }
+
+    /// Лексема таблицы `table` с основой `stem`
+    fn table_lexeme<'a>(&'a self, table: u16, stem: &'a str) -> Option<Lexeme<'a>> {
+        let start = *self.table_offsets.get(usize::from(table))? as usize;
+        let tables = self.tables();
+        let forms = self.paradigm(*tables.get(start)? as u16)?;
+        let cells = tables.get(start + 1..start + 1 + forms.len() / 3)?;
+        Some(Lexeme {
+            table,
+            forms,
+            cells,
+            stem,
+        })
     }
 
     /// Лемма формы лексемы; у сокращения - полное слово («млн» - «миллион»)
@@ -1155,7 +1188,11 @@ impl Dictionary {
     /// Есть ли словоформа в словаре
     pub fn is_known(&self, word: &str) -> bool {
         let normal = normalized_input(word);
-        let Some(key) = self.alphabet.input_key(normal.as_deref().unwrap_or(word)) else {
+        let word = normal.as_deref().unwrap_or(word);
+        if !self.own_words.is_empty() && self.is_own(word) {
+            return true;
+        }
+        let Some(key) = self.alphabet.input_key(word) else {
             return false;
         };
         self.spellings(&key)
@@ -1413,7 +1450,7 @@ fn feature_code(
 
 /// Признаки и пометы, которые `closest` берет, только если их просят, личная форма
 /// для инфинитива и счетная форма для согласования с числом
-#[derive(Default)]
+#[derive(Clone, Default)]
 struct Preferences {
     infinitive: Option<(usize, u16)>,
     finite: Option<(usize, u16)>,
@@ -2016,6 +2053,80 @@ pub(super) mod tests {
                     .ends_with(feats)
             })
             .unwrap()
+    }
+
+    #[test]
+    fn own_words_follow_sample() {
+        let dict = lexicon().with_words([("бот", "кот")]).unwrap();
+        let analysis = &dict.analyze("ботами")[0];
+        assert_eq!(
+            (analysis.lemma.as_str(), analysis.source),
+            ("бот", Source::Dictionary)
+        );
+        assert!(dict.is_known("Боты") && !lexicon().is_known("боты"));
+        let forms: Vec<String> = dict.forms(analysis).into_iter().map(|f| f.word).collect();
+        assert_eq!(forms[..3], ["бот", "бота", "боту"]);
+        let dative = dict.inflect(analysis, &[("Case", "Dat"), ("Number", "Sing")]);
+        assert_eq!(dative.unwrap().word, "боту");
+        // Разбор восстанавливается по форме таблицы, как из pickle
+        let entry = analysis.entry.unwrap();
+        let restored = dict.analysis("ботами", entry, Source::Dictionary).unwrap();
+        assert_eq!(restored.lemma, "бот");
+        assert!(
+            lexicon()
+                .analysis("ботами", entry, Source::Dictionary)
+                .is_none()
+        );
+        // «е» запроса может обозначать «ё» своего слова; словарное слово не дублируется
+        let dict = dict
+            .with_words([("мочёный", "учёный"), ("кот", "кот")])
+            .unwrap();
+        assert_eq!(dict.analyze("моченого")[0].word, "мочёного");
+        assert_eq!(dict.analyze("кота").len(), lexicon().analyze("кота").len());
+        let error = |words: &[(&str, Sample)]| {
+            let Err(Error::Word(message)) = lexicon().with_words(words.iter().copied()) else {
+                panic!("{words:?}");
+            };
+            message
+        };
+        assert_eq!(
+            error(&[("бот", "пёс".into())]),
+            "Образца «пёс» нет в словаре"
+        );
+        assert!(error(&[("бот", "учёный".into())]).contains("не изменяется по образцу"));
+        let both = dictionary_of(
+            &[
+                (
+                    "NOUN",
+                    "печ",
+                    vec![("ь", "Case=Nom|Number=Sing".to_owned())],
+                ),
+                ("VERB", "печ", vec![("ь", "VerbForm=Inf".to_owned())]),
+            ],
+            &[],
+        );
+        let Err(Error::Word(message)) = both.with_words([("зечь", "печь")]) else {
+            panic!("неоднозначный образец");
+        };
+        assert!(message.contains("NOUN, VERB"), "{message}");
+        let both = dictionary_of(
+            &[
+                (
+                    "NOUN",
+                    "печ",
+                    vec![("ь", "Case=Nom|Number=Sing".to_owned())],
+                ),
+                ("VERB", "печ", vec![("ь", "VerbForm=Inf".to_owned())]),
+            ],
+            &[],
+        );
+        let dict = both.with_words([("зечь", ("печь", "VERB"))]).unwrap();
+        let poses: Vec<&str> = dict
+            .analyze("зечь")
+            .iter()
+            .map(|analysis| dict.ud_tag(analysis.ud).unwrap().pos())
+            .collect();
+        assert_eq!(poses, ["VERB"]);
     }
 
     #[test]

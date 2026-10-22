@@ -9,6 +9,7 @@ use crate::Error;
 pub(crate) const MAX_KEY: usize = 64;
 
 /// Буквы словаря и их байты
+#[derive(Clone)]
 pub(crate) struct Alphabet {
     /// Буква каждого байта; у байта без буквы - '\0'
     letters: [char; 256],

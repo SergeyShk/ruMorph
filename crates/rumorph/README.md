@@ -39,6 +39,10 @@ fn main() -> Result<(), rumorph::Error> {
     assert_eq!(dictionary.inflect(cat, &[("Case", "Gen")]).unwrap().word, "кошки");
     let ruble = &dictionary.analyze("рубль")[0];
     assert_eq!(dictionary.agree(ruble, 5).unwrap().word, "рублей");
+
+    // Свое слово изменяется по образцу словарного; копия словаря делит отображенный файл
+    let zoomers = dictionary.clone().with_words([("зумер", "геймер")])?;
+    assert_eq!(zoomers.analyze("зумерами")[0].lemma, "зумер");
     Ok(())
 }
 ```

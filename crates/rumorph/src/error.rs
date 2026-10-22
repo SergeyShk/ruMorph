@@ -10,6 +10,8 @@ pub enum Error {
     Format(String),
     /// Неверные данные для сборки словаря
     Build(String),
+    /// Свое слово не добавить: нет образца, образец неоднозначен или слово не изменяется по нему
+    Word(String),
 }
 
 impl fmt::Display for Error {
@@ -18,6 +20,7 @@ impl fmt::Display for Error {
             Error::Io(err) => write!(f, "{err}"),
             Error::Format(msg) => write!(f, "неверный формат словаря: {msg}"),
             Error::Build(msg) => write!(f, "ошибка сборки словаря: {msg}"),
+            Error::Word(msg) => write!(f, "{msg}"),
         }
     }
 }
