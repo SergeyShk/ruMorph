@@ -485,6 +485,23 @@ def test_own_words():
     assert Analyzer(words={}).analyze("зумерами")[0].source == "guess"
 
 
+@pytest.mark.parametrize(
+    ("word", "sample", "query"),
+    [
+        ("зу\u0301мер", "геймер", "зумерами"),
+        ("зе\u0308мер", "геймер", "зёмерами"),
+        ("зу\u00adмер", "геймер", "зумерами"),
+        ("зумeр", "геймер", "зумерами"),
+        ("зумер", "ге\u0301ймер", "зумерами"),
+    ],
+)
+def test_own_words_in_query_spelling(word, sample, query):
+    # Ударение, разложенная «ё», мягкий перенос и латинские двойники приводятся, как в запросе
+    morph = Analyzer(words={word: sample})
+    assert morph.analyze(query)[0].source == "dictionary"
+    assert morph.is_known(query)
+
+
 def test_own_words_like_dictionary_words():
     # Копии форм фамилий не дают лишних разборов, а словарное слово - сдвига долей
     morph = Analyzer()
@@ -507,6 +524,11 @@ def test_own_words_like_dictionary_words():
         ),
         ({"бот": "бумер"}, ValueError, "Образца «бумер» нет в словаре"),
         ({"": "кот"}, ValueError, "Свое слово пустое"),
+        (
+            {"зумер ": "геймер"},
+            ValueError,
+            "Свое слово «зумер » с пробелом, управляющим или невидимым символом не найдется в тексте",
+        ),
         ({"а": "мама"}, ValueError, "«а» не изменяется по образцу «мама»"),
         ({"кошка": "мышь"}, ValueError, "«кошка» не изменяется по образцу «мышь»"),
         ("зумер", TypeError, "Свои слова должны быть словарем «слово: образец», а не str"),

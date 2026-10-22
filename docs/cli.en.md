@@ -21,7 +21,7 @@ echo "Мы стали друзьями в ковиде." | rumorph
 | `-f`, `--format` | `lemmas` | [Output format](#formats): `lemmas`, `conllu`, `tsv`, `jsonl` |
 | `-i`, `--input` | `text` | [Input](#input): `text`, `tokens`, `conllu` |
 | `-d`, `--dictionary` | the package dictionary | A ruMorph dictionary file |
-| `-w`, `--words` | | A file of [own words](analyzer.md#words): a word and its sample separated by a tab on each line, plus the part of speech if the sample has several; empty lines and lines starting with `#` are skipped. The option can be repeated |
+| `-w`, `--words` | | A file of [own words](analyzer.md#words): a word and its sample separated by a tab on each line, plus the part of speech if the sample has several; spaces around fields are ignored, empty lines and lines starting with `#` are skipped. The option can be repeated |
 | `-o`, `--output` | the standard output | The result file; `-` is the standard output |
 | `-h`, `--help` | | Show the help |
 | `-V`, `--version` | | Show the version |

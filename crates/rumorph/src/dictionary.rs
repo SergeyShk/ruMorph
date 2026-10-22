@@ -2180,6 +2180,42 @@ pub(super) mod tests {
     }
 
     #[test]
+    fn own_words_in_query_spelling() {
+        // Слово и образец приводятся, как запрос: ударение, мягкий перенос, неразрывный дефис
+        // и латинские двойники не мешают найти слово
+        let dict = lexicon()
+            .with_words([
+                ("бо\u{301}т", "кот"),
+                ("xот", "ко\u{301}т"),
+                ("ро\u{AD}т", "кот"),
+                ("бот\u{2011}кот", "кот"),
+            ])
+            .unwrap();
+        for (word, lemma) in [
+            ("ботами", "бот"),
+            ("хотами", "хот"),
+            ("xотами", "хот"),
+            ("ротами", "рот"),
+            ("бот-котами", "бот-кот"),
+            ("бот\u{2011}котами", "бот-кот"),
+        ] {
+            let analysis = &dict.analyze(word)[0];
+            assert_eq!(
+                (analysis.lemma.as_str(), analysis.source),
+                (lemma, Source::Dictionary),
+                "{word}"
+            );
+            assert!(dict.is_known(word), "{word}");
+        }
+        for word in [" бот", "бот\n", "бо т", "бо\u{200B}т"] {
+            let Err(Error::Word(message)) = lexicon().with_words([(word, "кот")]) else {
+                panic!("{word:?}");
+            };
+            assert!(message.contains("не найдется в тексте"), "{message}");
+        }
+    }
+
+    #[test]
     fn forms_of_lexeme() {
         let dict = lexicon();
         let forms: Vec<String> = dict

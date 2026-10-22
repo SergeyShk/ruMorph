@@ -10,7 +10,7 @@ Exceptions:
 
 - `FileNotFoundError` - the dictionary file does not exist;
 - `OSError` - the dictionary file cannot be read: no access, the path points to a directory;
-- `ValueError` - the file is not a ruMorph dictionary or is damaged, or an [own word](#words) has no sample in the dictionary, its sample is ambiguous or the word does not inflect like it;
+- `ValueError` - the file is not a ruMorph dictionary or is damaged, or an [own word](#words) has no sample in the dictionary, its sample is ambiguous, the word does not inflect like it or contains a space or an invisible character;
 - `TypeError` - a path that is neither a string nor `PathLike`, or own words that are not a mapping of strings.
 
 === "Code"
@@ -39,7 +39,7 @@ The object keeps the dictionary path in `path` of type `Path`, read-only. The di
 
 ## Own words { #words }
 
-A word that is not in the dictionary can be added after a sample - a dictionary word that inflects the same way: «зумер» like «геймер», «кринж» like «пляж». The word and the sample are written in the same form, usually the initial one. The own word gets all forms of the sample with its own stem and then behaves like a dictionary word: `source` is `"dictionary"`, `is_known` finds it, `forms`, `inflect` and `agree` work. If the sample has lexemes of different parts of speech («печь» is a noun and a verb), the sample is a pair with the UD part of speech: `{"зечь": ("печь", "VERB")}`; otherwise the analyzer is not created. Own words belong to this analyzer only, and pickle saves them with it.
+A word that is not in the dictionary can be added after a sample - a dictionary word that inflects the same way: «зумер» like «геймер», «кринж» like «пляж». The word and the sample are written in the same form, usually the initial one; stress marks, soft hyphens and look-alike Latin letters in them are normalized as in a query. The own word gets all forms of the sample with its own stem and then behaves like a dictionary word: `source` is `"dictionary"`, `is_known` finds it, `forms`, `inflect` and `agree` work. If the sample has lexemes of different parts of speech («печь» is a noun and a verb), the sample is a pair with the UD part of speech: `{"зечь": ("печь", "VERB")}`; otherwise the analyzer is not created. Own words belong to this analyzer only, and pickle saves them with it.
 
 === "Code"
 

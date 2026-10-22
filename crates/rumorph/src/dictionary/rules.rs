@@ -525,7 +525,7 @@ const RANGE: [char; 3] = ['-', '–', '—'];
 
 /// Токен, который может получить разбор: непустой, без пробелов, управляющих и невидимых
 /// символов и не из одних соединителей эмодзи
-fn token(chars: &[char]) -> bool {
+pub(super) fn token(chars: &[char]) -> bool {
     !chars.is_empty()
         && !chars
             .iter()
