@@ -1,6 +1,6 @@
 //! Разбор токенов, которых нет в словаре: числа, знаки, латиница, римские числа, инициалы,
 //! аббревиатуры, сокращения с точкой и наречия вида «по-русски». Части речи и признаки - по соглашениям SynTagRus,
-//! доли неоднозначных разборов - по частотам в его обучающей части
+//! доли неоднозначных разборов - по частотам в обучающих частях трибанков UD Taiga и GSD
 
 use super::{Analysis, Dictionary, Source, UdTags};
 
@@ -14,29 +14,35 @@ const SYMBOLS: &[char] = &[
 const LOWERCASE_PROPN: f64 = 0.001;
 const TITLECASE_PROPN: f64 = 3.0;
 
-/// Порядковые из цифр с окончанием в обучающей части SynTagRus: падеж, род, число,
-/// одушевленность и сколько раз встретились; доля разбора по образцу - число плюс один
+/// Порядковые из цифр с окончанием в обучающих частях UD_Russian-Taiga и UD_Russian-GSD: падеж,
+/// род, число, одушевленность и сколько раз встретились; доля разбора по образцу - число плюс один
 const NUMERAL_FEATS: &[(&str, &str, &str, &str, f64)] = &[
-    ("Gen", "", "Plur", "", 196.0),
-    ("Loc", "Masc", "Sing", "", 136.0),
-    ("Gen", "Masc", "Sing", "", 132.0),
-    ("Acc", "", "Plur", "Inan", 83.0),
-    ("Loc", "", "Plur", "", 76.0),
-    ("Gen", "Fem", "Sing", "", 38.0),
-    ("Nom", "Masc", "Sing", "", 27.0),
-    ("Nom", "Fem", "Sing", "", 20.0),
-    ("Loc", "Fem", "Sing", "", 11.0),
-    ("Acc", "Masc", "Sing", "Inan", 11.0),
-    ("Acc", "Fem", "Sing", "", 10.0),
-    ("Dat", "Masc", "Sing", "", 8.0),
-    ("Gen", "Neut", "Sing", "", 8.0),
-    ("Ins", "Masc", "Sing", "", 7.0),
-    ("Nom", "", "Plur", "", 7.0),
+    ("Gen", "", "Plur", "", 188.0),
+    ("Acc", "", "Plur", "Inan", 98.0),
+    ("Nom", "Masc", "Sing", "", 72.0),
+    ("Loc", "", "Plur", "", 71.0),
+    ("Gen", "Masc", "Sing", "", 64.0),
+    ("Nom", "", "Plur", "", 41.0),
+    ("Nom", "Fem", "Sing", "", 38.0),
+    ("Gen", "Neut", "Sing", "", 37.0),
+    ("Loc", "Masc", "Sing", "", 34.0),
+    ("Gen", "Fem", "Sing", "", 26.0),
+    ("Loc", "Fem", "Sing", "", 25.0),
+    ("Nom", "Neut", "Sing", "", 22.0),
+    ("Acc", "Masc", "Sing", "Inan", 19.0),
+    ("Dat", "Masc", "Sing", "", 7.0),
     ("Acc", "Neut", "Sing", "", 7.0),
-    ("Ins", "Fem", "Sing", "", 7.0),
-    ("Loc", "Neut", "Sing", "", 5.0),
-    ("Dat", "", "Plur", "", 3.0),
-    ("Ins", "Neut", "Sing", "", 2.0),
+    ("Ins", "", "Plur", "", 7.0),
+    ("Ins", "Masc", "Sing", "", 6.0),
+    ("Acc", "Fem", "Sing", "", 5.0),
+    ("Loc", "Neut", "Sing", "", 3.0),
+    ("Ins", "Fem", "Sing", "", 2.0),
+    ("Dat", "Fem", "Sing", "", 2.0),
+    ("Dat", "Neut", "Sing", "", 1.0),
+    ("Dat", "", "Plur", "", 2.0),
+    ("Acc", "Masc", "Sing", "Anim", 2.0),
+    ("Acc", "Neut", "Sing", "Inan", 1.0),
+    ("Acc", "", "Plur", "Anim", 1.0),
 ];
 
 /// Падежные окончания количественных числительных из цифр: «5-ти», «2-х», «3-мя», «4-м»
@@ -45,13 +51,13 @@ const CARDINAL_ENDINGS: &[&str] = &[
 ];
 
 /// Одиночные буквы, которые могут быть римским числом: доли римского числа и латиницы
-/// по обучающей части SynTagRus плюс один («C» и «L» там - только латиница)
+/// по обучающим частям UD Taiga и GSD плюс один («C» и «L» там - только латиница)
 const ROMAN_LETTERS: &[(&str, f64, f64)] = &[
-    ("I", 14.0, 10.0),
-    ("V", 5.0, 2.0),
-    ("X", 9.0, 12.0),
-    ("L", 1.0, 2.0),
-    ("C", 1.0, 6.0),
+    ("I", 176.0, 6.0),
+    ("V", 75.0, 2.0),
+    ("X", 52.0, 7.0),
+    ("L", 1.0, 5.0),
+    ("C", 1.0, 16.0),
 ];
 
 /// Номера тегов UD разборов по правилам в `Dictionary::ud_tags`
@@ -108,13 +114,13 @@ impl Dictionary {
                 return self.shares(word, &[(word, tags.cardinal, 1.0)]);
             }
             // Четырехзначное число в пределах 1000-2100 - обычно год («в 2008 году»), но круглые
-            // сотни - нет, кроме 1900 и 2000
+            // сотни - нет, кроме 1900 и 2000; доли - по обучающим частям UD Taiga и GSD
             let (ordinal, cardinal) = match (chars.len(), word.parse::<u32>()) {
                 (4, Ok(year @ 1000..=2100)) if year % 100 != 0 || year == 1900 || year == 2000 => {
-                    (2508.0, 171.0)
+                    (3776.0, 74.0)
                 }
-                (1 | 2, _) => (417.0, 4595.0),
-                _ => (11.0, 1207.0),
+                (1 | 2, _) => (624.0, 3199.0),
+                _ => (125.0, 718.0),
             };
             return self.shares(
                 word,
@@ -153,7 +159,7 @@ impl Dictionary {
                     Some(&(_, ordinal, foreign)) => (ordinal, foreign),
                     // «CV», «CI», «XL» - чаще латинские сокращения, чем римские числа
                     None if chars.len() == 2 && word.contains(['C', 'L']) => (1.0, 3.0),
-                    None => (471.0, 19.0),
+                    None => (2566.0, 2.0),
                 };
             return self.shares(
                 word,
@@ -190,9 +196,9 @@ impl Dictionary {
             return self.shares(
                 word,
                 &[
-                    (&lemma, tags.given, 561.0),
-                    (&lemma, tags.patronymic, 297.0),
-                    (&lemma, tags.surname, 79.0),
+                    (&lemma, tags.given, 6781.0),
+                    (&lemma, tags.patronymic, 4706.0),
+                    (&lemma, tags.surname, 9.0),
                 ],
             );
         }
@@ -203,8 +209,8 @@ impl Dictionary {
             let mut analyses = self.shares(
                 word,
                 &[
-                    (&lower, tags.organization, 510.0),
-                    (&lower, tags.abbreviation, 327.0),
+                    (&lower, tags.organization, 252.0),
+                    (&lower, tags.abbreviation, 198.0),
                 ],
             );
             // Длинное слово капсом в SynTagRus - чаще обычное слово заглавными буквами, чем
@@ -266,8 +272,8 @@ impl Dictionary {
 
     /// Числительное из цифр с окончанием. Порядковое («2005-го», «90-х») - по образцу «1-го»
     /// из словаря: те же разборы и таблица словоизменения с основой из числа, доли - по частотам
-    /// таких порядковых в SynTagRus. Короткое окончание без образца («5-ти», «2-мя») -
-    /// количественное с леммой из цифр
+    /// таких порядковых в трибанках UD Taiga и GSD. Короткое окончание без образца («5-ти»,
+    /// «2-мя») - количественное с леммой из цифр
     fn numeral_with_ending(&self, word: &str) -> Option<Vec<Analysis>> {
         let (digits, ending) = word.rsplit_once('-')?;
         if ending.is_empty() || !ending.chars().all(cyrillic) {
@@ -320,7 +326,7 @@ impl Dictionary {
         cardinal.then(|| self.shares(word, &[(digits, self.rule_tags.cardinal, 1.0)]))
     }
 
-    /// Словарные порядковые из цифр («90-е») получают те же доли по SynTagRus, что и разобранные
+    /// Словарные порядковые из цифр («90-е») получают те же доли по корпусу, что и разобранные
     /// по образцу: частот OpenCorpora у них нет или они мало что говорят
     pub(super) fn reweight_numerals(&self, analyses: &mut [Analysis]) {
         let combi = |analysis: &Analysis| self.has_code(analysis.ud, self.combined_numeral);
@@ -652,7 +658,7 @@ mod tests {
     }
 
     #[test]
-    fn dictionary_numerals_weighted_by_syntagrus() {
+    fn dictionary_numerals_weighted_by_corpus() {
         let ordinal = |feats: &str| format!("{feats}|Number=Plur|NumForm=Combi|NumType=Ord");
         let dict = dictionary_of(
             &[(
@@ -675,10 +681,10 @@ mod tests {
                 .unwrap();
             dict.numeral_weight(analysis.ud)
         };
-        // Доля - число в SynTagRus плюс один; сочетания, которых там нет, - единица
+        // Доля - число в корпусе плюс один; сочетания, которых там нет, - единица
         assert_eq!(
             (weight("Gen"), weight("Loc"), weight("Acc")),
-            (197.0, 77.0, 1.0)
+            (189.0, 72.0, 2.0)
         );
         let probs: Vec<(Option<&str>, f64)> = dict
             .analyze("90-х")
@@ -688,9 +694,9 @@ mod tests {
         assert_eq!(
             probs,
             [
-                (Some("Gen"), 197.0 / 275.0),
-                (Some("Loc"), 77.0 / 275.0),
-                (Some("Acc"), 1.0 / 275.0)
+                (Some("Gen"), 189.0 / 263.0),
+                (Some("Loc"), 72.0 / 263.0),
+                (Some("Acc"), 2.0 / 263.0)
             ]
         );
     }

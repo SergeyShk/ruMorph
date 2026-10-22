@@ -2243,7 +2243,7 @@ pub(super) mod tests {
             summary,
             [("Зумова", "зумов", "PROPN"), ("Зумова", "зумов", "NOUN")]
         );
-        assert!((analyses[0].prob - 0.89).abs() < 1e-12);
+        assert!((analyses[0].prob - 0.91).abs() < 1e-12);
         // Формы угаданного слова сохраняют заглавную букву
         let forms: Vec<String> = dict
             .forms(&analyses[0])

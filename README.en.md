@@ -148,14 +148,14 @@ Numbers, signs, Latin script and abbreviations are analyzed by rules, their `sou
 *   adverbs «по-бурятски», «по-молодому» - `ADV`
 *   other tokens «км/ч», «РосПил» - `X` without features, the lemma is the token in lowercase
 
-The shares of ambiguous analyses come from the frequencies in SynTagRus.
+The shares of ambiguous analyses come from the frequencies in the UD Taiga and GSD treebanks.
 
 ```python
 >>> from rumorph import Analyzer
 
 >>> morph = Analyzer()
 >>> [(a.lemma, a.pos, a.feats["NumType"], round(a.prob, 2)) for a in morph.analyze("2026")]
-[('2026', 'ADJ', 'Ord', 0.94), ('2026', 'NUM', 'Card', 0.06)]
+[('2026', 'ADJ', 'Ord', 0.98), ('2026', 'NUM', 'Card', 0.02)]
 >>> [(a.lemma, a.pos, a.feats["Case"]) for a in morph.analyze("2005-го")][:1]
 [('2005-й', 'ADJ', 'Gen')]
 >>> [(a.pos, a.feats, a.source) for a in morph.analyze("iPhone")]
