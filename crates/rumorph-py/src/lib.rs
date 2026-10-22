@@ -6,7 +6,7 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, OnceLock, Weak};
+use std::sync::{Arc, Mutex, OnceLock, PoisonError, Weak};
 use std::time::SystemTime;
 
 use pyo3::create_exception;
@@ -845,29 +845,47 @@ fn _analyzer(
     if let Some(analyzer) = found {
         return Ok(analyzer);
     }
-    if !words.is_empty() {
-        return Py::new(py, Analyzer::load_with_words(py, path, explicit, words)?);
-    }
-    match Analyzer::load(py, path.clone(), explicit) {
-        Ok(analyzer) => Py::new(py, analyzer),
+    let base = match Analyzer::load(py, path.clone(), explicit) {
+        Ok(analyzer) => analyzer,
         // Тип ошибки - OSError, а значение по errno - FileNotFoundError
         Err(err) if err.value(py).is_instance_of::<PyFileNotFoundError>() => {
             match loaded_from(py, &path) {
-                Some(shared) => Py::new(
-                    py,
-                    Analyzer {
-                        shared,
-                        path,
-                        explicit,
-                        words: Arc::default(),
-                    },
-                ),
-                None => Err(err),
+                Some(shared) => Analyzer {
+                    shared,
+                    path,
+                    explicit,
+                    words: Arc::default(),
+                },
+                None => return Err(err),
             }
         }
-        Err(err) => Err(err),
+        Err(err) => return Err(err),
+    };
+    if words.is_empty() {
+        Py::new(py, base)
+    } else {
+        Py::new(py, Analyzer::with_words(py, base, words)?)
     }
 }
+
+/// Словарь со своими словами, собранный в процессе: общий словарь, свои слова и копия словаря с ними
+struct WordDictionary {
+    base: Weak<Shared>,
+    words: Arc<Vec<OwnWord>>,
+    shared: Weak<Shared>,
+}
+
+/// Собранные словари со своими словами; последний держится и без анализаторов, как последний
+/// загруженный словарь, поэтому разборы из pickle в задачах пула не собирают слова заново
+struct WordDictionaries {
+    entries: Vec<WordDictionary>,
+    last: Option<Arc<Shared>>,
+}
+
+static WORD_DICTIONARIES: Mutex<WordDictionaries> = Mutex::new(WordDictionaries {
+    entries: Vec::new(),
+    last: None,
+});
 
 /// Морфологический анализатор
 ///
@@ -1169,10 +1187,11 @@ impl Analyzer {
     fn open(py: Python<'_>, path: Option<PathBuf>, words: Vec<OwnWord>) -> PyResult<Self> {
         let explicit = path.is_some();
         let path = Self::resolve(py, path)?;
+        let base = Self::load(py, path, explicit)?;
         if words.is_empty() {
-            Self::load(py, path, explicit)
+            Ok(base)
         } else {
-            Self::load_with_words(py, path, explicit, words)
+            Self::with_words(py, base, words)
         }
     }
 
@@ -1200,14 +1219,35 @@ impl Analyzer {
         })
     }
 
-    /// Анализатор со своими словами: копия общего словаря файла со своими словами
-    fn load_with_words(
-        py: Python<'_>,
-        path: PathBuf,
-        explicit: bool,
-        words: Vec<OwnWord>,
-    ) -> PyResult<Self> {
-        let base = Self::load(py, path, explicit)?;
+    /// Анализатор `base` со своими словами: копия его словаря со своими словами собирается один
+    /// раз на словарь и набор слов
+    fn with_words(py: Python<'_>, base: Analyzer, words: Vec<OwnWord>) -> PyResult<Self> {
+        let registry = || {
+            WORD_DICTIONARIES
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+        };
+        let found = {
+            let mut built = registry();
+            built
+                .entries
+                .retain(|entry| entry.shared.strong_count() > 0);
+            built
+                .entries
+                .iter()
+                .filter(|entry| *entry.words == words)
+                .filter(|entry| {
+                    (entry.base.upgrade()).is_some_and(|known| Arc::ptr_eq(&known, &base.shared))
+                })
+                .find_map(|entry| Some((entry.shared.upgrade()?, Arc::clone(&entry.words))))
+        };
+        if let Some((shared, words)) = found {
+            return Ok(Analyzer {
+                shared,
+                words,
+                ..base
+            });
+        }
         let dictionary = py
             .detach(|| {
                 let samples = words.iter().map(|(word, like, pos)| {
@@ -1220,9 +1260,24 @@ impl Analyzer {
                 base.shared.dictionary.clone().with_words(samples)
             })
             .map_err(|err| PyValueError::new_err(err.to_string()))?;
+        let (shared, words) = (
+            Arc::new(Shared::new(dictionary, &base.path)),
+            Arc::new(words),
+        );
+        // Прежний последний словарь освобождается после снятия блокировки
+        let previous = {
+            let mut built = registry();
+            built.entries.push(WordDictionary {
+                base: Arc::downgrade(&base.shared),
+                words: Arc::clone(&words),
+                shared: Arc::downgrade(&shared),
+            });
+            built.last.replace(Arc::clone(&shared))
+        };
+        drop(previous);
         Ok(Analyzer {
-            shared: Arc::new(Shared::new(dictionary, &base.path)),
-            words: Arc::new(words),
+            shared,
+            words,
             ..base
         })
     }
@@ -1394,7 +1449,6 @@ fn text(word: &Bound<'_, PyAny>) -> PyResult<String> {
     lossy(word)
 }
 
-/// TypeError с типом полученного значения: «Слово должно быть строкой, а не int»
 /// Свои слова из словаря Python: слово - образец или пара «образец, часть речи»
 fn own_words(words: &Bound<'_, PyAny>) -> PyResult<Vec<OwnWord>> {
     let not_mapping = || type_error("Свои слова должны быть словарем «слово: образец»", words);
@@ -1425,6 +1479,7 @@ fn own_words(words: &Bound<'_, PyAny>) -> PyResult<Vec<OwnWord>> {
     Ok(result)
 }
 
+/// TypeError с типом полученного значения: «Слово должно быть строкой, а не int»
 fn type_error(message: &str, value: &Bound<'_, PyAny>) -> PyErr {
     let name = value
         .get_type()
