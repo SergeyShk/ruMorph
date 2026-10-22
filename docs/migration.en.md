@@ -125,4 +125,4 @@ The `Voice` feature is present on all verb forms and `Degree` on all adverbs and
 - **Analyses** that coincide in UD (the conjunction and the adverb «так») are merged into one with the sum of their probabilities, so there may be fewer analyses than in pymorphy.
 - **Forms** from `inflect` and `agree` are strings, not analyses; when there is no form, they raise [`FormNotFoundError`](exceptions.md), a subclass of `LookupError`.
 - **Tokens outside the dictionary** are [analyzed by rules](analysis.md#rules) with UD parts of speech and features: «2005-го» is an ordinal adjective in the genitive with forms («2005-му»), not an indeclinable noun as in pymorphy3.
-- **Speed.** Analysis and lemmatization are 7-8 times faster than with `pymorphy3[fast]` and 37-64 times faster than with pymorphy3 without it, and lists of words are processed without the GIL, see [Comparison](performance.md).
+- **Speed.** Analysis and lemmatization are 6-8 times faster than with `pymorphy3[fast]` and 34-62 times faster than with pymorphy3 without it, and lists of words are processed without the GIL, see [Comparison](performance.md).
