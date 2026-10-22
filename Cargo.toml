@@ -3,7 +3,7 @@ members = ["crates/rumorph", "crates/rumorph-build", "crates/rumorph-dict-ru", "
 resolver = "3"
 
 [workspace.package]
-version = "0.3.0-dev.10"
+version = "0.3.0"
 edition = "2024"
 rust-version = "1.88"
 license = "MIT"
