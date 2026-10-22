@@ -142,8 +142,8 @@ pub struct Dictionary {
     proper_nouns: Vec<bool>,
     /// Граммемы сокращения-существительного для `ABBREVIATION_LEMMAS`: по номеру тега OpenCorpora
     abbreviation_grammemes: Vec<u8>,
-    /// Свои слова (`with_words`): словоформа с «е» вместо «ё» - написания и формы таблиц
-    own_words: HashMap<String, Vec<(String, Entry)>>,
+    /// Свои слова (`with_words`) по ключу автомата
+    own_words: own::OwnWords,
     features: BTreeMap<String, BTreeSet<String>>,
     alphabet: Alphabet,
     prefixes: Strings,
@@ -329,7 +329,7 @@ impl Dictionary {
             combined_numeral: None,
             proper_nouns: Vec::new(),
             abbreviation_grammemes: Vec::new(),
-            own_words: HashMap::new(),
+            own_words: own::OwnWords::default(),
             meta,
             alphabet,
             layout,
@@ -502,11 +502,16 @@ impl Dictionary {
 
     /// Разборы словаря до слияния с вероятностями P(тег | словоформа); без частот вероятности нулевые
     fn candidates(&self, word: &str) -> Vec<Analysis> {
+        // Своих слов с буквами вне алфавита словаря нет
         let Some(key) = self.alphabet.input_key(word) else {
-            return self.only_own_candidates(word);
+            return Vec::new();
         };
         let Some(spellings) = self.spellings(&key) else {
-            return self.only_own_candidates(word);
+            let mut analyses = Vec::new();
+            if !self.own_words.is_empty() {
+                self.own_candidates(&key, &mut analyses);
+            }
+            return analyses;
         };
         let matches = self.matches(&spellings, key.yo);
         let mut analyses: Vec<Analysis> = Vec::new();
@@ -563,18 +568,9 @@ impl Dictionary {
         }
         // Свои слова - без частот: у них средняя доля разборов с частотами
         if !self.own_words.is_empty() {
-            self.own_candidates(word, &mut analyses);
+            self.own_candidates(&key, &mut analyses);
         }
         self.assign_probabilities(&groups[..matches.len], input.is_some(), &mut analyses);
-        analyses
-    }
-
-    /// Разборы словоформы, которой нет в автомате: только свои слова
-    fn only_own_candidates(&self, word: &str) -> Vec<Analysis> {
-        let mut analyses = Vec::new();
-        if !self.own_words.is_empty() {
-            self.own_candidates(word, &mut analyses);
-        }
         analyses
     }
 
@@ -713,22 +709,17 @@ impl Dictionary {
                         || (lexeme.affixes(form) == lexeme.affixes(entry.form)
                             && lexeme.tag(form) == lexeme.tag(entry.form)))
             };
-            let own = !self.own_words.is_empty()
-                && self.own_forms(&lower).is_some_and(|forms| {
-                    forms.iter().any(|(spelling, own)| {
-                        *spelling == lower
-                            && same((u32::from(own.table) << 16) | u32::from(own.form))
-                    })
-                });
-            if !own {
-                let key = self.alphabet.spelling_key(word)?;
-                let (_, offset) = self
-                    .spellings(&key)?
-                    .variants()
-                    .find(|&(yo, _)| yo == key.yo)?;
-                if !self.records_at(offset)?.iter().any(|&packed| same(packed)) {
-                    return None;
-                }
+            let key = self.alphabet.spelling_key(word)?;
+            let recorded = (self.spellings(&key))
+                .and_then(|spellings| spellings.variants().find(|&(yo, _)| yo == key.yo))
+                .and_then(|(_, offset)| self.records_at(offset))
+                .is_some_and(|records| records.iter().any(|&packed| same(packed)));
+            let own = || {
+                self.own_entries(&key)
+                    .any(|own| same((u32::from(own.table) << 16) | u32::from(own.form)))
+            };
+            if !recorded && !own() {
+                return None;
             }
         }
         Some(Analysis {
@@ -1188,15 +1179,12 @@ impl Dictionary {
     /// Есть ли словоформа в словаре
     pub fn is_known(&self, word: &str) -> bool {
         let normal = normalized_input(word);
-        let word = normal.as_deref().unwrap_or(word);
-        if !self.own_words.is_empty() && self.is_own(word) {
-            return true;
-        }
-        let Some(key) = self.alphabet.input_key(word) else {
+        let Some(key) = self.alphabet.input_key(normal.as_deref().unwrap_or(word)) else {
             return false;
         };
         self.spellings(&key)
             .is_some_and(|spellings| spellings.variants().any(|(yo, _)| yo & key.yo == key.yo))
+            || (!self.own_words.is_empty() && self.is_own(&key))
     }
 
     fn paradigm(&self, paradigm: u16) -> Option<&[u16]> {
@@ -2082,7 +2070,10 @@ pub(super) mod tests {
             .with_words([("мочёный", "учёный"), ("кот", "кот")])
             .unwrap();
         assert_eq!(dict.analyze("моченого")[0].word, "мочёного");
-        assert_eq!(dict.analyze("кота").len(), lexicon().analyze("кота").len());
+        let probs = |dict: &Dictionary| -> Vec<f64> {
+            dict.analyze("кота").iter().map(|a| a.prob).collect()
+        };
+        assert_eq!(probs(&dict), probs(&lexicon()));
         let error = |words: &[(&str, Sample)]| {
             let Err(Error::Word(message)) = lexicon().with_words(words.iter().copied()) else {
                 panic!("{words:?}");
@@ -2094,6 +2085,8 @@ pub(super) mod tests {
             "Образца «пёс» нет в словаре"
         );
         assert!(error(&[("бот", "учёный".into())]).contains("не изменяется по образцу"));
+        assert_eq!(error(&[(" ", "кот".into())]), "Свое слово пустое");
+        assert!(error(&[("ый", "учёный".into())]).contains("основа"));
         let both = dictionary_of(
             &[
                 (
