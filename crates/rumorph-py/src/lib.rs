@@ -513,7 +513,7 @@ struct Shared {
 /// Копии словаря со своими словами и последняя собранная
 #[derive(Default)]
 struct WordCopies {
-    entries: Vec<(Arc<Vec<OwnWord>>, Weak<Shared>)>,
+    entries: Vec<(Arc<OwnWords>, Weak<Shared>)>,
     last: Option<Arc<Shared>>,
 }
 
@@ -833,7 +833,7 @@ fn package_version() -> String {
 fn _analyzer(
     py: Python<'_>,
     path: Option<PathBuf>,
-    words: Option<Vec<OwnWord>>,
+    words: Option<String>,
 ) -> PyResult<Py<Analyzer>> {
     let explicit = path.is_some();
     let path = Analyzer::resolve(py, path)?;
@@ -849,7 +849,7 @@ fn _analyzer(
                     let analyzer = handle.analyzer.get();
                     analyzer.explicit == explicit
                         && analyzer.path == path
-                        && *analyzer.words == words
+                        && analyzer.words.text == words
                 })
                 .map(|handle| handle.analyzer.clone_ref(py))
         })
@@ -864,6 +864,7 @@ fn _analyzer(
         Err(err) if err.value(py).is_instance_of::<PyFileNotFoundError>() => {
             match loaded_from(py, &path) {
                 Some(shared) => Analyzer {
+                    base: Arc::clone(&shared),
                     shared,
                     path,
                     explicit,
@@ -917,15 +918,51 @@ fn _analyzer(
 #[pyclass(frozen, module = "rumorph")]
 struct Analyzer {
     shared: Arc<Shared>,
+    /// Общий словарь файла: у анализатора со своими словами `shared` - его копия. Пока жив
+    /// анализатор, словарь файла находится и после удаления файла, а копия - в его `copies`
+    base: Arc<Shared>,
     path: PathBuf,
     /// Путь задан явно: иначе pickle не сохраняет путь, и в другом окружении берется словарь его пакета
     explicit: bool,
-    /// Свои слова: слово, образец и часть речи образца
-    words: Arc<Vec<OwnWord>>,
+    words: Arc<OwnWords>,
 }
 
 /// Свое слово: слово, образец и часть речи образца, если она задана
 type OwnWord = (String, String, Option<String>);
+
+/// Свои слова анализатора одной строкой: pickle анализатора и каждого разбора копирует одну
+/// строку, а не тысячи кортежей
+#[derive(Default)]
+struct OwnWords {
+    /// Строки «слово, образец, часть речи» через табуляцию. Табуляций и переводов строк в полях
+    /// нет: слово с ними отвергает ядро, а образец и часть речи с ними не находятся
+    text: String,
+    /// Та же строка в Python
+    object: Option<Py<PyString>>,
+}
+
+impl OwnWords {
+    fn text(words: &[OwnWord]) -> String {
+        words
+            .iter()
+            .map(|(word, like, pos)| format!("{word}\t{like}\t{}\n", pos.as_deref().unwrap_or("")))
+            .collect()
+    }
+
+    fn parse(text: &str) -> Vec<OwnWord> {
+        text.lines()
+            .map(|line| {
+                let mut fields = line.split('\t').map(str::to_owned);
+                let (word, like) = (
+                    fields.next().unwrap_or_default(),
+                    fields.next().unwrap_or_default(),
+                );
+                let pos = fields.next().filter(|pos| !pos.is_empty());
+                (word, like, pos)
+            })
+            .collect()
+    }
+}
 
 /// Анализатор для разборов одного потока. Разборы держат анализатор через ручку своего потока:
 /// в Python без GIL счетчик ссылок общего объекта, который меняют сразу несколько потоков,
@@ -988,9 +1025,9 @@ impl Analyzer {
     fn __reduce__<'py>(
         &self,
         py: Python<'py>,
-    ) -> Reduced<'py, (Option<PathBuf>, Option<Vec<OwnWord>>)> {
+    ) -> Reduced<'py, (Option<PathBuf>, Option<Py<PyString>>)> {
         let restore = py.import("rumorph._rumorph")?.getattr("_analyzer")?;
-        let words = (!self.words.is_empty()).then(|| self.words.to_vec());
+        let words = self.words.object.as_ref().map(|words| words.clone_ref(py));
         Ok((restore, (self.explicit.then(|| self.path.clone()), words)))
     }
 
@@ -1185,7 +1222,7 @@ impl Analyzer {
         if words.is_empty() {
             Ok(base)
         } else {
-            Self::with_words(py, base, words)
+            Self::with_words(py, base, OwnWords::text(&words))
         }
     }
 
@@ -1206,6 +1243,7 @@ impl Analyzer {
         };
         drop(previous);
         Ok(Analyzer {
+            base: Arc::clone(&shared),
             shared,
             path,
             explicit,
@@ -1213,10 +1251,10 @@ impl Analyzer {
         })
     }
 
-    /// Анализатор `base` со своими словами: копия его словаря со своими словами собирается один
-    /// раз на словарь и набор слов
-    fn with_words(py: Python<'_>, base: Analyzer, words: Vec<OwnWord>) -> PyResult<Self> {
-        let copies = || (base.shared.copies.lock()).unwrap_or_else(PoisonError::into_inner);
+    /// Анализатор `base` со своими словами в записи `OwnWords::text`: копия его словаря со своими
+    /// словами собирается один раз на словарь и набор слов
+    fn with_words(py: Python<'_>, base: Analyzer, text: String) -> PyResult<Self> {
+        let copies = || (base.base.copies.lock()).unwrap_or_else(PoisonError::into_inner);
         let found = {
             let mut copies = copies();
             copies
@@ -1225,7 +1263,7 @@ impl Analyzer {
             copies
                 .entries
                 .iter()
-                .filter(|(known, _)| **known == words)
+                .filter(|(known, _)| known.text == text)
                 .find_map(|(known, shared)| Some((shared.upgrade()?, Arc::clone(known))))
         };
         if let Some((shared, words)) = found {
@@ -1235,6 +1273,7 @@ impl Analyzer {
                 ..base
             });
         }
+        let words = OwnWords::parse(&text);
         let dictionary = py
             .detach(|| {
                 let samples = words.iter().map(|(word, like, pos)| {
@@ -1244,12 +1283,13 @@ impl Analyzer {
                     };
                     (word.as_str(), sample)
                 });
-                base.shared.dictionary.clone().with_words(samples)
+                base.base.dictionary.clone().with_words(samples)
             })
             .map_err(|err| PyValueError::new_err(err.to_string()))?;
+        let object = Some(PyString::new(py, &text).unbind());
         let (shared, words) = (
             Arc::new(Shared::new(dictionary, &base.path)),
-            Arc::new(words),
+            Arc::new(OwnWords { text, object }),
         );
         // Прежняя последняя копия освобождается после снятия блокировки
         let previous = {

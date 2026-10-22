@@ -693,6 +693,24 @@ def test_deleted_file_with_own_words(morph, tmp_path):
     # В другом потоке ручки анализатора нет: берется словарь, загруженный из этого файла
     with ThreadPoolExecutor(1) as pool:
         assert pool.submit(pickle.loads, blob).result().lemma == "зумер"
+    # Словарь файла держит и анализатор со своими словами, когда последним загружен другой
+    Analyzer()
+    with ThreadPoolExecutor(1) as pool:
+        assert pool.submit(pickle.loads, pickle.dumps(analyzer)).result().path == path
+
+
+def test_pickle_with_many_own_words():
+    # Свои слова в pickle - одна строка, и в другом потоке копия словаря находится по ней
+    words: dict[str, str | tuple[str, str]] = {
+        f"зумер{chr(ord('а') + i // 32)}{chr(ord('а') + i % 32)}": "геймер" for i in range(1000)
+    }
+    words["зечь"] = ("печь", "VERB")
+    analyzer = Analyzer(words=words)
+    blob = pickle.dumps([analyzer.analyze("зечет")[0], analyzer.analyze("зумербб")[0]])
+    with ThreadPoolExecutor(1) as pool:
+        verb, noun = pool.submit(pickle.loads, blob).result()
+    assert (verb.lemma, verb.pos, noun.lemma) == ("зечь", "VERB", "зумербб")
+    assert pickle.loads(pickle.dumps(analyzer)).analyze("зумербб")[0].source == "dictionary"
 
 
 @pytest.mark.skipif(not hasattr(os, "fork"), reason="нет fork")
