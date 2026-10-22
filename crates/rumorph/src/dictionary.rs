@@ -523,16 +523,20 @@ impl Dictionary {
         for (group, &(yo, records)) in groups.iter_mut().zip(matches.as_slice()) {
             let spelling = self.alphabet.spelling(&key, yo);
             let start = analyses.len();
+            let records = self.records_at(records).unwrap_or_default();
+            analyses.reserve(records.len());
             // Формы лексемы идут подряд (у сокращения «в» их 12): одна лемма ищется один раз
             let mut previous = None;
-            for &entry in self.records_at(records).unwrap_or_default() {
+            for &entry in records {
                 let (table, form) = ((entry >> 16) as u16, entry as u16);
                 let Some(lexeme) = self.lexeme(table, form, &spelling) else {
                     continue;
                 };
                 let tag = lexeme.tag(form);
                 let bits = self.abbreviation_grammemes.get(usize::from(tag)).copied();
-                let key = Some((table, lexeme.stem, lexeme.lemma_form(form), bits));
+                // Основы форм лексемы - один отрезок написания: сравниваются без сравнения строк
+                let stem = (lexeme.stem.as_ptr(), lexeme.stem.len());
+                let key = Some((table, stem, lexeme.lemma_form(form), bits));
                 let lemma = match analyses.last() {
                     Some(last) if previous == key => last.lemma.clone(),
                     _ => self.lemma(&lexeme, form),
@@ -1452,6 +1456,14 @@ struct Preferences {
 /// Слово в обычной записи: знаки и буквы-двойники (`normalized_marks`, `unified_script`)
 /// приведены к обычным. `None`, если менять нечего
 fn normalized_input(word: &str) -> Option<String> {
+    // Слово из ASCII или из кириллицы с цифрами и знаками ASCII: менять нечего
+    if word.is_ascii()
+        || word
+            .chars()
+            .all(|c| rules::cyrillic(c) || (c.is_ascii() && !c.is_ascii_alphabetic()))
+    {
+        return None;
+    }
     let unified = unified_script(word);
     normalized_marks(unified.as_deref().unwrap_or(word)).or(unified)
 }

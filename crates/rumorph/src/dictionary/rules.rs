@@ -419,7 +419,7 @@ impl Dictionary {
             return;
         }
         let (mut letters, mut first_lower, mut rest_lower) = (0, false, true);
-        for c in word.chars().filter(|c| c.is_alphabetic()) {
+        for c in word.chars().filter(|&c| cyrillic(c) || c.is_alphabetic()) {
             if letters == 0 {
                 first_lower = c.is_lowercase();
             } else {
