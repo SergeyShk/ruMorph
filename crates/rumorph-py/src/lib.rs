@@ -6,7 +6,7 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, OnceLock, Weak};
+use std::sync::{Arc, Mutex, OnceLock, PoisonError, Weak};
 use std::time::SystemTime;
 
 use pyo3::create_exception;
@@ -503,6 +503,17 @@ struct Shared {
     ud: Vec<OnceLock<Box<UdObjects>>>,
     /// Путь, по которому словарь загружен
     path: PathBuf,
+    /// Копии словаря со своими словами: последняя держится, пока жив сам словарь, поэтому разборы
+    /// из pickle в задачах пула не собирают свои слова заново, а файл освобождается вместе
+    /// со словарем
+    copies: Mutex<WordCopies>,
+}
+
+/// Копии словаря со своими словами и последняя собранная
+#[derive(Default)]
+struct WordCopies {
+    entries: Vec<(Arc<Vec<OwnWord>>, Weak<Shared>)>,
+    last: Option<Arc<Shared>>,
 }
 
 impl Shared {
@@ -512,6 +523,7 @@ impl Shared {
             dictionary,
             ud,
             path: path.to_owned(),
+            copies: Mutex::default(),
         }
     }
 }
@@ -816,9 +828,15 @@ fn package_version() -> String {
 /// есть в потоке (pickle разборов не создает анализатор на каждый разбор), иначе новый со словарем
 /// файла, а если файла уже нет - со словарем, загруженным из него в процессе
 #[pyfunction]
-fn _analyzer(py: Python<'_>, path: Option<PathBuf>) -> PyResult<Py<Analyzer>> {
+#[pyo3(signature = (path, words=None))]
+fn _analyzer(
+    py: Python<'_>,
+    path: Option<PathBuf>,
+    words: Option<Vec<OwnWord>>,
+) -> PyResult<Py<Analyzer>> {
     let explicit = path.is_some();
     let path = Analyzer::resolve(py, path)?;
+    let words = words.unwrap_or_default();
     let found = HANDLES
         .try_with(|handles| {
             handles
@@ -828,7 +846,9 @@ fn _analyzer(py: Python<'_>, path: Option<PathBuf>) -> PyResult<Py<Analyzer>> {
                 .filter_map(|(_, handle)| handle.upgrade())
                 .find(|handle| {
                     let analyzer = handle.analyzer.get();
-                    analyzer.explicit == explicit && analyzer.path == path
+                    analyzer.explicit == explicit
+                        && analyzer.path == path
+                        && *analyzer.words == words
                 })
                 .map(|handle| handle.analyzer.clone_ref(py))
         })
@@ -837,23 +857,26 @@ fn _analyzer(py: Python<'_>, path: Option<PathBuf>) -> PyResult<Py<Analyzer>> {
     if let Some(analyzer) = found {
         return Ok(analyzer);
     }
-    match Analyzer::load(py, path.clone(), explicit) {
-        Ok(analyzer) => Py::new(py, analyzer),
+    let base = match Analyzer::load(py, path.clone(), explicit) {
+        Ok(analyzer) => analyzer,
         // Тип ошибки - OSError, а значение по errno - FileNotFoundError
         Err(err) if err.value(py).is_instance_of::<PyFileNotFoundError>() => {
             match loaded_from(py, &path) {
-                Some(shared) => Py::new(
-                    py,
-                    Analyzer {
-                        shared,
-                        path,
-                        explicit,
-                    },
-                ),
-                None => Err(err),
+                Some(shared) => Analyzer {
+                    shared,
+                    path,
+                    explicit,
+                    words: Arc::default(),
+                },
+                None => return Err(err),
             }
         }
-        Err(err) => Err(err),
+        Err(err) => return Err(err),
+    };
+    if words.is_empty() {
+        Py::new(py, base)
+    } else {
+        Py::new(py, Analyzer::with_words(py, base, words)?)
     }
 }
 
@@ -870,24 +893,38 @@ fn _analyzer(py: Python<'_>, path: Option<PathBuf>) -> PyResult<Py<Analyzer>> {
 ///
 /// Аргументы:
 ///     path (str | os.PathLike | None): Путь к файлу словаря; по умолчанию - словарь из пакета
+///     words (Mapping[str, str | tuple[str, str]] | None): Свои слова и их образцы: слово
+///         изменяется как словарное слово-образец в той же форме (обычно в начальной). Если
+///         у образца лексемы разных частей речи, образец - пара «слово, часть речи UD»
 ///
 /// Исключения:
 ///     FileNotFoundError: Если файла словаря нет
 ///     OSError: Если файл словаря не читается
-///     ValueError: Если файл не является словарем ruMorph или поврежден
+///     TypeError: Если свои слова - не словарь строк
+///     ValueError: Если файл не является словарем ruMorph или поврежден, образца нет в словаре,
+///         у него лексемы разных частей речи без указания части речи или слово не изменяется
+///         по образцу
 ///
 /// Пример использования:
 ///     >>> from rumorph import Analyzer
 ///     >>> morph = Analyzer()
 ///     >>> [(analysis.lemma, round(analysis.prob, 3)) for analysis in morph.analyze("стали")][:2]
 ///     [('стать', 0.988), ('сталь', 0.005)]
+///     >>> morph = Analyzer(words={"зумер": "геймер", "зечь": ("печь", "VERB")})
+///     >>> morph.analyze("зумерами")[0].lemma, morph.analyze("зечет")[0].lemma
+///     ('зумер', 'зечь')
 #[pyclass(frozen, module = "rumorph")]
 struct Analyzer {
     shared: Arc<Shared>,
     path: PathBuf,
     /// Путь задан явно: иначе pickle не сохраняет путь, и в другом окружении берется словарь его пакета
     explicit: bool,
+    /// Свои слова: слово, образец и часть речи образца
+    words: Arc<Vec<OwnWord>>,
 }
+
+/// Свое слово: слово, образец и часть речи образца, если она задана
+type OwnWord = (String, String, Option<String>);
 
 /// Анализатор для разборов одного потока. Разборы держат анализатор через ручку своего потока:
 /// в Python без GIL счетчик ссылок общего объекта, который меняют сразу несколько потоков,
@@ -920,15 +957,23 @@ thread_local! {
 #[pymethods]
 impl Analyzer {
     #[new]
-    #[pyo3(signature = (path=None))]
-    fn new(py: Python<'_>, path: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
+    #[pyo3(signature = (path=None, words=None))]
+    fn new(
+        py: Python<'_>,
+        path: Option<&Bound<'_, PyAny>>,
+        words: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<Self> {
         let path = match path {
             Some(path) if !path.is_none() => Some(path.extract::<PathBuf>().map_err(|_| {
                 type_error("Путь к словарю должен быть строкой или os.PathLike", path)
             })?),
             _ => None,
         };
-        Self::open(py, path)
+        let words = match words {
+            Some(words) if !words.is_none() => own_words(words)?,
+            _ => Vec::new(),
+        };
+        Self::open(py, path, words)
     }
 
     fn __copy__(slf: Bound<'_, Self>) -> Bound<'_, Self> {
@@ -939,9 +984,13 @@ impl Analyzer {
         slf
     }
 
-    fn __reduce__<'py>(&self, py: Python<'py>) -> Reduced<'py, (Option<PathBuf>,)> {
+    fn __reduce__<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> Reduced<'py, (Option<PathBuf>, Option<Vec<OwnWord>>)> {
         let restore = py.import("rumorph._rumorph")?.getattr("_analyzer")?;
-        Ok((restore, (self.explicit.then(|| self.path.clone()),)))
+        let words = (!self.words.is_empty()).then(|| self.words.to_vec());
+        Ok((restore, (self.explicit.then(|| self.path.clone()), words)))
     }
 
     /// Путь к файлу словаря
@@ -1128,10 +1177,15 @@ impl Analyzer {
 
 impl Analyzer {
     /// Анализатор со словарем файла `path` (по умолчанию - словарем из пакета)
-    fn open(py: Python<'_>, path: Option<PathBuf>) -> PyResult<Self> {
+    fn open(py: Python<'_>, path: Option<PathBuf>, words: Vec<OwnWord>) -> PyResult<Self> {
         let explicit = path.is_some();
         let path = Self::resolve(py, path)?;
-        Self::load(py, path, explicit)
+        let base = Self::load(py, path, explicit)?;
+        if words.is_empty() {
+            Ok(base)
+        } else {
+            Self::with_words(py, base, words)
+        }
     }
 
     /// Путь к словарю: абсолютный, чтобы pickle работал в другом рабочем каталоге
@@ -1154,6 +1208,61 @@ impl Analyzer {
             shared,
             path,
             explicit,
+            words: Arc::default(),
+        })
+    }
+
+    /// Анализатор `base` со своими словами: копия его словаря со своими словами собирается один
+    /// раз на словарь и набор слов
+    fn with_words(py: Python<'_>, base: Analyzer, words: Vec<OwnWord>) -> PyResult<Self> {
+        let copies = || (base.shared.copies.lock()).unwrap_or_else(PoisonError::into_inner);
+        let found = {
+            let mut copies = copies();
+            copies
+                .entries
+                .retain(|(_, shared)| shared.strong_count() > 0);
+            copies
+                .entries
+                .iter()
+                .filter(|(known, _)| **known == words)
+                .find_map(|(known, shared)| Some((shared.upgrade()?, Arc::clone(known))))
+        };
+        if let Some((shared, words)) = found {
+            return Ok(Analyzer {
+                shared,
+                words,
+                ..base
+            });
+        }
+        let dictionary = py
+            .detach(|| {
+                let samples = words.iter().map(|(word, like, pos)| {
+                    let sample = rumorph::Sample {
+                        word: like,
+                        pos: pos.as_deref(),
+                    };
+                    (word.as_str(), sample)
+                });
+                base.shared.dictionary.clone().with_words(samples)
+            })
+            .map_err(|err| PyValueError::new_err(err.to_string()))?;
+        let (shared, words) = (
+            Arc::new(Shared::new(dictionary, &base.path)),
+            Arc::new(words),
+        );
+        // Прежняя последняя копия освобождается после снятия блокировки
+        let previous = {
+            let mut copies = copies();
+            copies
+                .entries
+                .push((Arc::clone(&words), Arc::downgrade(&shared)));
+            copies.last.replace(Arc::clone(&shared))
+        };
+        drop(previous);
+        Ok(Analyzer {
+            shared,
+            words,
+            ..base
         })
     }
 
@@ -1322,6 +1431,36 @@ fn text(word: &Bound<'_, PyAny>) -> PyResult<String> {
         return Err(type_error("Слово должно быть строкой", word));
     };
     lossy(word)
+}
+
+/// Свои слова из словаря Python: слово - образец или пара «образец, часть речи»
+fn own_words(words: &Bound<'_, PyAny>) -> PyResult<Vec<OwnWord>> {
+    let not_mapping = || type_error("Свои слова должны быть словарем «слово: образец»", words);
+    if words.is_instance_of::<PyString>() {
+        return Err(not_mapping());
+    }
+    let items = words.call_method0("items").map_err(|_| not_mapping())?;
+    let mut result = Vec::new();
+    for item in items.try_iter()? {
+        let (word, sample): (Bound<'_, PyAny>, Bound<'_, PyAny>) = item?.extract()?;
+        let word: String = word
+            .extract()
+            .map_err(|_| type_error("Свое слово должно быть строкой", &word))?;
+        let (like, pos) = match sample.extract::<String>() {
+            Ok(like) => (like, None),
+            Err(_) => {
+                let (like, pos) = sample.extract::<(String, String)>().map_err(|_| {
+                    type_error(
+                        "Образец должен быть строкой или парой строк «образец, часть речи»",
+                        &sample,
+                    )
+                })?;
+                (like, Some(pos))
+            }
+        };
+        result.push((word, like, pos));
+    }
+    Ok(result)
 }
 
 /// TypeError с типом полученного значения: «Слово должно быть строкой, а не int»

@@ -1,4 +1,4 @@
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from decimal import Decimal
 from fractions import Fraction
 from os import PathLike
@@ -33,7 +33,11 @@ class Analysis:
 
 @final
 class Analyzer:
-    def __init__(self, path: str | PathLike[str] | None = None) -> None: ...
+    def __init__(
+        self,
+        path: str | PathLike[str] | None = None,
+        words: Mapping[str, str | tuple[str, str]] | None = None,
+    ) -> None: ...
     @property
     def path(self) -> Path: ...
     def analyze(self, word: str) -> list[Analysis]: ...

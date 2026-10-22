@@ -9,6 +9,7 @@ use crate::Error;
 pub(crate) const MAX_KEY: usize = 64;
 
 /// Буквы словаря и их байты
+#[derive(Clone)]
 pub(crate) struct Alphabet {
     /// Буква каждого байта; у байта без буквы - '\0'
     letters: [char; 256],
@@ -50,6 +51,31 @@ impl Alphabet {
             return Err(Error::Format("буква алфавита повторяется".into()));
         }
         Ok(alphabet)
+    }
+
+    /// Добавляет буквы слова `word` в нижнем регистре, которых нет в алфавите, на свободные байты:
+    /// байты прежних букв и ключи автомата не меняются. `false`, если свободных байтов не хватило
+    pub fn extend(&mut self, word: &str) -> bool {
+        for letter in word.chars().flat_map(char::to_lowercase) {
+            let letter = if letter == 'ё' { 'е' } else { letter };
+            if letter == '\0' || self.code(letter).is_some() {
+                continue;
+            }
+            let Some(code) = (1..=u8::MAX).find(|&code| self.letters[usize::from(code)] == '\0')
+            else {
+                return false;
+            };
+            self.letters[usize::from(code)] = letter;
+            match letter {
+                'а'..='я' => self.cyrillic[letter as usize - 'а' as usize] = code,
+                _ if letter.is_ascii() => self.ascii[letter as usize] = code,
+                _ => {
+                    let at = self.other.partition_point(|&(known, _)| known < letter);
+                    self.other.insert(at, (letter, code));
+                }
+            }
+        }
+        true
     }
 
     fn code(&self, letter: char) -> Option<u8> {
@@ -209,6 +235,20 @@ mod tests {
         );
         assert_eq!(alphabet.key(1, "ёж").unwrap().bytes(), [1, 6, 7]);
         assert!(alphabet.key(1, "к").is_none());
+    }
+
+    #[test]
+    fn extends_alphabet() {
+        let mut alphabet = Alphabet::new("абвеёж").unwrap();
+        let before = alphabet.input_key("ёж").unwrap().bytes().to_vec();
+        assert!(alphabet.input_key("Ўёж").is_none());
+        assert!(alphabet.extend("ўёжz"));
+        assert_eq!(alphabet.input_key("ёж").unwrap().bytes(), before);
+        let key = alphabet.input_key("ЎЁЖZ").unwrap();
+        assert_eq!(alphabet.spelling(&key, key.yo), "ўёжz");
+        let letters: String = ('\u{100}'..).take(255).collect();
+        let mut full = Alphabet::new(&letters).unwrap();
+        assert!(!full.extend("я"));
     }
 
     #[test]

@@ -101,6 +101,7 @@ impl fmt::Debug for UdTag<'_> {
 }
 
 /// Теги UD словаря
+#[derive(Clone)]
 pub(crate) struct UdTags {
     /// Разные строки тегов: одинаковые строки файла получают один номер
     strings: Vec<Box<str>>,

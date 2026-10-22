@@ -177,6 +177,7 @@ For a word in Cyrillic that is not in the dictionary, the analyzer guesses the a
 *   A hyphenated word is analyzed by its last part: «крэш-тестов» - «крэш-тест», «Мак-Киннона» - «мак-киннон»
 *   A word with a known prefix - «эко», «анти», «супер», «микро» and others - is analyzed by the dictionary word without it: «экодомов» - «экодом»
 *   A guessed analysis has forms, and they keep the capital letters: «Мак-Киннона» in the dative - «Мак-Киннону»
+*   A word that must be analyzed exactly can be added after a sample - a dictionary word that inflects the same way: `Analyzer(words={"зумер": "геймер"})`
 
 ```python
 >>> from rumorph import Analyzer
@@ -189,6 +190,9 @@ For a word in Cyrillic that is not in the dictionary, the analyzer guesses the a
 ('мартов', 'PROPN', 'Sur', 'Мартову')
 >>> morph.analyze("крэш-тестов")[0].lemma, morph.analyze("экодомов")[0].lemma
 ('крэш-тест', 'экодом')
+>>> zoomers = Analyzer(words={"зумер": "геймер"})
+>>> zoomers.analyze("зумерами")[0].lemma, zoomers.is_known("зумеры")
+('зумер', True)
 ```
 
 See the [documentation](https://sergeyshk.github.io/ruMorph/en/analysis/#guess).

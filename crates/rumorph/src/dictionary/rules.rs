@@ -80,6 +80,7 @@ const ABBREVIATION_LEMMAS: &[(&str, &str, &str)] = &[
     ("стр", "neut", "строение"),
     ("т", "femn", "тонна"),
     ("т", "masc", "том"),
+    ("тов", "anim", "товарищ"),
     ("трлн", "masc", "триллион"),
     ("тыс", "femn", "тысяча"),
     ("ул", "femn", "улица"),
@@ -121,6 +122,7 @@ const ROMAN_LETTERS: &[(&str, f64, f64)] = &[
 ];
 
 /// Номера тегов UD разборов по правилам в `Dictionary::ud_tags`
+#[derive(Clone)]
 pub(super) struct Tags {
     punct: u16,
     symbol: u16,

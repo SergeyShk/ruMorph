@@ -4,6 +4,7 @@ import json
 import math
 import os
 import pickle
+import re
 import shutil
 import sys
 import threading
@@ -466,6 +467,58 @@ def test_merged_analyses(morph):
     assert math.isclose(sum(a.prob for a in analyses), 1.0)
 
 
+def test_own_words():
+    morph = Analyzer(words={"зумер": "геймер", "зечь": ("печь", "VERB"), "тов": "проф"})
+    analysis = morph.analyze("Зумерами")[0]
+    assert (analysis.lemma, analysis.pos, analysis.source) == ("зумер", "NOUN", "dictionary")
+    assert analysis.inflect(Case="Gen", Number="Sing") == "зумера"
+    assert [form.word for form in analysis.forms()][:3] == ["зумер", "зумера", "зумеру"]
+    assert morph.is_known("зумеры")
+    assert not Analyzer().is_known("зумеры")
+    assert {a.pos for a in morph.analyze("зечет")} == {"VERB"}
+    assert morph.lemmatize(["тов."]) == ["товарищ"]
+    # Анализатор без своих слов их не знает, а pickle сохраняет их
+    assert Analyzer().analyze("зумерами")[0].source == "guess"
+    restored, copied = pickle.loads(pickle.dumps([morph, analysis]))
+    assert copied == analysis
+    assert restored.analyze("зумеру")[0].lemma == "зумер"
+    assert Analyzer(words={}).analyze("зумерами")[0].source == "guess"
+
+
+def test_own_words_like_dictionary_words():
+    # Копии форм фамилий не дают лишних разборов, а словарное слово - сдвига долей
+    morph = Analyzer()
+    surname = Analyzer(words={"петренков": ("иванов", "PROPN")})
+    for own, known in [("петренковы", "ивановы"), ("петренковых", "ивановых")]:
+        proper = [a.feats for a in morph.analyze(known) if a.pos == "PROPN"]
+        assert [a.feats for a in surname.analyze(own)] == proper
+    steel = Analyzer(words={"сталь": "сталь"})
+    assert steel.analyze("стали") == morph.analyze("стали")
+
+
+@pytest.mark.parametrize(
+    ("words", "error", "message"),
+    [
+        ({"зечь": "печь"}, ValueError, "У образца «печь» лексемы разных частей речи (NOUN, VERB)"),
+        (
+            {"зечь": ("печь", "ADJ")},
+            ValueError,
+            "У образца «печь» нет лексем ADJ, есть NOUN, VERB",
+        ),
+        ({"бот": "бумер"}, ValueError, "Образца «бумер» нет в словаре"),
+        ({"": "кот"}, ValueError, "Свое слово пустое"),
+        ({"а": "мама"}, ValueError, "«а» не изменяется по образцу «мама»"),
+        ({"кошка": "мышь"}, ValueError, "«кошка» не изменяется по образцу «мышь»"),
+        ("зумер", TypeError, "Свои слова должны быть словарем «слово: образец», а не str"),
+        ({"зумер": 1}, TypeError, "Образец должен быть строкой или парой строк"),
+        ({1: "кот"}, TypeError, "Свое слово должно быть строкой, а не int"),
+    ],
+)
+def test_own_words_errors(words, error, message):
+    with pytest.raises(error, match=re.escape(message)):
+        Analyzer(words=words)
+
+
 def test_pickle(morph):
     analyses = morph.analyze("стали")
     restored_analyses = pickle.loads(pickle.dumps(analyses))
@@ -568,6 +621,30 @@ def test_deleted_file_keeps_working(morph, tmp_path):
     assert pickle.loads(pickle.dumps(analyzer)).path == path
     with ThreadPoolExecutor(1) as pool:
         assert pool.submit(pickle.loads, blob).result().lemma == "стать"
+
+
+def test_own_words_release_file(morph, tmp_path):
+    # Копия словаря со своими словами освобождает файл вместе со словарем: в Windows файл
+    # удаляется, как только остался только анализатор со словарем пакета
+    path = tmp_path / "ru.dict"
+    shutil.copy(morph.path, path)
+    analyzer = Analyzer(path, words={"зумер": "геймер"})
+    assert analyzer.analyze("зумерами")[0].lemma == "зумер"
+    del analyzer
+    Analyzer()
+    path.unlink()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows не удаляет отображенный файл")
+def test_deleted_file_with_own_words(morph, tmp_path):
+    path = tmp_path / "ru.dict"
+    shutil.copy(morph.path, path)
+    analyzer = Analyzer(path, words={"зумер": "геймер"})
+    blob = pickle.dumps(analyzer.analyze("зумерами")[0])
+    path.unlink()
+    # В другом потоке ручки анализатора нет: берется словарь, загруженный из этого файла
+    with ThreadPoolExecutor(1) as pool:
+        assert pool.submit(pickle.loads, blob).result().lemma == "зумер"
 
 
 @pytest.mark.skipif(not hasattr(os, "fork"), reason="нет fork")
