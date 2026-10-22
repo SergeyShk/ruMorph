@@ -70,6 +70,15 @@ def test_particle_chain(morph):
     assert [a.pos for a in morph.analyze("кто" + "-то" * 12000)] == ["X"]
 
 
+def test_stretched_like_plain_word(morph):
+    # Протяжка в середине слова не меняет долей: регистр и числительные учитываются, как без нее
+    for stretched, plain in [("ве-ера", "вера"), ("Ве-еры", "Веры"), ("Наде-ежда", "Надежда")]:
+        found = [(a.lemma, a.pos, a.source) for a in morph.analyze(stretched)]
+        assert found == [(a.lemma, a.pos, "guess") for a in morph.analyze(plain)]
+        probs = zip(morph.analyze(stretched), morph.analyze(plain), strict=True)
+        assert all(math.isclose(a.prob, b.prob) for a, b in probs)
+
+
 def test_stretched_particle_chain(morph):
     # Протяжка и частица («да-то-о-то-о») не вызывают друг друга без конца
     assert morph.analyze("да" + "-то-о" * 12000)

@@ -69,7 +69,7 @@ Numbers, punctuation, Latin words and abbreviations are analyzed by rules, their
 | abbreviations with a dot: «т.», «им.» | the analyses of the dictionary abbreviation without the dot |
 | capitalized abbreviations: «НКО» | `PROPN` or `NOUN` with `Abbr=Yes`; a long word in capitals («ЧАТБОТАМИ») is also guessed as an ordinary word |
 | adverbs «по-бурятски», «по-молодому» | `ADV` with `Degree=Pos` |
-| other tokens: «км/ч», «РосПил» | `X` without features, the lemma is the token in lowercase |
+| other tokens: «км/ч», «100%-ный» | `X` without features, the lemma is the token in lowercase |
 
 The shares of ambiguous analyses come from the frequencies in the UD Taiga and GSD treebanks, the shares of proper nouns take the case into account. As in SynTagRus, «Земля», «Луна», «Солнце», «Кремль», «Дума» and a few other common nouns are also proper nouns when capitalized: «Земли» is first of all PROPN, «земли» is NOUN. The letters «й» and «ё» in decomposed Unicode and the non-breaking hyphen are converted to the usual ones, and stress marks (also in the composed letters «ѐ», «ѝ»), soft hyphens and invisible word joiners (U+2060, U+FEFF) are removed: «Москва́» is analyzed as «Москва». Latin letters that look like Cyrillic ones in a Cyrillic word are read as Cyrillic («cтали» with a Latin «c» is «стали»), and Cyrillic ones in a Latin word as Latin.
 
@@ -89,9 +89,9 @@ The shares of ambiguous analyses come from the frequencies in the UD Taiga and G
 
 ## Unknown words { #guess }
 
-The analyses of a Cyrillic word that is not in the dictionary are guessed by its ending: the analyzer takes the forms of dictionary words with the same ending - their part of speech, features and inflection. Their `source` is `"guess"`. A lowercase word is guessed as a common word, a capitalized word mostly as a proper noun: a surname, a given name, a place, and a word in «-ский» mostly as an adjective. An abbreviation with an ending («МЭРТа») is guessed like a capitalized word.
+The analyses of a Cyrillic word that is not in the dictionary are guessed by its ending: the analyzer takes the forms of dictionary words with the same ending - their part of speech, features and inflection. Their `source` is `"guess"`. A lowercase word is guessed as a common word, a capitalized word mostly as a proper noun: a surname, a given name, a place, and a word in «-ский» mostly as an adjective. An abbreviation with an ending («МЭРТа») is guessed like a capitalized word. A word in mixed case with capitals inside a lowercase word («прихАдите») or with a suffix after an abbreviation («КВНщиками», «ЗОЖное») is guessed as a lowercase word, and a solid name («ЛайфНьюс») as a capitalized word.
 
-A hyphenated word is analyzed by its last part: «крэш-тестов» - «крэш-тест», «IT-компании» - «it-компания»; if the last part is a particle («сколь-нибудь»), by the first one. If both parts inflect, the lemma is made of the lemmas of the parts: «дивана-кровати» - «диван-кровать», and such an analysis has no forms. A word with a known prefix - «эко», «анти», «супер», «микро» and others - is analyzed by the dictionary word without it: «экодомов» - «экодом». These analyses are guessed too.
+A hyphenated word is analyzed by its last part: «крэш-тестов» - «крэш-тест», «IT-компании» - «it-компания»; if the last part is a particle («сколь-нибудь»), by the first one. A word with a drawl or a stutter through hyphens («Что-о», «не-е-ет», «Н-ну-у», «с-спасибо») gets the analyses of the dictionary word without them, but no forms. If both parts inflect, the lemma is made of the lemmas of the parts: «дивана-кровати» - «диван-кровать», and such an analysis has no forms. A word with a known prefix - «эко», «анти», «супер», «микро» and others - is analyzed by the dictionary word without it: «экодомов» - «экодом». These analyses are guessed too.
 
 A guessed analysis has forms, and `forms`, `inflect` and `agree` work with it; the forms keep the capital letters: «Мак-Киннона» in the dative is «Мак-Киннону», «ПИН-КОДОВ» is «ПИН-КОДАМ». A word with a particle inflects by its first part: «смотри-ка» in the plural is «смотрите-ка».
 

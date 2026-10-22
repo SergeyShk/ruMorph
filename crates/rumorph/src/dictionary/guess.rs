@@ -47,6 +47,10 @@ const PROPER_NUMBER: &[(&str, f64)] = &[("Sing", 57779.0), ("Plur", 613.0)];
 /// дорого стоят
 const MAX_GUESSED_LENGTH: usize = 100;
 
+/// Наименьшая длина слова в смешанном регистре, которое угадывается как строчное: короче - чаще
+/// единица измерения
+const MIN_MIXED_LENGTH: usize = 5;
+
 impl Dictionary {
     /// Угаданные разборы незнакомого слова кириллицей в нижнем регистре или с заглавной буквы
     pub(super) fn guess(&self, word: &str) -> Vec<Analysis> {
@@ -63,28 +67,57 @@ impl Dictionary {
         let abbreviation_with_ending = capitals >= 2
             && (1..=3).contains(&(chars.len() - capitals))
             && chars[capitals..].iter().all(|c| c.is_lowercase());
-        // Лемма такой аббревиатуры - ее заглавная часть («КВНу» - «квн», а не «квна»)
-        let stem: Option<String> =
-            abbreviation_with_ending.then(|| lower.chars().take(capitals).collect());
         let proper = if adjectival(&lower) {
             ADJECTIVAL_PROPER_SHARE
         } else {
             PROPER_SHARE
         };
-        let indexes: &[(GuessIndex, f64)] = if chars.iter().all(|c| c.is_lowercase()) {
-            &[(GuessIndex::Common, 1.0)]
-        } else if chars[1..].iter().all(|c| c.is_lowercase()) || abbreviation_with_ending {
-            &[
-                (GuessIndex::Proper, proper),
-                (GuessIndex::Common, 1.0 - proper),
-            ]
+        // Смешанный регистр: заглавные внутри строчного слова («прихАдите») и аббревиатура
+        // с суффиксом («КВНщиками», «ЗОЖное», «НКФин»), если она не аббревиатура с падежным
+        // окончанием, - как строчное слово, слитное название («ЛайфНьюс») - как слово с заглавной.
+        // Короткое слово со строчной буквы в смешанном регистре - чаще единица измерения («дБ»,
+        // «кГц»), как и короткая аббревиатура, у которой не нашлось окончания («МГц»)
+        let lowercase = chars.iter().all(|c| c.is_lowercase());
+        let mixed = !lowercase
+            && !chars[1..].iter().all(|c| c.is_lowercase())
+            && !chars.iter().all(|c| c.is_uppercase());
+        let lowercase_tail = capitals >= 2 && chars[capitals..].iter().all(|c| c.is_lowercase());
+        if lowercase || chars[0].is_lowercase() || (lowercase_tail && !abbreviation_with_ending) {
+            if mixed && chars.len() < MIN_MIXED_LENGTH {
+                return Vec::new();
+            }
+            return self.guess_with(&[(GuessIndex::Common, 1.0)], word, &lower, None);
+        }
+        // Лемма аббревиатуры с окончанием - ее заглавная часть («КВНу» - «квн», а не «квна»),
+        // а названия, которое кончается заглавной буквой, - все слово («РусАЛ», а не «русала»)
+        let stem: Option<String> = if abbreviation_with_ending {
+            Some(lower.chars().take(capitals).collect())
         } else {
-            return Vec::new();
+            (mixed && chars[chars.len() - 1].is_uppercase()).then(|| lower.clone())
         };
+        let title: &[(GuessIndex, f64)] = &[
+            (GuessIndex::Proper, proper),
+            (GuessIndex::Common, 1.0 - proper),
+        ];
+        let analyses = self.guess_with(title, word, &lower, stem.as_deref());
+        if analyses.is_empty() && lowercase_tail && chars.len() >= MIN_MIXED_LENGTH {
+            return self.guess_with(&[(GuessIndex::Common, 1.0)], word, &lower, None);
+        }
+        analyses
+    }
+
+    /// Разборы по индексам угадывания `indexes` с их долями
+    fn guess_with(
+        &self,
+        indexes: &[(GuessIndex, f64)],
+        word: &str,
+        lower: &str,
+        stem: Option<&str>,
+    ) -> Vec<Analysis> {
         let mut analyses = Vec::new();
         for &(index, share) in indexes {
             let found: Vec<(Analysis, f64)> = self
-                .guess_in(index, word, &lower, stem.as_deref())
+                .guess_in(index, word, lower, stem)
                 .into_iter()
                 .map(|(analysis, count)| {
                     let weight = match index {

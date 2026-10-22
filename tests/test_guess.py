@@ -83,9 +83,38 @@ def test_guessed_inflection(morph):
     assert {form.lemma for form in morph.analyze("чатботу")[0].forms()} == {"чатбот"}
 
 
-@pytest.mark.parametrize("word", ["ВаЙб", "ЗуМер", "вайб1", "Б" + "е" * 200])
+# Короткие слова в смешанном регистре - чаще единицы измерения: их не угадать по окончанию
+@pytest.mark.parametrize("word", ["вайб1", "Б" + "е" * 200, "МГц", "кГц", "дБ", "мВ"])
 def test_not_guessed(morph, word):
     assert [(a.pos, a.source) for a in morph.analyze(word)] == [("X", "rule")]
+
+
+@pytest.mark.parametrize(
+    ("word", "lemma", "pos"),
+    [
+        # Заглавные внутри строчного слова и аббревиатура с суффиксом - как строчное слово
+        ("прихАдите", "прихадить", "VERB"),
+        ("КВНщиками", "квнщик", "NOUN"),
+        ("ЗОЖное", "зожный", "ADJ"),
+        ("НКФин", "нкфин", "NOUN"),
+        # Слитное название - как слово с заглавной, аббревиатура с окончанием - по основе
+        ("ЛайфНьюс", "лайфньюс", "PROPN"),
+        ("РосПил", "роспил", "PROPN"),
+        # Название, которое кончается заглавной буквой, сохраняет конец в лемме
+        ("РусАЛ", "русал", "PROPN"),
+        ("МЭРТа", "мэрт", "PROPN"),
+    ],
+)
+def test_mixed_case(morph, word, lemma, pos):
+    first = morph.analyze(word)[0]
+    assert (first.lemma, first.pos, first.source) == (lemma, pos, "guess")
+    # Формы сохраняют регистр общего со словом начала
+    assert word in [form.word for form in first.forms()]
+
+
+def test_mixed_case_forms(morph):
+    assert [form.word for form in morph.analyze("УрО")[0].forms()][:3] == ["УрО", "Ура", "Уру"]
+    assert morph.analyze("ФПиКА")[0].inflect(Case="Dat") == "ФПиКе"
 
 
 def test_order_of_sources(morph):

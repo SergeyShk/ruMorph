@@ -118,7 +118,7 @@ def test_uniform_without_frequencies(morph):
     assert probs == [1 / len(probs)] * len(probs)
 
 
-@pytest.mark.parametrize("word", ["ежж1", "ВаЙб", "∂x", "км/ч", "РосПил"])
+@pytest.mark.parametrize("word", ["ежж1", "∂x", "км/ч", "100%-ный"])
 def test_unknown_word(morph, word):
     # Токен, который не разобрали ни словарь, ни правила, ни угадывание, - X без признаков
     analyses = morph.analyze(word)

@@ -1594,13 +1594,32 @@ fn same_up_to_yo(a: &str, b: &str) -> bool {
 }
 
 /// Форма в регистре слова, от которого формы строились в нижнем регистре: капсом, если слово
-/// капсом («ПИН-КОДАМ»), иначе с заглавной первой буквой («Покринжовее» → «Кринжового»)
+/// капсом («ПИН-КОДАМ»), иначе общее начало слова и формы - в регистре слова («УрО» → «УрО»,
+/// «Уру»), а без общего начала - с заглавной первой буквой («Покринжовее» → «Кринжового»)
 fn capitalized_like(original: &str, form: Analysis) -> Analysis {
     if original.chars().any(char::is_alphabetic) && !original.chars().any(char::is_lowercase) {
         return Analysis {
             word: form.word.to_uppercase(),
             ..form
         };
+    }
+    let mut source = original.chars();
+    let (mut shared, mut same) = (0, true);
+    let mut word = String::with_capacity(form.word.len());
+    for letter in form.word.chars() {
+        match source.next() {
+            Some(own) if same && own.to_lowercase().eq(letter.to_lowercase()) => {
+                word.push(own);
+                shared += 1;
+            }
+            _ => {
+                same = false;
+                word.push(letter);
+            }
+        }
+    }
+    if shared > 0 {
+        return Analysis { word, ..form };
     }
     let upper = original.chars().next().is_some_and(char::is_uppercase);
     let mut letters = form.word.chars();
@@ -2414,7 +2433,15 @@ pub(super) mod tests {
             .map(|form| form.word)
             .collect();
         assert_eq!(forms, ["Зумов", "Зумова"]);
-        assert_eq!(dict.analyze("ЗуМова"), dict.fallback("ЗуМова"));
+        // Слитное название в смешанном регистре угадывается, как слово с заглавной
+        let mixed: Vec<(String, f64)> = dict
+            .analyze("ЗуМова")
+            .into_iter()
+            .map(|a| (a.lemma, a.prob))
+            .collect();
+        let capitalized: Vec<(String, f64)> =
+            analyses.into_iter().map(|a| (a.lemma, a.prob)).collect();
+        assert_eq!(mixed, capitalized);
     }
 
     #[test]
