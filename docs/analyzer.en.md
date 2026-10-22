@@ -1,7 +1,7 @@
 # Analyzer
 
 ``` {.python .signature}
-Analyzer(path=None)
+Analyzer(path=None, words=None)
 ```
 
 Morphological analyzer: for a word form it finds all [analyses](analysis.md) in the OpenCorpora dictionary - the initial form, the part of speech and the [Universal Dependencies](https://universaldependencies.org/) features - and orders them by probability. The dictionary is loaded when the first analyzer is created: analyzers with the same dictionary file in a process share it, so a new analyzer is created instantly. The last loaded dictionary stays in the process even without analyzers, so process pool tasks and an analyzer created for a single call do not load the dictionary again.
@@ -10,8 +10,8 @@ Exceptions:
 
 - `FileNotFoundError` - the dictionary file does not exist;
 - `OSError` - the dictionary file cannot be read: no access, the path points to a directory;
-- `ValueError` - the file is not a ruMorph dictionary or is damaged;
-- `TypeError` - a path that is neither a string nor `PathLike`.
+- `ValueError` - the file is not a ruMorph dictionary or is damaged, or an [own word](#words) has no sample in the dictionary, its sample is ambiguous or the word does not inflect like it;
+- `TypeError` - a path that is neither a string nor `PathLike`, or own words that are not a mapping of strings.
 
 === "Code"
 
@@ -33,8 +33,27 @@ Exceptions:
 | Parameter | Type | Default | Description |
 | :-------- | :--- | :------ | :---------- |
 | `path` | `str` / `PathLike` | `None` | Path to the dictionary file; by default, the dictionary from the package |
+| `words` | `Mapping[str, str \| tuple[str, str]]` | `None` | [Own words](#words) and their samples |
 
 The object keeps the dictionary path in `path` of type `Path`, read-only. The dictionary file is mapped into memory: processes with the same file share its memory, so every further process with an analyzer takes about 1.4 MB. While an analyzer exists, the file must not be overwritten in place, but it can be replaced with a new file; on Windows an open file can be neither replaced nor deleted. The last loaded dictionary stays open even after the analyzers are deleted - until a dictionary from another file is loaded or the process exits: to release the file of your own dictionary, for example before deleting it on Windows, delete its analyzers and analyses and create an analyzer with the package dictionary: `Analyzer()`. A dictionary is trusted data, like code: loading rejects a damaged file but not every deliberately crafted one, so dictionaries from untrusted sources should not be loaded.
+
+## Own words { #words }
+
+A word that is not in the dictionary can be added after a sample - a dictionary word that inflects the same way: «зумер» like «геймер», «кринж» like «пляж». The word and the sample are written in the same form, usually the initial one. The own word gets all forms of the sample with its own stem and then behaves like a dictionary word: `source` is `"dictionary"`, `is_known` finds it, `forms`, `inflect` and `agree` work. If the sample has lexemes of different parts of speech («печь» is a noun and a verb), the sample is a pair with the UD part of speech: `{"зечь": ("печь", "VERB")}`; otherwise the analyzer is not created. Own words belong to this analyzer only, and pickle saves them with it.
+
+=== "Code"
+
+    ``` python
+    morph = Analyzer(words={"зумер": "геймер", "кринж": "пляж"})
+    zoomer = morph.analyze("зумерами")[0]
+    zoomer.lemma, zoomer.inflect(Case="Dat", Number="Sing"), morph.lemmatize(["кринжем"])
+    ```
+
+=== "Result"
+
+    ```
+    ('зумер', 'зумеру', ['кринж'])
+    ```
 
 ## Methods
 
