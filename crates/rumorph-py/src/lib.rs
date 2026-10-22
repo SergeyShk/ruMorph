@@ -442,7 +442,10 @@ type AnalysisState = (
 
 /// Восстановление разбора из pickle: по сохраненным таблице и форме, если словарь тот же,
 /// иначе - среди разборов слова с теми же леммой, частью речи, признаками и пометами;
-/// вероятность берется сохраненная
+/// вероятность берется сохраненная. Разбор, которого в словаре нет (сохранен со словарем
+/// другой версии), восстанавливается как сохранен, но без формы таблицы, а если нет и его
+/// тега - разбор слова, у которого к сохраненным признакам добавились новые («Нидерландов»
+/// без рода в 0.2.0)
 #[pyfunction]
 fn _analysis(py: Python<'_>, analyzer: Py<Analyzer>, state: AnalysisState) -> PyResult<Analysis> {
     let (word, lemma, pos, feats, labels, prob, source, entry) = state;
@@ -461,35 +464,58 @@ fn _analysis(py: Python<'_>, analyzer: Py<Analyzer>, state: AnalysisState) -> Py
     // Признаки сравниваются без учета порядка: до 0.2.0 он был другим
     let mut wanted: Vec<&str> = feats.split('|').filter(|feat| !feat.is_empty()).collect();
     wanted.sort_unstable();
-    let same = |analysis: &rumorph::Analysis| {
-        dictionary.ud_tag(analysis.ud).is_some_and(|tag| {
-            let mut own: Vec<String> = tag
-                .feats()
-                .map(|(name, value)| format!("{name}={value}"))
-                .collect();
-            own.sort_unstable();
-            analysis.word == word
-                && analysis.source == source
-                && analysis.lemma == lemma
-                && tag.pos() == pos
-                && own == wanted
-                && tag.labels().collect::<Vec<_>>().join(",") == labels
-        })
+    // Тег с теми же частью речи и пометами и с теми же признаками, а при `wider` - и с новыми
+    let tag_like = |tag: &rumorph::UdTag<'_>, wider: bool| {
+        let mut own: Vec<String> = tag
+            .feats()
+            .map(|(name, value)| format!("{name}={value}"))
+            .collect();
+        own.sort_unstable();
+        let feats = if wider {
+            wanted
+                .iter()
+                .all(|feat| own.iter().any(|known| known == feat))
+        } else {
+            own == wanted
+        };
+        tag.pos() == pos && feats && tag.labels().collect::<Vec<_>>().join(",") == labels
+    };
+    let like = |analysis: &rumorph::Analysis, wider: bool| {
+        analysis.word == word
+            && analysis.source == source
+            && analysis.lemma == lemma
+            && dictionary
+                .ud_tag(analysis.ud)
+                .is_some_and(|tag| tag_like(&tag, wider))
     };
     let found = entry
         .and_then(|(table, form)| {
             dictionary.analysis(&word, rumorph::Entry { table, form }, source)
         })
-        .filter(|analysis| same(analysis))
+        .filter(|analysis| like(analysis, false))
         .or_else(|| {
-            dictionary
-                .analyze(&word)
-                .into_iter()
-                .find(|analysis| same(analysis))
+            let analyses = dictionary.analyze(&word);
+            let ud = || {
+                (dictionary.ud_tags().zip(0u16..))
+                    .find_map(|(tag, ud)| tag_like(&tag, false).then_some(ud))
+            };
+            match analyses.iter().position(|analysis| like(analysis, false)) {
+                Some(at) => analyses.into_iter().nth(at),
+                None => match ud() {
+                    Some(ud) => Some(rumorph::Analysis::new(
+                        word.clone(),
+                        lemma.clone(),
+                        ud,
+                        prob,
+                        source,
+                    )),
+                    None => analyses.into_iter().find(|analysis| like(analysis, true)),
+                },
+            }
         });
     let Some(mut inner) = found else {
         return Err(PyValueError::new_err(format!(
-            "В словаре нет разбора «{word}» с леммой «{lemma}», частью речи {pos}, признаками «{feats}» и пометами «{labels}»"
+            "Разбор «{word}» сохранен со словарем другой версии: в этом словаре нет части речи {pos} с признаками «{feats}» и пометами «{labels}»"
         )));
     };
     inner.prob = prob;

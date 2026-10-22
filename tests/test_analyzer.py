@@ -601,8 +601,30 @@ def test_pickle(morph):
     assert rumorph._rumorph._analysis(morph, old_state) == one
     with pytest.raises(ValueError, match="Неизвестный источник"):
         rumorph._rumorph._analysis(morph, (*state[:6], "corpus", *state[7:]))
-    with pytest.raises(ValueError, match="В словаре нет разбора"):
+    with pytest.raises(ValueError, match="сохранен со словарем другой версии"):
         rumorph._rumorph._analysis(morph, (*state[:3], "Case", *state[4:]))
+
+
+def test_pickle_from_other_dictionary(morph):
+    # Разбор, сохраненный со словарем другой версии (в 0.2.0 у сокращения «в» лемма «в»),
+    # восстанавливается как сохранен, но без других форм
+    analysis = next(a for a in morph.analyze("в") if a.pos == "NOUN")
+    restore, (analyzer, state) = analysis.__reduce__()
+    old = restore(analyzer, (state[0], "в", *state[2:]))
+    assert (old.word, old.lemma, old.pos, old.feats, old.prob) == (
+        "в",
+        "в",
+        "NOUN",
+        analysis.feats,
+        analysis.prob,
+    )
+    assert old.forms() == [old]
+    assert pickle.loads(pickle.dumps(old)) == old
+    # Тега нет (в 0.2.0 у «Нидерландов» не было рода): берется разбор, у которого признак добавился
+    netherlands = morph.analyze("Нидерландов")[0]
+    _, (_, state) = netherlands.__reduce__()
+    genderless = "|".join(feat for feat in state[3].split("|") if not feat.startswith("Gender="))
+    assert restore(analyzer, (*state[:3], genderless, *state[4:7], None)) == netherlands
 
 
 def test_pickled_analyses_share_tag_objects(morph):

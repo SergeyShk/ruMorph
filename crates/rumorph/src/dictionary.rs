@@ -79,6 +79,22 @@ pub struct Analysis {
     pub entry: Option<Entry>,
 }
 
+impl Analysis {
+    /// Разбор без формы таблицы и тега OpenCorpora: его единственная форма - он сам. Например,
+    /// сохраненный разбор, которого нет в словаре другой версии
+    pub fn new(word: String, lemma: String, ud: u16, prob: f64, source: Source) -> Self {
+        Analysis {
+            word,
+            lemma,
+            ud,
+            tag: None,
+            prob,
+            source,
+            entry: None,
+        }
+    }
+}
+
 /// Тег UD для подбора формы: номер строки части речи, коды значений признаков
 /// из `Dictionary::features` по порядку (0 - признака нет) и номера строк помет
 struct Codes<'a> {
