@@ -328,7 +328,7 @@ Bug reports, ideas and pull requests are welcome - the [issues](https://github.c
 *   **crates/rumorph-dict-ru** - the crate with the dictionary for `rumorph` on crates.io
 *   **crates/rumorph-py** - the Python module `rumorph._rumorph` built with PyO3
 *   **python/rumorph** - the Python package
-*   **scripts** - exporting the pymorphy3-dicts-ru dictionary and checking the installed package before publishing
+*   **scripts** - exporting the pymorphy3-dicts-ru dictionary and the UD treebank counts, checking the installed package before publishing and comparing with other analyzers
 *   **docs** - MkDocs documentation in Russian and English
 *   **tests** - tests of the Python package
 
