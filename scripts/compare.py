@@ -20,7 +20,8 @@
     закрепленного релиза UD, модели Slovnet и mystem (с проверкой SHA-256) в каталог данных
     и разбирает эталонные токены каждой системой. Анализаторы без контекста (ruMorph, pymorphy3,
     mystem без снятия омонимии) оцениваются по первому разбору и по лучшему из разборов
-    (оракул), теггеры с контекстом (spaCy, Stanza, Slovnet) - по своему ответу. Части речи
+    (оракул), теггеры с контекстом (ruMorph с контекстом, spaCy, Stanza, Slovnet) - по своему
+    ответу. Части речи
     pymorphy3 и mystem переводятся в UD простой таблицей (`PYMORPHY_POS`, `MYSTEM_POS`), падеж
     и число - тоже; признаки UD целиком сравниваются только у систем с признаками UD. Скорость -
     токены в секунду на SynTagRus test без загрузки (лучший из двух прогонов), а для графика -
@@ -322,6 +323,21 @@ def rumorph_system(data: Path) -> System:
     return System(lambda text: morph.analyze_many([w for s in text for w in s]), convert)
 
 
+def rumorph_context_system(data: Path) -> System:
+    """ruMorph с контекстом: разборы токенов предложения, первый - выбранный моделью"""
+    from rumorph import Analyzer
+
+    morph = Analyzer()
+
+    def convert(text: list[list[str]], found: object) -> list[list[list[Candidate]]]:
+        return [
+            [[(a.lemma, a.pos, dict(a.feats)) for a in analyses] for analyses in sentence]
+            for sentence in found
+        ]
+
+    return System(lambda text: [morph.analyze_sentence(s) for s in text], convert)
+
+
 def pymorphy_system(data: Path) -> System:
     """pymorphy3: все разборы токена, часть речи, падеж и число - по таблицам"""
     import pymorphy3
@@ -452,6 +468,7 @@ def slovnet_system(data: Path) -> System:
 
 SYSTEMS = {
     "rumorph": rumorph_system,
+    "rumorph-context": rumorph_context_system,
     "pymorphy3": pymorphy_system,
     "mystem": mystem_system,
     "spacy": spacy_system,
@@ -461,16 +478,20 @@ SYSTEMS = {
 
 
 CONTEXT_FREE = ("rumorph", "pymorphy3", "mystem")
-UD_SYSTEMS = ("rumorph", "spacy", "stanza", "slovnet")
-CONTEXTUAL = ("spacy", "stanza", "slovnet")
+UD_SYSTEMS = ("rumorph", "rumorph-context", "spacy", "stanza", "slovnet")
+CONTEXTUAL = ("rumorph-context", "spacy", "stanza", "slovnet")
 TITLES = {
     "rumorph": "ruMorph",
+    "rumorph-context": "ruMorph с контекстом",
     "pymorphy3": "pymorphy3",
     "mystem": "mystem",
     "spacy": "spaCy ru_core_news_sm",
     "stanza": "Stanza",
     "slovnet": "Slovnet (Natasha)",
 }
+
+
+TITLES_EN = {**TITLES, "rumorph-context": "ruMorph in context"}
 
 
 def norm(lemma: str) -> str:
@@ -617,7 +638,7 @@ def chart(curves: dict[str, list[tuple[int, float]]], path: Path, english: bool 
         text = f"{value:,}" if value >= 1 else f"{value:.{-math.floor(math.log10(value))}f}"
         return text if english else text.replace(",", " ").replace(".", ",")
 
-    colors = ["#1e88e5", "#e53935", "#43a047", "#fb8c00", "#8e24aa", "#00acc1"]
+    colors = ["#1e88e5", "#e53935", "#43a047", "#fb8c00", "#8e24aa", "#00acc1", "#3949ab"]
     style = 'font-family="sans-serif" font-size="13" fill="#888"'
     grid = 'stroke="#888" stroke-opacity="0.3"'
     parts = [
@@ -660,7 +681,8 @@ def chart(curves: dict[str, list[tuple[int, float]]], path: Path, english: bool 
         parts.append(
             f'<line x1="{x}" y1="{y - 4}" x2="{x + 24}" y2="{y - 4}" stroke="{color}" stroke-width="2.5"/>'
         )
-        parts.append(f'<text x="{x + 32}" y="{y}" {style}>{TITLES[name]}</text>')
+        title = (TITLES_EN if english else TITLES)[name]
+        parts.append(f'<text x="{x + 32}" y="{y}" {style}>{title}</text>')
     parts.append("</svg>")
     path.write_text("\n".join(parts) + "\n", encoding="utf-8")
 
@@ -757,7 +779,7 @@ def main() -> None:
         (data / "environment.json").write_text(json.dumps(environment, indent=2), encoding="utf-8")
         saved.write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8")
     free = [name for name in CONTEXT_FREE if name in results]
-    contextual = [name for name in ("rumorph", *CONTEXTUAL) if name in results]
+    contextual = [name for name in CONTEXTUAL if name in results]
     print("## Без контекста\n")
     print(
         "\n".join(

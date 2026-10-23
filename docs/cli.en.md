@@ -4,7 +4,7 @@
 rumorph [options] [file ...]
 ```
 
-The command analyzes text from files or the standard input and writes lemmas, parts of speech and [Universal Dependencies](https://universaldependencies.org/) features in one of four formats. It is installed with the package (`pip install rumorph`) and also runs as `python -m rumorph`; without Python, `cargo install rumorph --features cli` installs it. The Rust core does the analysis and the output: about a million tokens per second in one thread.
+The command analyzes text from files or the standard input and writes lemmas, parts of speech and [Universal Dependencies](https://universaldependencies.org/) features in one of four formats. It is installed with the package (`pip install rumorph`) and also runs as `python -m rumorph`; without Python, `cargo install rumorph --features cli` installs it. The Rust core does the analysis and the output in one thread: about 100 thousand tokens per second with [context](analyzer.md#analyze_sentence) and about a million without it (`--no-context`).
 
 ``` bash
 echo "Мы стали друзьями в ковиде." | rumorph
@@ -23,6 +23,7 @@ echo "Мы стали друзьями в ковиде." | rumorph
 | `-d`, `--dictionary` | the package dictionary | A ruMorph dictionary file |
 | `-w`, `--words` | | A file of [own words](analyzer.md#words): a word and its sample separated by a tab on each line, plus the part of speech if the sample has several; spaces around fields are ignored, empty lines and lines starting with `#` are skipped. The option can be repeated |
 | `-o`, `--output` | the standard output | The result file; `-` is the standard output |
+| `--no-context` | | Analyze each word without its neighbours: analyses by dictionary frequencies, as with [`analyze`](analyzer.md#analyze), several times faster |
 | `-h`, `--help` | | Show the help |
 | `-V`, `--version` | | Show the version |
 
@@ -32,8 +33,8 @@ In Windows PowerShell 5.1 the `>` redirection and a pipeline (`Get-Content text.
 
 ## Input { #input }
 
-- `text` - text, a sentence is a line. The text is split into tokens simply: words with hyphens and apostrophes between letters («кто-то», «д’Артаньян»), numbers with a period or a comma between digits («3,14»), other signs one by one, the same signs in a row together («...»), emoji with modifiers and flags whole. A zero-width space and other invisible separators split tokens, while a soft hyphen and a word joiner (U+2060) inside a word do not. The period of an abbreviation is split off: «т.е.» is four tokens; for exact splitting pass ready tokens.
-- `tokens` - one token per line, an empty line separates sentences; spaces around the token and everything after a tab are ignored, so a table with the token in the first column works too.
+- `text` - text, a sentence is a line. The text is split into tokens simply: words with hyphens and apostrophes between letters («кто-то», «д’Артаньян»), numbers with a period or a comma between digits («3,14»), other signs one by one, the same signs in a row together («...»), emoji with modifiers and flags whole. A zero-width space and other invisible separators split tokens, while a soft hyphen and a word joiner (U+2060) inside a word do not. The period of an abbreviation is split off: «т.е.» is four tokens; for exact splitting pass ready tokens. The context model analyzes a line sentence by sentence - pieces up to a sentence-final mark (`.`, `!`, `?`, `…`).
+- `tokens` - one token per line, an empty line separates sentences; spaces around the token and everything after a tab are ignored, so a table with the token in the first column works too. Analyze a list of separate words with `--no-context`: otherwise the model takes neighbouring words for a sentence.
 - `conllu` - [CoNLL-U](https://universaldependencies.org/format.html): the LEMMA, UPOS and FEATS columns are filled, while the other columns, comments, multiword tokens and empty nodes stay as they are.
 
 ``` bash
@@ -47,7 +48,7 @@ printf '1\tМы\t_\t_\t_\t_\t2\tnsubj\t_\t_\n2\tстали\t_\t_\t_\t_\t0\troot\
 
 ## Output formats { #formats }
 
-All formats except `jsonl` take the most probable analysis of a token; a token without analyses gets the lowercase token as the lemma and the part of speech `X`.
+All formats except `jsonl` take the first analysis of a token - the one chosen by the context model from the neighbouring words, and with `--no-context` the most probable one by the dictionary; `jsonl` writes all analyses in this order. A token without analyses gets the lowercase token as the lemma and the part of speech `X`.
 
 ### lemmas
 

@@ -9,6 +9,7 @@ EXPORT_PATH := target/opencorpora
 EXPORT_STAMP := $(EXPORT_PATH)/.exported
 UD_PATH := target/ud
 UD_STAMP := $(UD_PATH)/.exported
+CONTEXT := data/ru-context.bin
 
 help: ## Показать список команд
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "%-20s %s\n", $$1, $$2}'
@@ -40,8 +41,8 @@ $(UD_STAMP): $(SCRIPTS_PATH)/export_ud.py | deps
 	uv run python $(SCRIPTS_PATH)/export_ud.py $(UD_PATH)
 	touch $@
 
-$(DICTIONARY): $(EXPORT_STAMP) $(UD_STAMP) $(wildcard crates/rumorph/src/*.rs crates/rumorph/src/dictionary/*.rs crates/rumorph-build/src/*.rs)
-	cargo run --release --locked -p rumorph-build -- $(EXPORT_PATH) $(UD_PATH) $(DICTIONARY)
+$(DICTIONARY): $(EXPORT_STAMP) $(UD_STAMP) $(CONTEXT) $(wildcard crates/rumorph/src/*.rs crates/rumorph/src/dictionary/*.rs crates/rumorph-build/src/*.rs)
+	cargo run --release --locked -p rumorph-build -- $(EXPORT_PATH) $(UD_PATH) $(DICTIONARY) $(CONTEXT)
 
 lock: uv ## Обновить lock-файлы до последних версий зависимостей
 	uv lock --upgrade

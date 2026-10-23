@@ -1,6 +1,6 @@
 # Comparison
 
-ruMorph analyzes a word without context, like pymorphy3 and mystem, and it is the most accurate of them: on three UD test sets the first analysis gets both the part of speech and the lemma right for 90-94 % of words against 79-85 % for pymorphy3 and mystem. It is also the fastest: 709 thousand tokens per second, 30 times faster than pymorphy3 and 9 times faster than mystem, and it answers a short text together with loading in 5 ms. The context tagger Stanza is more accurate in features, but 260 times slower and answers a short text in 2 s.
+Without context ruMorph analyzes a word like pymorphy3 and mystem, and it is the most accurate of them: on three UD test sets the first analysis gets both the part of speech and the lemma right for 91-94 % of words against 79-85 % for pymorphy3 and mystem. It is also the fastest: 693 thousand tokens per second, 30 times faster than pymorphy3 and 8 times faster than mystem, and it answers a short text together with loading in 6 ms. With context ([`analyze_sentence`](analyzer.md#analyze_sentence)) ruMorph is more accurate than all the taggers in the part of speech, lemma and features together on Taiga and GSD, and on SynTagRus it is behind only Stanza, by 0.3 points, although Stanza is trained on SynTagRus and ruMorph has never seen it. Meanwhile it analyzes 108 thousand tokens per second, 39 times faster than Stanza.
 
 ## Quality { #quality }
 
@@ -12,7 +12,7 @@ The share of words whose first analysis has the right part of speech and lemma, 
 
 | System | SynTagRus | Taiga | GSD |
 | :----- | :-------- | :---- | :-- |
-| ruMorph | **93.7** (97.5) | **90.5** (94.9) | **92.1** (95.4) |
+| ruMorph | **93.8** (98.2) | **90.6** (95.6) | **91.9** (95.6) |
 | pymorphy3 | 84.8 (90.6) | 82.9 (88.9) | 84.3 (87.9) |
 | mystem | 81.9 (86.4) | 79.4 (83.8) | 79.9 (83.9) |
 
@@ -20,13 +20,13 @@ pymorphy3 and mystem annotate by their own rules, and their parts of speech are 
 
 ### With context { #contextual }
 
-Taggers see the sentence and choose one analysis; ruMorph in this table is the first analysis without context. The share of words with the right part of speech, lemma and UD features (case, number, gender, person, tense, aspect, mood, voice, verb form, degree, animacy), %:
+Taggers see the sentence and choose one analysis; ruMorph here is the analysis in context (`analyze_sentence`), the first analysis without context is in the «All metrics» table. The share of words with the right part of speech, lemma and UD features (case, number, gender, person, tense, aspect, mood, voice, verb form, degree, animacy), %:
 
 === "SynTagRus"
 
     | System | Part of speech | Lemma | Features |
     | :----- | :------------- | :---- | :------- |
-    | ruMorph | 95.0 | 96.6 | 83.9 |
+    | ruMorph in context | 97.0 | **97.8** | 94.9 |
     | Stanza | **98.0** | **97.8** | **95.3** |
     | spaCy ru_core_news_sm | 94.1 | 90.7 | 81.0 |
     | Slovnet (Natasha) | 93.7 | - | 86.8 |
@@ -35,8 +35,8 @@ Taggers see the sentence and choose one analysis; ruMorph in this table is the f
 
     | System | Part of speech | Lemma | Features |
     | :----- | :------------- | :---- | :------- |
-    | ruMorph | 92.1 | **95.5** | 81.6 |
-    | Stanza | **94.5** | 94.9 | **90.3** |
+    | ruMorph in context | **94.7** | **96.6** | **93.1** |
+    | Stanza | 94.5 | 94.9 | 90.3 |
     | spaCy ru_core_news_sm | 89.8 | 87.9 | 74.9 |
     | Slovnet (Natasha) | 88.2 | - | 81.1 |
 
@@ -44,12 +44,12 @@ Taggers see the sentence and choose one analysis; ruMorph in this table is the f
 
     | System | Part of speech | Lemma | Features |
     | :----- | :------------- | :---- | :------- |
-    | ruMorph | 93.8 | **96.3** | 72.9 |
+    | ruMorph in context | 95.1 | **97.4** | 83.0 |
     | Stanza | **96.0** | 95.9 | **83.7** |
     | spaCy ru_core_news_sm | 94.0 | 92.0 | 77.5 |
     | Slovnet (Natasha) | 93.5 | - | 79.8 |
 
-The default Stanza model is trained on SynTagRus, so its test part is Stanza's own; spaCy ru_core_news_sm and Slovnet are trained on Nerus, news annotated automatically. Slovnet gives no lemmas: in Natasha they come from pymorphy2.
+The default Stanza model is trained on SynTagRus, so its test part is Stanza's own; the ruMorph context model is trained on the training parts of Taiga and GSD, and SynTagRus is new to it; spaCy ru_core_news_sm and Slovnet are trained on Nerus, news annotated automatically. Slovnet gives no lemmas: in Natasha they come from pymorphy2.
 
 ??? note "All metrics"
 
@@ -59,7 +59,8 @@ The default Stanza model is trained on SynTagRus, so its test part is Stanza's o
 
         | System | Lemma | Part of speech | Case | Number | Features | All together |
         | :----- | :---- | :------------- | :--- | :----- | :------- | :----------- |
-        | ruMorph | 96.6 | 95.0 | 88.0 | 96.4 | 83.9 | 81.9 |
+        | ruMorph | 96.7 | 95.2 | 88.0 | 96.4 | 84.0 | 82.1 |
+        | ruMorph in context | 97.8 | 97.0 | 97.4 | 98.6 | 94.9 | 93.2 |
         | pymorphy3 | 94.1 | 87.0 | 87.0 | 94.8 | - | - |
         | mystem | 90.9 | 88.2 | 76.9 | 92.7 | - | - |
         | spaCy ru_core_news_sm | 90.7 | 94.1 | 95.6 | 97.3 | 81.0 | 76.5 |
@@ -70,7 +71,8 @@ The default Stanza model is trained on SynTagRus, so its test part is Stanza's o
 
         | System | Lemma | Part of speech | Case | Number | Features | All together |
         | :----- | :---- | :------------- | :--- | :----- | :------- | :----------- |
-        | ruMorph | 95.5 | 92.1 | 86.8 | 95.4 | 81.6 | 77.6 |
+        | ruMorph | 95.6 | 92.2 | 86.8 | 95.5 | 81.7 | 77.7 |
+        | ruMorph in context | 96.6 | 94.7 | 96.6 | 97.9 | 93.1 | 89.7 |
         | pymorphy3 | 92.7 | 85.3 | 85.7 | 93.8 | - | - |
         | mystem | 90.5 | 85.2 | 77.0 | 91.7 | - | - |
         | spaCy ru_core_news_sm | 87.9 | 89.8 | 91.7 | 94.0 | 74.9 | 68.8 |
@@ -81,7 +83,8 @@ The default Stanza model is trained on SynTagRus, so its test part is Stanza's o
 
         | System | Lemma | Part of speech | Case | Number | Features | All together |
         | :----- | :---- | :------------- | :--- | :----- | :------- | :----------- |
-        | ruMorph | 96.3 | 93.8 | 80.8 | 93.2 | 72.9 | 71.2 |
+        | ruMorph | 96.3 | 93.6 | 80.8 | 93.1 | 72.8 | 71.2 |
+        | ruMorph in context | 97.4 | 95.1 | 90.0 | 94.7 | 83.0 | 81.2 |
         | pymorphy3 | 94.5 | 86.1 | 79.7 | 92.3 | - | - |
         | mystem | 91.2 | 85.5 | 66.3 | 88.1 | - | - |
         | spaCy ru_core_news_sm | 92.0 | 94.0 | 89.5 | 94.7 | 77.5 | 72.0 |
@@ -96,11 +99,12 @@ The time to analyze a text together with importing and loading the system in a n
 
 ![Text analysis time with loading by text size](img/speed.en.svg)
 
-On a short text almost all the time goes to loading: ruMorph answers in 5 ms, pymorphy3 and mystem in 20-40 ms, Slovnet in 0.2 s, spaCy in 1.1-1.3 s, Stanza in 2 s. On a long text the analysis speed decides, tokens per second without loading, more is better:
+On a short text almost all the time goes to loading: ruMorph answers in 6 ms, in context in 14 ms, pymorphy3 and mystem in 20-40 ms, Slovnet in 0.2 s, spaCy in 1.1-1.3 s, Stanza in 2 s. On a long text the analysis speed decides, tokens per second without loading, more is better:
 
 | System | Tokens per second |
 | :----- | :---------------- |
-| ruMorph | **709,381** |
+| ruMorph | **693,383** |
+| ruMorph in context | 107,565 |
 | mystem | 82,191 |
 | Slovnet (Natasha) | 45,286 |
 | pymorphy3 | 23,484 |
@@ -131,11 +135,11 @@ Lists of words are processed without the GIL, so several threads sharing one ana
 | Growth of process memory | 16.5 MB | 34.5 MB | 25.5 MB |
 | Every further process | 1.2 MB | 32.5 MB | 23.1 MB |
 
-Analyzers with the same dictionary file in a process share the dictionary. The dictionary file is mapped into memory, so `multiprocessing` or joblib processes and web server workers share it too: every further process adds only the analyzer's own tables.
+The context model is read at the first sentence analysis: 9 ms and 5 MB of memory. Analyzers with the same dictionary file in a process share the dictionary and the model. The dictionary file is mapped into memory, so `multiprocessing` or joblib processes and web server workers share it too: every further process adds only the analyzer's own tables.
 
 ## How it was measured { #method }
 
 - Quality and text analysis - the [`scripts/compare.py`](https://github.com/SergeyShk/ruMorph/blob/master/scripts/compare.py) script: `uv run --with rumorph==X.Y.Z scripts/compare.py build/compare --chart docs/img/speed.svg`, where `X.Y.Z` is the ruMorph version (without `--with`, the version from `scripts/compare.py.lock`; a path to a wheel works instead of the version). It installs the systems into a separate environment with the versions of all packages pinned in `scripts/compare.py.lock`, downloads the treebank test parts, the models and mystem with checksum verification before measuring and analyzes the gold tokens. The tables converting the parts of speech, case and number of pymorphy3 and mystem to UD are at the top of the script.
-- Versions: Python 3.11, ruMorph 0.3.0, pymorphy3 2.0.6 with the pymorphy3-dicts-ru 2.4.417150.4580142 dictionary, mystem 3.1 through pymystem3 0.2.0 without disambiguation (for quality, each word separately; the macOS binary is built for x86_64 and runs through Rosetta 2), spaCy 3.8.16 with the ru_core_news_sm 3.8.0 model, Stanza 1.15.0 with the default model on the CPU (torch 2.14.1), Slovnet 0.6.0 with the slovnet_morph_news_v1 and navec_news_v1 models. Computer - Apple M3 Pro, macOS 26.
-- Text analysis speed - 157,706 tokens of the SynTagRus test part with punctuation in one thread: tokens per second - the best of two analyses of the whole part after loading, chart points - importing, loading and analyzing the first 10-100,000 tokens in a new process. Only the call of the system is measured: mystem gets a whole sentence, spaCy analyzes sentences with `nlp.pipe`.
+- Versions: Python 3.11, ruMorph 0.4.0.dev2, pymorphy3 2.0.6 with the pymorphy3-dicts-ru 2.4.417150.4580142 dictionary, mystem 3.1 through pymystem3 0.2.0 without disambiguation (for quality, each word separately; the macOS binary is built for x86_64 and runs through Rosetta 2), spaCy 3.8.16 with the ru_core_news_sm 3.8.0 model, Stanza 1.15.0 with the default model on the CPU (torch 2.14.1), Slovnet 0.6.0 with the slovnet_morph_news_v1 and navec_news_v1 models. Computer - Apple M3 Pro, macOS 26.
+- Text analysis speed - 157,706 tokens of the SynTagRus test part with punctuation in one thread: tokens per second - the best of two analyses of the whole part after loading, chart points - importing, loading and analyzing the first 10-100,000 tokens in a new process. Only the call of the system is measured: mystem gets a whole sentence, spaCy analyzes sentences with `nlp.pipe`, ruMorph in context - `analyze_sentence` per sentence.
 - Operations and memory - ruMorph 0.3.0, pymorphy3 2.0.6, `pymorphy3[fast]` - the same with the C++ DAWG extension; 128,251 word forms of the SynTagRus test part without punctuation, the best of three runs in one thread, except for the row with threads. `inflect` - the genitive of the first analyses that have a case, `agree` - the first analyses of nouns with the number 5, `forms` - the first analyses of the first 20,000 words. Memory - the growth of the resident memory of the process (`ps -o rss`) after importing and creating the analyzer, time - the import, creating the analyzer and the first analysis; a further process - the growth of the memory the process does not share with others (USS), in each of four `multiprocessing` processes.

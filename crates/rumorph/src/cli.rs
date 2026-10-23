@@ -18,7 +18,8 @@ rumorph - морфологический анализ русского текс�
 Использование: rumorph [параметры] [файл ...]
 
 Файлы читаются по очереди, без файлов и вместо «-» - стандартный ввод; вход - в UTF-8.
-Результат пишется в стандартный вывод или в файл параметра -o.
+Результат пишется в стандартный вывод или в файл параметра -o. Разбор слова выбирает
+контекстная модель по соседним словам предложения.
 
 Параметры:
   -f, --format ФОРМАТ    формат вывода:
@@ -34,6 +35,7 @@ rumorph - морфологический анализ русского текс�
   -w, --words ФАЙЛ       свои слова: в строке слово и образец (словарное слово в той же форме)
                          через табуляцию, а если у образца несколько частей речи - и часть речи
   -o, --output ФАЙЛ      записать результат в файл
+      --no-context       разбор каждого слова без соседних: быстрее, разборы по частотам словаря
   -h, --help             показать эту справку и выйти
   -V, --version          показать версию и выйти
 ";
@@ -59,6 +61,9 @@ pub fn run(args: Vec<OsString>, version: &str, dictionary: Option<&Path>) -> u8 
 
 /// Буфер входа: вывод сбрасывается, когда буфер пуст и следующее чтение может ждать ввода
 const INPUT_BUFFER: usize = 1 << 16;
+/// Наибольший кусок предложения, который команда разбирает за раз: разборы куска и состояния
+/// модели держатся в памяти
+const MAX_CHUNK: usize = 256;
 
 /// Формат вывода
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -87,13 +92,14 @@ enum Command {
         dictionary: Option<PathBuf>,
         words: Vec<PathBuf>,
         output: Option<PathBuf>,
+        context: bool,
         files: Vec<OsString>,
     },
 }
 
 fn parse(args: Vec<OsString>) -> Result<Command, String> {
     let (mut format, mut input, mut dictionary) = (Format::Lemmas, Input::Text, None);
-    let (mut words, mut output) = (Vec::new(), None);
+    let (mut words, mut output, mut context) = (Vec::new(), None, true);
     let mut files = Vec::new();
     let mut options = true;
     let mut args = args.into_iter();
@@ -148,6 +154,7 @@ fn parse(args: Vec<OsString>) -> Result<Command, String> {
                     .filter(|value| value != "-")
                     .map(PathBuf::from);
             }
+            "--no-context" if inline.is_none() => context = false,
             _ => return Err(format!("неизвестный параметр {option}")),
         }
     }
@@ -157,6 +164,7 @@ fn parse(args: Vec<OsString>) -> Result<Command, String> {
         dictionary,
         words,
         output,
+        context,
         files,
     })
 }
@@ -179,15 +187,16 @@ fn execute(
 ) -> u8 {
     // Сообщение в stderr: если и он закрыт, сказать уже некому
     let mut report = |message: String| drop(writeln!(stderr, "rumorph: {message}"));
-    let (format, input, dictionary, words, output_path, files) = match parse(args) {
+    let (format, input, dictionary, words, output_path, context, files) = match parse(args) {
         Ok(Command::Run {
             format,
             input,
             dictionary,
             words,
             output,
+            context,
             files,
-        }) => (format, input, dictionary, words, output, files),
+        }) => (format, input, dictionary, words, output, context, files),
         Ok(Command::Help) => {
             let written = stdout
                 .write_all(HELP.as_bytes())
@@ -211,6 +220,11 @@ fn execute(
             return 1;
         }
     };
+    // Модель читается до разбора: словарь без нее - ошибка сразу, а не на первом предложении
+    if context && let Err(err) = dictionary.analyze_sentence::<&str>(&[]) {
+        report(format!("{err} (без контекста: --no-context)"));
+        return 1;
+    }
     let files = if files.is_empty() {
         vec![OsString::from("-")]
     } else {
@@ -257,6 +271,7 @@ fn execute(
         interactive: interactive && output_path.is_none(),
         pending: false,
         sentence: 0,
+        context,
     };
     let mut code = 0;
     for file in files {
@@ -448,6 +463,8 @@ struct Writer<'a> {
     pending: bool,
     /// Номер последнего предложения: `# sent_id` CoNLL-U
     sentence: usize,
+    /// Разборы с контекстной моделью
+    context: bool,
 }
 
 impl Writer<'_> {
@@ -503,7 +520,7 @@ impl Writer<'_> {
             match input {
                 Input::Text => {
                     let tokens = Tokens::new(text).peekable();
-                    self.write_tokens(Some(text), tokens, true)
+                    self.write_tokens(Some(text), tokens, true, true)
                         .map_err(Failure::Write)?;
                 }
                 _ if text.trim().is_empty() => {
@@ -565,16 +582,32 @@ impl Writer<'_> {
             word,
             space_after: true,
         });
-        self.write_tokens(block.text.as_deref(), tokens.peekable(), false)
+        self.write_tokens(block.text.as_deref(), tokens.peekable(), false, false)
     }
 
-    /// Предложение в формате вывода: токены пишутся по одному, без разборов всего предложения
-    /// в памяти. Пустая строка текста (`keep_empty`) остается пустой строкой лемм
+    /// Разборы слов предложения: с контекстной моделью или каждого слова отдельно
+    fn analyze(&self, words: &[&str]) -> Vec<Vec<Analysis>> {
+        if self.context
+            && let Ok(analyses) = self.dictionary.analyze_sentence(words)
+        {
+            return analyses;
+        }
+        words
+            .iter()
+            .map(|word| self.dictionary.analyze(word))
+            .collect()
+    }
+
+    /// Предложение в формате вывода: токены разбираются кусками (`next_chunk`), а разборы куска
+    /// сразу пишутся, поэтому память не растет с длиной строки. Пустая строка текста
+    /// (`keep_empty`) остается пустой строкой лемм; со `split` кусок кончается и на знаке конца
+    /// предложения
     fn write_tokens<'t>(
         &mut self,
         text: Option<&str>,
         mut tokens: Peekable<impl Iterator<Item = Token<'t>>>,
         keep_empty: bool,
+        split: bool,
     ) -> io::Result<()> {
         if tokens.peek().is_none() {
             if keep_empty && self.format == Format::Lemmas {
@@ -583,56 +616,19 @@ impl Writer<'_> {
             }
             return Ok(());
         }
-        let mut piece = String::new();
-        match self.format {
-            Format::Lemmas => {
-                for (index, token) in tokens.enumerate() {
-                    let analyses = self.dictionary.analyze(token.word);
-                    let separator = if index > 0 { " " } else { "" };
-                    write!(self.output, "{separator}{}", lemma(&analyses, token.word))?;
-                }
-                writeln!(self.output)?;
-            }
-            Format::Tsv => {
-                for token in tokens {
-                    let analyses = self.dictionary.analyze(token.word);
-                    let (pos, feats, prob) = first(self.dictionary, &analyses);
-                    let lemma = lemma(&analyses, token.word);
-                    writeln!(
-                        self.output,
-                        "{}\t{lemma}\t{pos}\t{feats}\t{prob}",
-                        token.word
-                    )?;
-                }
-                writeln!(self.output)?;
-            }
+        let collected: Vec<Token>;
+        let mut tokens: Box<dyn Iterator<Item = Token<'t>> + '_> = match self.format {
             Format::Conllu => {
-                self.sentence += 1;
-                writeln!(self.output, "# sent_id = {}", self.sentence)?;
                 // Текст - из токенов и SpaceAfter: так он совпадает с ними, как требует CoNLL-U,
                 // и не несет переводов строки, пробелов по краям и невидимых разделителей
-                let tokens: Vec<Token> = tokens.collect();
-                writeln!(self.output, "# text = {}", sentence_text(&tokens))?;
-                for (index, token) in tokens.iter().enumerate() {
-                    let analyses = self.dictionary.analyze(token.word);
-                    let (pos, feats, _) = first(self.dictionary, &analyses);
-                    let misc = if token.space_after {
-                        "_"
-                    } else {
-                        "SpaceAfter=No"
-                    };
-                    writeln!(
-                        self.output,
-                        "{}\t{}\t{}\t{pos}\t_\t{feats}\t_\t_\t_\t{misc}",
-                        index + 1,
-                        token.word,
-                        lemma(&analyses, token.word)
-                    )?;
-                }
-                writeln!(self.output)?;
+                collected = tokens.collect();
+                self.sentence += 1;
+                writeln!(self.output, "# sent_id = {}", self.sentence)?;
+                writeln!(self.output, "# text = {}", sentence_text(&collected))?;
+                Box::new(collected.iter().copied())
             }
             Format::Jsonl => {
-                piece.push('{');
+                let mut piece = String::from("{");
                 if let Some(text) = text {
                     piece.push_str("\"text\": ");
                     json_string(&mut piece, text);
@@ -640,37 +636,95 @@ impl Writer<'_> {
                 }
                 piece.push_str("\"tokens\": [");
                 self.output.write_all(piece.as_bytes())?;
-                for (index, token) in tokens.enumerate() {
-                    piece.clear();
-                    if index > 0 {
-                        piece.push_str(", ");
-                    }
-                    piece.push_str("{\"word\": ");
-                    json_string(&mut piece, token.word);
-                    piece.push_str(", \"analyses\": [");
-                    for (number, analysis) in self.dictionary.analyze(token.word).iter().enumerate()
-                    {
-                        if number > 0 {
-                            piece.push_str(", ");
-                        }
-                        self.json_analysis(&mut piece, analysis);
-                    }
-                    piece.push_str("]}");
-                    self.output.write_all(piece.as_bytes())?;
-                }
-                writeln!(self.output, "]}}")?;
+                Box::new(tokens)
             }
+            _ => Box::new(tokens),
+        };
+        let (mut chunk, mut piece, mut index) = (Vec::new(), String::new(), 0);
+        while next_chunk(&mut tokens, split, &mut chunk) {
+            let words: Vec<&str> = chunk.iter().map(|token| token.word).collect();
+            for (token, analyses) in chunk.iter().zip(self.analyze(&words)) {
+                self.write_token(index, token, &analyses, &mut piece)?;
+                index += 1;
+            }
+        }
+        match self.format {
+            Format::Jsonl => writeln!(self.output, "]}}")?,
+            _ => writeln!(self.output)?,
         }
         self.end_sentence()
     }
 
+    /// Токен номер `index` предложения в формате вывода
+    fn write_token(
+        &mut self,
+        index: usize,
+        token: &Token,
+        analyses: &[Analysis],
+        piece: &mut String,
+    ) -> io::Result<()> {
+        match self.format {
+            Format::Lemmas => {
+                let separator = if index > 0 { " " } else { "" };
+                write!(self.output, "{separator}{}", lemma(analyses, token.word))
+            }
+            Format::Tsv => {
+                let (pos, feats, prob) = first(self.dictionary, analyses);
+                let lemma = lemma(analyses, token.word);
+                writeln!(
+                    self.output,
+                    "{}\t{lemma}\t{pos}\t{feats}\t{prob}",
+                    token.word
+                )
+            }
+            Format::Conllu => {
+                let (pos, feats, _) = first(self.dictionary, analyses);
+                let misc = if token.space_after {
+                    "_"
+                } else {
+                    "SpaceAfter=No"
+                };
+                writeln!(
+                    self.output,
+                    "{}\t{}\t{}\t{pos}\t_\t{feats}\t_\t_\t_\t{misc}",
+                    index + 1,
+                    token.word,
+                    lemma(analyses, token.word)
+                )
+            }
+            Format::Jsonl => {
+                piece.clear();
+                if index > 0 {
+                    piece.push_str(", ");
+                }
+                piece.push_str("{\"word\": ");
+                json_string(piece, token.word);
+                piece.push_str(", \"analyses\": [");
+                for (number, analysis) in analyses.iter().enumerate() {
+                    if number > 0 {
+                        piece.push_str(", ");
+                    }
+                    self.json_analysis(piece, analysis);
+                }
+                piece.push_str("]}");
+                self.output.write_all(piece.as_bytes())
+            }
+        }
+    }
+
     /// Предложение CoNLL-U с заполненными LEMMA, UPOS и FEATS
     fn write_conllu_lines(&mut self, block: &Block) -> io::Result<()> {
+        let mut words = block.words.iter().map(String::as_str);
+        let mut chunk = Vec::new().into_iter();
         for line in &block.lines {
             match line {
                 Line::Raw(text) => writeln!(self.output, "{text}")?,
                 Line::Word(columns) => {
-                    let analyses = self.dictionary.analyze(&columns[1]);
+                    if chunk.len() == 0 {
+                        let next: Vec<&str> = words.by_ref().take(MAX_CHUNK).collect();
+                        chunk = self.analyze(&next).into_iter();
+                    }
+                    let analyses = chunk.next().unwrap_or_default();
                     let (pos, feats, _) = first(self.dictionary, &analyses);
                     let lemma = lemma(&analyses, &columns[1]);
                     let [id, form, _, _, xpos, _, rest @ ..] = &columns[..] else {
@@ -756,6 +810,29 @@ fn foreign_encoding(head: &[u8]) -> Option<usize> {
         };
     }
     None
+}
+
+/// Следующий кусок токенов в `chunk`: не больше `MAX_CHUNK`, а со `split` - и до знака конца
+/// предложения включительно: строку из нескольких предложений модель разбирает по одному.
+/// `false` - токены кончились
+fn next_chunk<'t>(
+    tokens: &mut dyn Iterator<Item = Token<'t>>,
+    split: bool,
+    chunk: &mut Vec<Token<'t>>,
+) -> bool {
+    chunk.clear();
+    for token in tokens {
+        chunk.push(token);
+        let end = !token.word.is_empty()
+            && token
+                .word
+                .chars()
+                .all(|ch| matches!(ch, '.' | '!' | '?' | '…'));
+        if chunk.len() >= MAX_CHUNK || (split && end) {
+            break;
+        }
+    }
+    !chunk.is_empty()
 }
 
 /// Текст предложения из токенов: пробел - после токена со `space_after`
@@ -931,7 +1008,8 @@ fn json_string(out: &mut String, text: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dictionary::tests::dictionary_bytes_of;
+    use crate::dictionary::context::tests::weights;
+    use crate::dictionary::tests::dictionary_bytes_with;
 
     fn words(line: &str) -> Vec<(String, bool)> {
         Tokens::new(line)
@@ -1044,7 +1122,8 @@ mod tests {
                 "a.txt",
                 "-",
                 "-o",
-                "b"
+                "b",
+                "--no-context"
             ]),
             Ok(Command::Run {
                 format: Format::Conllu,
@@ -1052,6 +1131,7 @@ mod tests {
                 dictionary: Some(PathBuf::from("ru.dict")),
                 words: vec![PathBuf::from("w.tsv")],
                 output: Some(PathBuf::from("b")),
+                context: false,
                 files: vec!["a.txt".into(), "-".into()],
             })
         );
@@ -1065,8 +1145,13 @@ mod tests {
                 dictionary: None,
                 words: Vec::new(),
                 output: None,
+                context: true,
                 files: vec!["-f".into()],
             })
+        );
+        assert_eq!(
+            args(&["--no-context=yes"]),
+            Err("неизвестный параметр --no-context=yes".into())
         );
         assert_eq!(
             args(&["-f", "xml"]),
@@ -1082,14 +1167,25 @@ mod tests {
         assert_eq!(args(&["--all"]), Err("неизвестный параметр --all".into()));
     }
 
-    /// Словарь «мама», «мыла» и «раму» в файле: команда читает словарь из файла
-    struct TestDictionary(PathBuf);
+    /// Словарь «мама», «мыла», «раму» и «стол» в файле: команда читает словарь из файла.
+    /// Без модели (`new`) команда запускается с `--no-context`
+    struct TestDictionary(PathBuf, bool);
 
     impl TestDictionary {
         fn new() -> Self {
+            Self::build(None)
+        }
+
+        /// Словарь с моделью, которая ставит винительный падеж первым
+        fn with_context() -> Self {
+            Self::build(Some(weights(&[("F=Case=Acc", 2.0)])))
+        }
+
+        fn build(context: Option<Vec<u8>>) -> Self {
             let noun = |case: &str| format!("Case={case}|Gender=Fem|Number=Sing");
             let verb = |feats: &str| feats.to_owned();
-            let data = dictionary_bytes_of(
+            let model = context.is_some();
+            let data = dictionary_bytes_with(
                 &[
                     ("NOUN", "мам", vec![("а", noun("Nom"))]),
                     ("NOUN", "рам", vec![("а", noun("Nom")), ("у", noun("Acc"))]),
@@ -1101,8 +1197,17 @@ mod tests {
                             ("ла", verb("Gender=Fem|Number=Sing|Tense=Past")),
                         ],
                     ),
+                    (
+                        "NOUN",
+                        "стол",
+                        vec![
+                            ("", "Case=Nom|Gender=Masc|Number=Sing".into()),
+                            ("", "Case=Acc|Gender=Masc|Number=Sing".into()),
+                        ],
+                    ),
                 ],
                 &[],
+                context,
             );
             use std::sync::atomic::{AtomicUsize, Ordering};
             static NUMBER: AtomicUsize = AtomicUsize::new(0);
@@ -1110,7 +1215,7 @@ mod tests {
             let path = std::env::temp_dir()
                 .join(format!("rumorph-cli-{}-{number}.dict", std::process::id()));
             std::fs::write(&path, data).unwrap();
-            TestDictionary(path)
+            TestDictionary(path, model)
         }
 
         /// Код выхода, вывод и ошибки команды с аргументами `args` и входом `input`
@@ -1124,7 +1229,13 @@ mod tests {
             mut input: &[u8],
             stdout: &mut dyn Write,
         ) -> (u8, String, String) {
-            let args = args.iter().map(OsString::from).collect();
+            let no_context = (!self.1).then_some("--no-context");
+            let args = args
+                .iter()
+                .copied()
+                .chain(no_context)
+                .map(OsString::from)
+                .collect();
             let mut captured = Vec::new();
             let mut stderr = Vec::new();
             let code = {
@@ -1167,6 +1278,52 @@ mod tests {
         fn flush(&mut self) -> io::Result<()> {
             self.0.flush()
         }
+    }
+
+    #[test]
+    fn context_by_default() {
+        let dict = TestDictionary::with_context();
+        let (code, out, err) = dict.run(&["-f", "tsv"], "вижу стол\n".as_bytes());
+        assert_eq!((code, err.as_str()), (0, ""));
+        let prob = 1.0 / (1.0 + (-2.0f64).exp());
+        assert!(
+            out.contains(&format!(
+                "стол\tстол\tNOUN\tCase=Acc|Gender=Masc|Number=Sing\t{prob}"
+            )),
+            "{out}"
+        );
+        let (_, out, _) = dict.run(&["-f", "tsv", "--no-context"], "стол\n".as_bytes());
+        assert!(
+            out.contains("стол\tстол\tNOUN\tCase=Nom|Gender=Masc|Number=Sing\t0.5"),
+            "{out}"
+        );
+        let (code, out, _) = dict.run(
+            &["-i", "conllu", "-f", "conllu"],
+            "1\tвижу\t_\t_\t_\t_\t_\t_\t_\t_\n2\tстол\t_\t_\t_\t_\t_\t_\t_\t_\n".as_bytes(),
+        );
+        assert_eq!(code, 0);
+        assert!(out.contains("2\tстол\tстол\tNOUN\t_\tCase=Acc"), "{out}");
+        // Слово без соседей - порядок словаря, как с --no-context
+        let (_, out, _) = dict.run(&["-f", "tsv"], "стол\n".as_bytes());
+        assert!(
+            out.contains("Case=Nom|Gender=Masc|Number=Sing\t0.5"),
+            "{out}"
+        );
+        // Строка из нескольких предложений и очень длинная строка - кусками: в каждом слово
+        // «стол» после «вижу» в винительном падеже
+        let text = "вижу стол . ".repeat(300) + "\n";
+        let (code, out, _) = dict.run(&["-f", "tsv"], text.as_bytes());
+        assert_eq!(code, 0);
+        assert_eq!(out.matches("стол\tстол\tNOUN\tCase=Acc").count(), 300);
+        // Словарь без модели: ошибка до разбора, с подсказкой
+        let mut dict = TestDictionary::new();
+        dict.1 = true;
+        let (code, out, err) = dict.run(&[], "стол\n".as_bytes());
+        assert_eq!((code, out.as_str()), (1, ""));
+        assert!(
+            err.contains("нет контекстной модели") && err.contains("--no-context"),
+            "{err}"
+        );
     }
 
     #[test]
@@ -1421,7 +1578,7 @@ mod tests {
     fn run_with(dict: &TestDictionary, interactive: bool, output: &mut Output) -> (u8, String) {
         let mut stderr = Vec::new();
         let code = execute(
-            Vec::new(),
+            vec!["--no-context".into()],
             "",
             Some(&dict.0),
             interactive,
@@ -1465,7 +1622,7 @@ mod tests {
         let dict = TestDictionary::new();
         let mut stderr = Vec::new();
         let code = execute(
-            Vec::new(),
+            vec!["--no-context".into()],
             "",
             Some(&dict.0),
             true,
@@ -1500,7 +1657,7 @@ mod tests {
         };
         let mut input = Lines(vec!["раму\n".as_bytes(), "раму\n".as_bytes()]);
         let code = execute(
-            Vec::new(),
+            vec!["--no-context".into()],
             "",
             Some(&dict.0),
             false,

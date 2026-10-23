@@ -138,6 +138,47 @@ analyze_many(words)
 
 <div class="metric-card" markdown>
 
+### Разбор предложения { #analyze_sentence }
+
+`analyze_sentence` · `list[list[Analysis]]`
+{ .metric-meta }
+
+``` {.python .signature}
+analyze_sentence(words)
+```
+
+Разборы слов предложения с учетом контекста: те же разборы, что у [`analyze`](#analyze), упорядочивает контекстная модель - первым идет разбор, который она выбрала по соседним словам, а `prob` - ее оценка в этом предложении. Без контекста «книги» - в родительном падеже (так чаще), в «Я читаю книги» модель выбирает винительный, а «стали» в «Завод выпускает больше стали» - существительное «сталь», а не глагол «стать». С контекстом часть речи, лемма и признаки первого разбора верны у 81-93 % слов против 71-82 % без него ([Сравнение](performance.md)). Слова - токены одного предложения по порядку: ruMorph не делит текст на предложения и токены. Слово без соседей разбирается, как у `analyze`: без контекста модель выбирает хуже частот словаря. Модель обучена на трибанках [UD_Russian-Taiga](https://github.com/UniversalDependencies/UD_Russian-Taiga) и [UD_Russian-GSD](https://github.com/UniversalDependencies/UD_Russian-GSD) и входит в словарь пакета.
+
+| Параметр | Тип | По умолчанию | Описание |
+| :------- | :-- | :----------- | :------- |
+| `words` | `Iterable[str]` | - | Токены предложения: список, кортеж, генератор |
+
+Исключения:
+
+- `TypeError` - строка вместо набора слов, слово, которое не строка;
+- `ValueError` - в словаре нет контекстной модели (словарь, собранный без нее).
+
+=== "Код"
+
+    ``` python
+    words = ["Я", "читаю", "книги"]
+    print([analyses[0].feats.get("Case") for analyses in morph.analyze_many(words)])
+    print([analyses[0].feats.get("Case") for analyses in morph.analyze_sentence(words)])
+    print(morph.analyze_sentence(["Завод", "выпускает", "больше", "стали"])[3][0].lemma)
+    ```
+
+=== "Результат"
+
+    ```
+    ['Nom', None, 'Gen']
+    ['Nom', None, 'Acc']
+    сталь
+    ```
+
+</div>
+
+<div class="metric-card" markdown>
+
 ### Лемматизация { #lemmatize }
 
 `lemmatize` · `list[str]`

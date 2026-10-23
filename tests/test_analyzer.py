@@ -9,6 +9,7 @@ import shutil
 import sys
 import threading
 import time
+import zlib
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -213,6 +214,52 @@ def test_analyze_many(morph):
     assert morph.analyze_many(words) == [morph.analyze(word) for word in words]
     assert morph.analyze_many(word for word in words) == morph.analyze_many(tuple(words))
     assert morph.analyze_many([]) == []
+
+
+def test_analyze_sentence(morph):
+    words = ["Я", "читаю", "книги", ",", "а", "он", "видит", "меня"]
+    sentence = morph.analyze_sentence(words)
+
+    def key(analysis):
+        return analysis.word, analysis.lemma, analysis.pos, tuple(analysis.feats.items())
+
+    # Те же разборы, что без контекста, в другом порядке и с вероятностями в контексте
+    for analyses, word in zip(sentence, words, strict=True):
+        assert sorted(map(key, analyses)) == sorted(map(key, morph.analyze(word)))
+        assert math.isclose(sum(analysis.prob for analysis in analyses), 1.0)
+    assert morph.analyze("книги")[0].feats["Case"] == "Gen"
+    assert sentence[2][0].feats["Case"] == "Acc"
+    steel = morph.analyze_sentence(["Завод", "выпускает", "больше", "стали"])[3][0]
+    assert (steel.lemma, steel.pos) == ("сталь", "NOUN")
+    assert morph.analyze_sentence(word for word in words) == sentence
+    assert morph.analyze_sentence([]) == []
+    # Свои слова и pickle анализатора
+    own = Analyzer(words={"зумер": "геймер"})
+    assert own.analyze_sentence(["Вижу", "зумера"])[1][0].lemma == "зумер"
+    restored = pickle.loads(pickle.dumps(morph))
+    assert restored.analyze_sentence(words) == sentence
+
+
+def test_analyze_sentence_errors(morph, tmp_path):
+    with pytest.raises(TypeError, match="набор слов"):
+        morph.analyze_sentence("стол")
+    with pytest.raises(TypeError):
+        morph.analyze_sentence(["стол", 1])
+    # Словарь формата 6 - без секции контекстной модели: разбор слов работает, предложения - нет
+    data = bytearray(Path(morph.path).read_bytes())
+    at = 16
+    for _ in range(16):
+        length = int.from_bytes(data[at : at + 8], "little")
+        at += 8 + (length + 7) // 8 * 8
+    old = data[:at]
+    old[8:12] = (6).to_bytes(4, "little")
+    old[12:16] = zlib.crc32(old[16:]).to_bytes(4, "little")
+    path = tmp_path / "old.dict"
+    path.write_bytes(bytes(old))
+    analyzer = Analyzer(path)
+    assert analyzer.analyze("стол") == morph.analyze("стол")
+    with pytest.raises(ValueError, match="нет контекстной модели"):
+        analyzer.analyze_sentence(["стол"])
 
 
 def test_lemmatize(morph):
@@ -808,6 +855,43 @@ def test_fork_while_loading(morph, tmp_path):
             pid = os.fork()
             if pid == 0:
                 os._exit(0 if Analyzer(path).lemmatize(["стали"]) == ["стать"] else 1)
+            deadline = time.monotonic() + 30
+            while (done := os.waitpid(pid, os.WNOHANG))[0] == 0 and time.monotonic() < deadline:
+                time.sleep(0.01)
+            if done[0] == 0:
+                os.kill(pid, 9)
+                os.waitpid(pid, 0)
+            assert done[0] == pid and os.waitstatus_to_exitcode(done[1]) == 0
+    finally:
+        stop.set()
+        thread.join()
+
+
+@pytest.mark.skipif(not hasattr(os, "fork"), reason="нет fork")
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
+def test_fork_while_building_context(morph, tmp_path):
+    # Процесс, созданный fork, пока другой поток строит контекстную модель, не зависает на ней:
+    # два файла словаря по очереди - модель каждый раз строится заново
+    paths = [tmp_path / f"{name}.dict" for name in "ab"]
+    for path in paths:
+        shutil.copy(morph.path, path)
+    stop = threading.Event()
+
+    def build():
+        number = 0
+        while not stop.is_set():
+            Analyzer(paths[number % 2]).analyze_sentence(["Я", "читаю"])
+            number += 1
+
+    thread = threading.Thread(target=build)
+    thread.start()
+    try:
+        for _ in range(10):
+            time.sleep(0.013)
+            pid = os.fork()
+            if pid == 0:
+                sentences = [Analyzer(path).analyze_sentence(["Я", "читаю"]) for path in paths]
+                os._exit(0 if all(len(sentence) == 2 for sentence in sentences) else 1)
             deadline = time.monotonic() + 30
             while (done := os.waitpid(pid, os.WNOHANG))[0] == 0 and time.monotonic() < deadline:
                 time.sleep(0.01)

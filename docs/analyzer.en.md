@@ -138,6 +138,47 @@ Exceptions:
 
 <div class="metric-card" markdown>
 
+### Sentence analysis { #analyze_sentence }
+
+`analyze_sentence` · `list[list[Analysis]]`
+{ .metric-meta }
+
+``` {.python .signature}
+analyze_sentence(words)
+```
+
+Analyses of the words of a sentence in context: the same analyses as with [`analyze`](#analyze) are ordered by the context model - the first one is the analysis it chose from the neighbouring words, and `prob` is its estimate in this sentence. Without context «книги» is in the genitive (it is more frequent), in «Я читаю книги» the model picks the accusative, and «стали» in «Завод выпускает больше стали» is the noun «сталь», not the verb «стать». With context the part of speech, lemma and features of the first analysis are right for 81-93 % of words against 71-82 % without it ([Comparison](performance.md)). The words are the tokens of one sentence in order: ruMorph does not split text into sentences and tokens. A word without neighbours is analyzed as with `analyze`: without context the model chooses worse than the dictionary frequencies. The model is trained on the [UD_Russian-Taiga](https://github.com/UniversalDependencies/UD_Russian-Taiga) and [UD_Russian-GSD](https://github.com/UniversalDependencies/UD_Russian-GSD) treebanks and ships with the package dictionary.
+
+| Parameter | Type | Default | Description |
+| :-------- | :--- | :------ | :---------- |
+| `words` | `Iterable[str]` | - | Tokens of a sentence: a list, a tuple, a generator |
+
+Exceptions:
+
+- `TypeError` - a string instead of a collection of words, a word that is not a string;
+- `ValueError` - the dictionary has no context model (a dictionary built without it).
+
+=== "Code"
+
+    ``` python
+    words = ["Я", "читаю", "книги"]
+    print([analyses[0].feats.get("Case") for analyses in morph.analyze_many(words)])
+    print([analyses[0].feats.get("Case") for analyses in morph.analyze_sentence(words)])
+    print(morph.analyze_sentence(["Завод", "выпускает", "больше", "стали"])[3][0].lemma)
+    ```
+
+=== "Result"
+
+    ```
+    ['Nom', None, 'Gen']
+    ['Nom', None, 'Acc']
+    сталь
+    ```
+
+</div>
+
+<div class="metric-card" markdown>
+
 ### Lemmatization { #lemmatize }
 
 `lemmatize` · `list[str]`

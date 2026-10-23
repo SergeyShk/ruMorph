@@ -15,12 +15,16 @@ pub(crate) const MAX_SPELLINGS: usize = 8;
 pub(crate) const MAX_LIST: usize = 255;
 /// Бит длины списка частот: ключи списка - формы таблиц `(таблица << 16) | форма`, а не теги
 pub(crate) const ENTRY_KEYS: u32 = 1 << 31;
-const VERSION: u32 = 6;
-/// Самый старый читаемый формат: в формате 5 нет списков частот по формам таблиц, остальное как в 6
+const VERSION: u32 = 7;
+/// Самый старый читаемый формат: в формате 5 нет списков частот по формам таблиц, в форматах 5
+/// и 6 - секции контекстной модели, остальное как в 7
 const OLDEST_VERSION: u32 = 5;
 const HEADER: usize = 16;
 const ALIGN: usize = 8;
-const SECTIONS: usize = 16;
+/// Число секций формата: с версии 7 - и секция контекстной модели
+const fn sections(version: u32) -> usize {
+    if version >= 7 { 17 } else { 16 }
+}
 
 /// Содержимое словаря для записи в файл
 #[cfg(any(test, feature = "build"))]
@@ -61,6 +65,8 @@ pub(crate) struct Sections {
     pub guesses: Vec<u8>,
     /// Списки форм для угадывания: длина, затем пары `(таблица << 16) | форма`, число словоформ
     pub guess_records: Vec<u32>,
+    /// Веса контекстной модели (`scripts/train_context.py`); пусто - модели нет
+    pub context: Vec<u8>,
 }
 
 /// Значение ключа в автомате словоформ
@@ -138,6 +144,8 @@ pub(crate) struct Layout {
     pub probability_records: Range<usize>,
     pub guesses: Range<usize>,
     pub guess_records: Range<usize>,
+    /// Пусто у словаря без модели и у форматов 5 и 6
+    pub context: Range<usize>,
 }
 
 impl Layout {
@@ -181,13 +189,14 @@ pub(crate) fn write(sections: &Sections) -> Vec<u8> {
     section(&u32_bytes(&sections.probability_records));
     section(&sections.guesses);
     section(&u32_bytes(&sections.guess_records));
+    section(&sections.context);
     let checksum = crc32fast::hash(&out[HEADER..]);
     out[12..HEADER].copy_from_slice(&checksum.to_le_bytes());
     out
 }
 
-/// Проверяет сигнатуру и версию формата в начале файла
-fn check_header(data: &[u8]) -> Result<(), Error> {
+/// Проверяет сигнатуру и версию формата в начале файла; вывод - версия
+fn check_header(data: &[u8]) -> Result<u32, Error> {
     if data.get(..MAGIC.len()) != Some(MAGIC.as_slice()) {
         return Err(Error::Format("нет сигнатуры словаря ruMorph".into()));
     }
@@ -200,12 +209,12 @@ fn check_header(data: &[u8]) -> Result<(), Error> {
             "версия формата {version}, поддерживаются {OLDEST_VERSION}-{VERSION}"
         )));
     }
-    Ok(())
+    Ok(version)
 }
 
 /// Границы секций файла: проверяются сигнатура, версия, длины секций и контрольная сумма
 pub(crate) fn layout(data: &[u8]) -> Result<Layout, Error> {
-    check_header(data)?;
+    let version = check_header(data)?;
     let mut at = HEADER;
     let mut section = |width: usize| -> Result<Range<usize>, Error> {
         let len = data.get(at..at + 8).ok_or_else(truncated)?;
@@ -242,6 +251,11 @@ pub(crate) fn layout(data: &[u8]) -> Result<Layout, Error> {
         probability_records: section(4)?,
         guesses: section(1)?,
         guess_records: section(4)?,
+        context: if sections(version) > 16 {
+            section(1)?
+        } else {
+            0..0
+        },
     };
     if at != data.len() {
         return Err(extra_data());
@@ -261,8 +275,8 @@ pub(crate) fn layout(data: &[u8]) -> Result<Layout, Error> {
 pub(crate) fn read(mut input: impl Read) -> Result<Storage, Error> {
     let mut buffer = Buffer::default();
     buffer.fill(&mut input, HEADER as u64)?;
-    check_header(buffer.bytes())?;
-    for _ in 0..SECTIONS {
+    let version = check_header(buffer.bytes())?;
+    for _ in 0..sections(version) {
         if buffer.fill(&mut input, 8)? < 8 {
             return Err(truncated());
         }
@@ -541,6 +555,7 @@ pub(crate) mod tests {
             probability_records: u32s(&layout.probability_records),
             guesses: bytes(&layout.guesses).to_vec(),
             guess_records: u32s(&layout.guess_records),
+            context: bytes(&layout.context).to_vec(),
         }
     }
 
@@ -815,8 +830,26 @@ pub(crate) mod tests {
         data[MAGIC.len()..MAGIC.len() + 4].copy_from_slice(&4u32.to_le_bytes());
         let err = layout(&data).err().unwrap();
         assert!(err.to_string().contains("версия формата 4"), "{err}");
-        data[MAGIC.len()..MAGIC.len() + 4].copy_from_slice(&5u32.to_le_bytes());
-        assert!(layout(&data).is_ok());
+        // Форматы 5 и 6 - без последней секции, контекстной модели
+        data.truncate(data.len() - 8);
+        for version in [5u32, 6] {
+            data[MAGIC.len()..MAGIC.len() + 4].copy_from_slice(&version.to_le_bytes());
+            let data = with_checksum(data.clone());
+            assert!(layout(&data).unwrap().context.is_empty());
+            assert_eq!(super::read(data.as_slice()).unwrap().bytes(), data);
+        }
+    }
+
+    #[test]
+    fn context_section() {
+        let sections = Sections {
+            context: b"weights".to_vec(),
+            ..sample()
+        };
+        let data = write(&sections);
+        let layout = layout(&data).unwrap();
+        assert_eq!(&data[layout.context], b"weights");
+        assert_eq!(super::read(data.as_slice()).unwrap().bytes(), data);
     }
 
     #[test]
