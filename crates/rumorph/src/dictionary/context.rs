@@ -321,14 +321,17 @@ impl<'a> Entries<'a> {
         }
     }
 
-    /// Номера строк таблицы: строки 0 и 1 таблицы - пустая и неизвестная, словарь - с 2
-    fn index(&mut self, name: &str) -> Result<HashMap<String, u32>, Error> {
+    /// Номера строк таблицы по строкам записи `name` с номера `first`; повтор строки - ошибка:
+    /// иначе номер строки вышел бы за таблицу
+    fn index(&mut self, name: &str, first: u32) -> Result<HashMap<String, u32>, Error> {
         let strings = self.strings(name)?;
-        Ok(strings
-            .iter()
-            .enumerate()
-            .map(|(number, text)| ((*text).to_owned(), number as u32 + 2))
-            .collect())
+        let index: HashMap<String, u32> = (strings.iter().enumerate())
+            .map(|(number, text)| ((*text).to_owned(), number as u32 + first))
+            .collect();
+        if index.len() != strings.len() {
+            return Err(invalid(&format!("в {name} повторяются строки")));
+        }
+        Ok(index)
     }
 }
 
@@ -416,12 +419,10 @@ impl Model {
         let Value::Floats(edges) = entries.take("edges")? else {
             return Err(invalid("edges - не числа"));
         };
-        let words = entries.index("words")?;
-        let suffixes = entries.index("suffixes")?;
-        let tags: HashMap<String, u32> = (entries.strings("tags")?.iter())
-            .enumerate()
-            .map(|(number, text)| ((*text).to_owned(), number as u32 + 1))
-            .collect();
+        // Строки 0 и 1 таблиц слов и окончаний - пустая и неизвестная, строка 0 тегов - пустая
+        let words = entries.index("words", 2)?;
+        let suffixes = entries.index("suffixes", 2)?;
+        let tags = entries.index("tags", 1)?;
         let inventory = (entries.strings("inventory")?.iter())
             .map(|text| (*text).to_owned())
             .collect();
@@ -898,11 +899,13 @@ pub(crate) mod tests {
         assert!((table[0].prob - expected).abs() < 1e-6, "{}", table[0].prob);
         assert!((table[0].prob + table[1].prob - 1.0).abs() < 1e-9);
         assert_eq!(sentence[0][0].prob, 1.0);
-        // Пустое предложение и копия словаря - та же модель
+        // Пустое предложение, слово без соседей - как `analyze`, копия словаря - та же модель
         assert!(dictionary.analyze_sentence::<&str>(&[]).unwrap().is_empty());
+        let alone = dictionary.analyze_sentence(&["стол"]).unwrap();
+        assert_eq!(alone, vec![dictionary.analyze("стол")]);
         let copy = dictionary.clone();
         assert_eq!(
-            copy.analyze_sentence(&["стол"]).unwrap()[0][0].ud,
+            copy.analyze_sentence(&["вижу", "стол"]).unwrap()[1][0].ud,
             table[0].ud
         );
     }
@@ -971,6 +974,14 @@ pub(crate) mod tests {
         let a: Vec<f32> = (0..19).map(|i| i as f32).collect();
         let b = vec![2.0f32; 19];
         assert_eq!(dot(&a, &b), 342.0);
+    }
+
+    #[test]
+    fn repeated_strings() {
+        // Повтор тега: номер строки второго вышел бы за таблицу тегов
+        let data = weights(&[("P=NOUN", 1.0), ("P=NOUN", 2.0)]);
+        let err = Model::parse(&data).unwrap_err().to_string();
+        assert!(err.contains("в tags повторяются строки"), "{err}");
     }
 
     #[test]

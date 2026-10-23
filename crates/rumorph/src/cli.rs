@@ -61,6 +61,9 @@ pub fn run(args: Vec<OsString>, version: &str, dictionary: Option<&Path>) -> u8 
 
 /// Буфер входа: вывод сбрасывается, когда буфер пуст и следующее чтение может ждать ввода
 const INPUT_BUFFER: usize = 1 << 16;
+/// Наибольший кусок предложения, который команда разбирает за раз: разборы куска и состояния
+/// модели держатся в памяти
+const MAX_CHUNK: usize = 256;
 
 /// Формат вывода
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -517,7 +520,7 @@ impl Writer<'_> {
             match input {
                 Input::Text => {
                     let tokens = Tokens::new(text).peekable();
-                    self.write_tokens(Some(text), tokens, true)
+                    self.write_tokens(Some(text), tokens, true, true)
                         .map_err(Failure::Write)?;
                 }
                 _ if text.trim().is_empty() => {
@@ -579,7 +582,7 @@ impl Writer<'_> {
             word,
             space_after: true,
         });
-        self.write_tokens(block.text.as_deref(), tokens.peekable(), false)
+        self.write_tokens(block.text.as_deref(), tokens.peekable(), false, false)
     }
 
     /// Разборы слов предложения: с контекстной моделью или каждого слова отдельно
@@ -595,70 +598,37 @@ impl Writer<'_> {
             .collect()
     }
 
-    /// Предложение в формате вывода. Пустая строка текста (`keep_empty`) остается пустой
-    /// строкой лемм
+    /// Предложение в формате вывода: токены разбираются кусками (`next_chunk`), а разборы куска
+    /// сразу пишутся, поэтому память не растет с длиной строки. Пустая строка текста
+    /// (`keep_empty`) остается пустой строкой лемм; со `split` кусок кончается и на знаке конца
+    /// предложения
     fn write_tokens<'t>(
         &mut self,
         text: Option<&str>,
-        tokens: Peekable<impl Iterator<Item = Token<'t>>>,
+        mut tokens: Peekable<impl Iterator<Item = Token<'t>>>,
         keep_empty: bool,
+        split: bool,
     ) -> io::Result<()> {
-        let tokens: Vec<Token> = tokens.collect();
-        if tokens.is_empty() {
+        if tokens.peek().is_none() {
             if keep_empty && self.format == Format::Lemmas {
                 writeln!(self.output)?;
                 self.end_sentence()?;
             }
             return Ok(());
         }
-        let words: Vec<&str> = tokens.iter().map(|token| token.word).collect();
-        let sentence = self.analyze(&words);
-        let mut piece = String::new();
-        match self.format {
-            Format::Lemmas => {
-                for (index, (token, analyses)) in tokens.iter().zip(&sentence).enumerate() {
-                    let separator = if index > 0 { " " } else { "" };
-                    write!(self.output, "{separator}{}", lemma(analyses, token.word))?;
-                }
-                writeln!(self.output)?;
-            }
-            Format::Tsv => {
-                for (token, analyses) in tokens.iter().zip(&sentence) {
-                    let (pos, feats, prob) = first(self.dictionary, analyses);
-                    let lemma = lemma(analyses, token.word);
-                    writeln!(
-                        self.output,
-                        "{}\t{lemma}\t{pos}\t{feats}\t{prob}",
-                        token.word
-                    )?;
-                }
-                writeln!(self.output)?;
-            }
+        let collected: Vec<Token>;
+        let mut tokens: Box<dyn Iterator<Item = Token<'t>> + '_> = match self.format {
             Format::Conllu => {
-                self.sentence += 1;
-                writeln!(self.output, "# sent_id = {}", self.sentence)?;
                 // Текст - из токенов и SpaceAfter: так он совпадает с ними, как требует CoNLL-U,
                 // и не несет переводов строки, пробелов по краям и невидимых разделителей
-                writeln!(self.output, "# text = {}", sentence_text(&tokens))?;
-                for (index, (token, analyses)) in tokens.iter().zip(&sentence).enumerate() {
-                    let (pos, feats, _) = first(self.dictionary, analyses);
-                    let misc = if token.space_after {
-                        "_"
-                    } else {
-                        "SpaceAfter=No"
-                    };
-                    writeln!(
-                        self.output,
-                        "{}\t{}\t{}\t{pos}\t_\t{feats}\t_\t_\t_\t{misc}",
-                        index + 1,
-                        token.word,
-                        lemma(analyses, token.word)
-                    )?;
-                }
-                writeln!(self.output)?;
+                collected = tokens.collect();
+                self.sentence += 1;
+                writeln!(self.output, "# sent_id = {}", self.sentence)?;
+                writeln!(self.output, "# text = {}", sentence_text(&collected))?;
+                Box::new(collected.iter().copied())
             }
             Format::Jsonl => {
-                piece.push('{');
+                let mut piece = String::from("{");
                 if let Some(text) = text {
                     piece.push_str("\"text\": ");
                     json_string(&mut piece, text);
@@ -666,38 +636,95 @@ impl Writer<'_> {
                 }
                 piece.push_str("\"tokens\": [");
                 self.output.write_all(piece.as_bytes())?;
-                for (index, (token, analyses)) in tokens.iter().zip(&sentence).enumerate() {
-                    piece.clear();
-                    if index > 0 {
-                        piece.push_str(", ");
-                    }
-                    piece.push_str("{\"word\": ");
-                    json_string(&mut piece, token.word);
-                    piece.push_str(", \"analyses\": [");
-                    for (number, analysis) in analyses.iter().enumerate() {
-                        if number > 0 {
-                            piece.push_str(", ");
-                        }
-                        self.json_analysis(&mut piece, analysis);
-                    }
-                    piece.push_str("]}");
-                    self.output.write_all(piece.as_bytes())?;
-                }
-                writeln!(self.output, "]}}")?;
+                Box::new(tokens)
             }
+            _ => Box::new(tokens),
+        };
+        let (mut chunk, mut piece, mut index) = (Vec::new(), String::new(), 0);
+        while next_chunk(&mut tokens, split, &mut chunk) {
+            let words: Vec<&str> = chunk.iter().map(|token| token.word).collect();
+            for (token, analyses) in chunk.iter().zip(self.analyze(&words)) {
+                self.write_token(index, token, &analyses, &mut piece)?;
+                index += 1;
+            }
+        }
+        match self.format {
+            Format::Jsonl => writeln!(self.output, "]}}")?,
+            _ => writeln!(self.output)?,
         }
         self.end_sentence()
     }
 
+    /// Токен номер `index` предложения в формате вывода
+    fn write_token(
+        &mut self,
+        index: usize,
+        token: &Token,
+        analyses: &[Analysis],
+        piece: &mut String,
+    ) -> io::Result<()> {
+        match self.format {
+            Format::Lemmas => {
+                let separator = if index > 0 { " " } else { "" };
+                write!(self.output, "{separator}{}", lemma(analyses, token.word))
+            }
+            Format::Tsv => {
+                let (pos, feats, prob) = first(self.dictionary, analyses);
+                let lemma = lemma(analyses, token.word);
+                writeln!(
+                    self.output,
+                    "{}\t{lemma}\t{pos}\t{feats}\t{prob}",
+                    token.word
+                )
+            }
+            Format::Conllu => {
+                let (pos, feats, _) = first(self.dictionary, analyses);
+                let misc = if token.space_after {
+                    "_"
+                } else {
+                    "SpaceAfter=No"
+                };
+                writeln!(
+                    self.output,
+                    "{}\t{}\t{}\t{pos}\t_\t{feats}\t_\t_\t_\t{misc}",
+                    index + 1,
+                    token.word,
+                    lemma(analyses, token.word)
+                )
+            }
+            Format::Jsonl => {
+                piece.clear();
+                if index > 0 {
+                    piece.push_str(", ");
+                }
+                piece.push_str("{\"word\": ");
+                json_string(piece, token.word);
+                piece.push_str(", \"analyses\": [");
+                for (number, analysis) in analyses.iter().enumerate() {
+                    if number > 0 {
+                        piece.push_str(", ");
+                    }
+                    self.json_analysis(piece, analysis);
+                }
+                piece.push_str("]}");
+                self.output.write_all(piece.as_bytes())
+            }
+        }
+    }
+
     /// Предложение CoNLL-U с заполненными LEMMA, UPOS и FEATS
     fn write_conllu_lines(&mut self, block: &Block) -> io::Result<()> {
-        let words: Vec<&str> = block.words.iter().map(String::as_str).collect();
-        let mut sentence = self.analyze(&words).into_iter();
+        let mut words = block.words.iter().map(String::as_str);
+        let mut chunk = Vec::new().into_iter();
         for line in &block.lines {
             match line {
                 Line::Raw(text) => writeln!(self.output, "{text}")?,
                 Line::Word(columns) => {
-                    let analyses = sentence.next().unwrap_or_default();
+                    if chunk.len() == 0 {
+                        let next: Vec<&str> = words.by_ref().take(MAX_CHUNK).collect();
+                        chunk = self.analyze(&next).into_iter();
+                    }
+                    let analyses = chunk.next().unwrap_or_default();
                     let (pos, feats, _) = first(self.dictionary, &analyses);
                     let lemma = lemma(&analyses, &columns[1]);
                     let [id, form, _, _, xpos, _, rest @ ..] = &columns[..] else {
@@ -783,6 +810,29 @@ fn foreign_encoding(head: &[u8]) -> Option<usize> {
         };
     }
     None
+}
+
+/// Следующий кусок токенов в `chunk`: не больше `MAX_CHUNK`, а со `split` - и до знака конца
+/// предложения включительно: строку из нескольких предложений модель разбирает по одному.
+/// `false` - токены кончились
+fn next_chunk<'t>(
+    tokens: &mut dyn Iterator<Item = Token<'t>>,
+    split: bool,
+    chunk: &mut Vec<Token<'t>>,
+) -> bool {
+    chunk.clear();
+    for token in tokens {
+        chunk.push(token);
+        let end = !token.word.is_empty()
+            && token
+                .word
+                .chars()
+                .all(|ch| matches!(ch, '.' | '!' | '?' | '…'));
+        if chunk.len() >= MAX_CHUNK || (split && end) {
+            break;
+        }
+    }
+    !chunk.is_empty()
 }
 
 /// Текст предложения из токенов: пробел - после токена со `space_after`
@@ -1249,10 +1299,22 @@ mod tests {
         );
         let (code, out, _) = dict.run(
             &["-i", "conllu", "-f", "conllu"],
-            "1\tстол\t_\t_\t_\t_\t_\t_\t_\t_\n".as_bytes(),
+            "1\tвижу\t_\t_\t_\t_\t_\t_\t_\t_\n2\tстол\t_\t_\t_\t_\t_\t_\t_\t_\n".as_bytes(),
         );
         assert_eq!(code, 0);
-        assert!(out.contains("1\tстол\tстол\tNOUN\t_\tCase=Acc"), "{out}");
+        assert!(out.contains("2\tстол\tстол\tNOUN\t_\tCase=Acc"), "{out}");
+        // Слово без соседей - порядок словаря, как с --no-context
+        let (_, out, _) = dict.run(&["-f", "tsv"], "стол\n".as_bytes());
+        assert!(
+            out.contains("Case=Nom|Gender=Masc|Number=Sing\t0.5"),
+            "{out}"
+        );
+        // Строка из нескольких предложений и очень длинная строка - кусками: в каждом слово
+        // «стол» после «вижу» в винительном падеже
+        let text = "вижу стол . ".repeat(300) + "\n";
+        let (code, out, _) = dict.run(&["-f", "tsv"], text.as_bytes());
+        assert_eq!(code, 0);
+        assert_eq!(out.matches("стол\tстол\tNOUN\tCase=Acc").count(), 300);
         // Словарь без модели: ошибка до разбора, с подсказкой
         let mut dict = TestDictionary::new();
         dict.1 = true;

@@ -489,7 +489,8 @@ impl Dictionary {
 
     /// Разборы слов предложения по убыванию вероятности в контексте: те же разборы, что
     /// у `analyze`, упорядочивает контекстная модель словаря, вероятность - ее оценка. Слова -
-    /// токены одного предложения по порядку. Ошибка - если в словаре нет контекстной модели
+    /// токены одного предложения по порядку; предложение из одного слова разбирается, как
+    /// `analyze`. Ошибка - если в словаре нет контекстной модели
     ///
     /// ```
     /// # #[cfg(feature = "bundled")] {
@@ -507,22 +508,31 @@ impl Dictionary {
         let context = self.context()?;
         let words: Vec<&str> = words.iter().map(AsRef::as_ref).collect();
         let analyses = words.iter().map(|word| self.analyze(word)).collect();
+        // Без соседних слов модель выбирает хуже частот словаря: слово остается как у `analyze`
+        if words.len() < 2 {
+            return Ok(analyses);
+        }
         Ok(context.rank(&words, analyses))
     }
 
     /// Контекстная модель словаря: читается один раз на словарь и его копии
     fn context(&self) -> Result<&context::Context, Error> {
-        let context = self.context.get_or_init(|| {
-            let bytes = &self.storage.bytes()[self.layout.context.clone()];
-            if bytes.is_empty() {
-                return Err(
-                    "В словаре нет контекстной модели: разбор предложения недоступен".into(),
-                );
+        // Модель строится вне ячейки: fork из другого потока, пока ячейка занята, оставил бы
+        // ребенка ждать ее вечно. Два потока могут построить ее одновременно - в ячейку попадет одна
+        let context = match self.context.get() {
+            Some(context) => context,
+            None => {
+                let bytes = &self.storage.bytes()[self.layout.context.clone()];
+                let built = if bytes.is_empty() {
+                    Err("В словаре нет контекстной модели: разбор предложения недоступен".into())
+                } else {
+                    context::Model::parse(bytes)
+                        .map(|model| context::Context::new(model, &self.ud))
+                        .map_err(|err| err.to_string())
+                };
+                self.context.get_or_init(move || built)
             }
-            context::Model::parse(bytes)
-                .map(|model| context::Context::new(model, &self.ud))
-                .map_err(|err| err.to_string())
-        });
+        };
         context
             .as_ref()
             .map_err(|message| Error::Context(message.clone()))

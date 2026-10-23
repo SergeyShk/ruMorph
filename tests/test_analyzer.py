@@ -867,6 +867,43 @@ def test_fork_while_loading(morph, tmp_path):
         thread.join()
 
 
+@pytest.mark.skipif(not hasattr(os, "fork"), reason="нет fork")
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
+def test_fork_while_building_context(morph, tmp_path):
+    # Процесс, созданный fork, пока другой поток строит контекстную модель, не зависает на ней:
+    # два файла словаря по очереди - модель каждый раз строится заново
+    paths = [tmp_path / f"{name}.dict" for name in "ab"]
+    for path in paths:
+        shutil.copy(morph.path, path)
+    stop = threading.Event()
+
+    def build():
+        number = 0
+        while not stop.is_set():
+            Analyzer(paths[number % 2]).analyze_sentence(["Я", "читаю"])
+            number += 1
+
+    thread = threading.Thread(target=build)
+    thread.start()
+    try:
+        for _ in range(10):
+            time.sleep(0.013)
+            pid = os.fork()
+            if pid == 0:
+                sentences = [Analyzer(path).analyze_sentence(["Я", "читаю"]) for path in paths]
+                os._exit(0 if all(len(sentence) == 2 for sentence in sentences) else 1)
+            deadline = time.monotonic() + 30
+            while (done := os.waitpid(pid, os.WNOHANG))[0] == 0 and time.monotonic() < deadline:
+                time.sleep(0.01)
+            if done[0] == 0:
+                os.kill(pid, 9)
+                os.waitpid(pid, 0)
+            assert done[0] == pid and os.waitstatus_to_exitcode(done[1]) == 0
+    finally:
+        stop.set()
+        thread.join()
+
+
 def test_relative_path_pickles(morph, tmp_path, monkeypatch):
     # Путь хранится абсолютным: pickle работает в другом рабочем каталоге
     (tmp_path / "ru.dict").symlink_to(morph.path)
