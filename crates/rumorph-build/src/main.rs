@@ -1,4 +1,5 @@
-//! Сборка словаря ruMorph из выгрузки pymorphy3-dicts-ru (`scripts/export_pymorphy.py`)
+//! Сборка словаря ruMorph из выгрузки pymorphy3-dicts-ru (`scripts/export_pymorphy.py`),
+//! счетчиков UD (`scripts/export_ud.py`) и весов контекстной модели (`scripts/train_context.py`)
 
 mod frequencies;
 mod lexemes;
@@ -15,11 +16,19 @@ use rumorph::{Builder, Dictionary, Entry, GuessIndex};
 
 fn main() -> ExitCode {
     let args: Vec<PathBuf> = std::env::args_os().skip(1).map(PathBuf::from).collect();
-    let [export, ud, output] = args.as_slice() else {
-        eprintln!("Использование: rumorph-build <выгрузка pymorphy3> <выгрузка UD> <файл словаря>");
-        return ExitCode::from(2);
+    // Без весов собирается словарь без контекстной модели: на нем она и учится
+    let (export, ud, output, context) = match args.as_slice() {
+        [export, ud, output] => (export, ud, output, None),
+        [export, ud, output, context] => (export, ud, output, Some(context.as_path())),
+        _ => {
+            eprintln!(
+                "Использование: rumorph-build <выгрузка pymorphy3> <выгрузка UD> <файл словаря> \
+                 [веса контекстной модели]"
+            );
+            return ExitCode::from(2);
+        }
     };
-    match build(export, ud, output) {
+    match build(export, ud, output, context) {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) => {
             eprintln!("rumorph-build: {err}");
@@ -63,7 +72,12 @@ const VARIANT_LEMMAS: &[(&str, &str, &str)] = &[
     ("PRCL", "чтоб", "чтобы"),
 ];
 
-fn build(export: &Path, ud: &Path, output: &Path) -> Result<(), Box<dyn Error>> {
+fn build(
+    export: &Path,
+    ud: &Path,
+    output: &Path,
+    context: Option<&Path>,
+) -> Result<(), Box<dyn Error>> {
     let started = Instant::now();
     let read =
         |name: &str| fs::read_to_string(export.join(name)).map_err(|err| format!("{name}: {err}"));
@@ -874,9 +888,25 @@ fn build(export: &Path, ud: &Path, output: &Path) -> Result<(), Box<dyn Error>> 
     for (word, list) in &blended {
         builder.set_entry_probabilities(word, list)?;
     }
+    if let Some(context) = context {
+        let weights = fs::read(context).map_err(|err| format!("{}: {err}", context.display()))?;
+        builder.context(weights)?;
+    }
 
     let data = builder.build()?;
     let dictionary = Dictionary::from_bytes(&data)?;
+    // Тег, которого не было в словаре обучения, модель не знает: ее нужно переобучить
+    if context.is_some() {
+        let gaps = dictionary.context_gaps()?;
+        if !gaps.is_empty() {
+            return Err(format!(
+                "контекстная модель обучена на словаре без тегов {}: соберите словарь без весов \
+                 и переобучите ее (scripts/train_context.py)",
+                gaps.join(", ")
+            )
+            .into());
+        }
+    }
     if let Some(parent) = output.parent() {
         fs::create_dir_all(parent)?;
     }
