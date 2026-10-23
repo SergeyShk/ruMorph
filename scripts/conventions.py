@@ -24,6 +24,7 @@ SHORT_PREPOSITIONS = {
     "передо": "перед",
     "подо": "под",
     "надо": "над",
+    "безо": "без",
 }
 # Слова с частью речи SynTagRus: (часть речи трибанка, лемма) - новая часть речи
 POS_CHANGES = {
@@ -32,13 +33,13 @@ POS_CHANGES = {
     ("PART", "пожалуйста"): "ADV",
     ("PART", "хоть"): "ADV",
     ("ADJ", "угодный"): "ADV",
-    ("CCONJ", "то"): "SCONJ",
     ("ADV", "всё"): "PART",
 }
 # Вводные слова, которые в SynTagRus - наречия: лемма трибанка - лемма наречия
 PARENTHETICALS = {"значить": "значит", "разуметься": "разумеется", "правда": "правда"}
-# Супплетивные превосходные прилагательные: в SynTagRus Degree=Pos
+# Супплетивные сравнительные и превосходные прилагательные: в SynTagRus Degree=Pos
 SUPPLETIVE = {
+    "больший",
     "высший",
     "худший",
     "лучший",
@@ -123,7 +124,7 @@ def harmonize(treebank: str, sentence: list[Token]) -> None:
                 token.feats = {}
         if lemma in PARENTHETICALS and token.deprel == "parataxis:discourse":
             token.upos, token.lemma, token.feats = "ADV", PARENTHETICALS[lemma], {"Degree": "Pos"}
-        if lemma in SUPPLETIVE and token.feats.get("Degree") == "Sup":
+        if lemma in SUPPLETIVE and token.feats.get("Degree") in ("Sup", "Cmp"):
             token.feats["Degree"] = "Pos"
         # Пассив на -ся: в Taiga, как в SynTagRus, Voice=Pass и невозвратная лемма, в GSD - Mid
         if (

@@ -29,11 +29,11 @@
 
 **ruMorph** - морфологический анализатор русского языка: ядро на Rust и API для Python. Для словоформы анализатор находит по словарю [OpenCorpora](https://opencorpora.org) варианты разбора - начальную форму (лемму), часть речи и признаки [Universal Dependencies](https://universaldependencies.org/) - упорядочивает их по вероятности и строит формы слова.
 
-Разбор и лемматизация в 6-8 раз быстрее, чем в pymorphy3 с ускорением `pymorphy3[fast]`, форма по признакам и согласование с количеством - в 16-19 раз; списки слов разбираются без GIL. Части речи, признаки и леммы следуют соглашениям трибанка SynTagRus, поэтому результат можно сравнивать с разметкой spaCy, Stanza и других инструментов на UD.
+Разбор и лемматизация в 6-8 раз быстрее, чем в pymorphy3 с ускорением `pymorphy3[fast]`, форма по признакам и согласование с количеством - в 16-19 раз; списки слов разбираются без GIL. Части речи, признаки и леммы следуют руководству UD, а где оно молчит - соглашениям трибанка SynTagRus, поэтому результат можно сравнивать с разметкой spaCy, Stanza и других инструментов на UD.
 
 * **[Анализатор](https://sergeyshk.github.io/ruMorph/analyzer/)** - разборы словоформы по убыванию вероятности, разбор списков слов и лемматизация без GIL, проверка словоформы по словарю
 * **[Разбор предложения](https://sergeyshk.github.io/ruMorph/analyzer/#analyze_sentence)** - выбор разбора по соседним словам контекстной моделью: часть речи, лемма и признаки верны у 81-93 % слов против 71-82 % без контекста
-* **[Части речи и признаки UD](https://sergeyshk.github.io/ruMorph/analysis/#ud)** - части речи, признаки и леммы в соглашениях SynTagRus; пометы OpenCorpora, у которых нет признака UD
+* **[Части речи и признаки UD](https://sergeyshk.github.io/ruMorph/analysis/#ud)** - части речи, признаки и леммы по руководству UD и соглашениям SynTagRus; пометы OpenCorpora, у которых нет признака UD
 * **[Токены вне словаря](https://sergeyshk.github.io/ruMorph/analysis/#rules)** - числа, знаки, латиница, инициалы и сокращения по правилам
 * **[Незнакомые слова](https://sergeyshk.github.io/ruMorph/analysis/#guess)** - разборы по окончанию, слова через дефис и с приставками, формы угаданных слов
 * **[Словоизменение](https://sergeyshk.github.io/ruMorph/inflection/)** - формы лексемы, форма по признакам UD, согласование с количеством
@@ -121,7 +121,7 @@ Analysis(word='стали', lemma='стать', pos='VERB', feats='Aspect=Perf|M
 
 <br>
 
-Части речи и признаки следуют [Universal Dependencies](https://universaldependencies.org/u/pos/) в соглашениях крупнейшего русского трибанка [UD_Russian-SynTagRus](https://github.com/UniversalDependencies/UD_Russian-SynTagRus). Отличия от частей речи OpenCorpora:
+Части речи и признаки следуют руководству [Universal Dependencies](https://universaldependencies.org/u/pos/), а где оно молчит - соглашениям крупнейшего русского трибанка [UD_Russian-SynTagRus](https://github.com/UniversalDependencies/UD_Russian-SynTagRus). Отличия от частей речи OpenCorpora:
 
 *   «который», «этот», «свой», «весь», «такой» и другие местоименные прилагательные - `DET`
 *   «быть» и «бы» - `AUX`

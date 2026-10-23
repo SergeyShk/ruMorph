@@ -855,14 +855,16 @@ pub fn substantive_pronoun(base: &str, tag: &str) -> Option<(&'static str, Ud)> 
 
 /// Разбор, который различает только контекст, - копия формы с тегом `tag` лексемы `base` с другой
 /// частью речи: у «быть» - и VERB (бытийное «есть»), у «бы» - и PART, у «один» - и DET
-/// («одна женщина»), у единственного числа «друг» - и взаимное местоимение («друг друга»)
+/// («одна женщина»), у единственного числа «друг» - и взаимное местоимение («друг друга»),
+/// у союза «то» - и сочинительный в чередовании («то дождь, то снег»)
 pub fn context_copy(base: &str, tag: &str) -> Option<Ud> {
-    if !matches!(base, "быть" | "бы" | "один" | "друг") {
+    if !matches!(base, "быть" | "бы" | "один" | "друг" | "то") {
         return None;
     }
     let mut ud = convert(tag, lemma_class(base));
     let case = ud.feats.get("Case").copied();
     match (base, ud.pos) {
+        ("то", "SCONJ") => ud.pos = "CCONJ",
         ("быть", "AUX") => ud.pos = "VERB",
         ("бы", "AUX") => {
             ud.pos = "PART";
@@ -1544,6 +1546,8 @@ mod tests {
             Some(("PRON", "Case=Ins|PronType=Rcp".into()))
         );
         assert_eq!(copy("друг", "NOUN,anim,masc plur,ablt"), None);
+        assert_eq!(copy("то", "CONJ"), Some(("CCONJ", "".into())));
+        assert_eq!(copy("то", "NPRO,neut sing,nomn"), None);
         assert_eq!(copy("друг", "NOUN,anim,masc sing,voct"), None);
         assert_eq!(copy("стать", "VERB,perf,intr sing,3per,futr,indc"), None);
     }

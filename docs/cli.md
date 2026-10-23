@@ -83,7 +83,7 @@ echo "Мы стали друзьями." | rumorph -f tsv
 
 ```
 Мы	мы	PRON	Case=Nom|Number=Plur|Person=1|PronType=Prs	1
-стали	стать	VERB	Aspect=Perf|Mood=Ind|Number=Plur|Tense=Past|VerbForm=Fin|Voice=Act	0.9877829877829878
+стали	стать	VERB	Aspect=Perf|Mood=Ind|Number=Plur|Tense=Past|VerbForm=Fin|Voice=Act	0.9999117074397501
 друзьями	друг	NOUN	Animacy=Anim|Case=Ins|Gender=Masc|Number=Plur	1
 .	.	PUNCT	_	1
 ```
@@ -105,10 +105,10 @@ echo "Мы стали" | rumorph -f jsonl
        "labels": [], "prob": 1, "source": "dictionary"}
     ]},
     {"word": "стали", "analyses": [
-      {"lemma": "стать", "pos": "VERB", "feats": {"Aspect": "Perf", "Mood": "Ind", "Number": "Plur", "Tense": "Past", "VerbForm": "Fin", "Voice": "Mid"},
-       "labels": ["intr"], "prob": 0.9877829877829878, "source": "dictionary"},
-      {"lemma": "сталь", "pos": "NOUN", "feats": {"Animacy": "Inan", "Case": "Gen", "Gender": "Fem", "Number": "Sing"},
-       "labels": [], "prob": 0.005431005431005431, "source": "dictionary"}
+      {"lemma": "стать", "pos": "VERB", "feats": {"Aspect": "Perf", "Mood": "Ind", "Number": "Plur", "Tense": "Past", "VerbForm": "Fin", "Voice": "Act"},
+       "labels": ["intr"], "prob": 0.9999563566511577, "source": "dictionary"},
+      {"lemma": "сталь", "pos": "NOUN", "feats": {"Animacy": "Inan", "Case": "Nom", "Gender": "Fem", "Number": "Plur"},
+       "labels": [], "prob": 2.3757838451202036e-05, "source": "dictionary"}
     ]}
   ]
 }

@@ -29,11 +29,11 @@
 
 **ruMorph** is a morphological analyzer of Russian: a Rust core with a Python API. For a word form the analyzer finds its analyses in the [OpenCorpora](https://opencorpora.org) dictionary - the initial form (lemma), the part of speech and the [Universal Dependencies](https://universaldependencies.org/) features - orders them by probability and builds the forms of the word.
 
-Analysis and lemmatization are 6-8 times faster than in pymorphy3 with the `pymorphy3[fast]` speedup, the form by features and agreement with a number are 16-19 times faster; lists of words are analyzed without the GIL. Parts of speech, features and lemmas follow the conventions of the SynTagRus treebank, so the results can be compared with the annotation of spaCy, Stanza and other tools built on UD.
+Analysis and lemmatization are 6-8 times faster than in pymorphy3 with the `pymorphy3[fast]` speedup, the form by features and agreement with a number are 16-19 times faster; lists of words are analyzed without the GIL. Parts of speech, features and lemmas follow the UD guidelines and, where they are silent, the conventions of the SynTagRus treebank, so the results can be compared with the annotation of spaCy, Stanza and other tools built on UD.
 
 * **[Analyzer](https://sergeyshk.github.io/ruMorph/en/analyzer/)** - analyses of a word form by descending probability, analysis of word lists and lemmatization without the GIL, a dictionary lookup of a word form
 * **[Sentence analysis](https://sergeyshk.github.io/ruMorph/en/analyzer/#analyze_sentence)** - the context model picks the analysis from the neighbouring words: the part of speech, lemma and features are right for 81-93 % of words against 71-82 % without context
-* **[UD parts of speech and features](https://sergeyshk.github.io/ruMorph/en/analysis/#ud)** - parts of speech, features and lemmas in the SynTagRus conventions; OpenCorpora labels that have no UD feature
+* **[UD parts of speech and features](https://sergeyshk.github.io/ruMorph/en/analysis/#ud)** - parts of speech, features and lemmas by the UD guidelines and the SynTagRus conventions; OpenCorpora labels that have no UD feature
 * **[Tokens outside the dictionary](https://sergeyshk.github.io/ruMorph/en/analysis/#rules)** - numbers, signs, Latin script, initials and abbreviations by rules
 * **[Unknown words](https://sergeyshk.github.io/ruMorph/en/analysis/#guess)** - analyses by the ending, hyphenated words and words with prefixes, forms of guessed words
 * **[Inflection](https://sergeyshk.github.io/ruMorph/en/inflection/)** - forms of a lexeme, a form by UD features, agreement with a number
@@ -121,7 +121,7 @@ The `analyze_sentence` method orders the analyses of the words of a sentence usi
 
 <br>
 
-Parts of speech and features follow [Universal Dependencies](https://universaldependencies.org/u/pos/) in the conventions of the largest Russian treebank [UD_Russian-SynTagRus](https://github.com/UniversalDependencies/UD_Russian-SynTagRus). Differences from the OpenCorpora parts of speech:
+Parts of speech and features follow the [Universal Dependencies](https://universaldependencies.org/u/pos/) guidelines and, where they are silent, the conventions of the largest Russian treebank [UD_Russian-SynTagRus](https://github.com/UniversalDependencies/UD_Russian-SynTagRus). Differences from the OpenCorpora parts of speech:
 
 *   «который», «этот», «свой», «весь», «такой» and other pronominal adjectives - `DET`
 *   «быть» and «бы» - `AUX`
