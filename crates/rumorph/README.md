@@ -4,7 +4,7 @@
 [ruMorph](https://github.com/SergeyShk/ruMorph) для Python.
 
 - Разборы словоформы по словарю OpenCorpora: лемма, часть речи и признаки
-  [Universal Dependencies](https://universaldependencies.org/) в соглашениях трибанка SynTagRus,
+  [Universal Dependencies](https://universaldependencies.org/) по руководству UD и соглашениям SynTagRus,
   вероятность разбора.
 - Незнакомые слова: числа, знаки, латиница, сокращения, слова через дефис и с приставками,
   угадывание по окончанию.

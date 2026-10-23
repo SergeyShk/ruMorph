@@ -22,7 +22,7 @@ An analysis is an `Analysis` object returned by the `analyze` and `analyze_many`
       'Number': 'Plur',
       'Tense': 'Past',
       'VerbForm': 'Fin',
-      'Voice': 'Mid'},
+      'Voice': 'Act'},
      frozenset({'intr'}))
     ```
 
@@ -40,7 +40,7 @@ An analysis is an `Analysis` object returned by the `analyze` and `analyze_many`
 
 ## Parts of speech and features { #ud }
 
-Parts of speech and features follow [Universal Dependencies](https://universaldependencies.org/u/pos/) as annotated in the largest Russian treebank, [UD_Russian-SynTagRus](https://github.com/UniversalDependencies/UD_Russian-SynTagRus), so the output can be compared with spaCy, Stanza and other UD tools. Differences from the OpenCorpora parts of speech:
+Parts of speech and features follow the [Universal Dependencies](https://universaldependencies.org/u/pos/) guidelines and, where they are silent, the conventions of the largest Russian treebank, [UD_Russian-SynTagRus](https://github.com/UniversalDependencies/UD_Russian-SynTagRus), so the output can be compared with spaCy, Stanza and other UD tools. By the guidelines the future of «быть» («будет») is `Tense=Fut`, and `Voice=Mid` is only for reflexive verbs («стать» is `Voice=Act`). Differences from the OpenCorpora parts of speech:
 
 - «который», «этот», «свой», «весь», «такой» and the other pronominal adjectives are `DET`;
 - «быть» and «бы» are `AUX`;
@@ -48,13 +48,13 @@ Parts of speech and features follow [Universal Dependencies](https://universalde
 - «можно», «надо», «нельзя» are `VERB` without features;
 - prepositions are `ADP`, coordinating conjunctions `CCONJ`, subordinating ones `SCONJ`, particles `PART`.
 
-If a word's part of speech depends on context, it has both analyses: «есть» is `AUX` and `VERB` («у меня есть»), «бы» `AUX` and `PART`, «это» `PRON` and `PART` («это он сделал»), «один» `NUM` and `DET` («одна женщина»), «друг» `NOUN` and the pronoun `PRON` with `PronType=Rcp` («друг друга»), «раньше», «лучше» `ADJ` and `ADV` in the comparative (lemmas «ранний» and «рано», «хороший» and «хорошо»). «двух», «двум», «двумя» have analyses in all three genders.
+If a word's part of speech depends on context, it has both analyses: «есть» is `AUX` and `VERB` («у меня есть»), «бы» `AUX` and `PART`, «это» `PRON` and `PART` («это он сделал»), «один» `NUM` and `DET` («одна женщина»), «друг» `NOUN` and the pronoun `PRON` with `PronType=Rcp` («друг друга»), «всё» `PRON` and `PART` («всё ещё»), a verb in -ся `Voice=Mid` and the passive `Voice=Pass` with the non-reflexive lemma («используется» - «использоваться» and «использовать»), «раньше», «лучше» `ADJ` and `ADV` in the comparative (lemmas «ранний» and «рано», «хороший» and «хорошо»). «двух», «двум», «двумя» have analyses in all three genders.
 
 Features: case, number, gender, animacy, person, tense, aspect, mood, voice, verb form, degree, the short form (`Variant=Short`), the type of a proper name (`NameType`), abbreviation (`Abbr`), possessiveness (`Poss`), the type of a numeral (`NumType`) and how it is written (`NumForm`), the type of a pronoun or pronominal adverb (`PronType`: «там» - `Dem`, «где» - `Rel`, «никогда» - `Neg`), reflexivity (`Reflex`), indeclinability (`InflClass=Ind`), negation (`Polarity=Neg`).
 
 Lemmas follow SynTagRus too: feminine surnames and patronymics keep the feminine lemma («Ивановой» - «иванова»), superlatives stay superlative («важнейшей» - «важнейший»), «денег» - «деньги», abbreviated nouns get the full word as the lemma («млн» - «миллион», «г.» - «год»). Nouns that have only the plural get the gender of their declension, as in SynTagRus: «выборы» is masculine, «сутки» feminine, «ворота» neuter; indeclinable ones («СМИ») and those declined as adjectives («данные») have no gender. When several OpenCorpora analyses coincide in UD (the conjunction and the adverb «так»), they are merged into one with the sum of their probabilities.
 
-The `labels` are the [OpenCorpora](https://opencorpora.org/dict.php?act=gram) grammemes that have no UD feature: style (`Infr`, `Slng`, `Arch`), qualitative adjective (`Qual`), parenthetical word (`Prnt`), transitivity (`tran`, `intr`), whether the speaker is included in an imperative (`incl` - «пойдемте», `excl` - «иди»), the second locative (`loc2` - «в лесу»), the future of «быть» (`futr` - «будет»: SynTagRus gives it `Tense=Pres`) and others.
+The `labels` are the [OpenCorpora](https://opencorpora.org/dict.php?act=gram) grammemes that have no UD feature: style (`Infr`, `Slng`, `Arch`), qualitative adjective (`Qual`), parenthetical word (`Prnt`), transitivity (`tran`, `intr`), whether the speaker is included in an imperative (`incl` - «пойдемте», `excl` - «иди»), the second locative (`loc2` - «в лесу») and others.
 
 ## Tokens outside the dictionary { #rules }
 

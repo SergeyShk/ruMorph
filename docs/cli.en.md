@@ -43,7 +43,7 @@ printf '1\tМы\t_\t_\t_\t_\t2\tnsubj\t_\t_\n2\tстали\t_\t_\t_\t_\t0\troot\
 
 ```
 1	Мы	мы	PRON	_	Case=Nom|Number=Plur|Person=1|PronType=Prs	2	nsubj	_	_
-2	стали	стать	VERB	_	Aspect=Perf|Mood=Ind|Number=Plur|Tense=Past|VerbForm=Fin|Voice=Mid	0	root	_	_
+2	стали	стать	VERB	_	Aspect=Perf|Mood=Ind|Number=Plur|Tense=Past|VerbForm=Fin|Voice=Act	0	root	_	_
 ```
 
 ## Output formats { #formats }
@@ -66,7 +66,7 @@ echo "Мы стали друзьями в ковиде." | rumorph -f conllu
 # sent_id = 1
 # text = Мы стали друзьями в ковиде.
 1	Мы	мы	PRON	_	Case=Nom|Number=Plur|Person=1|PronType=Prs	_	_	_	_
-2	стали	стать	VERB	_	Aspect=Perf|Mood=Ind|Number=Plur|Tense=Past|VerbForm=Fin|Voice=Mid	_	_	_	_
+2	стали	стать	VERB	_	Aspect=Perf|Mood=Ind|Number=Plur|Tense=Past|VerbForm=Fin|Voice=Act	_	_	_	_
 3	друзьями	друг	NOUN	_	Animacy=Anim|Case=Ins|Gender=Masc|Number=Plur	_	_	_	_
 4	в	в	ADP	_	_	_	_	_	_
 5	ковиде	ковид	NOUN	_	Animacy=Inan|Case=Loc|Gender=Masc|Number=Sing	_	_	_	SpaceAfter=No
@@ -83,7 +83,7 @@ echo "Мы стали друзьями." | rumorph -f tsv
 
 ```
 Мы	мы	PRON	Case=Nom|Number=Plur|Person=1|PronType=Prs	1
-стали	стать	VERB	Aspect=Perf|Mood=Ind|Number=Plur|Tense=Past|VerbForm=Fin|Voice=Mid	0.9877829877829878
+стали	стать	VERB	Aspect=Perf|Mood=Ind|Number=Plur|Tense=Past|VerbForm=Fin|Voice=Act	0.9999117074397501
 друзьями	друг	NOUN	Animacy=Anim|Case=Ins|Gender=Masc|Number=Plur	1
 .	.	PUNCT	_	1
 ```
@@ -105,10 +105,10 @@ echo "Мы стали" | rumorph -f jsonl
        "labels": [], "prob": 1, "source": "dictionary"}
     ]},
     {"word": "стали", "analyses": [
-      {"lemma": "стать", "pos": "VERB", "feats": {"Aspect": "Perf", "Mood": "Ind", "Number": "Plur", "Tense": "Past", "VerbForm": "Fin", "Voice": "Mid"},
-       "labels": ["intr"], "prob": 0.9877829877829878, "source": "dictionary"},
-      {"lemma": "сталь", "pos": "NOUN", "feats": {"Animacy": "Inan", "Case": "Gen", "Gender": "Fem", "Number": "Sing"},
-       "labels": [], "prob": 0.005431005431005431, "source": "dictionary"}
+      {"lemma": "стать", "pos": "VERB", "feats": {"Aspect": "Perf", "Mood": "Ind", "Number": "Plur", "Tense": "Past", "VerbForm": "Fin", "Voice": "Act"},
+       "labels": ["intr"], "prob": 0.9999563566511577, "source": "dictionary"},
+      {"lemma": "сталь", "pos": "NOUN", "feats": {"Animacy": "Inan", "Case": "Nom", "Gender": "Fem", "Number": "Plur"},
+       "labels": [], "prob": 2.3757838451202036e-05, "source": "dictionary"}
     ]}
   ]
 }

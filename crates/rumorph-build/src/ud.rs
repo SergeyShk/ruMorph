@@ -130,7 +130,6 @@ const POS_EXCEPTIONS: &[(&str, &str, &str)] = &[
     ("NUMR", "мало", "ADV"),
     ("NUMR", "недостаточно", "ADV"),
     ("PRCL", "бы", "AUX"),
-    ("PRCL", "всё", "PRON"),
     ("PRCL", "исключительно", "ADV"),
     ("PRCL", "конечно", "ADV"),
     ("PRCL", "никак", "ADV"),
@@ -183,16 +182,6 @@ const EXCEPTION_FEATS: &[(&str, &str, &[Feature])] = &[
             ("Number", "Sing"),
         ],
     ),
-];
-
-/// Глаголы с Voice=Mid без -ся
-const MIDDLE_VERBS: &[&str] = &[
-    "лечь",
-    "пересесть",
-    "подсесть",
-    "присесть",
-    "сесть",
-    "стать",
 ];
 
 /// Тип местоимения и местоименного наречия (PronType) по части речи UD и лемме
@@ -488,9 +477,6 @@ const SUPPLETIVE_SUPERLATIVES: &[&str] = &[
 /// Прилагательные без пометы Supr, которые в SynTagRus в превосходной степени
 const SUPERLATIVES: &[&str] = &["дальнейший"];
 
-/// Частицы, которые в UD - местоимения среднего рода: «всё»
-const PARTICLE_PRONOUNS: &[&str] = &["всё"];
-
 /// Неодушевленные местоимения без «что» в лемме
 const INANIMATE_PRONOUNS: &[&str] = &["всё", "многое", "прочее", "сие", "то", "это"];
 
@@ -718,8 +704,7 @@ pub fn convert(tag: &str, lemma: &str) -> Ud {
         feats.insert("VerbForm", form);
         let voice = if g("pssv") {
             "Pass"
-        } else if lemma.ends_with("ся") || lemma.ends_with("сь") || MIDDLE_VERBS.contains(&lemma)
-        {
+        } else if lemma.ends_with("ся") || lemma.ends_with("сь") {
             "Mid"
         } else {
             "Act"
@@ -760,19 +745,6 @@ pub fn convert(tag: &str, lemma: &str) -> Ud {
         feats.insert("Mood", "Cnd");
     }
     let mut extra_labels = Vec::new();
-    if lemma == "быть" && feats.get("Tense") == Some(&"Fut") {
-        // SynTagRus: «будет», «будут» - Tense=Pres; помета futr отличает их от «есть», «суть»
-        feats.insert("Tense", "Pres");
-        extra_labels.push("futr".to_string());
-    }
-    if oc == "PRCL" && PARTICLE_PRONOUNS.contains(&lemma) {
-        feats.extend([
-            ("Animacy", "Inan"),
-            ("Case", "Nom"),
-            ("Gender", "Neut"),
-            ("Number", "Sing"),
-        ]);
-    }
     if oc == "NPRO" {
         if lemma.contains("что") || INANIMATE_PRONOUNS.contains(&lemma) {
             feats.insert("Animacy", "Inan");
@@ -883,14 +855,16 @@ pub fn substantive_pronoun(base: &str, tag: &str) -> Option<(&'static str, Ud)> 
 
 /// Разбор, который различает только контекст, - копия формы с тегом `tag` лексемы `base` с другой
 /// частью речи: у «быть» - и VERB (бытийное «есть»), у «бы» - и PART, у «один» - и DET
-/// («одна женщина»), у единственного числа «друг» - и взаимное местоимение («друг друга»)
+/// («одна женщина»), у единственного числа «друг» - и взаимное местоимение («друг друга»),
+/// у союза «то» - и сочинительный в чередовании («то дождь, то снег»)
 pub fn context_copy(base: &str, tag: &str) -> Option<Ud> {
-    if !matches!(base, "быть" | "бы" | "один" | "друг") {
+    if !matches!(base, "быть" | "бы" | "один" | "друг" | "то") {
         return None;
     }
     let mut ud = convert(tag, lemma_class(base));
     let case = ud.feats.get("Case").copied();
     match (base, ud.pos) {
+        ("то", "SCONJ") => ud.pos = "CCONJ",
         ("быть", "AUX") => ud.pos = "VERB",
         ("бы", "AUX") => {
             ud.pos = "PART";
@@ -956,6 +930,18 @@ pub fn positive_adverbs(lemma: &str, short: &[String]) -> Vec<String> {
         }
     }
     adverbs
+}
+
+/// Пассив возвратного глагола `lemma` - его форма с тегом `tag` (личная форма, инфинитив,
+/// причастие, деепричастие) с Voice=Pass; лемма - невозвратный глагол, как в SynTagRus и Taiga
+pub fn reflexive_passive(tag: &str, lemma: &str) -> Option<Ud> {
+    let oc = tag.split([',', ' ']).next()?;
+    if !matches!(oc, "VERB" | "INFN" | "PRTF" | "PRTS" | "GRND") {
+        return None;
+    }
+    let mut ud = convert(tag, lemma_class(lemma));
+    ud.feats.insert("Voice", "Pass");
+    Some(ud)
 }
 
 /// Сравнительная степень наречия `adverb` - форма COMP прилагательного с тегом `tag`
@@ -1051,14 +1037,12 @@ pub fn lemma_class(lemma: &str) -> &str {
         || pronoun_series(lemma).is_some()
         || RARE_PRONOUN_TYPES.iter().any(|&(word, _)| word == lemma)
         || [
-            MIDDLE_VERBS,
             POSSESSIVE,
             NEGATIVE,
             NEGATIVE_PREDICATIVES,
             SUPPLETIVE_SUPERLATIVES,
             SUPERLATIVES,
             ANIMATE_PRONOUNS,
-            PARTICLE_PRONOUNS,
             INANIMATE_PRONOUNS,
             REFLEXIVE,
             &["быть", "бы", "два", "должный", "себя"],
@@ -1194,11 +1178,12 @@ mod tests {
 
     #[test]
     fn verbs() {
+        // Voice=Mid - только у возвратных глаголов (руководство UD): «стать» - Act
         assert_eq!(
             summary("VERB,perf,intr plur,past,indc", "стать"),
             (
                 "VERB".into(),
-                "Aspect=Perf|Mood=Ind|Number=Plur|Tense=Past|VerbForm=Fin|Voice=Mid".into(),
+                "Aspect=Perf|Mood=Ind|Number=Plur|Tense=Past|VerbForm=Fin|Voice=Act".into(),
                 vec!["intr".into()]
             )
         );
@@ -1440,13 +1425,13 @@ mod tests {
 
     #[test]
     fn future_of_be() {
-        // SynTagRus: «будет» - Tense=Pres; помета futr отличает его от «есть»
+        // Будущее время вспомогательного «быть» по руководству UD - Tense=Fut
         assert_eq!(
             summary("VERB,impf,intr sing,3per,futr,indc", "быть"),
             (
                 "AUX".into(),
-                "Mood=Ind|Number=Sing|Person=3|Tense=Pres|VerbForm=Fin|Voice=Act".into(),
-                vec!["futr".into(), "intr".into()]
+                "Mood=Ind|Number=Sing|Person=3|Tense=Fut|VerbForm=Fin|Voice=Act".into(),
+                vec!["intr".into()]
             )
         );
         assert!(summary("VERB,impf,intr sing,3per,pres,indc", "быть").2 == ["intr"]);
@@ -1561,6 +1546,8 @@ mod tests {
             Some(("PRON", "Case=Ins|PronType=Rcp".into()))
         );
         assert_eq!(copy("друг", "NOUN,anim,masc plur,ablt"), None);
+        assert_eq!(copy("то", "CONJ"), Some(("CCONJ", "".into())));
+        assert_eq!(copy("то", "NPRO,neut sing,nomn"), None);
         assert_eq!(copy("друг", "NOUN,anim,masc sing,voct"), None);
         assert_eq!(copy("стать", "VERB,perf,intr sing,3per,futr,indc"), None);
     }
@@ -1584,6 +1571,26 @@ mod tests {
         );
         assert!(numeral_genders("два", "NUMR masc,nomn").is_empty());
         assert!(numeral_genders("три", "NUMR gent").is_empty());
+    }
+
+    #[test]
+    fn reflexive_passives() {
+        let passive = |tag: &str| {
+            reflexive_passive(tag, "использоваться").map(|ud| (ud.pos, feats_string(&ud.feats)))
+        };
+        assert_eq!(
+            passive("VERB,impf,intr sing,3per,pres,indc"),
+            Some((
+                "VERB",
+                "Aspect=Imp|Mood=Ind|Number=Sing|Person=3|Tense=Pres|VerbForm=Fin|Voice=Pass"
+                    .into()
+            ))
+        );
+        assert_eq!(
+            passive("INFN,impf,intr"),
+            Some(("VERB", "Aspect=Imp|VerbForm=Inf|Voice=Pass".into()))
+        );
+        assert_eq!(passive("NOUN,inan,masc sing,nomn"), None);
     }
 
     #[test]

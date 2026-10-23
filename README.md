@@ -29,11 +29,11 @@
 
 **ruMorph** - морфологический анализатор русского языка: ядро на Rust и API для Python. Для словоформы анализатор находит по словарю [OpenCorpora](https://opencorpora.org) варианты разбора - начальную форму (лемму), часть речи и признаки [Universal Dependencies](https://universaldependencies.org/) - упорядочивает их по вероятности и строит формы слова.
 
-Разбор и лемматизация в 6-8 раз быстрее, чем в pymorphy3 с ускорением `pymorphy3[fast]`, форма по признакам и согласование с количеством - в 16-19 раз; списки слов разбираются без GIL. Части речи, признаки и леммы следуют соглашениям трибанка SynTagRus, поэтому результат можно сравнивать с разметкой spaCy, Stanza и других инструментов на UD.
+Разбор и лемматизация в 6-8 раз быстрее, чем в pymorphy3 с ускорением `pymorphy3[fast]`, форма по признакам и согласование с количеством - в 16-19 раз; списки слов разбираются без GIL. Части речи, признаки и леммы следуют руководству UD, а где оно молчит - соглашениям трибанка SynTagRus, поэтому результат можно сравнивать с разметкой spaCy, Stanza и других инструментов на UD.
 
 * **[Анализатор](https://sergeyshk.github.io/ruMorph/analyzer/)** - разборы словоформы по убыванию вероятности, разбор списков слов и лемматизация без GIL, проверка словоформы по словарю
 * **[Разбор предложения](https://sergeyshk.github.io/ruMorph/analyzer/#analyze_sentence)** - выбор разбора по соседним словам контекстной моделью: часть речи, лемма и признаки верны у 81-93 % слов против 71-82 % без контекста
-* **[Части речи и признаки UD](https://sergeyshk.github.io/ruMorph/analysis/#ud)** - части речи, признаки и леммы в соглашениях SynTagRus; пометы OpenCorpora, у которых нет признака UD
+* **[Части речи и признаки UD](https://sergeyshk.github.io/ruMorph/analysis/#ud)** - части речи, признаки и леммы по руководству UD и соглашениям SynTagRus; пометы OpenCorpora, у которых нет признака UD
 * **[Токены вне словаря](https://sergeyshk.github.io/ruMorph/analysis/#rules)** - числа, знаки, латиница, инициалы и сокращения по правилам
 * **[Незнакомые слова](https://sergeyshk.github.io/ruMorph/analysis/#guess)** - разборы по окончанию, слова через дефис и с приставками, формы угаданных слов
 * **[Словоизменение](https://sergeyshk.github.io/ruMorph/inflection/)** - формы лексемы, форма по признакам UD, согласование с количеством
@@ -91,7 +91,7 @@ uv add rumorph
 
 >>> morph = Analyzer()
 >>> morph.analyze("стали")[0]
-Analysis(word='стали', lemma='стать', pos='VERB', feats='Aspect=Perf|Mood=Ind|Number=Plur|Tense=Past|VerbForm=Fin|Voice=Mid', labels='intr', prob=0.9877829877829878, source='dictionary')
+Analysis(word='стали', lemma='стать', pos='VERB', feats='Aspect=Perf|Mood=Ind|Number=Plur|Tense=Past|VerbForm=Fin|Voice=Act', labels='intr', prob=0.9877829877829878, source='dictionary')
 >>> [len(analyses) for analyses in morph.analyze_many(["мама", "мыла", "раму"])]
 [1, 4, 2]
 >>> morph.is_known("Ежи"), morph.is_known("вайб")
@@ -112,7 +112,7 @@ Analysis(word='стали', lemma='стать', pos='VERB', feats='Aspect=Perf|M
 ['Nom', None, 'Gen']
 >>> [analyses[0].feats.get("Case") for analyses in morph.analyze_sentence(words)]
 ['Nom', None, 'Acc']
->>> morph.analyze_sentence(["Завод", "выпускает", "больше", "стали"])[3][0].lemma
+>>> morph.analyze_sentence(["Мост", "сделан", "из", "стали"])[3][0].lemma
 'сталь'
 ```
 
@@ -121,7 +121,7 @@ Analysis(word='стали', lemma='стать', pos='VERB', feats='Aspect=Perf|M
 
 <br>
 
-Части речи и признаки следуют [Universal Dependencies](https://universaldependencies.org/u/pos/) в соглашениях крупнейшего русского трибанка [UD_Russian-SynTagRus](https://github.com/UniversalDependencies/UD_Russian-SynTagRus). Отличия от частей речи OpenCorpora:
+Части речи и признаки следуют руководству [Universal Dependencies](https://universaldependencies.org/u/pos/), а где оно молчит - соглашениям крупнейшего русского трибанка [UD_Russian-SynTagRus](https://github.com/UniversalDependencies/UD_Russian-SynTagRus). Отличия от частей речи OpenCorpora:
 
 *   «который», «этот», «свой», «весь», «такой» и другие местоименные прилагательные - `DET`
 *   «быть» и «бы» - `AUX`
@@ -297,11 +297,11 @@ ruMorph работает с тем же словарем OpenCorpora, что pym
 
 | Система | SynTagRus | Taiga | GSD | Токенов в секунду |
 | :------ | :-------- | :---- | :-- | :---------------- |
-| ruMorph | **93,8** | **90,6** | **91,9** | **693 383** |
+| ruMorph | **93,9** | **90,6** | **91,8** | **693 383** |
 | pymorphy3 | 84,8 | 82,9 | 84,3 | 23 484 |
 | mystem | 81,9 | 79,4 | 79,9 | 82 191 |
 
-С контекстом (`analyze_sentence`) ruMorph по части речи, лемме и признакам вместе точнее всех теггеров на Taiga и GSD (89,7 и 81,2 % слов против 85,6 и 80,3 % у Stanza), а на SynTagRus уступает только Stanza - 0,3 пункта, хотя Stanza обучена на SynTagRus. При этом он разбирает 108 тыс. токенов в секунду против 2 738 у Stanza. На короткий текст вместе с загрузкой ruMorph отвечает за 6 мс против 0,2-2 с у теггеров, процессы делят словарь, и каждый следующий добавляет 1,2 МБ. Замер - Apple M3 Pro, Python 3.11.
+С контекстом (`analyze_sentence`) ruMorph по части речи, лемме и признакам вместе точнее всех теггеров на Taiga и GSD (90,0 и 81,3 % слов против 85,6 и 80,3 % у Stanza), а на SynTagRus уступает только Stanza - 0,2 пункта, хотя Stanza обучена на SynTagRus. При этом он разбирает 108 тыс. токенов в секунду против 2 738 у Stanza. На короткий текст вместе с загрузкой ruMorph отвечает за 6 мс против 0,2-2 с у теггеров, процессы делят словарь, и каждый следующий добавляет 1,2 МБ. Замер - Apple M3 Pro, Python 3.11.
 
 Подробнее - в [документации](https://sergeyshk.github.io/ruMorph/performance/): теггеры с контекстом, график скорости от объема текста, операции в сравнении с pymorphy3, память и как это измерено.
 

@@ -444,7 +444,7 @@ def test_threads(morph):
         ("новый", {"Case": "Acc"}, "новый"),
         ("новые", {"Case": "Acc"}, "новые"),
         ("кот", {"Case": "Acc"}, "кота"),
-        # Будущее «быть»: формы с пометой futr
+        # Будущее «быть» - Tense=Fut
         ("буду", {"Person": "3"}, "будет"),
         # Вариант написания исходной формы
         ("листья", {"Case": "Gen"}, "листьев"),
@@ -460,8 +460,10 @@ def test_inflect_prefers_requested(morph, word, feats, form):
 
 def test_future_of_be(morph):
     future = next(a for a in morph.analyze("будет") if a.feats.get("Mood") == "Ind")
-    assert "futr" in future.labels
+    assert future.feats["Tense"] == "Fut"
+    assert "futr" not in future.labels
     assert future.inflect(Number="Plur") == "будут"
+    assert morph.analyze("быть")[0].inflect(Tense="Fut", Person="1", Number="Sing") == "буду"
 
 
 def test_female_surname_agreement(morph):

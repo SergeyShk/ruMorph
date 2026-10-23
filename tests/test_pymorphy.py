@@ -61,7 +61,7 @@ def changed_by_build(parses):
     предикатив при кратком прилагательном среднего рода, местоимения «то», «всё», «все» поверх
     «тот» и «весь», варианты «б», «ж», «чтоб» в лексемах основных слов, имена собственные
     поверх нарицательных («Земля»), копии с разбором по контексту («быть», «бы», «один», «друг»,
-    род «двух», сравнительная степень наречия)"""
+    союз «то», род «двух», сравнительная степень наречия)"""
     tags = [set(str(parse.tag).replace(" ", ",").split(",")) for parse in parses]
     return (
         (any({"CONJ", "Prnt"} <= tag for tag in tags) and len(parses) > 1)
@@ -71,7 +71,9 @@ def changed_by_build(parses):
         )
         or any(parse.normal_form in ("тот", "весь") and "Apro" in parse.tag for parse in parses)
         or any(parse.normal_form in ("б", "ж", "чтоб") for parse in parses)
-        or any(parse.normal_form in ("быть", "бы", "один", "друг", "два") for parse in parses)
+        or any(
+            parse.normal_form in ("быть", "бы", "один", "друг", "два", "то") for parse in parses
+        )
         or any("COMP" in tag for tag in tags)
         or any(
             parse.normal_form in PROPER_COPIES and {"NOUN", "sing"} <= tag
@@ -134,7 +136,9 @@ def test_same_analyses(pymorphy, unsorted, words):
         if parses is None:
             checked["not in dictionary"] += 1
             continue
-        if changed_by_build(parses):
+        # Пассив на -ся - копия формы возвратного глагола с невозвратной леммой
+        passive = any(a.feats.get("Voice") == "Pass" for a in morph.analyze(word))
+        if changed_by_build(parses) or (passive and word.endswith(("ся", "сь"))):
             checked["changed by build"] += 1
             continue
         ours = morph._opencorpora(word)

@@ -63,7 +63,7 @@ The forms of the lexeme in dictionary order - analyses like those of `analyze`, 
 inflect(**feats)
 ```
 
-The form of the lexeme with the given UD features. Features that are not given are kept where possible: «кошка» in the genitive is «кошки», not «кошек». The short form, the animate accusative («нового») and the inclusive imperative («сделаем») are chosen only when asked for: `Variant="Short"`, `Animacy="Anim"`, `Person="1"`. The future of «быть» in SynTagRus is `Tense=Pres` with the `futr` label: «будет» in the plural is «будут», while `inflect(Tense="Fut")` of «быть» raises `FormNotFoundError` - the future is taken from `forms()` by the `futr` label.
+The form of the lexeme with the given UD features. Features that are not given are kept where possible: «кошка» in the genitive is «кошки», not «кошек». The short form, the animate accusative («нового») and the inclusive imperative («сделаем») are chosen only when asked for: `Variant="Short"`, `Animacy="Anim"`, `Person="1"`. The future of «быть» is `Tense=Fut`: «быть» with `Tense="Fut", Person="1", Number="Sing"` is «буду».
 
 | Parameter | Type | Default | Description |
 | :-------- | :--- | :------ | :---------- |

@@ -30,7 +30,7 @@ bytemuck = "1.25.2"
 crc32fast = "1.5.3"
 fst = "0.4.7"
 memmap2 = "0.9.11"
-rumorph-dict-ru = { version = "=0.4.0-dev.2", path = "../rumorph-dict-ru", optional = true }
+rumorph-dict-ru = { version = "=0.4.0-dev.3", path = "../rumorph-dict-ru", optional = true }
 unicode-segmentation = { version = "1.13.3", optional = true }
 
 [package.metadata.docs.rs]

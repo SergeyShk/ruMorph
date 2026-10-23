@@ -102,7 +102,7 @@ Some words get their part of speech by the SynTagRus conventions: the parentheti
 | `ms-f` («сирота») | `Gender=Masc` |
 | `anim`, `inan` | `Animacy`: `Anim`, `Inan` |
 | `1per`, `2per`, `3per` | `Person`: `1`, `2`, `3` |
-| `pres`, `past`, `futr` | `Tense`: `Pres`, `Past`, `Fut`; the future of «быть» is `Tense=Pres` with the `futr` label |
+| `pres`, `past`, `futr` | `Tense`: `Pres`, `Past`, `Fut` |
 | `perf`, `impf` | `Aspect`: `Perf`, `Imp` |
 | `indc`, `impr` | `Mood`: `Ind`, `Imp` |
 | `actv`, `pssv` | `Voice`: `Act`, `Pass`; reflexive verbs - `Mid` |
