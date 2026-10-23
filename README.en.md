@@ -301,7 +301,7 @@ The share of words whose first analysis has the right part of speech and lemma, 
 | pymorphy3 | 84.8 | 82.9 | 84.3 | 23,484 |
 | mystem | 81.9 | 79.4 | 79.9 | 82,191 |
 
-In context (`analyze_sentence`) ruMorph is more accurate than the spaCy and Slovnet taggers on all sets and than Stanza on Taiga and GSD: the part of speech, lemma and features are right for 89.7 and 81.2 % of words against 85.6 and 80.3 %. Meanwhile it handles 108 thousand tokens per second against 2,738 for Stanza. ruMorph answers a short text together with loading in 6 ms against 0.2-2 s for the taggers, processes share the dictionary, and every further one adds 1.2 MB. Measured on Apple M3 Pro, Python 3.11.
+In context (`analyze_sentence`) ruMorph is more accurate than all the taggers in the part of speech, lemma and features together on Taiga and GSD (89.7 and 81.2 % of words against 85.6 and 80.3 % for Stanza), and on SynTagRus it is behind only Stanza, by 0.3 points, although Stanza is trained on SynTagRus. Meanwhile it handles 108 thousand tokens per second against 2,738 for Stanza. ruMorph answers a short text together with loading in 6 ms against 0.2-2 s for the taggers, processes share the dictionary, and every further one adds 1.2 MB. Measured on Apple M3 Pro, Python 3.11.
 
 See the [documentation](https://sergeyshk.github.io/ruMorph/en/performance/) for context taggers, the chart of speed by text size, operations compared with pymorphy3, memory and how it was measured.
 
