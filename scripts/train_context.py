@@ -11,9 +11,10 @@
 
 Описание:
     Скачивает обучающие и проверочные части UD_Russian-Taiga и UD_Russian-GSD (CC BY-SA 4.0)
-    закрепленного релиза UD с проверкой SHA-256, разбирает их токены словарем `--dictionary`
-    и учит модель выбирать среди разборов словаря тот, что совпадает с эталоном по части речи,
-    лемме и основным признакам. Модель - BiLSTM над признаками токена (запись, слово, окончания,
+    закрепленного релиза UD с проверкой SHA-256, приводит их разметку к соглашениям ruMorph
+    (`conventions.py`, признаки - по разборам словаря), разбирает их токены словарем
+    `--dictionary` и учит модель выбирать среди разборов словаря тот, что совпадает с эталоном
+    по части речи, лемме и основным признакам. Модель - BiLSTM над признаками токена (запись, слово, окончания,
     теги его разборов) и оценка каждого разбора скалярным произведением с вектором токена.
     Эпоха выбирается по full core на проверочных частях Taiga и GSD. Веса квантуются в int8
     по строкам и пишутся в файл `--output`, который `rumorph-build` вшивает в словарь; точность
@@ -38,6 +39,8 @@ import numpy as np
 import torch
 from torch import nn
 
+import conventions
+from conventions import GSD, TAIGA, harmonize
 from rumorph import Analyzer
 
 # Трибанк, коммит релиза и файлы с SHA-256: обучающие части - как в export_ud.py
@@ -110,8 +113,8 @@ def download(url: str, path: Path, digest: str) -> None:
 
 def sentences(paths: list[Path]) -> list[list[tuple[str, str, str, dict[str, str]]]]:
     """
-    Предложения CoNLL-U: форма, лемма, часть речи и признаки токенов; многословные и пустые токены
-    пропускаются
+    Предложения CoNLL-U в соглашениях ruMorph (`conventions.py`): форма, лемма, часть речи
+    и признаки токенов; многословные и пустые токены пропускаются
 
     Аргументы:
         paths (list[Path]): Файлы CoNLL-U
@@ -119,23 +122,46 @@ def sentences(paths: list[Path]) -> list[list[tuple[str, str, str, dict[str, str
     Вывод:
         list[list[tuple[str, str, str, dict[str, str]]]]: Предложения
     """
-    result, sentence = [], []
+    result = []
     for path in paths:
-        for line in path.read_text(encoding="utf-8").splitlines():
-            if not line:
-                if sentence:
-                    result.append(sentence)
-                sentence = []
-            elif line[0].isdigit():
-                cols = line.split("\t")
-                if "-" in cols[0] or "." in cols[0]:
-                    continue
-                feats = dict(f.split("=", 1) for f in cols[5].split("|")) if cols[5] != "_" else {}
-                sentence.append((cols[1], cols[2], cols[3], feats))
-        if sentence:
-            result.append(sentence)
-            sentence = []
+        treebank = GSD if path.name.startswith("ru_gsd") else TAIGA
+        for sentence in conventions.sentences(path):
+            harmonize(treebank, sentence)
+            result.append([(t.form, t.lemma, t.upos, t.feats) for t in sentence])
     return result
+
+
+def harmonize_features(
+    lemma: str, upos: str, feats: dict[str, str], analyses: list
+) -> tuple[str, dict[str, str]]:
+    """
+    Лемма и основные признаки эталона в соглашениях словаря: признак, которого нет ни у одного
+    разбора словаря с той же частью речи и леммой, убирается, а одинаковый у всех них -
+    добавляется; у сравнительной степени наречия лемма - как у разбора словаря («раньше» - «рано»)
+
+    Аргументы:
+        lemma (str): Лемма эталона
+        upos (str): Часть речи эталона
+        feats (dict[str, str]): Основные признаки эталона
+        analyses (list): Разборы словаря
+
+    Вывод:
+        tuple[str, dict[str, str]]: Лемма и признаки
+    """
+    same = [a for a in analyses if a.pos == upos and normal(a.lemma) == normal(lemma)]
+    if not same and upos == "ADV" and feats.get("Degree") == "Cmp":
+        same = [a for a in analyses if a.pos == "ADV" and a.feats.get("Degree") == "Cmp"][:1]
+        lemma = same[0].lemma if same else lemma
+    if not same:
+        return lemma, feats
+    feats = dict(feats)
+    for name in CORE:
+        values = {a.feats.get(name) for a in same}
+        if values == {None}:
+            feats.pop(name, None)
+        elif None not in values and len(values) == 1 and name not in feats:
+            feats[name] = values.pop()
+    return lemma, feats
 
 
 def normal(text: str) -> str:
@@ -244,6 +270,7 @@ class Data:
         self.bits = []
         for (_, lemma, upos, feats), analyses in zip(golds, self.analyses, strict=True):
             gold = {k: v for k, v in feats.items() if k in CORE}
+            lemma, gold = harmonize_features(lemma, upos, gold, analyses)
             row = []
             for a in analyses[:KMAX]:
                 ours = {k: v for k, v in a.feats.items() if k in CORE}

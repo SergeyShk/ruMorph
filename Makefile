@@ -37,7 +37,7 @@ $(EXPORT_STAMP): $(SCRIPTS_PATH)/export_pymorphy.py uv.lock | deps
 	uv run python $(SCRIPTS_PATH)/export_pymorphy.py $(EXPORT_PATH)
 	touch $@
 
-$(UD_STAMP): $(SCRIPTS_PATH)/export_ud.py | deps
+$(UD_STAMP): $(SCRIPTS_PATH)/export_ud.py $(SCRIPTS_PATH)/conventions.py | deps
 	uv run python $(SCRIPTS_PATH)/export_ud.py $(UD_PATH)
 	touch $@
 
