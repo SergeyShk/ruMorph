@@ -742,6 +742,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#analyze_sentence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sentence analysis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#lemmatize" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -955,6 +966,17 @@
     <span class="md-ellipsis">
       
         Analyses of a list of word forms
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#analyze_sentence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sentence analysis
       
     </span>
   </a>
@@ -1190,6 +1212,53 @@
 </div>
 </div>
 <div class="metric-card">
+<h3 id="analyze_sentence">Sentence analysis<a class="headerlink" href="#analyze_sentence" title="Permanent link">&para;</a></h3>
+<p class="metric-meta"><code>analyze_sentence</code> · <code>list[list[Analysis]]</code></p>
+<div class="signature highlight"><pre><span></span><code><span class="n">analyze_sentence</span><span class="p">(</span><span class="n">words</span><span class="p">)</span>
+</code></pre></div>
+<p>Analyses of the words of a sentence in context: the same analyses as with <a href="#analyze"><code>analyze</code></a> are ordered by the context model - the first one is the analysis it chose from the neighbouring words, and <code>prob</code> is its estimate in this sentence. Without context «книги» is in the genitive (it is more frequent), in «Я читаю книги» the model picks the accusative, and «стали» in «Завод выпускает больше стали» is the noun «сталь», not the verb «стать». With context the part of speech, lemma and features of the first analysis are right for 81-93 % of words against 71-82 % without it (<a href="../performance/">Comparison</a>). The words are the tokens of one sentence in order: ruMorph does not split text into sentences and tokens. A word without neighbours is analyzed as with <code>analyze</code>: without context the model chooses worse than the dictionary frequencies. The model is trained on the <a href="https://github.com/UniversalDependencies/UD_Russian-Taiga">UD_Russian-Taiga</a> and <a href="https://github.com/UniversalDependencies/UD_Russian-GSD">UD_Russian-GSD</a> treebanks and ships with the package dictionary.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Parameter</th>
+<th style="text-align: left;">Type</th>
+<th style="text-align: left;">Default</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>words</code></td>
+<td style="text-align: left;"><code>Iterable[str]</code></td>
+<td style="text-align: left;">-</td>
+<td style="text-align: left;">Tokens of a sentence: a list, a tuple, a generator</td>
+</tr>
+</tbody>
+</table>
+<p>Exceptions:</p>
+<ul>
+<li><code>TypeError</code> - a string instead of a collection of words, a word that is not a string;</li>
+<li><code>ValueError</code> - the dictionary has no context model (a dictionary built without it).</li>
+</ul>
+<div class="tabbed-set tabbed-alternate" data-tabs="5:2"><input checked="checked" id="__tabbed_5_1" name="__tabbed_5" type="radio" /><input id="__tabbed_5_2" name="__tabbed_5" type="radio" /><div class="tabbed-labels"><label for="__tabbed_5_1">Code</label><label for="__tabbed_5_2">Result</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="n">words</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"Я"</span><span class="p">,</span> <span class="s2">"читаю"</span><span class="p">,</span> <span class="s2">"книги"</span><span class="p">]</span>
+<span class="nb">print</span><span class="p">([</span><span class="n">analyses</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">feats</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"Case"</span><span class="p">)</span> <span class="k">for</span> <span class="n">analyses</span> <span class="ow">in</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze_many</span><span class="p">(</span><span class="n">words</span><span class="p">)])</span>
+<span class="nb">print</span><span class="p">([</span><span class="n">analyses</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">feats</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"Case"</span><span class="p">)</span> <span class="k">for</span> <span class="n">analyses</span> <span class="ow">in</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze_sentence</span><span class="p">(</span><span class="n">words</span><span class="p">)])</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">morph</span><span class="o">.</span><span class="n">analyze_sentence</span><span class="p">([</span><span class="s2">"Завод"</span><span class="p">,</span> <span class="s2">"выпускает"</span><span class="p">,</span> <span class="s2">"больше"</span><span class="p">,</span> <span class="s2">"стали"</span><span class="p">])[</span><span class="mi">3</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">lemma</span><span class="p">)</span>
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code>['Nom', None, 'Gen']
+['Nom', None, 'Acc']
+сталь
+</code></pre></div>
+</div>
+</div>
+</div>
+</div>
+<div class="metric-card">
 <h3 id="lemmatize">Lemmatization<a class="headerlink" href="#lemmatize" title="Permanent link">&para;</a></h3>
 <p class="metric-meta"><code>lemmatize</code> · <code>list[str]</code></p>
 <div class="signature highlight"><pre><span></span><code><span class="n">lemmatize</span><span class="p">(</span><span class="n">words</span><span class="p">)</span>
@@ -1217,7 +1286,7 @@
 <ul>
 <li><code>TypeError</code> - a string instead of a collection of words, a word that is not a string.</li>
 </ul>
-<div class="tabbed-set tabbed-alternate" data-tabs="5:2"><input checked="checked" id="__tabbed_5_1" name="__tabbed_5" type="radio" /><input id="__tabbed_5_2" name="__tabbed_5" type="radio" /><div class="tabbed-labels"><label for="__tabbed_5_1">Code</label><label for="__tabbed_5_2">Result</label></div>
+<div class="tabbed-set tabbed-alternate" data-tabs="6:2"><input checked="checked" id="__tabbed_6_1" name="__tabbed_6" type="radio" /><input id="__tabbed_6_2" name="__tabbed_6" type="radio" /><div class="tabbed-labels"><label for="__tabbed_6_1">Code</label><label for="__tabbed_6_2">Result</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
 <div class="highlight"><pre><span></span><code><span class="n">morph</span><span class="o">.</span><span class="n">lemmatize</span><span class="p">(</span><span class="s2">"Мы стали друзьями в ковиде"</span><span class="o">.</span><span class="n">split</span><span class="p">())</span>
@@ -1258,7 +1327,7 @@
 <ul>
 <li><code>TypeError</code> - a word that is not a string.</li>
 </ul>
-<div class="tabbed-set tabbed-alternate" data-tabs="6:2"><input checked="checked" id="__tabbed_6_1" name="__tabbed_6" type="radio" /><input id="__tabbed_6_2" name="__tabbed_6" type="radio" /><div class="tabbed-labels"><label for="__tabbed_6_1">Code</label><label for="__tabbed_6_2">Result</label></div>
+<div class="tabbed-set tabbed-alternate" data-tabs="7:2"><input checked="checked" id="__tabbed_7_1" name="__tabbed_7" type="radio" /><input id="__tabbed_7_2" name="__tabbed_7" type="radio" /><div class="tabbed-labels"><label for="__tabbed_7_1">Code</label><label for="__tabbed_7_2">Result</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
 <div class="highlight"><pre><span></span><code><span class="n">morph</span><span class="o">.</span><span class="n">is_known</span><span class="p">(</span><span class="s2">"Ежи"</span><span class="p">),</span> <span class="n">morph</span><span class="o">.</span><span class="n">is_known</span><span class="p">(</span><span class="s2">"вайб"</span><span class="p">)</span>
@@ -1275,7 +1344,7 @@
 <p>The package dictionary is built from the <a href="https://opencorpora.org">OpenCorpora</a> dictionary: about 3.1 million word forms. The probabilities of analyses come from the OpenCorpora corpus and are refined by the annotation of the Universal Dependencies treebanks <a href="https://github.com/UniversalDependencies/UD_Russian-Taiga">UD_Russian-Taiga</a> and <a href="https://github.com/UniversalDependencies/UD_Russian-GSD">UD_Russian-GSD</a>: this way «ничего» is more often a pronoun than an adverb. Word forms missing from every corpus get equally probable analyses. The dictionary is distributed under the <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a> license.</p>
 <h2 id="parallel">Threads and processes<a class="headerlink" href="#parallel" title="Permanent link">&para;</a></h2>
 <p>One analyzer can be used from several threads: <code>analyze_many</code> and <code>lemmatize</code> release the GIL and process lists in parallel, and on the free-threaded Python 3.14t <code>analyze</code>, <code>is_known</code>, <code>inflect</code> and <code>agree</code> run in parallel too. A shared analyzer is not slower than a separate one per thread, so there is no need for an analyzer per thread. Without the GIL threads are limited by deleting the analysis objects: <code>forms</code> hardly speeds up in threads and <code>analyze_many</code> on long lists speeds up weakly, so such lists are better analyzed in chunks of a thousand or two words. The analyzer and analyses are pickled, so they work with <code>multiprocessing</code> and joblib: processes share the dictionary mapped into memory, however many analyses they receive (each process builds the copy with <a href="#words">own words</a> itself). A pickle keeps the dictionary path: unpickling takes the analyzer with the same path whose analyses are in the thread, otherwise loads the dictionary from the path or, if the file is gone, takes the dictionary loaded from it in the process. An analysis pickled with another version of the dictionary is found by its spelling, lemma and tag; if the dictionary has no such analysis, it is restored as saved, but without other forms, and if the dictionary has no such tag either, the analysis of the word with new features added to the saved ones is taken (the gender of «Нидерландов»). Python 3.14 subinterpreters (<code>InterpreterPoolExecutor</code>) are not supported: use threads or processes. Passing analyses between processes costs more than the analysis itself, so in processes it is better to get lemmas and analysis fields, and analyses in threads.</p>
-<div class="tabbed-set tabbed-alternate" data-tabs="7:2"><input checked="checked" id="__tabbed_7_1" name="__tabbed_7" type="radio" /><input id="__tabbed_7_2" name="__tabbed_7" type="radio" /><div class="tabbed-labels"><label for="__tabbed_7_1">Code</label><label for="__tabbed_7_2">Result</label></div>
+<div class="tabbed-set tabbed-alternate" data-tabs="8:2"><input checked="checked" id="__tabbed_8_1" name="__tabbed_8" type="radio" /><input id="__tabbed_8_2" name="__tabbed_8" type="radio" /><div class="tabbed-labels"><label for="__tabbed_8_1">Code</label><label for="__tabbed_8_2">Result</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
 <div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">concurrent.futures</span><span class="w"> </span><span class="kn">import</span> <span class="n">ThreadPoolExecutor</span>

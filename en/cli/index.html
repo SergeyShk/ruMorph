@@ -1009,7 +1009,7 @@
 <h1 id="the-rumorph-command">The rumorph command<a class="headerlink" href="#the-rumorph-command" title="Permanent link">&para;</a></h1>
 <div class="highlight"><pre><span></span><code>rumorph<span class="w"> </span><span class="o">[</span>options<span class="o">]</span><span class="w"> </span><span class="o">[</span>file<span class="w"> </span>...<span class="o">]</span>
 </code></pre></div>
-<p>The command analyzes text from files or the standard input and writes lemmas, parts of speech and <a href="https://universaldependencies.org/">Universal Dependencies</a> features in one of four formats. It is installed with the package (<code>pip install rumorph</code>) and also runs as <code>python -m rumorph</code>; without Python, <code>cargo install rumorph --features cli</code> installs it. The Rust core does the analysis and the output: about a million tokens per second in one thread.</p>
+<p>The command analyzes text from files or the standard input and writes lemmas, parts of speech and <a href="https://universaldependencies.org/">Universal Dependencies</a> features in one of four formats. It is installed with the package (<code>pip install rumorph</code>) and also runs as <code>python -m rumorph</code>; without Python, <code>cargo install rumorph --features cli</code> installs it. The Rust core does the analysis and the output in one thread: about 100 thousand tokens per second with <a href="../analyzer/#analyze_sentence">context</a> and about a million without it (<code>--no-context</code>).</p>
 <div class="highlight"><pre><span></span><code><span class="nb">echo</span><span class="w"> </span><span class="s2">"Мы стали друзьями в ковиде."</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>rumorph
 </code></pre></div>
 <div class="highlight"><pre><span></span><code>мы стать друг в ковид .
@@ -1050,6 +1050,11 @@
 <td style="text-align: left;">The result file; <code>-</code> is the standard output</td>
 </tr>
 <tr>
+<td style="text-align: left;"><code>--no-context</code></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">Analyze each word without its neighbours: analyses by dictionary frequencies, as with <a href="../analyzer/#analyze"><code>analyze</code></a>, several times faster</td>
+</tr>
+<tr>
 <td style="text-align: left;"><code>-h</code>, <code>--help</code></td>
 <td style="text-align: left;"></td>
 <td style="text-align: left;">Show the help</td>
@@ -1065,8 +1070,8 @@
 <p>In Windows PowerShell 5.1 the <code>&gt;</code> redirection and a pipeline (<code>Get-Content text.txt | rumorph</code>) corrupt Cyrillic: pass the file as an argument and write the result with the <code>-o</code> option (in PowerShell 7 they work too). Text passed with <code>echo</code> in cmd comes in the console encoding: run <code>chcp 65001</code> first. cmd and PowerShell do not expand file patterns (<code>*.txt</code>).</p>
 <h2 id="input">Input<a class="headerlink" href="#input" title="Permanent link">&para;</a></h2>
 <ul>
-<li><code>text</code> - text, a sentence is a line. The text is split into tokens simply: words with hyphens and apostrophes between letters («кто-то», «д’Артаньян»), numbers with a period or a comma between digits («3,14»), other signs one by one, the same signs in a row together («...»), emoji with modifiers and flags whole. A zero-width space and other invisible separators split tokens, while a soft hyphen and a word joiner (U+2060) inside a word do not. The period of an abbreviation is split off: «т.е.» is four tokens; for exact splitting pass ready tokens.</li>
-<li><code>tokens</code> - one token per line, an empty line separates sentences; spaces around the token and everything after a tab are ignored, so a table with the token in the first column works too.</li>
+<li><code>text</code> - text, a sentence is a line. The text is split into tokens simply: words with hyphens and apostrophes between letters («кто-то», «д’Артаньян»), numbers with a period or a comma between digits («3,14»), other signs one by one, the same signs in a row together («...»), emoji with modifiers and flags whole. A zero-width space and other invisible separators split tokens, while a soft hyphen and a word joiner (U+2060) inside a word do not. The period of an abbreviation is split off: «т.е.» is four tokens; for exact splitting pass ready tokens. The context model analyzes a line sentence by sentence - pieces up to a sentence-final mark (<code>.</code>, <code>!</code>, <code>?</code>, <code>…</code>).</li>
+<li><code>tokens</code> - one token per line, an empty line separates sentences; spaces around the token and everything after a tab are ignored, so a table with the token in the first column works too. Analyze a list of separate words with <code>--no-context</code>: otherwise the model takes neighbouring words for a sentence.</li>
 <li><code>conllu</code> - <a href="https://universaldependencies.org/format.html">CoNLL-U</a>: the LEMMA, UPOS and FEATS columns are filled, while the other columns, comments, multiword tokens and empty nodes stay as they are.</li>
 </ul>
 <div class="highlight"><pre><span></span><code><span class="nb">printf</span><span class="w"> </span><span class="s1">'1\tМы\t_\t_\t_\t_\t2\tnsubj\t_\t_\n2\tстали\t_\t_\t_\t_\t0\troot\t_\t_\n'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>rumorph<span class="w"> </span>-i<span class="w"> </span>conllu<span class="w"> </span>-f<span class="w"> </span>conllu
@@ -1075,7 +1080,7 @@
 2   стали   стать   VERB    _   Aspect=Perf|Mood=Ind|Number=Plur|Tense=Past|VerbForm=Fin|Voice=Mid  0   root    _   _
 </code></pre></div>
 <h2 id="formats">Output formats<a class="headerlink" href="#formats" title="Permanent link">&para;</a></h2>
-<p>All formats except <code>jsonl</code> take the most probable analysis of a token; a token without analyses gets the lowercase token as the lemma and the part of speech <code>X</code>.</p>
+<p>All formats except <code>jsonl</code> take the first analysis of a token - the one chosen by the context model from the neighbouring words, and with <code>--no-context</code> the most probable one by the dictionary; <code>jsonl</code> writes all analyses in this order. A token without analyses gets the lowercase token as the lemma and the part of speech <code>X</code>.</p>
 <h3 id="lemmas">lemmas<a class="headerlink" href="#lemmas" title="Permanent link">&para;</a></h3>
 <p>Lemmas separated by spaces, a line per sentence; an empty line of text stays empty.</p>
 <h3 id="conllu">conllu<a class="headerlink" href="#conllu" title="Permanent link">&para;</a></h3>

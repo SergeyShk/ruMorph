@@ -742,6 +742,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#analyze_sentence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Разбор предложения
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#lemmatize" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -955,6 +966,17 @@
     <span class="md-ellipsis">
       
         Разборы списка словоформ
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#analyze_sentence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Разбор предложения
       
     </span>
   </a>
@@ -1190,6 +1212,53 @@
 </div>
 </div>
 <div class="metric-card">
+<h3 id="analyze_sentence">Разбор предложения<a class="headerlink" href="#analyze_sentence" title="Permanent link">&para;</a></h3>
+<p class="metric-meta"><code>analyze_sentence</code> · <code>list[list[Analysis]]</code></p>
+<div class="signature highlight"><pre><span></span><code><span class="n">analyze_sentence</span><span class="p">(</span><span class="n">words</span><span class="p">)</span>
+</code></pre></div>
+<p>Разборы слов предложения с учетом контекста: те же разборы, что у <a href="#analyze"><code>analyze</code></a>, упорядочивает контекстная модель - первым идет разбор, который она выбрала по соседним словам, а <code>prob</code> - ее оценка в этом предложении. Без контекста «книги» - в родительном падеже (так чаще), в «Я читаю книги» модель выбирает винительный, а «стали» в «Завод выпускает больше стали» - существительное «сталь», а не глагол «стать». С контекстом часть речи, лемма и признаки первого разбора верны у 81-93 % слов против 71-82 % без него (<a href="../performance/">Сравнение</a>). Слова - токены одного предложения по порядку: ruMorph не делит текст на предложения и токены. Слово без соседей разбирается, как у <code>analyze</code>: без контекста модель выбирает хуже частот словаря. Модель обучена на трибанках <a href="https://github.com/UniversalDependencies/UD_Russian-Taiga">UD_Russian-Taiga</a> и <a href="https://github.com/UniversalDependencies/UD_Russian-GSD">UD_Russian-GSD</a> и входит в словарь пакета.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Параметр</th>
+<th style="text-align: left;">Тип</th>
+<th style="text-align: left;">По умолчанию</th>
+<th style="text-align: left;">Описание</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>words</code></td>
+<td style="text-align: left;"><code>Iterable[str]</code></td>
+<td style="text-align: left;">-</td>
+<td style="text-align: left;">Токены предложения: список, кортеж, генератор</td>
+</tr>
+</tbody>
+</table>
+<p>Исключения:</p>
+<ul>
+<li><code>TypeError</code> - строка вместо набора слов, слово, которое не строка;</li>
+<li><code>ValueError</code> - в словаре нет контекстной модели (словарь, собранный без нее).</li>
+</ul>
+<div class="tabbed-set tabbed-alternate" data-tabs="5:2"><input checked="checked" id="__tabbed_5_1" name="__tabbed_5" type="radio" /><input id="__tabbed_5_2" name="__tabbed_5" type="radio" /><div class="tabbed-labels"><label for="__tabbed_5_1">Код</label><label for="__tabbed_5_2">Результат</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="n">words</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"Я"</span><span class="p">,</span> <span class="s2">"читаю"</span><span class="p">,</span> <span class="s2">"книги"</span><span class="p">]</span>
+<span class="nb">print</span><span class="p">([</span><span class="n">analyses</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">feats</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"Case"</span><span class="p">)</span> <span class="k">for</span> <span class="n">analyses</span> <span class="ow">in</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze_many</span><span class="p">(</span><span class="n">words</span><span class="p">)])</span>
+<span class="nb">print</span><span class="p">([</span><span class="n">analyses</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">feats</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"Case"</span><span class="p">)</span> <span class="k">for</span> <span class="n">analyses</span> <span class="ow">in</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze_sentence</span><span class="p">(</span><span class="n">words</span><span class="p">)])</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">morph</span><span class="o">.</span><span class="n">analyze_sentence</span><span class="p">([</span><span class="s2">"Завод"</span><span class="p">,</span> <span class="s2">"выпускает"</span><span class="p">,</span> <span class="s2">"больше"</span><span class="p">,</span> <span class="s2">"стали"</span><span class="p">])[</span><span class="mi">3</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">lemma</span><span class="p">)</span>
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code>['Nom', None, 'Gen']
+['Nom', None, 'Acc']
+сталь
+</code></pre></div>
+</div>
+</div>
+</div>
+</div>
+<div class="metric-card">
 <h3 id="lemmatize">Лемматизация<a class="headerlink" href="#lemmatize" title="Permanent link">&para;</a></h3>
 <p class="metric-meta"><code>lemmatize</code> · <code>list[str]</code></p>
 <div class="signature highlight"><pre><span></span><code><span class="n">lemmatize</span><span class="p">(</span><span class="n">words</span><span class="p">)</span>
@@ -1217,7 +1286,7 @@
 <ul>
 <li><code>TypeError</code> - строка вместо набора слов, слово, которое не строка.</li>
 </ul>
-<div class="tabbed-set tabbed-alternate" data-tabs="5:2"><input checked="checked" id="__tabbed_5_1" name="__tabbed_5" type="radio" /><input id="__tabbed_5_2" name="__tabbed_5" type="radio" /><div class="tabbed-labels"><label for="__tabbed_5_1">Код</label><label for="__tabbed_5_2">Результат</label></div>
+<div class="tabbed-set tabbed-alternate" data-tabs="6:2"><input checked="checked" id="__tabbed_6_1" name="__tabbed_6" type="radio" /><input id="__tabbed_6_2" name="__tabbed_6" type="radio" /><div class="tabbed-labels"><label for="__tabbed_6_1">Код</label><label for="__tabbed_6_2">Результат</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
 <div class="highlight"><pre><span></span><code><span class="n">morph</span><span class="o">.</span><span class="n">lemmatize</span><span class="p">(</span><span class="s2">"Мы стали друзьями в ковиде"</span><span class="o">.</span><span class="n">split</span><span class="p">())</span>
@@ -1258,7 +1327,7 @@
 <ul>
 <li><code>TypeError</code> - слово, которое не строка.</li>
 </ul>
-<div class="tabbed-set tabbed-alternate" data-tabs="6:2"><input checked="checked" id="__tabbed_6_1" name="__tabbed_6" type="radio" /><input id="__tabbed_6_2" name="__tabbed_6" type="radio" /><div class="tabbed-labels"><label for="__tabbed_6_1">Код</label><label for="__tabbed_6_2">Результат</label></div>
+<div class="tabbed-set tabbed-alternate" data-tabs="7:2"><input checked="checked" id="__tabbed_7_1" name="__tabbed_7" type="radio" /><input id="__tabbed_7_2" name="__tabbed_7" type="radio" /><div class="tabbed-labels"><label for="__tabbed_7_1">Код</label><label for="__tabbed_7_2">Результат</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
 <div class="highlight"><pre><span></span><code><span class="n">morph</span><span class="o">.</span><span class="n">is_known</span><span class="p">(</span><span class="s2">"Ежи"</span><span class="p">),</span> <span class="n">morph</span><span class="o">.</span><span class="n">is_known</span><span class="p">(</span><span class="s2">"вайб"</span><span class="p">)</span>
@@ -1275,7 +1344,7 @@
 <p>Словарь пакета собран из словаря <a href="https://opencorpora.org">OpenCorpora</a>: около 3,1 млн словоформ. Вероятности разборов взяты из корпуса OpenCorpora и уточнены по разметке трибанков Universal Dependencies <a href="https://github.com/UniversalDependencies/UD_Russian-Taiga">UD_Russian-Taiga</a> и <a href="https://github.com/UniversalDependencies/UD_Russian-GSD">UD_Russian-GSD</a>: так «ничего» чаще местоимение, чем наречие. У словоформ, которых нет ни в одном корпусе, разборы равновероятны. Словарь распространяется по лицензии <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>.</p>
 <h2 id="parallel">Потоки и процессы<a class="headerlink" href="#parallel" title="Permanent link">&para;</a></h2>
 <p>Один анализатор можно использовать из нескольких потоков: <code>analyze_many</code> и <code>lemmatize</code> отпускают GIL и разбирают списки параллельно, а в Python 3.14t без GIL параллельно работают и <code>analyze</code>, <code>is_known</code>, <code>inflect</code> и <code>agree</code>. Общий анализатор не медленнее отдельного на каждый поток, поэтому заводить анализатор на поток не нужно. Без GIL потоки упираются в удаление объектов разборов: <code>forms</code> в потоках почти не ускоряется, а <code>analyze_many</code> на длинных списках - слабо, поэтому такие списки лучше разбирать кусками по тысяче-другой слов. Анализатор и разборы сохраняются через pickle, поэтому работают с <code>multiprocessing</code> и joblib: процессы делят отображенный в память словарь, сколько бы разборов они ни получили (копию со <a href="#words">своими словами</a> каждый процесс собирает сам). pickle хранит путь к словарю: при распаковке берется анализатор с тем же путем, разборы которого есть в потоке, иначе словарь загружается по пути, а если файла уже нет - берется словарь, загруженный из него в процессе. Разбор, сохраненный со словарем другой версии, находится по написанию, лемме и тегу; если такого разбора в словаре нет, он восстанавливается как сохранен, но без других форм, а если в словаре нет и его тега - берется разбор слова, у которого к сохраненным признакам добавились новые (род «Нидерландов»). Подынтерпретаторы Python 3.14 (<code>InterpreterPoolExecutor</code>) не поддерживаются: используйте потоки или процессы. Передача разборов между процессами дороже самого разбора, поэтому в процессах лучше получать леммы и поля разборов, а разборы - в потоках.</p>
-<div class="tabbed-set tabbed-alternate" data-tabs="7:2"><input checked="checked" id="__tabbed_7_1" name="__tabbed_7" type="radio" /><input id="__tabbed_7_2" name="__tabbed_7" type="radio" /><div class="tabbed-labels"><label for="__tabbed_7_1">Код</label><label for="__tabbed_7_2">Результат</label></div>
+<div class="tabbed-set tabbed-alternate" data-tabs="8:2"><input checked="checked" id="__tabbed_8_1" name="__tabbed_8" type="radio" /><input id="__tabbed_8_2" name="__tabbed_8" type="radio" /><div class="tabbed-labels"><label for="__tabbed_8_1">Код</label><label for="__tabbed_8_2">Результат</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
 <div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">concurrent.futures</span><span class="w"> </span><span class="kn">import</span> <span class="n">ThreadPoolExecutor</span>

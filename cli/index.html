@@ -1009,7 +1009,7 @@
 <h1 id="rumorph">Команда rumorph<a class="headerlink" href="#rumorph" title="Permanent link">&para;</a></h1>
 <div class="highlight"><pre><span></span><code>rumorph<span class="w"> </span><span class="o">[</span>параметры<span class="o">]</span><span class="w"> </span><span class="o">[</span>файл<span class="w"> </span>...<span class="o">]</span>
 </code></pre></div>
-<p>Команда разбирает текст из файлов или стандартного ввода и пишет леммы, части речи и признаки <a href="https://universaldependencies.org/">Universal Dependencies</a> в одном из четырех форматов. Она ставится вместе с пакетом (<code>pip install rumorph</code>) и запускается и как <code>python -m rumorph</code>; без Python ее ставит <code>cargo install rumorph --features cli</code>. Разбор и вывод выполняет ядро на Rust: около миллиона токенов в секунду в одном потоке.</p>
+<p>Команда разбирает текст из файлов или стандартного ввода и пишет леммы, части речи и признаки <a href="https://universaldependencies.org/">Universal Dependencies</a> в одном из четырех форматов. Она ставится вместе с пакетом (<code>pip install rumorph</code>) и запускается и как <code>python -m rumorph</code>; без Python ее ставит <code>cargo install rumorph --features cli</code>. Разбор и вывод выполняет ядро на Rust в одном потоке: около 100 тыс. токенов в секунду с <a href="../analyzer/#analyze_sentence">контекстом</a> и около миллиона без него (<code>--no-context</code>).</p>
 <div class="highlight"><pre><span></span><code><span class="nb">echo</span><span class="w"> </span><span class="s2">"Мы стали друзьями в ковиде."</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>rumorph
 </code></pre></div>
 <div class="highlight"><pre><span></span><code>мы стать друг в ковид .
@@ -1050,6 +1050,11 @@
 <td style="text-align: left;">Файл результата; <code>-</code> - стандартный вывод</td>
 </tr>
 <tr>
+<td style="text-align: left;"><code>--no-context</code></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;">Разбор каждого слова без соседних: разборы по частотам словаря, как у <a href="../analyzer/#analyze"><code>analyze</code></a>, в разы быстрее</td>
+</tr>
+<tr>
 <td style="text-align: left;"><code>-h</code>, <code>--help</code></td>
 <td style="text-align: left;"></td>
 <td style="text-align: left;">Показать справку</td>
@@ -1065,8 +1070,8 @@
 <p>В Windows PowerShell 5.1 перенаправление <code>&gt;</code> и конвейер (<code>Get-Content text.txt | rumorph</code>) портят кириллицу: передавайте файл аргументом, а результат пишите параметром <code>-o</code> (в PowerShell 7 работают и они). Текст из <code>echo</code> в cmd приходит в кодировке консоли: перед ним нужна команда <code>chcp 65001</code>. Шаблоны файлов (<code>*.txt</code>) cmd и PowerShell не раскрывают.</p>
 <h2 id="input">Вход<a class="headerlink" href="#input" title="Permanent link">&para;</a></h2>
 <ul>
-<li><code>text</code> - текст, предложение - строка. Текст делится на токены просто: слова - с дефисами и апострофами между буквами («кто-то», «д’Артаньян»), числа - с точкой или запятой между цифрами («3,14»), остальные знаки - по одному, одинаковые знаки подряд - вместе («...»), эмодзи с модификаторами и флаги - целиком. Пробел нулевой ширины и другие невидимые разделители делят токены, а мягкий перенос и соединитель слов (U+2060) внутри слова - нет. Точка сокращения отделяется: «т.е.» - четыре токена; для точного деления текста подайте готовые токены.</li>
-<li><code>tokens</code> - токен в строке, пустая строка разделяет предложения; пробелы по краям и все после табуляции не учитываются, так что подходит и таблица с токеном в первом столбце.</li>
+<li><code>text</code> - текст, предложение - строка. Текст делится на токены просто: слова - с дефисами и апострофами между буквами («кто-то», «д’Артаньян»), числа - с точкой или запятой между цифрами («3,14»), остальные знаки - по одному, одинаковые знаки подряд - вместе («...»), эмодзи с модификаторами и флаги - целиком. Пробел нулевой ширины и другие невидимые разделители делят токены, а мягкий перенос и соединитель слов (U+2060) внутри слова - нет. Точка сокращения отделяется: «т.е.» - четыре токена; для точного деления текста подайте готовые токены. Контекстная модель разбирает строку по предложениям - кускам до знака конца предложения (<code>.</code>, <code>!</code>, <code>?</code>, <code>…</code>).</li>
+<li><code>tokens</code> - токен в строке, пустая строка разделяет предложения; пробелы по краям и все после табуляции не учитываются, так что подходит и таблица с токеном в первом столбце. Список отдельных слов разбирайте с <code>--no-context</code>: иначе модель примет соседние слова за предложение.</li>
 <li><code>conllu</code> - <a href="https://universaldependencies.org/format.html">CoNLL-U</a>: заполняются столбцы LEMMA, UPOS и FEATS, а остальные столбцы, комментарии, многословные токены и пустые узлы остаются как есть.</li>
 </ul>
 <div class="highlight"><pre><span></span><code><span class="nb">printf</span><span class="w"> </span><span class="s1">'1\tМы\t_\t_\t_\t_\t2\tnsubj\t_\t_\n2\tстали\t_\t_\t_\t_\t0\troot\t_\t_\n'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>rumorph<span class="w"> </span>-i<span class="w"> </span>conllu<span class="w"> </span>-f<span class="w"> </span>conllu
@@ -1075,7 +1080,7 @@
 2   стали   стать   VERB    _   Aspect=Perf|Mood=Ind|Number=Plur|Tense=Past|VerbForm=Fin|Voice=Mid  0   root    _   _
 </code></pre></div>
 <h2 id="formats">Форматы вывода<a class="headerlink" href="#formats" title="Permanent link">&para;</a></h2>
-<p>Все форматы, кроме <code>jsonl</code>, берут самый вероятный разбор токена; токен без разбора получает лемму в нижнем регистре и часть речи <code>X</code>.</p>
+<p>Все форматы, кроме <code>jsonl</code>, берут первый разбор токена - выбранный контекстной моделью по соседним словам, а с <code>--no-context</code> - самый вероятный по словарю; <code>jsonl</code> пишет все разборы в этом порядке. Токен без разбора получает лемму в нижнем регистре и часть речи <code>X</code>.</p>
 <h3 id="lemmas">lemmas<a class="headerlink" href="#lemmas" title="Permanent link">&para;</a></h3>
 <p>Леммы через пробел, строка на предложение; пустая строка текста остается пустой.</p>
 <h3 id="conllu">conllu<a class="headerlink" href="#conllu" title="Permanent link">&para;</a></h3>
