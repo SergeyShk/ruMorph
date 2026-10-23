@@ -967,7 +967,7 @@
 <p class="metric-meta"><code>inflect</code> · <code>str</code></p>
 <div class="signature highlight"><pre><span></span><code><span class="n">inflect</span><span class="p">(</span><span class="o">**</span><span class="n">feats</span><span class="p">)</span>
 </code></pre></div>
-<p>Форма лексемы с заданными признаками UD. Признаки, которые не названы, по возможности сохраняются: «кошка» в родительном падеже - «кошки», а не «кошек». Краткая форма, одушевленный винительный («нового») и инклюзив повелительного наклонения («сделаем») берутся, только если их просят: <code>Variant="Short"</code>, <code>Animacy="Anim"</code>, <code>Person="1"</code>. Будущее время «быть» в SynTagRus - <code>Tense=Pres</code> с пометой <code>futr</code>: «будет» во множественном числе - «будут», а <code>inflect(Tense="Fut")</code> у «быть» бросает <code>FormNotFoundError</code> - будущее берется из <code>forms()</code> по помете <code>futr</code>.</p>
+<p>Форма лексемы с заданными признаками UD. Признаки, которые не названы, по возможности сохраняются: «кошка» в родительном падеже - «кошки», а не «кошек». Краткая форма, одушевленный винительный («нового») и инклюзив повелительного наклонения («сделаем») берутся, только если их просят: <code>Variant="Short"</code>, <code>Animacy="Anim"</code>, <code>Person="1"</code>. Будущее время «быть» - <code>Tense=Fut</code>: «быть» с <code>Tense="Fut", Person="1", Number="Sing"</code> - «буду».</p>
 <table>
 <thead>
 <tr>

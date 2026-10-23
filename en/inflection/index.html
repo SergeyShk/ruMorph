@@ -967,7 +967,7 @@
 <p class="metric-meta"><code>inflect</code> · <code>str</code></p>
 <div class="signature highlight"><pre><span></span><code><span class="n">inflect</span><span class="p">(</span><span class="o">**</span><span class="n">feats</span><span class="p">)</span>
 </code></pre></div>
-<p>The form of the lexeme with the given UD features. Features that are not given are kept where possible: «кошка» in the genitive is «кошки», not «кошек». The short form, the animate accusative («нового») and the inclusive imperative («сделаем») are chosen only when asked for: <code>Variant="Short"</code>, <code>Animacy="Anim"</code>, <code>Person="1"</code>. The future of «быть» in SynTagRus is <code>Tense=Pres</code> with the <code>futr</code> label: «будет» in the plural is «будут», while <code>inflect(Tense="Fut")</code> of «быть» raises <code>FormNotFoundError</code> - the future is taken from <code>forms()</code> by the <code>futr</code> label.</p>
+<p>The form of the lexeme with the given UD features. Features that are not given are kept where possible: «кошка» in the genitive is «кошки», not «кошек». The short form, the animate accusative («нового») and the inclusive imperative («сделаем») are chosen only when asked for: <code>Variant="Short"</code>, <code>Animacy="Anim"</code>, <code>Person="1"</code>. The future of «быть» is <code>Tense=Fut</code>: «быть» with <code>Tense="Fut", Person="1", Number="Sing"</code> is «буду».</p>
 <table>
 <thead>
 <tr>

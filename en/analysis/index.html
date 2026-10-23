@@ -928,7 +928,7 @@
   'Number': 'Plur',
   'Tense': 'Past',
   'VerbForm': 'Fin',
-  'Voice': 'Mid'},
+  'Voice': 'Act'},
  frozenset({'intr'}))
 </code></pre></div>
 </div>
@@ -982,7 +982,7 @@
 </tbody>
 </table>
 <h2 id="ud">Parts of speech and features<a class="headerlink" href="#ud" title="Permanent link">&para;</a></h2>
-<p>Parts of speech and features follow <a href="https://universaldependencies.org/u/pos/">Universal Dependencies</a> as annotated in the largest Russian treebank, <a href="https://github.com/UniversalDependencies/UD_Russian-SynTagRus">UD_Russian-SynTagRus</a>, so the output can be compared with spaCy, Stanza and other UD tools. Differences from the OpenCorpora parts of speech:</p>
+<p>Parts of speech and features follow the <a href="https://universaldependencies.org/u/pos/">Universal Dependencies</a> guidelines and, where they are silent, the conventions of the largest Russian treebank, <a href="https://github.com/UniversalDependencies/UD_Russian-SynTagRus">UD_Russian-SynTagRus</a>, so the output can be compared with spaCy, Stanza and other UD tools. By the guidelines the future of «быть» («будет») is <code>Tense=Fut</code>, and <code>Voice=Mid</code> is only for reflexive verbs («стать» is <code>Voice=Act</code>). Differences from the OpenCorpora parts of speech:</p>
 <ul>
 <li>«который», «этот», «свой», «весь», «такой» and the other pronominal adjectives are <code>DET</code>;</li>
 <li>«быть» and «бы» are <code>AUX</code>;</li>
@@ -990,10 +990,10 @@
 <li>«можно», «надо», «нельзя» are <code>VERB</code> without features;</li>
 <li>prepositions are <code>ADP</code>, coordinating conjunctions <code>CCONJ</code>, subordinating ones <code>SCONJ</code>, particles <code>PART</code>.</li>
 </ul>
-<p>If a word's part of speech depends on context, it has both analyses: «есть» is <code>AUX</code> and <code>VERB</code> («у меня есть»), «бы» <code>AUX</code> and <code>PART</code>, «это» <code>PRON</code> and <code>PART</code> («это он сделал»), «один» <code>NUM</code> and <code>DET</code> («одна женщина»), «друг» <code>NOUN</code> and the pronoun <code>PRON</code> with <code>PronType=Rcp</code> («друг друга»), «раньше», «лучше» <code>ADJ</code> and <code>ADV</code> in the comparative (lemmas «ранний» and «рано», «хороший» and «хорошо»). «двух», «двум», «двумя» have analyses in all three genders.</p>
+<p>If a word's part of speech depends on context, it has both analyses: «есть» is <code>AUX</code> and <code>VERB</code> («у меня есть»), «бы» <code>AUX</code> and <code>PART</code>, «это» <code>PRON</code> and <code>PART</code> («это он сделал»), «один» <code>NUM</code> and <code>DET</code> («одна женщина»), «друг» <code>NOUN</code> and the pronoun <code>PRON</code> with <code>PronType=Rcp</code> («друг друга»), «всё» <code>PRON</code> and <code>PART</code> («всё ещё»), a verb in -ся <code>Voice=Mid</code> and the passive <code>Voice=Pass</code> with the non-reflexive lemma («используется» - «использоваться» and «использовать»), «раньше», «лучше» <code>ADJ</code> and <code>ADV</code> in the comparative (lemmas «ранний» and «рано», «хороший» and «хорошо»). «двух», «двум», «двумя» have analyses in all three genders.</p>
 <p>Features: case, number, gender, animacy, person, tense, aspect, mood, voice, verb form, degree, the short form (<code>Variant=Short</code>), the type of a proper name (<code>NameType</code>), abbreviation (<code>Abbr</code>), possessiveness (<code>Poss</code>), the type of a numeral (<code>NumType</code>) and how it is written (<code>NumForm</code>), the type of a pronoun or pronominal adverb (<code>PronType</code>: «там» - <code>Dem</code>, «где» - <code>Rel</code>, «никогда» - <code>Neg</code>), reflexivity (<code>Reflex</code>), indeclinability (<code>InflClass=Ind</code>), negation (<code>Polarity=Neg</code>).</p>
 <p>Lemmas follow SynTagRus too: feminine surnames and patronymics keep the feminine lemma («Ивановой» - «иванова»), superlatives stay superlative («важнейшей» - «важнейший»), «денег» - «деньги», abbreviated nouns get the full word as the lemma («млн» - «миллион», «г.» - «год»). Nouns that have only the plural get the gender of their declension, as in SynTagRus: «выборы» is masculine, «сутки» feminine, «ворота» neuter; indeclinable ones («СМИ») and those declined as adjectives («данные») have no gender. When several OpenCorpora analyses coincide in UD (the conjunction and the adverb «так»), they are merged into one with the sum of their probabilities.</p>
-<p>The <code>labels</code> are the <a href="https://opencorpora.org/dict.php?act=gram">OpenCorpora</a> grammemes that have no UD feature: style (<code>Infr</code>, <code>Slng</code>, <code>Arch</code>), qualitative adjective (<code>Qual</code>), parenthetical word (<code>Prnt</code>), transitivity (<code>tran</code>, <code>intr</code>), whether the speaker is included in an imperative (<code>incl</code> - «пойдемте», <code>excl</code> - «иди»), the second locative (<code>loc2</code> - «в лесу»), the future of «быть» (<code>futr</code> - «будет»: SynTagRus gives it <code>Tense=Pres</code>) and others.</p>
+<p>The <code>labels</code> are the <a href="https://opencorpora.org/dict.php?act=gram">OpenCorpora</a> grammemes that have no UD feature: style (<code>Infr</code>, <code>Slng</code>, <code>Arch</code>), qualitative adjective (<code>Qual</code>), parenthetical word (<code>Prnt</code>), transitivity (<code>tran</code>, <code>intr</code>), whether the speaker is included in an imperative (<code>incl</code> - «пойдемте», <code>excl</code> - «иди»), the second locative (<code>loc2</code> - «в лесу») and others.</p>
 <h2 id="rules">Tokens outside the dictionary<a class="headerlink" href="#rules" title="Permanent link">&para;</a></h2>
 <p>Numbers, punctuation, Latin words and abbreviations are analyzed by rules, their <code>source</code> is <code>"rule"</code>:</p>
 <table>
