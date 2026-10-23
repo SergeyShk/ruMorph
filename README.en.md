@@ -104,7 +104,7 @@ See the documentation: [analyzer](https://sergeyshk.github.io/ruMorph/en/analyze
 
 ### Sentence analysis
 
-The `analyze_sentence` method orders the analyses of the words of a sentence using the neighbouring words: the first one is the analysis chosen by the context model, and the probability is its estimate in this sentence. The model (a BiLSTM, 0.9 MB) is trained on the UD_Russian-Taiga and UD_Russian-GSD treebanks and ships with the package dictionary; the words are the tokens of one sentence.
+The `analyze_sentence` method orders the analyses of the words of a sentence using the neighbouring words: the first one is the analysis chosen by the context model, and the probability is its estimate in this sentence. The model (a BiLSTM, 0.9 MB) is trained on the UD_Russian-Taiga and UD_Russian-GSD treebanks and the OpenCorpora corpus and ships with the package dictionary; the words are the tokens of one sentence.
 
 ```python
 >>> words = ["Я", "читаю", "книги"]
@@ -356,7 +356,7 @@ Bug reports, ideas and pull requests are welcome - the [issues](https://github.c
 
 ## License
 
-The code is distributed under the [MIT](https://github.com/SergeyShk/ruMorph/blob/master/LICENSE.txt) license. The dictionary in the package is built from the [OpenCorpora](https://opencorpora.org) dictionary with frequencies and a context model from the [UD_Russian-Taiga](https://github.com/UniversalDependencies/UD_Russian-Taiga) and [UD_Russian-GSD](https://github.com/UniversalDependencies/UD_Russian-GSD) treebanks and is distributed under the CC BY-SA 4.0 license ([LICENSE-DICTIONARY.txt](https://github.com/SergeyShk/ruMorph/blob/master/LICENSE-DICTIONARY.txt)).
+The code is distributed under the [MIT](https://github.com/SergeyShk/ruMorph/blob/master/LICENSE.txt) license. The dictionary in the package is built from the [OpenCorpora](https://opencorpora.org) dictionary with frequencies and a context model from the [UD_Russian-Taiga](https://github.com/UniversalDependencies/UD_Russian-Taiga) and [UD_Russian-GSD](https://github.com/UniversalDependencies/UD_Russian-GSD) treebanks and the OpenCorpora corpus and is distributed under the CC BY-SA 4.0 license ([LICENSE-DICTIONARY.txt](https://github.com/SergeyShk/ruMorph/blob/master/LICENSE-DICTIONARY.txt)).
 
 ## Citation
 

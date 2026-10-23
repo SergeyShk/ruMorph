@@ -49,7 +49,7 @@ pymorphy3 и mystem размечают по своим правилам, их ч
     | spaCy ru_core_news_sm | 94,0 | 92,0 | 77,5 |
     | Slovnet (Natasha) | 93,5 | - | 79,8 |
 
-Модель Stanza по умолчанию обучена на SynTagRus, и его тестовая часть для нее своя; контекстная модель ruMorph обучена на обучающих частях Taiga и GSD, а SynTagRus для нее чужой; spaCy ru_core_news_sm и Slovnet обучены на Nerus - новостях, размеченных автоматически. Slovnet не дает лемм: в Natasha их дает pymorphy2.
+Модель Stanza по умолчанию обучена на SynTagRus, и его тестовая часть для нее своя; контекстная модель ruMorph обучена на обучающих частях Taiga и GSD и корпусе OpenCorpora, а SynTagRus для нее чужой; spaCy ru_core_news_sm и Slovnet обучены на Nerus - новостях, размеченных автоматически. Slovnet не дает лемм: в Natasha их дает pymorphy2.
 
 ??? note "Все метрики"
 

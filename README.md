@@ -104,7 +104,7 @@ Analysis(word='стали', lemma='стать', pos='VERB', feats='Aspect=Perf|M
 
 ### Разбор предложения
 
-Метод `analyze_sentence` упорядочивает разборы слов предложения с учетом соседних слов: первым идет разбор, который выбрала контекстная модель, а вероятность - ее оценка в этом предложении. Модель (BiLSTM, 0,9 МБ) обучена на трибанках UD_Russian-Taiga и UD_Russian-GSD и входит в словарь пакета; слова - токены одного предложения.
+Метод `analyze_sentence` упорядочивает разборы слов предложения с учетом соседних слов: первым идет разбор, который выбрала контекстная модель, а вероятность - ее оценка в этом предложении. Модель (BiLSTM, 0,9 МБ) обучена на трибанках UD_Russian-Taiga, UD_Russian-GSD и корпусе OpenCorpora и входит в словарь пакета; слова - токены одного предложения.
 
 ```python
 >>> words = ["Я", "читаю", "книги"]
@@ -356,7 +356,7 @@ uv run pre-commit install
 
 ## Лицензия
 
-Код распространяется под лицензией [MIT](https://github.com/SergeyShk/ruMorph/blob/master/LICENSE.txt). Словарь в пакете собран из словаря [OpenCorpora](https://opencorpora.org) с частотами и контекстной моделью по трибанкам [UD_Russian-Taiga](https://github.com/UniversalDependencies/UD_Russian-Taiga) и [UD_Russian-GSD](https://github.com/UniversalDependencies/UD_Russian-GSD) и распространяется по лицензии CC BY-SA 4.0 ([LICENSE-DICTIONARY.txt](https://github.com/SergeyShk/ruMorph/blob/master/LICENSE-DICTIONARY.txt)).
+Код распространяется под лицензией [MIT](https://github.com/SergeyShk/ruMorph/blob/master/LICENSE.txt). Словарь в пакете собран из словаря [OpenCorpora](https://opencorpora.org) с частотами и контекстной моделью по трибанкам [UD_Russian-Taiga](https://github.com/UniversalDependencies/UD_Russian-Taiga) и [UD_Russian-GSD](https://github.com/UniversalDependencies/UD_Russian-GSD) и корпусу OpenCorpora и распространяется по лицензии CC BY-SA 4.0 ([LICENSE-DICTIONARY.txt](https://github.com/SergeyShk/ruMorph/blob/master/LICENSE-DICTIONARY.txt)).
 
 ## Цитирование
 
