@@ -32,6 +32,7 @@
 Analysis and lemmatization are 6-8 times faster than in pymorphy3 with the `pymorphy3[fast]` speedup, the form by features and agreement with a number are 16-19 times faster; lists of words are analyzed without the GIL. Parts of speech, features and lemmas follow the conventions of the SynTagRus treebank, so the results can be compared with the annotation of spaCy, Stanza and other tools built on UD.
 
 * **[Analyzer](https://sergeyshk.github.io/ruMorph/en/analyzer/)** - analyses of a word form by descending probability, analysis of word lists and lemmatization without the GIL, a dictionary lookup of a word form
+* **[Sentence analysis](https://sergeyshk.github.io/ruMorph/en/analyzer/#analyze_sentence)** - the context model picks the analysis from the neighbouring words: the case is correct in 94-96 % of cases against 75-78 % without context
 * **[UD parts of speech and features](https://sergeyshk.github.io/ruMorph/en/analysis/#ud)** - parts of speech, features and lemmas in the SynTagRus conventions; OpenCorpora labels that have no UD feature
 * **[Tokens outside the dictionary](https://sergeyshk.github.io/ruMorph/en/analysis/#rules)** - numbers, signs, Latin script, initials and abbreviations by rules
 * **[Unknown words](https://sergeyshk.github.io/ruMorph/en/analysis/#guess)** - analyses by the ending, hyphenated words and words with prefixes, forms of guessed words
@@ -100,6 +101,20 @@ Analysis(word='стали', lemma='стать', pos='VERB', feats='Aspect=Perf|M
 The `analyze_many` and `lemmatize` methods analyze lists of words without the GIL, so several threads sharing one analyzer run in parallel; on the free-threaded Python 3.14t `analyze`, `inflect` and `agree` run in parallel too. The analyzer and the analyses can be pickled and work with `multiprocessing` and joblib.
 
 See the documentation: [analyzer](https://sergeyshk.github.io/ruMorph/en/analyzer/), [word analysis](https://sergeyshk.github.io/ruMorph/en/analysis/).
+
+### Sentence analysis
+
+The `analyze_sentence` method orders the analyses of the words of a sentence using the neighbouring words: the first one is the analysis chosen by the context model, and the probability is its estimate in this sentence. The model (a BiLSTM, 0.9 MB) is trained on the UD_Russian-Taiga and UD_Russian-GSD treebanks and ships with the package dictionary; the words are the tokens of one sentence.
+
+```python
+>>> words = ["Я", "читаю", "книги"]
+>>> [analyses[0].feats.get("Case") for analyses in morph.analyze_many(words)]
+['Nom', None, 'Gen']
+>>> [analyses[0].feats.get("Case") for analyses in morph.analyze_sentence(words)]
+['Nom', None, 'Acc']
+>>> morph.analyze_sentence(["Завод", "выпускает", "больше", "стали"])[3][0].lemma
+'сталь'
+```
 
 <details>
 <summary><b>Universal Dependencies parts of speech and features</b></summary>
@@ -323,12 +338,13 @@ Bug reports, ideas and pull requests are welcome - the [issues](https://github.c
 
 <br>
 
-*   **crates/rumorph** - the analyzer core in Rust: the dictionary format, building, analysis and inflection
+*   **crates/rumorph** - the analyzer core in Rust: the dictionary format, building, analysis, the context model and inflection
 *   **crates/rumorph-build** - building the dictionary from an export of pymorphy3-dicts-ru, converting the OpenCorpora tags to UD and frequencies of analyses from UD treebanks
 *   **crates/rumorph-dict-ru** - the crate with the dictionary for `rumorph` on crates.io
 *   **crates/rumorph-py** - the Python module `rumorph._rumorph` built with PyO3
 *   **python/rumorph** - the Python package
-*   **scripts** - exporting the pymorphy3-dicts-ru dictionary and the UD treebank counts, checking the installed package before publishing and comparing with other analyzers
+*   **scripts** - exporting the pymorphy3-dicts-ru dictionary and the UD treebank counts, training the context model, checking the installed package before publishing and comparing with other analyzers
+*   **data** - the context model weights that the builder embeds into the dictionary
 *   **docs** - MkDocs documentation in Russian and English
 *   **tests** - tests of the Python package
 
@@ -340,7 +356,7 @@ Bug reports, ideas and pull requests are welcome - the [issues](https://github.c
 
 ## License
 
-The code is distributed under the [MIT](https://github.com/SergeyShk/ruMorph/blob/master/LICENSE.txt) license. The dictionary in the package is built from the [OpenCorpora](https://opencorpora.org) dictionary with frequencies from the [UD_Russian-Taiga](https://github.com/UniversalDependencies/UD_Russian-Taiga) and [UD_Russian-GSD](https://github.com/UniversalDependencies/UD_Russian-GSD) treebanks and is distributed under the CC BY-SA 4.0 license ([LICENSE-DICTIONARY.txt](https://github.com/SergeyShk/ruMorph/blob/master/LICENSE-DICTIONARY.txt)).
+The code is distributed under the [MIT](https://github.com/SergeyShk/ruMorph/blob/master/LICENSE.txt) license. The dictionary in the package is built from the [OpenCorpora](https://opencorpora.org) dictionary with frequencies and a context model from the [UD_Russian-Taiga](https://github.com/UniversalDependencies/UD_Russian-Taiga) and [UD_Russian-GSD](https://github.com/UniversalDependencies/UD_Russian-GSD) treebanks and is distributed under the CC BY-SA 4.0 license ([LICENSE-DICTIONARY.txt](https://github.com/SergeyShk/ruMorph/blob/master/LICENSE-DICTIONARY.txt)).
 
 ## Citation
 

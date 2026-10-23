@@ -23,6 +23,7 @@ echo "Мы стали друзьями в ковиде." | rumorph
 | `-d`, `--dictionary` | the package dictionary | A ruMorph dictionary file |
 | `-w`, `--words` | | A file of [own words](analyzer.md#words): a word and its sample separated by a tab on each line, plus the part of speech if the sample has several; spaces around fields are ignored, empty lines and lines starting with `#` are skipped. The option can be repeated |
 | `-o`, `--output` | the standard output | The result file; `-` is the standard output |
+| `--no-context` | | Analyze each word without its neighbours: analyses by dictionary frequencies, as with [`analyze`](analyzer.md#analyze), several times faster |
 | `-h`, `--help` | | Show the help |
 | `-V`, `--version` | | Show the version |
 
@@ -47,7 +48,7 @@ printf '1\tМы\t_\t_\t_\t_\t2\tnsubj\t_\t_\n2\tстали\t_\t_\t_\t_\t0\troot\
 
 ## Output formats { #formats }
 
-All formats except `jsonl` take the most probable analysis of a token; a token without analyses gets the lowercase token as the lemma and the part of speech `X`.
+All formats except `jsonl` take the first analysis of a token - the one chosen by the context model from the neighbouring words, and with `--no-context` the most probable one by the dictionary; `jsonl` writes all analyses in this order. A token without analyses gets the lowercase token as the lemma and the part of speech `X`.
 
 ### lemmas
 

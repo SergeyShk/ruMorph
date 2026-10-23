@@ -32,6 +32,7 @@
 Разбор и лемматизация в 6-8 раз быстрее, чем в pymorphy3 с ускорением `pymorphy3[fast]`, форма по признакам и согласование с количеством - в 16-19 раз; списки слов разбираются без GIL. Части речи, признаки и леммы следуют соглашениям трибанка SynTagRus, поэтому результат можно сравнивать с разметкой spaCy, Stanza и других инструментов на UD.
 
 * **[Анализатор](https://sergeyshk.github.io/ruMorph/analyzer/)** - разборы словоформы по убыванию вероятности, разбор списков слов и лемматизация без GIL, проверка словоформы по словарю
+* **[Разбор предложения](https://sergeyshk.github.io/ruMorph/analyzer/#analyze_sentence)** - выбор разбора по соседним словам контекстной моделью: падеж верен в 94-96 % случаев против 75-78 % без контекста
 * **[Части речи и признаки UD](https://sergeyshk.github.io/ruMorph/analysis/#ud)** - части речи, признаки и леммы в соглашениях SynTagRus; пометы OpenCorpora, у которых нет признака UD
 * **[Токены вне словаря](https://sergeyshk.github.io/ruMorph/analysis/#rules)** - числа, знаки, латиница, инициалы и сокращения по правилам
 * **[Незнакомые слова](https://sergeyshk.github.io/ruMorph/analysis/#guess)** - разборы по окончанию, слова через дефис и с приставками, формы угаданных слов
@@ -100,6 +101,20 @@ Analysis(word='стали', lemma='стать', pos='VERB', feats='Aspect=Perf|M
 Списки слов методы `analyze_many` и `lemmatize` разбирают без GIL, поэтому несколько потоков с одним анализатором работают параллельно; в Python 3.14t без GIL параллельно работают и `analyze`, `inflect` и `agree`. Анализатор и разборы сохраняются через pickle и работают с `multiprocessing` и joblib.
 
 Подробнее - в документации: [анализатор](https://sergeyshk.github.io/ruMorph/analyzer/), [разбор словоформы](https://sergeyshk.github.io/ruMorph/analysis/).
+
+### Разбор предложения
+
+Метод `analyze_sentence` упорядочивает разборы слов предложения с учетом соседних слов: первым идет разбор, который выбрала контекстная модель, а вероятность - ее оценка в этом предложении. Модель (BiLSTM, 0,9 МБ) обучена на трибанках UD_Russian-Taiga и UD_Russian-GSD и входит в словарь пакета; слова - токены одного предложения.
+
+```python
+>>> words = ["Я", "читаю", "книги"]
+>>> [analyses[0].feats.get("Case") for analyses in morph.analyze_many(words)]
+['Nom', None, 'Gen']
+>>> [analyses[0].feats.get("Case") for analyses in morph.analyze_sentence(words)]
+['Nom', None, 'Acc']
+>>> morph.analyze_sentence(["Завод", "выпускает", "больше", "стали"])[3][0].lemma
+'сталь'
+```
 
 <details>
 <summary><b>Части речи и признаки Universal Dependencies</b></summary>
@@ -323,12 +338,13 @@ uv run pre-commit install
 
 <br>
 
-*   **crates/rumorph** - ядро анализатора на Rust: формат словаря, сборка, разбор и словоизменение
+*   **crates/rumorph** - ядро анализатора на Rust: формат словаря, сборка, разбор, контекстная модель и словоизменение
 *   **crates/rumorph-build** - сборка словаря из выгрузки pymorphy3-dicts-ru, перевод тегов OpenCorpora в UD и частоты разборов по трибанкам UD
 *   **crates/rumorph-dict-ru** - крейт со словарем для `rumorph` на crates.io
 *   **crates/rumorph-py** - модуль Python `rumorph._rumorph` на PyO3
 *   **python/rumorph** - пакет Python
-*   **scripts** - выгрузка словаря pymorphy3-dicts-ru и счетчиков трибанков UD, проверка установленного пакета перед публикацией и сравнение с другими анализаторами
+*   **scripts** - выгрузка словаря pymorphy3-dicts-ru и счетчиков трибанков UD, обучение контекстной модели, проверка установленного пакета перед публикацией и сравнение с другими анализаторами
+*   **data** - веса контекстной модели, которые сборщик вшивает в словарь
 *   **docs** - документация MkDocs на русском и английском
 *   **tests** - тесты пакета Python
 
@@ -340,7 +356,7 @@ uv run pre-commit install
 
 ## Лицензия
 
-Код распространяется под лицензией [MIT](https://github.com/SergeyShk/ruMorph/blob/master/LICENSE.txt). Словарь в пакете собран из словаря [OpenCorpora](https://opencorpora.org) с частотами по трибанкам [UD_Russian-Taiga](https://github.com/UniversalDependencies/UD_Russian-Taiga) и [UD_Russian-GSD](https://github.com/UniversalDependencies/UD_Russian-GSD) и распространяется по лицензии CC BY-SA 4.0 ([LICENSE-DICTIONARY.txt](https://github.com/SergeyShk/ruMorph/blob/master/LICENSE-DICTIONARY.txt)).
+Код распространяется под лицензией [MIT](https://github.com/SergeyShk/ruMorph/blob/master/LICENSE.txt). Словарь в пакете собран из словаря [OpenCorpora](https://opencorpora.org) с частотами и контекстной моделью по трибанкам [UD_Russian-Taiga](https://github.com/UniversalDependencies/UD_Russian-Taiga) и [UD_Russian-GSD](https://github.com/UniversalDependencies/UD_Russian-GSD) и распространяется по лицензии CC BY-SA 4.0 ([LICENSE-DICTIONARY.txt](https://github.com/SergeyShk/ruMorph/blob/master/LICENSE-DICTIONARY.txt)).
 
 ## Цитирование
 
