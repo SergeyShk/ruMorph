@@ -2,7 +2,7 @@ use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::ops::Range;
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use fst::Map;
 
@@ -12,12 +12,15 @@ use crate::format::{
     self, ENTRY_KEYS, Layout, MAX_LIST, MAX_SPELLINGS, Slice, Storage, Strings, WordValue,
 };
 
+pub(crate) mod context;
 mod guess;
 mod own;
 mod parts;
 mod rules;
 mod ud;
 
+#[cfg(any(test, feature = "build"))]
+pub(crate) use context::Model;
 #[cfg(any(test, feature = "build"))]
 pub use guess::GuessIndex;
 pub use own::Sample;
@@ -162,6 +165,8 @@ pub struct Dictionary {
     abbreviation_grammemes: Vec<u8>,
     /// Свои слова (`with_words`) по ключу автомата
     own_words: own::OwnWords,
+    /// Контекстная модель секции словаря: читается при первом разборе предложения, копии ее делят
+    context: Arc<OnceLock<Result<context::Context, String>>>,
     features: BTreeMap<String, BTreeSet<String>>,
     alphabet: Alphabet,
     prefixes: Strings,
@@ -348,6 +353,7 @@ impl Dictionary {
             proper_nouns: Vec::new(),
             abbreviation_grammemes: Vec::new(),
             own_words: own::OwnWords::default(),
+            context: Arc::new(OnceLock::new()),
             meta,
             alphabet,
             layout,
@@ -479,6 +485,55 @@ impl Dictionary {
     /// Число словоформ в словаре
     pub fn word_count(&self) -> usize {
         self.word_count
+    }
+
+    /// Разборы слов предложения по убыванию вероятности в контексте: те же разборы, что
+    /// у `analyze`, упорядочивает контекстная модель словаря, вероятность - ее оценка. Слова -
+    /// токены одного предложения по порядку. Ошибка - если в словаре нет контекстной модели
+    ///
+    /// ```
+    /// # #[cfg(feature = "bundled")] {
+    /// let dictionary = rumorph::Dictionary::bundled()?;
+    /// let sentence = dictionary.analyze_sentence(&["Я", "читаю", "книги"])?;
+    /// let books = &sentence[2][0];
+    /// assert_eq!(dictionary.ud_tag(books.ud).unwrap().feat("Case"), Some("Acc"));
+    /// # }
+    /// # Ok::<(), rumorph::Error>(())
+    /// ```
+    pub fn analyze_sentence<S: AsRef<str>>(
+        &self,
+        words: &[S],
+    ) -> Result<Vec<Vec<Analysis>>, Error> {
+        let context = self.context()?;
+        let words: Vec<&str> = words.iter().map(AsRef::as_ref).collect();
+        let analyses = words.iter().map(|word| self.analyze(word)).collect();
+        Ok(context.rank(&words, analyses))
+    }
+
+    /// Контекстная модель словаря: читается один раз на словарь и его копии
+    fn context(&self) -> Result<&context::Context, Error> {
+        let context = self.context.get_or_init(|| {
+            let bytes = &self.storage.bytes()[self.layout.context.clone()];
+            if bytes.is_empty() {
+                return Err(
+                    "В словаре нет контекстной модели: разбор предложения недоступен".into(),
+                );
+            }
+            context::Model::parse(bytes)
+                .map(|model| context::Context::new(model, &self.ud))
+                .map_err(|err| err.to_string())
+        });
+        context
+            .as_ref()
+            .map_err(|message| Error::Context(message.clone()))
+    }
+
+    /// Теги частей речи и признаков словаря, которых не было в словаре обучения контекстной
+    /// модели: если они есть, модель нужно переобучить (для сборки словаря)
+    #[cfg(feature = "build")]
+    #[doc(hidden)]
+    pub fn context_gaps(&self) -> Result<Vec<String>, Error> {
+        Ok(self.context()?.gaps(&self.ud))
     }
 
     /// Разборы словоформы по убыванию вероятности; регистр для поиска не важен, «е» может
@@ -2062,6 +2117,15 @@ pub(super) mod tests {
         lexemes: &[(&str, &str, Forms)],
         probabilities: &[(&str, &str, u32)],
     ) -> Vec<u8> {
+        dictionary_bytes_with(lexemes, probabilities, None)
+    }
+
+    /// Словарь с контекстной моделью `context` (веса `context::tests::weights`)
+    pub(crate) fn dictionary_bytes_with(
+        lexemes: &[(&str, &str, Forms)],
+        probabilities: &[(&str, &str, u32)],
+        context: Option<Vec<u8>>,
+    ) -> Vec<u8> {
         let mut tags: Vec<String> = Vec::new();
         let mut suffixes: Vec<String> = Vec::new();
         for (pos, _, forms) in lexemes {
@@ -2105,6 +2169,9 @@ pub(super) mod tests {
             builder
                 .add_probability(word, id(&tags, tag), millionths)
                 .unwrap();
+        }
+        if let Some(context) = context {
+            builder.context(context).unwrap();
         }
         builder.build().unwrap()
     }

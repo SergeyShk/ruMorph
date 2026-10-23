@@ -1,7 +1,7 @@
 //! Модуль Python `rumorph._rumorph`
 
 use std::cell::{RefCell, UnsafeCell};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
@@ -1154,6 +1154,49 @@ impl Analyzer {
         Ok(result)
     }
 
+    /// Разборы слов предложения с учетом контекста
+    ///
+    /// Описание:
+    ///     Те же разборы, что у analyze, упорядочивает контекстная модель: первый - разбор,
+    ///     который модель выбрала по соседним словам, вероятность - ее оценка в этом
+    ///     предложении. Слова - токены одного предложения по порядку. Разбор идет без GIL
+    ///
+    /// Аргументы:
+    ///     words (Iterable[str]): Токены предложения
+    ///
+    /// Вывод:
+    ///     list[list[Analysis]]: Разборы каждого токена
+    ///
+    /// Исключения:
+    ///     TypeError: Если передана строка, а не набор слов, или слово не строка
+    ///     ValueError: Если в словаре нет контекстной модели
+    ///
+    /// Пример использования:
+    ///     >>> from rumorph import Analyzer
+    ///     >>> sentence = Analyzer().analyze_sentence(["Я", "читаю", "книги"])
+    ///     >>> [(analyses[0].lemma, analyses[0].feats.get("Case")) for analyses in sentence]
+    ///     [('я', 'Nom'), ('читать', None), ('книга', 'Acc')]
+    fn analyze_sentence(
+        slf: &Bound<'_, Self>,
+        words: &Bound<'_, PyAny>,
+    ) -> PyResult<Vec<Vec<Analysis>>> {
+        let (py, handle) = (slf.py(), Self::handle(slf));
+        let words = collect_words(words)?;
+        let dictionary = &slf.get().shared.dictionary;
+        let sentence = py
+            .detach(|| dictionary.analyze_sentence(&words))
+            .map_err(|err| PyValueError::new_err(err.to_string()))?;
+        sentence
+            .into_iter()
+            .map(|analyses| {
+                analyses
+                    .into_iter()
+                    .map(|analysis| Self::to_py(py, &handle, analysis))
+                    .collect()
+            })
+            .collect()
+    }
+
     /// Леммы списка словоформ
     ///
     /// Описание:
@@ -1245,6 +1288,20 @@ impl Analyzer {
     /// Описание источника словаря в JSON (для проверки словаря в тестах)
     fn _meta(&self) -> &str {
         self.shared.dictionary.meta()
+    }
+
+    /// Части речи и признаки всех тегов UD словаря (для обучения контекстной модели)
+    fn _ud_tags(&self) -> Vec<(String, BTreeMap<String, String>)> {
+        self.shared
+            .dictionary
+            .ud_tags()
+            .map(|tag| {
+                let feats = tag
+                    .feats()
+                    .map(|(name, value)| (name.to_owned(), value.to_owned()));
+                (tag.pos().to_owned(), feats.collect())
+            })
+            .collect()
     }
 
     fn __repr__(&self, py: Python<'_>) -> PyResult<String> {

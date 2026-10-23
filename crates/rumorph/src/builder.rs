@@ -28,6 +28,7 @@ pub struct Builder {
     /// Списки частот: ключи - формы таблиц (`true`) или теги, пары «ключ, доля в миллионных»
     probabilities: BTreeMap<String, (bool, Vec<(u32, u32)>)>,
     guesses: BTreeMap<(GuessIndex, String), Vec<(u32, u32)>>,
+    context: Vec<u8>,
 }
 
 impl Builder {
@@ -54,6 +55,7 @@ impl Builder {
             words: BTreeMap::new(),
             probabilities: BTreeMap::new(),
             guesses: BTreeMap::new(),
+            context: Vec::new(),
         }
     }
 
@@ -61,6 +63,13 @@ impl Builder {
     pub fn meta(&mut self, meta: impl Into<String>) -> &mut Self {
         self.meta = meta.into();
         self
+    }
+
+    /// Веса контекстной модели - файл `scripts/train_context.py`; проверяются при добавлении
+    pub fn context(&mut self, weights: Vec<u8>) -> Result<&mut Self, Error> {
+        crate::dictionary::Model::parse(&weights)?;
+        self.context = weights;
+        Ok(self)
     }
 
     /// Добавляет тег UD и возвращает его номер; одинаковые теги получают один номер
@@ -426,6 +435,7 @@ impl Builder {
             probability_records,
             guesses: guesses.into_inner().map_err(build_error)?,
             guess_records,
+            context: self.context.clone(),
         }))
     }
 
