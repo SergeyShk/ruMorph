@@ -91,7 +91,7 @@ uv add rumorph
 
 >>> morph = Analyzer()
 >>> morph.analyze("стали")[0]
-Analysis(word='стали', lemma='стать', pos='VERB', feats='Aspect=Perf|Mood=Ind|Number=Plur|Tense=Past|VerbForm=Fin|Voice=Mid', labels='intr', prob=0.9877829877829878, source='dictionary')
+Analysis(word='стали', lemma='стать', pos='VERB', feats='Aspect=Perf|Mood=Ind|Number=Plur|Tense=Past|VerbForm=Fin|Voice=Act', labels='intr', prob=0.9877829877829878, source='dictionary')
 >>> [len(analyses) for analyses in morph.analyze_many(["мама", "мыла", "раму"])]
 [1, 4, 2]
 >>> morph.is_known("Ежи"), morph.is_known("вайб")
@@ -112,7 +112,7 @@ Analysis(word='стали', lemma='стать', pos='VERB', feats='Aspect=Perf|M
 ['Nom', None, 'Gen']
 >>> [analyses[0].feats.get("Case") for analyses in morph.analyze_sentence(words)]
 ['Nom', None, 'Acc']
->>> morph.analyze_sentence(["Завод", "выпускает", "больше", "стали"])[3][0].lemma
+>>> morph.analyze_sentence(["Мост", "сделан", "из", "стали"])[3][0].lemma
 'сталь'
 ```
 
@@ -297,11 +297,11 @@ ruMorph работает с тем же словарем OpenCorpora, что pym
 
 | Система | SynTagRus | Taiga | GSD | Токенов в секунду |
 | :------ | :-------- | :---- | :-- | :---------------- |
-| ruMorph | **93,8** | **90,6** | **91,9** | **693 383** |
+| ruMorph | **93,9** | **90,6** | **91,8** | **693 383** |
 | pymorphy3 | 84,8 | 82,9 | 84,3 | 23 484 |
 | mystem | 81,9 | 79,4 | 79,9 | 82 191 |
 
-С контекстом (`analyze_sentence`) ruMorph по части речи, лемме и признакам вместе точнее всех теггеров на Taiga и GSD (89,7 и 81,2 % слов против 85,6 и 80,3 % у Stanza), а на SynTagRus уступает только Stanza - 0,3 пункта, хотя Stanza обучена на SynTagRus. При этом он разбирает 108 тыс. токенов в секунду против 2 738 у Stanza. На короткий текст вместе с загрузкой ruMorph отвечает за 6 мс против 0,2-2 с у теггеров, процессы делят словарь, и каждый следующий добавляет 1,2 МБ. Замер - Apple M3 Pro, Python 3.11.
+С контекстом (`analyze_sentence`) ruMorph по части речи, лемме и признакам вместе точнее всех теггеров на Taiga и GSD (90,0 и 81,3 % слов против 85,6 и 80,3 % у Stanza), а на SynTagRus уступает только Stanza - 0,2 пункта, хотя Stanza обучена на SynTagRus. При этом он разбирает 108 тыс. токенов в секунду против 2 738 у Stanza. На короткий текст вместе с загрузкой ruMorph отвечает за 6 мс против 0,2-2 с у теггеров, процессы делят словарь, и каждый следующий добавляет 1,2 МБ. Замер - Apple M3 Pro, Python 3.11.
 
 Подробнее - в [документации](https://sergeyshk.github.io/ruMorph/performance/): теггеры с контекстом, график скорости от объема текста, операции в сравнении с pymorphy3, память и как это измерено.
 

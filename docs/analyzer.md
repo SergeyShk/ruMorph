@@ -25,7 +25,7 @@ Analyzer(path=None, words=None)
 === "Результат"
 
     ```
-    Analysis(word='стали', lemma='стать', pos='VERB', feats='Aspect=Perf|Mood=Ind|Number=Plur|Tense=Past|VerbForm=Fin|Voice=Mid', labels='intr', prob=0.9877829877829878, source='dictionary')
+    Analysis(word='стали', lemma='стать', pos='VERB', feats='Aspect=Perf|Mood=Ind|Number=Plur|Tense=Past|VerbForm=Fin|Voice=Act', labels='intr', prob=0.9877829877829878, source='dictionary')
     ```
 
 ## Параметры
@@ -147,7 +147,7 @@ analyze_many(words)
 analyze_sentence(words)
 ```
 
-Разборы слов предложения с учетом контекста: те же разборы, что у [`analyze`](#analyze), упорядочивает контекстная модель - первым идет разбор, который она выбрала по соседним словам, а `prob` - ее оценка в этом предложении. Без контекста «книги» - в родительном падеже (так чаще), в «Я читаю книги» модель выбирает винительный, а «стали» в «Завод выпускает больше стали» - существительное «сталь», а не глагол «стать». С контекстом часть речи, лемма и признаки первого разбора верны у 81-93 % слов против 71-82 % без него ([Сравнение](performance.md)). Слова - токены одного предложения по порядку: ruMorph не делит текст на предложения и токены. Слово без соседей разбирается, как у `analyze`: без контекста модель выбирает хуже частот словаря. Модель обучена на трибанках [UD_Russian-Taiga](https://github.com/UniversalDependencies/UD_Russian-Taiga) и [UD_Russian-GSD](https://github.com/UniversalDependencies/UD_Russian-GSD) и входит в словарь пакета.
+Разборы слов предложения с учетом контекста: те же разборы, что у [`analyze`](#analyze), упорядочивает контекстная модель - первым идет разбор, который она выбрала по соседним словам, а `prob` - ее оценка в этом предложении. Без контекста «книги» - в родительном падеже (так чаще), в «Я читаю книги» модель выбирает винительный, а «стали» в «Мост сделан из стали» - существительное «сталь», а не глагол «стать». С контекстом часть речи, лемма и признаки первого разбора верны у 81-93 % слов против 71-82 % без него ([Сравнение](performance.md)). Слова - токены одного предложения по порядку: ruMorph не делит текст на предложения и токены. Слово без соседей разбирается, как у `analyze`: без контекста модель выбирает хуже частот словаря. Модель обучена на трибанках [UD_Russian-Taiga](https://github.com/UniversalDependencies/UD_Russian-Taiga) и [UD_Russian-GSD](https://github.com/UniversalDependencies/UD_Russian-GSD) и входит в словарь пакета.
 
 | Параметр | Тип | По умолчанию | Описание |
 | :------- | :-- | :----------- | :------- |
@@ -164,7 +164,7 @@ analyze_sentence(words)
     words = ["Я", "читаю", "книги"]
     print([analyses[0].feats.get("Case") for analyses in morph.analyze_many(words)])
     print([analyses[0].feats.get("Case") for analyses in morph.analyze_sentence(words)])
-    print(morph.analyze_sentence(["Завод", "выпускает", "больше", "стали"])[3][0].lemma)
+    print(morph.analyze_sentence(["Мост", "сделан", "из", "стали"])[3][0].lemma)
     ```
 
 === "Результат"

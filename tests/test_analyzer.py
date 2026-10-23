@@ -229,7 +229,7 @@ def test_analyze_sentence(morph):
         assert math.isclose(sum(analysis.prob for analysis in analyses), 1.0)
     assert morph.analyze("книги")[0].feats["Case"] == "Gen"
     assert sentence[2][0].feats["Case"] == "Acc"
-    steel = morph.analyze_sentence(["Завод", "выпускает", "больше", "стали"])[3][0]
+    steel = morph.analyze_sentence(["Мост", "сделан", "из", "стали"])[3][0]
     assert (steel.lemma, steel.pos) == ("сталь", "NOUN")
     assert morph.analyze_sentence(word for word in words) == sentence
     assert morph.analyze_sentence([]) == []
@@ -352,7 +352,7 @@ def test_ud_fields(morph):
         "Number": "Plur",
         "Tense": "Past",
         "VerbForm": "Fin",
-        "Voice": "Mid",
+        "Voice": "Act",
     }
     assert analysis.labels == frozenset({"intr"})
     assert list(analysis.feats) == sorted(analysis.feats)
@@ -369,7 +369,13 @@ def test_ud_fields(morph):
     [
         ("который", "который", "DET", {"Case": "Nom"}),
         ("бы", "бы", "AUX", {"Mood": "Cnd"}),
-        ("будет", "быть", "AUX", {"Tense": "Pres"}),
+        ("будет", "быть", "AUX", {"Tense": "Fut"}),
+        ("стали", "стать", "VERB", {"Voice": "Act"}),
+        ("используется", "использовать", "VERB", {"Voice": "Pass"}),
+        ("используется", "использоваться", "VERB", {"Voice": "Mid"}),
+        ("всё", "всё", "PART", {}),
+        ("тоже", "тоже", "PART", {}),
+        ("во", "в", "ADP", {}),
         ("однако", "однако", "ADV", {"Degree": "Pos"}),
         ("можно", "можно", "VERB", {}),
         ("кто", "кто", "PRON", {"Animacy": "Anim"}),

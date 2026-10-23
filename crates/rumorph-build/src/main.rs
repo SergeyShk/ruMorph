@@ -5,7 +5,7 @@ mod frequencies;
 mod lexemes;
 mod ud;
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::error::Error;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -686,15 +686,78 @@ fn build(
                 .collect(),
         }
     };
-    for (&adverb, sources) in &comparatives {
-        let word = spell(lexemes[adverb].0, &lexemes[adverb].1, 0);
-        let mut members = vec![source_lexeme(adverb, &[0], &|_| lexemes[adverb].2[0].1)];
+
+    // Пассив на -ся («используется» - и «использовать» с Voice=Pass): лексема из инфинитива
+    // невозвратного глагола и копий форм возвратного глагола несовершенного вида. Только у глаголов,
+    // пассив которых размечен в трибанках (в счетчиках - словоформа на -ся с невозвратной леммой):
+    // у других копия лишь делила бы долю с Mid
+    let counts = frequencies::read(&read_ud("counts.tsv")?)?;
+    let reflexive = |word: &str| word.ends_with("ся") || word.ends_with("сь");
+    let attested: HashSet<&str> = counts
+        .iter()
+        .filter(|(word, _)| reflexive(word))
+        .flat_map(|(_, pairs)| pairs)
+        .filter(|(pos, lemma, ..)| pos == "VERB" && !reflexive(lemma))
+        .map(|(_, lemma, ..)| lemma.as_str())
+        .collect();
+    let mut infinitives: HashMap<String, usize> = HashMap::new();
+    for (lexeme, (paradigm, stem, _)) in lexemes.iter().enumerate() {
+        let layout = &paradigms[*paradigm as usize];
+        if tags[layout[layout.len() / 3] as usize].starts_with("INFN") {
+            infinitives
+                .entry(spell(*paradigm, stem, 0))
+                .or_insert(lexeme);
+        }
+    }
+    let mut passives: BTreeMap<usize, Vec<(usize, Vec<usize>)>> = BTreeMap::new();
+    for (lexeme, (paradigm, stem, _)) in lexemes.iter().enumerate() {
+        let layout = &paradigms[*paradigm as usize];
+        let count = layout.len() / 3;
+        let tag_of = |form: usize| tags[layout[count + form] as usize].as_str();
+        let first: Vec<&str> = tag_of(0).split([',', ' ']).collect();
+        if first[0] != "INFN" || !first.contains(&"impf") {
+            continue;
+        }
+        let lemma = spell(*paradigm, stem, 0);
+        let Some(base) = lemma
+            .strip_suffix("ся")
+            .or_else(|| lemma.strip_suffix("сь"))
+        else {
+            continue;
+        };
+        let Some(&active) = infinitives.get(base).filter(|_| attested.contains(base)) else {
+            continue;
+        };
+        let forms: Vec<usize> = (0..count)
+            .filter(|&form| ud::reflexive_passive(tag_of(form), &lemma).is_some())
+            .collect();
+        passives.entry(active).or_default().push((lexeme, forms));
+    }
+
+    // Копии форм с леммой другой лексемы из одной формы: наречия и инфинитива
+    let jobs = (comparatives
+        .iter()
+        .map(|(lexeme, sources)| (*lexeme, sources, false)))
+    .chain(
+        passives
+            .iter()
+            .map(|(lexeme, sources)| (*lexeme, sources, true)),
+    );
+    for (target, sources, passive) in jobs {
+        let word = spell(lexemes[target].0, &lexemes[target].1, 0);
+        let mut members = vec![source_lexeme(target, &[0], &|_| lexemes[target].2[0].1)];
         for (lexeme, forms) in sources {
-            let layout = &paradigms[lexemes[*lexeme].0 as usize];
+            let (paradigm, stem, _) = &lexemes[*lexeme];
+            let layout = &paradigms[*paradigm as usize];
             let count = layout.len() / 3;
+            let lemma = spell(*paradigm, stem, 0);
             let mut uds = HashMap::new();
             for &form in forms {
-                let converted = ud::comparative_adverb(&tags[layout[count + form] as usize], &word);
+                let tag = &tags[layout[count + form] as usize];
+                let converted = match passive {
+                    true => ud::reflexive_passive(tag, &lemma).ok_or("пассив не глагола")?,
+                    false => ud::comparative_adverb(tag, &word),
+                };
                 let labels: Vec<&str> = converted.labels.iter().map(String::as_str).collect();
                 let feats = ud::feats_string(&converted.feats);
                 uds.insert(form, builder.add_ud_tag(converted.pos, &feats, &labels)?);
@@ -882,7 +945,6 @@ fn build(
     }
 
     // Доли разборов по счетчикам UD считаются по разборам уже собранного словаря
-    let counts = frequencies::read(&read_ud("counts.tsv")?)?;
     let first = Dictionary::from_bytes(&builder.build()?)?;
     let blended = frequencies::blend(&first, &counts);
     for (word, list) in &blended {

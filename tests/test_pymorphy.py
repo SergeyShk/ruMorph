@@ -134,7 +134,9 @@ def test_same_analyses(pymorphy, unsorted, words):
         if parses is None:
             checked["not in dictionary"] += 1
             continue
-        if changed_by_build(parses):
+        # Пассив на -ся - копия формы возвратного глагола с невозвратной леммой
+        passive = any(a.feats.get("Voice") == "Pass" for a in morph.analyze(word))
+        if changed_by_build(parses) or (passive and word.endswith(("ся", "сь"))):
             checked["changed by build"] += 1
             continue
         ours = morph._opencorpora(word)
