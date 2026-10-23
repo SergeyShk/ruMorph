@@ -8,6 +8,7 @@ mod ud;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::error::Error;
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Instant;
@@ -17,24 +18,44 @@ use rumorph::{Builder, Dictionary, Entry, GuessIndex};
 fn main() -> ExitCode {
     let args: Vec<PathBuf> = std::env::args_os().skip(1).map(PathBuf::from).collect();
     // Без весов собирается словарь без контекстной модели: на нем она и учится
-    let (export, ud, output, context) = match args.as_slice() {
-        [export, ud, output] => (export, ud, output, None),
-        [export, ud, output, context] => (export, ud, output, Some(context.as_path())),
+    let result = match args.as_slice() {
+        [mode] if mode.as_os_str() == "tags" => tags(),
+        [export, ud, output] => build(export, ud, output, None),
+        [export, ud, output, context] => build(export, ud, output, Some(context.as_path())),
         _ => {
             eprintln!(
                 "Использование: rumorph-build <выгрузка pymorphy3> <выгрузка UD> <файл словаря> \
-                 [веса контекстной модели]"
+                 [веса контекстной модели]\n       rumorph-build tags < теги OpenCorpora"
             );
             return ExitCode::from(2);
         }
     };
-    match build(export, ud, output, context) {
+    match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) => {
             eprintln!("rumorph-build: {err}");
             ExitCode::FAILURE
         }
     }
+}
+
+/// Перевод разметки корпуса OpenCorpora для обучения контекстной модели: на каждую строку
+/// «тег\tлемма» из stdin - строка JSON со списком разборов `[лемма, часть речи, признаки]`,
+/// которые сборщик выводит из них (`ud::derived`)
+fn tags() -> Result<(), Box<dyn Error>> {
+    let mut out = std::io::BufWriter::new(std::io::stdout().lock());
+    for line in std::io::stdin().lines() {
+        let line = line?;
+        let (tag, lemma) = line
+            .split_once('\t')
+            .ok_or_else(|| format!("нет табуляции: {line}"))?;
+        let analyses: Vec<(String, &str, String)> = ud::derived(tag, lemma)
+            .into_iter()
+            .map(|(lemma, ud)| (lemma, ud.pos, ud::feats_string(&ud.feats)))
+            .collect();
+        writeln!(out, "{}", serde_json::to_string(&analyses)?)?;
+    }
+    Ok(out.flush()?)
 }
 
 /// Разборы строки выгрузки: парадигма, форма и основа
@@ -804,35 +825,24 @@ fn build(
         let count = layout.len() / 3;
         let tag_of = |form: usize| tags[layout[count + form] as usize].as_str();
         let lemma = spell(*paradigm, stem, 0);
-        let Some(&(_, name_type)) = ud::PROPER_COPIES.iter().find(|(word, _)| *word == lemma)
-        else {
-            continue;
-        };
-        if !tag_of(0).starts_with("NOUN,") {
+        let copies: Vec<(usize, ud::Ud)> = (0..count)
+            .filter_map(|form| ud::proper_copy(tag_of(form), &lemma).map(|ud| (form, ud)))
+            .collect();
+        if copies.is_empty() {
             continue;
         }
-        let forms: Vec<usize> = (0..count)
-            .filter(|&form| {
-                tag_of(form)
-                    .split([',', ' '])
-                    .any(|grammeme| grammeme == "sing")
-            })
-            .collect();
-        let layout_forms: Vec<(u16, u16, u16)> = forms
+        let layout_forms: Vec<(u16, u16, u16)> = copies
             .iter()
-            .map(|&form| (layout[form], layout[count + form], layout[2 * count + form]))
+            .map(|&(form, _)| (layout[form], layout[count + form], layout[2 * count + form]))
             .collect();
         let copy_paradigm = add_paradigm(&mut builder, &mut paradigm_numbers, layout_forms)?;
-        let mut copy_cells = Vec::with_capacity(forms.len());
-        for &form in &forms {
-            let mut converted = ud::convert(tag_of(form), ud::lemma_class(&lemma));
-            converted.pos = "PROPN";
-            converted.feats.insert("NameType", name_type);
+        let mut copy_cells = Vec::with_capacity(copies.len());
+        for (form, converted) in &copies {
             let labels: Vec<&str> = converted.labels.iter().map(String::as_str).collect();
             let feats = ud::feats_string(&converted.feats);
-            let lemma_form = forms
+            let lemma_form = copies
                 .iter()
-                .position(|&known| known == usize::from(cells[form].0))
+                .position(|&(known, _)| known == usize::from(cells[*form].0))
                 .unwrap_or(0);
             copy_cells.push((
                 lemma_form as u16,
@@ -840,7 +850,7 @@ fn build(
             ));
         }
         let table = builder.add_table(copy_paradigm, &copy_cells)?;
-        for (number, &form) in forms.iter().enumerate() {
+        for (number, &(form, _)) in copies.iter().enumerate() {
             extra_entries
                 .entry((lexeme, form as u16))
                 .or_default()

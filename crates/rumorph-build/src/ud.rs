@@ -955,6 +955,43 @@ pub fn comparative_adverb(tag: &str, adverb: &str) -> Ud {
     ud
 }
 
+/// Имя собственное из `PROPER_COPIES` («Земля») - форма единственного числа нарицательного
+/// существительного `lemma` с тегом `tag` как PROPN
+pub fn proper_copy(tag: &str, lemma: &str) -> Option<Ud> {
+    let &(_, name_type) = PROPER_COPIES.iter().find(|(word, _)| *word == lemma)?;
+    let grammemes: Vec<&str> = tag.split([',', ' ']).collect();
+    if grammemes[0] != "NOUN" || !grammemes.contains(&"sing") {
+        return None;
+    }
+    let mut ud = convert(tag, lemma_class(lemma));
+    ud.pos = "PROPN";
+    ud.feats.insert("NameType", name_type);
+    Some(ud)
+}
+
+/// Разборы UD с леммами, которые сборщик выводит из тега OpenCorpora `tag` и леммы `lemma`:
+/// перевод и копии форм. Копии, которые сборщик делает не всем лексемам (пассив - только глаголам
+/// несовершенного вида, пассив которых есть в трибанках), здесь есть у всех; сравнительной степени
+/// наречия нет: ее лемма - из другой лексемы
+pub fn derived(tag: &str, lemma: &str) -> Vec<(String, Ud)> {
+    let mut analyses = vec![(lemma.to_owned(), convert(tag, lemma_class(lemma)))];
+    analyses.extend(context_copy(lemma, tag).map(|ud| (lemma.to_owned(), ud)));
+    analyses.extend(substantive_pronoun(lemma, tag).map(|(pronoun, ud)| (pronoun.to_owned(), ud)));
+    analyses.extend(
+        numeral_genders(lemma, tag)
+            .into_iter()
+            .map(|ud| (lemma.to_owned(), ud)),
+    );
+    analyses.extend(proper_copy(tag, lemma).map(|ud| (lemma.to_owned(), ud)));
+    if let Some(base) = lemma
+        .strip_suffix("ся")
+        .or_else(|| lemma.strip_suffix("сь"))
+    {
+        analyses.extend(reflexive_passive(tag, lemma).map(|ud| (base.to_owned(), ud)));
+    }
+    analyses
+}
+
 /// Признаки, которых нет у несклоняемых аббревиатур и сокращений слов
 const UNINFLECTED_ABBREVIATION: [&str; 4] = ["Animacy", "Case", "Gender", "Number"];
 
@@ -1591,6 +1628,41 @@ mod tests {
             Some(("VERB", "Aspect=Imp|VerbForm=Inf|Voice=Pass".into()))
         );
         assert_eq!(passive("NOUN,inan,masc sing,nomn"), None);
+    }
+
+    #[test]
+    fn derived_analyses() {
+        let derived = |tag: &str, lemma: &str| -> Vec<(String, &str)> {
+            super::derived(tag, lemma)
+                .into_iter()
+                .map(|(lemma, ud)| (lemma, ud.pos))
+                .collect()
+        };
+        let pairs = |items: &[(&str, &'static str)]| -> Vec<(String, &'static str)> {
+            items.iter().map(|&(l, p)| (l.into(), p)).collect()
+        };
+        assert_eq!(
+            derived("VERB,impf,intr sing,3per,pres,indc", "использоваться"),
+            pairs(&[("использоваться", "VERB"), ("использовать", "VERB")])
+        );
+        assert_eq!(
+            derived("ADJF,Apro,Subx neut,sing,gent", "тот"),
+            pairs(&[("тот", "DET"), ("то", "PRON")])
+        );
+        assert_eq!(
+            derived("NOUN,inan,femn sing,gent", "земля"),
+            pairs(&[("земля", "NOUN"), ("земля", "PROPN")])
+        );
+        assert_eq!(derived("NOUN,inan,femn plur,gent", "земля").len(), 1);
+        assert_eq!(
+            derived("PRCL", "бы"),
+            pairs(&[("бы", "AUX"), ("бы", "PART")])
+        );
+        assert_eq!(derived("NUMR,gent", "два").len(), 3);
+        assert_eq!(
+            derived("NOUN,inan,masc sing,nomn", "стол"),
+            pairs(&[("стол", "NOUN")])
+        );
     }
 
     #[test]
