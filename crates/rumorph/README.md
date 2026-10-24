@@ -17,7 +17,7 @@
 
 ```toml
 [dependencies]
-rumorph = "0.3"
+rumorph = "0.4"
 ```
 
 Словарь OpenCorpora входит в крейт [`rumorph-dict-ru`](https://crates.io/crates/rumorph-dict-ru)

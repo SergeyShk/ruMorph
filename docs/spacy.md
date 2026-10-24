@@ -49,8 +49,8 @@ pip install "rumorph[spacy]"
 
 | Конвейер | SynTagRus | Taiga | GSD | Скорость |
 | :------- | :-------- | :---- | :-- | :------- |
-| ru_core_news_sm | 82,0 | 75,5 | 74,8 | 5 291 |
-| ru_core_news_sm с rumorph | **93,6** | **90,1** | **81,6** | **8 460** |
+| ru_core_news_sm | 82,0 | 75,5 | 74,8 | 5 628 |
+| ru_core_news_sm с rumorph | **93,7** | **90,2** | **81,6** | **8 842** |
 
 ## Предложения { #sentences }
 
