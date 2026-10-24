@@ -954,7 +954,7 @@
 
 <h1 id="spacy">spaCy<a class="headerlink" href="#spacy" title="Permanent link">&para;</a></h1>
 <p>Компонент <code>rumorph</code> подключает ruMorph к конвейеру <a href="https://spacy.io/">spaCy</a>: размечает токены документа частью речи (<code>pos_</code>), признаками <a href="https://universaldependencies.org/">Universal Dependencies</a> (<code>morph</code>) и леммой (<code>lemma_</code>) по <a href="../analyzer/#analyze_sentence">разбору с контекстом</a>. В конвейере он заменяет теггер, морфологизатор и лемматизатор.</p>
-<div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span>rumorph<span class="o">[</span>spacy<span class="o">]</span>
+<div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"rumorph[spacy]"</span>
 </code></pre></div>
 <p>Компонент регистрируется в spaCy при установке пакета и подключается по имени, импортировать rumorph не нужно. Для Python 3.14t без GIL у spaCy нет готовых колес.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Код</label><label for="__tabbed_1_2">Результат</label></div>
@@ -1009,19 +1009,19 @@
 <td style="text-align: left;">82,0</td>
 <td style="text-align: left;">75,5</td>
 <td style="text-align: left;">74,8</td>
-<td style="text-align: left;">5 291</td>
+<td style="text-align: left;">5 628</td>
 </tr>
 <tr>
 <td style="text-align: left;">ru_core_news_sm с rumorph</td>
-<td style="text-align: left;"><strong>93,6</strong></td>
-<td style="text-align: left;"><strong>90,1</strong></td>
+<td style="text-align: left;"><strong>93,7</strong></td>
+<td style="text-align: left;"><strong>90,2</strong></td>
 <td style="text-align: left;"><strong>81,6</strong></td>
-<td style="text-align: left;"><strong>8 460</strong></td>
+<td style="text-align: left;"><strong>8 842</strong></td>
 </tr>
 </tbody>
 </table>
 <h2 id="sentences">Предложения<a class="headerlink" href="#sentences" title="Permanent link">&para;</a></h2>
-<p>Контекстная модель разбирает предложение целиком. Предложения компонент берет из разметки документа - парсера, <code>senter</code> или <code>sentencizer</code>, а если ее нет, делит документ после знаков конца предложения («.», «!», «?», «…»); предложение длиннее 256 токенов разбирается частями, как в <a href="../cli/">команде rumorph</a>. Пробельные токены получают часть речи <code>SPACE</code>, как в моделях spaCy, а лемма у них - сам токен.</p>
+<p>Контекстная модель разбирает предложение целиком. Предложения компонент берет из разметки документа - парсера, <code>senter</code> или <code>sentencizer</code>, а если ее нет, делит документ после знаков конца предложения («.», «!», «?», «…»); предложение длиннее 256 токенов разбирается частями, как в <a href="../cli/">команде rumorph</a>. Пробельные токены получают часть речи <code>SPACE</code>, как в моделях spaCy, а лемма у них - сам токен; токен без разбора ruMorph (невидимые символы) - <code>X</code> и лемму в нижнем регистре, как в команде rumorph.</p>
 <h2 id="config">Параметры<a class="headerlink" href="#config" title="Permanent link">&para;</a></h2>
 <table>
 <thead>

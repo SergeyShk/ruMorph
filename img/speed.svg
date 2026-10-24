@@ -23,60 +23,60 @@
 <text x="540.0" y="388" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#888">100 000</text>
 <text x="305.0" y="412" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#888">токенов</text>
 <text x="16" y="195.0" transform="rotate(-90 16 195.0)" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#888">секунд</text>
-<polyline points="70.0,318.1 187.5,318.2 305.0,304.6 422.5,280.5 540.0,216.8" fill="none" stroke="#1e88e5" stroke-width="2.5"/>
+<polyline points="70.0,318.1 187.5,316.3 305.0,310.4 422.5,278.4 540.0,214.6" fill="none" stroke="#1e88e5" stroke-width="2.5"/>
 <circle cx="70.0" cy="318.1" r="3.5" fill="#1e88e5"/>
-<circle cx="187.5" cy="318.2" r="3.5" fill="#1e88e5"/>
-<circle cx="305.0" cy="304.6" r="3.5" fill="#1e88e5"/>
-<circle cx="422.5" cy="280.5" r="3.5" fill="#1e88e5"/>
-<circle cx="540.0" cy="216.8" r="3.5" fill="#1e88e5"/>
+<circle cx="187.5" cy="316.3" r="3.5" fill="#1e88e5"/>
+<circle cx="305.0" cy="310.4" r="3.5" fill="#1e88e5"/>
+<circle cx="422.5" cy="278.4" r="3.5" fill="#1e88e5"/>
+<circle cx="540.0" cy="214.6" r="3.5" fill="#1e88e5"/>
 <line x1="556" y1="30" x2="580" y2="30" stroke="#1e88e5" stroke-width="2.5"/>
 <text x="588" y="34" font-family="sans-serif" font-size="13" fill="#888">ruMorph</text>
-<polyline points="70.0,277.8 187.5,272.8 305.0,240.3 422.5,187.2 540.0,115.9" fill="none" stroke="#e53935" stroke-width="2.5"/>
-<circle cx="70.0" cy="277.8" r="3.5" fill="#e53935"/>
-<circle cx="187.5" cy="272.8" r="3.5" fill="#e53935"/>
-<circle cx="305.0" cy="240.3" r="3.5" fill="#e53935"/>
-<circle cx="422.5" cy="187.2" r="3.5" fill="#e53935"/>
-<circle cx="540.0" cy="115.9" r="3.5" fill="#e53935"/>
+<polyline points="70.0,274.7 187.5,270.6 305.0,242.3 422.5,186.7 540.0,113.4" fill="none" stroke="#e53935" stroke-width="2.5"/>
+<circle cx="70.0" cy="274.7" r="3.5" fill="#e53935"/>
+<circle cx="187.5" cy="270.6" r="3.5" fill="#e53935"/>
+<circle cx="305.0" cy="242.3" r="3.5" fill="#e53935"/>
+<circle cx="422.5" cy="186.7" r="3.5" fill="#e53935"/>
+<circle cx="540.0" cy="113.4" r="3.5" fill="#e53935"/>
 <line x1="556" y1="52" x2="580" y2="52" stroke="#e53935" stroke-width="2.5"/>
 <text x="588" y="56" font-family="sans-serif" font-size="13" fill="#888">pymorphy3</text>
-<polyline points="70.0,258.1 187.5,257.8 305.0,249.6 422.5,215.6 540.0,152.2" fill="none" stroke="#43a047" stroke-width="2.5"/>
-<circle cx="70.0" cy="258.1" r="3.5" fill="#43a047"/>
-<circle cx="187.5" cy="257.8" r="3.5" fill="#43a047"/>
+<polyline points="70.0,258.3 187.5,257.9 305.0,249.6 422.5,215.5 540.0,151.7" fill="none" stroke="#43a047" stroke-width="2.5"/>
+<circle cx="70.0" cy="258.3" r="3.5" fill="#43a047"/>
+<circle cx="187.5" cy="257.9" r="3.5" fill="#43a047"/>
 <circle cx="305.0" cy="249.6" r="3.5" fill="#43a047"/>
-<circle cx="422.5" cy="215.6" r="3.5" fill="#43a047"/>
-<circle cx="540.0" cy="152.2" r="3.5" fill="#43a047"/>
+<circle cx="422.5" cy="215.5" r="3.5" fill="#43a047"/>
+<circle cx="540.0" cy="151.7" r="3.5" fill="#43a047"/>
 <line x1="556" y1="74" x2="580" y2="74" stroke="#43a047" stroke-width="2.5"/>
 <text x="588" y="78" font-family="sans-serif" font-size="13" fill="#888">mystem</text>
-<polyline points="70.0,151.8 187.5,158.3 305.0,155.5 422.5,135.9 540.0,82.6" fill="none" stroke="#fb8c00" stroke-width="2.5"/>
-<circle cx="70.0" cy="151.8" r="3.5" fill="#fb8c00"/>
-<circle cx="187.5" cy="158.3" r="3.5" fill="#fb8c00"/>
-<circle cx="305.0" cy="155.5" r="3.5" fill="#fb8c00"/>
-<circle cx="422.5" cy="135.9" r="3.5" fill="#fb8c00"/>
-<circle cx="540.0" cy="82.6" r="3.5" fill="#fb8c00"/>
+<polyline points="70.0,152.2 187.5,157.1 305.0,154.2 422.5,135.7 540.0,83.0" fill="none" stroke="#fb8c00" stroke-width="2.5"/>
+<circle cx="70.0" cy="152.2" r="3.5" fill="#fb8c00"/>
+<circle cx="187.5" cy="157.1" r="3.5" fill="#fb8c00"/>
+<circle cx="305.0" cy="154.2" r="3.5" fill="#fb8c00"/>
+<circle cx="422.5" cy="135.7" r="3.5" fill="#fb8c00"/>
+<circle cx="540.0" cy="83.0" r="3.5" fill="#fb8c00"/>
 <line x1="556" y1="96" x2="580" y2="96" stroke="#fb8c00" stroke-width="2.5"/>
 <text x="588" y="100" font-family="sans-serif" font-size="13" fill="#888">spaCy ru_core_news_sm</text>
-<polyline points="70.0,136.9 187.5,139.9 305.0,136.1 422.5,108.9 540.0,49.0" fill="none" stroke="#8e24aa" stroke-width="2.5"/>
-<circle cx="70.0" cy="136.9" r="3.5" fill="#8e24aa"/>
-<circle cx="187.5" cy="139.9" r="3.5" fill="#8e24aa"/>
-<circle cx="305.0" cy="136.1" r="3.5" fill="#8e24aa"/>
-<circle cx="422.5" cy="108.9" r="3.5" fill="#8e24aa"/>
-<circle cx="540.0" cy="49.0" r="3.5" fill="#8e24aa"/>
+<polyline points="70.0,138.1 187.5,139.0 305.0,134.4 422.5,107.5 540.0,48.9" fill="none" stroke="#8e24aa" stroke-width="2.5"/>
+<circle cx="70.0" cy="138.1" r="3.5" fill="#8e24aa"/>
+<circle cx="187.5" cy="139.0" r="3.5" fill="#8e24aa"/>
+<circle cx="305.0" cy="134.4" r="3.5" fill="#8e24aa"/>
+<circle cx="422.5" cy="107.5" r="3.5" fill="#8e24aa"/>
+<circle cx="540.0" cy="48.9" r="3.5" fill="#8e24aa"/>
 <line x1="556" y1="118" x2="580" y2="118" stroke="#8e24aa" stroke-width="2.5"/>
 <text x="588" y="122" font-family="sans-serif" font-size="13" fill="#888">Stanza</text>
-<polyline points="70.0,205.1 187.5,207.4 305.0,205.6 422.5,185.3 540.0,134.2" fill="none" stroke="#00acc1" stroke-width="2.5"/>
-<circle cx="70.0" cy="205.1" r="3.5" fill="#00acc1"/>
-<circle cx="187.5" cy="207.4" r="3.5" fill="#00acc1"/>
+<polyline points="70.0,205.9 187.5,209.2 305.0,205.6 422.5,186.3 540.0,133.8" fill="none" stroke="#00acc1" stroke-width="2.5"/>
+<circle cx="70.0" cy="205.9" r="3.5" fill="#00acc1"/>
+<circle cx="187.5" cy="209.2" r="3.5" fill="#00acc1"/>
 <circle cx="305.0" cy="205.6" r="3.5" fill="#00acc1"/>
-<circle cx="422.5" cy="185.3" r="3.5" fill="#00acc1"/>
-<circle cx="540.0" cy="134.2" r="3.5" fill="#00acc1"/>
+<circle cx="422.5" cy="186.3" r="3.5" fill="#00acc1"/>
+<circle cx="540.0" cy="133.8" r="3.5" fill="#00acc1"/>
 <line x1="556" y1="140" x2="580" y2="140" stroke="#00acc1" stroke-width="2.5"/>
 <text x="588" y="144" font-family="sans-serif" font-size="13" fill="#888">Slovnet (Natasha)</text>
-<polyline points="70.0,289.6 187.5,288.2 305.0,274.2 422.5,224.8 540.0,162.1" fill="none" stroke="#3949ab" stroke-width="2.5"/>
-<circle cx="70.0" cy="289.6" r="3.5" fill="#3949ab"/>
-<circle cx="187.5" cy="288.2" r="3.5" fill="#3949ab"/>
-<circle cx="305.0" cy="274.2" r="3.5" fill="#3949ab"/>
-<circle cx="422.5" cy="224.8" r="3.5" fill="#3949ab"/>
-<circle cx="540.0" cy="162.1" r="3.5" fill="#3949ab"/>
+<polyline points="70.0,298.7 187.5,299.3 305.0,281.5 422.5,230.2 540.0,162.4" fill="none" stroke="#3949ab" stroke-width="2.5"/>
+<circle cx="70.0" cy="298.7" r="3.5" fill="#3949ab"/>
+<circle cx="187.5" cy="299.3" r="3.5" fill="#3949ab"/>
+<circle cx="305.0" cy="281.5" r="3.5" fill="#3949ab"/>
+<circle cx="422.5" cy="230.2" r="3.5" fill="#3949ab"/>
+<circle cx="540.0" cy="162.4" r="3.5" fill="#3949ab"/>
 <line x1="556" y1="162" x2="580" y2="162" stroke="#3949ab" stroke-width="2.5"/>
 <text x="588" y="166" font-family="sans-serif" font-size="13" fill="#888">ruMorph с контекстом</text>
 </svg>

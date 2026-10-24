@@ -954,7 +954,7 @@
 
 <h1 id="spacy">spaCy<a class="headerlink" href="#spacy" title="Permanent link">&para;</a></h1>
 <p>The <code>rumorph</code> component plugs ruMorph into a <a href="https://spacy.io/">spaCy</a> pipeline: it annotates the tokens of a document with the part of speech (<code>pos_</code>), the <a href="https://universaldependencies.org/">Universal Dependencies</a> features (<code>morph</code>) and the lemma (<code>lemma_</code>) of the <a href="../analyzer/#analyze_sentence">analysis in context</a>. In the pipeline it replaces the tagger, the morphologizer and the lemmatizer.</p>
-<div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span>rumorph<span class="o">[</span>spacy<span class="o">]</span>
+<div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"rumorph[spacy]"</span>
 </code></pre></div>
 <p>The component registers with spaCy when the package is installed and is added by name, there is no need to import rumorph. spaCy has no prebuilt wheels for Python 3.14t without the GIL.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Code</label><label for="__tabbed_1_2">Result</label></div>
@@ -1009,19 +1009,19 @@
 <td style="text-align: left;">82.0</td>
 <td style="text-align: left;">75.5</td>
 <td style="text-align: left;">74.8</td>
-<td style="text-align: left;">5,291</td>
+<td style="text-align: left;">5,628</td>
 </tr>
 <tr>
 <td style="text-align: left;">ru_core_news_sm with rumorph</td>
-<td style="text-align: left;"><strong>93.6</strong></td>
-<td style="text-align: left;"><strong>90.1</strong></td>
+<td style="text-align: left;"><strong>93.7</strong></td>
+<td style="text-align: left;"><strong>90.2</strong></td>
 <td style="text-align: left;"><strong>81.6</strong></td>
-<td style="text-align: left;"><strong>8,460</strong></td>
+<td style="text-align: left;"><strong>8,842</strong></td>
 </tr>
 </tbody>
 </table>
 <h2 id="sentences">Sentences<a class="headerlink" href="#sentences" title="Permanent link">&para;</a></h2>
-<p>The context model analyzes a whole sentence. The component takes sentences from the annotation of the document - the parser, <code>senter</code> or <code>sentencizer</code>, and without it splits the document after sentence-final marks («.», «!», «?», «…»); a sentence longer than 256 tokens is analyzed in parts, as in the <a href="../cli/">rumorph command</a>. Whitespace tokens get the <code>SPACE</code> part of speech, as in spaCy models, and the token itself as the lemma.</p>
+<p>The context model analyzes a whole sentence. The component takes sentences from the annotation of the document - the parser, <code>senter</code> or <code>sentencizer</code>, and without it splits the document after sentence-final marks («.», «!», «?», «…»); a sentence longer than 256 tokens is analyzed in parts, as in the <a href="../cli/">rumorph command</a>. Whitespace tokens get the <code>SPACE</code> part of speech, as in spaCy models, and the token itself as the lemma; a token without a ruMorph analysis (invisible characters) gets <code>X</code> and the lowercased token as the lemma, as in the rumorph command.</p>
 <h2 id="config">Parameters<a class="headerlink" href="#config" title="Permanent link">&para;</a></h2>
 <table>
 <thead>

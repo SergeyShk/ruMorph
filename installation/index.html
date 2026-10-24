@@ -941,6 +941,7 @@
 <p>Требуется Python 3.11 или новее.</p>
 <div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span>rumorph
 </code></pre></div>
+<p>Компонент для <a href="../spacy/">spaCy</a> ставится вместе со spaCy: <code>pip install "rumorph[spacy]"</code>; для Python 3.14t без GIL у spaCy нет готовых колес.</p>
 <h2 id="_2">Готовые колеса<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h2>
 <p>На PyPI публикуются колеса для Linux (x86_64 и aarch64; manylinux и musllinux - для Alpine), macOS (Intel и Apple Silicon) и Windows (x64 и arm64). Одно колесо подходит для всех версий Python начиная с 3.11, для Python 3.14t без GIL - отдельное колесо; Rust для установки не нужен. Словарь входит в пакет, отдельно его устанавливать не нужно. Python 3.13t без GIL не поддерживается.</p>
 <p>Предварительные версии <code>X.Y.Z.devN</code> публикуются только на TestPyPI:</p>
