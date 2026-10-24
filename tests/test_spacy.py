@@ -161,3 +161,8 @@ def test_default_settings_not_stored(nlp):
         merged = spacy.tokens.Doc.from_docs(docs)
     assert merged[2]._.rumorph.lemma == "друг"
     assert docs[1][1:4].as_doc()[2]._.rumorph.lemma == "сталь"
+    own = spacy.blank("ru")
+    own.add_pipe("rumorph", config={"words": {"вайб": "шарф"}})
+    doc = nlp(own("Какой вайб"))
+    assert "rumorph" not in doc.user_data
+    assert doc[1]._.rumorph.lemma == doc[1].lemma_

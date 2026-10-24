@@ -134,6 +134,8 @@ class Component:
                 token.lemma_ = token.text
         if self.settings != DEFAULT:
             doc.user_data[SETTINGS] = self.settings
+        else:
+            doc.user_data.pop(SETTINGS, None)
         return doc
 
 
