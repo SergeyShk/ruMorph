@@ -6,7 +6,7 @@
 pip install rumorph
 ```
 
-Компонент для [spaCy](spacy.md) ставится вместе со spaCy: `pip install rumorph[spacy]`; для Python 3.14t без GIL у spaCy нет готовых колес.
+Компонент для [spaCy](spacy.md) ставится вместе со spaCy: `pip install "rumorph[spacy]"`; для Python 3.14t без GIL у spaCy нет готовых колес.
 
 ## Готовые колеса
 

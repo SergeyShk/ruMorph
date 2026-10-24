@@ -1,13 +1,9 @@
 # /// script
 # requires-python = ">=3.11,<3.14"
 # dependencies = [
-#     "rumorph",
 #     "numpy==2.3.4",
 #     "torch==2.14.1",
 # ]
-#
-# [tool.uv.sources]
-# rumorph = { path = "..", editable = true }
 # ///
 """
 Обучение контекстной модели ruMorph: выбор разбора словоформы по соседним словам
@@ -25,10 +21,10 @@
     Эпоха выбирается по full core на проверочных частях Taiga и GSD. Веса квантуются в int8
     по строкам и пишутся в файл `--output`, который `rumorph-build` вшивает в словарь; точность
     квантованной модели печатается. Версии пакетов закреплены в train_context.py.lock; ruMorph -
-    сборка проекта (из репозитория), кандидаты которой должны совпадать со словарем.
+    сборка проекта (`--with-editable .`), кандидаты которой должны совпадать со словарем.
 
 Пример использования:
-    uv run scripts/train_context.py --dictionary python/rumorph/data/ru.dict \\
+    uv run --with-editable . scripts/train_context.py --dictionary python/rumorph/data/ru.dict \\
         --data target/context --output data/ru-context.bin
 """
 
@@ -52,7 +48,13 @@ from torch import nn
 
 import conventions
 from conventions import GSD, TAIGA, harmonize
-from rumorph import Analyzer
+
+try:
+    from rumorph import Analyzer
+except ImportError:
+    raise SystemExit(
+        "нужна сборка ruMorph из репозитория: uv run --with-editable . scripts/train_context.py ..."
+    ) from None
 
 # Трибанк, коммит релиза и файлы с SHA-256: обучающие части - как в export_ud.py
 SOURCES = {

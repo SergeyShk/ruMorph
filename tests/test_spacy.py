@@ -126,10 +126,13 @@ def test_analyzer_cache_is_bounded(nlp):
     for number in range(rumorph.spacy.CACHE_SIZE + 3):
         own = spacy.blank("ru")
         own.add_pipe("rumorph", config={"words": {f"зумер{'а' * number}": "геймер"}})
-        docs.append(own("Привет"))
+        docs.append(own("Зумер"))
     assert len(rumorph.spacy._analyzers) <= rumorph.spacy.CACHE_SIZE
-    # Вытесненный анализатор создается заново по настройкам документа
-    assert docs[0][0]._.rumorph.lemma == "привет"
+    # Вытесненный анализатор создается заново по настройкам документа: свое слово - из словаря
+    assert docs[0][0]._.rumorph.source == "dictionary"
+    # Документ 0.4.0.dev5-dev6: настройки без ключа
+    del docs[0].user_data["rumorph"]["key"]
+    assert docs[0][0]._.rumorph.source == "dictionary"
 
 
 def test_extension_uses_component_settings(nlp):

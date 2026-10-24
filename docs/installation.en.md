@@ -6,7 +6,7 @@ Python 3.11 or newer is required.
 pip install rumorph
 ```
 
-The [spaCy](spacy.md) component is installed together with spaCy: `pip install rumorph[spacy]`; spaCy has no prebuilt wheels for the free-threaded Python 3.14t.
+The [spaCy](spacy.md) component is installed together with spaCy: `pip install "rumorph[spacy]"`; spaCy has no prebuilt wheels for the free-threaded Python 3.14t.
 
 ## Prebuilt wheels
 

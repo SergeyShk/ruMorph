@@ -3,7 +3,7 @@
 The `rumorph` component plugs ruMorph into a [spaCy](https://spacy.io/) pipeline: it annotates the tokens of a document with the part of speech (`pos_`), the [Universal Dependencies](https://universaldependencies.org/) features (`morph`) and the lemma (`lemma_`) of the [analysis in context](analyzer.md#analyze_sentence). In the pipeline it replaces the tagger, the morphologizer and the lemmatizer.
 
 ``` bash
-pip install rumorph[spacy]
+pip install "rumorph[spacy]"
 ```
 
 The component registers with spaCy when the package is installed and is added by name, there is no need to import rumorph. spaCy has no prebuilt wheels for Python 3.14t without the GIL.

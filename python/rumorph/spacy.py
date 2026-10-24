@@ -13,7 +13,7 @@
     признаки (`morph`) и лемму (`lemma_`) выбранного разбора. Предложения берутся из `Doc.sents`,
     если их разметил парсер или `sentencizer`, иначе документ делится после знаков конца
     предложения. Пробельные токены получают часть речи SPACE. Разбор ruMorph токена -
-    `token._.rumorph`. После установки `pip install rumorph[spacy]` компонент подключается
+    `token._.rumorph`. После установки `pip install "rumorph[spacy]"` компонент подключается
     по имени, без импорта rumorph.
 
 Пример использования:
@@ -26,6 +26,7 @@
 
 import hashlib
 import json
+import threading
 from collections import OrderedDict
 from collections.abc import Iterator, Mapping
 from typing import Any
@@ -51,6 +52,7 @@ Pattern = str | tuple[str, str] | list[str]
 CACHE_SIZE = 8
 
 _analyzers: OrderedDict[str, Analyzer] = OrderedDict()
+_analyzers_lock = threading.Lock()
 
 
 @Language.factory(
@@ -102,10 +104,11 @@ class Component:
         patterns = None
         if words is not None:
             patterns = {word: p if isinstance(p, str) else list(p) for word, p in words.items()}
-        self.settings: dict[str, Any] = {"dictionary": dictionary, "words": patterns, "key": ""}
-        if dictionary is not None or patterns is not None:
-            text = json.dumps([dictionary, patterns], ensure_ascii=False)
-            self.settings["key"] = hashlib.sha256(text.encode()).hexdigest()
+        self.settings: dict[str, Any] = {
+            "dictionary": dictionary,
+            "words": patterns,
+            "key": settings_key(dictionary, patterns),
+        }
         self.context = context
         self.analyzer = analyzer(self.settings)
 
@@ -146,7 +149,7 @@ class Component:
                 token.pos_ = "SPACE"
                 token.lemma_ = token.text
         if self.settings != DEFAULT:
-            doc.user_data[SETTINGS] = self.settings
+            doc.user_data[SETTINGS] = dict(self.settings)
         else:
             doc.user_data.pop(SETTINGS, None)
         return doc
@@ -163,17 +166,42 @@ def analyzer(settings: Mapping[str, Any]) -> Analyzer:
     Вывод:
         Analyzer: Анализатор
     """
-    key = settings["key"]
-    if key in _analyzers:
-        _analyzers.move_to_end(key)
-        return _analyzers[key]
+    key = settings.get("key")
+    if key is None:
+        # Документы 0.4.0.dev5-dev6: настройки без ключа
+        key = settings_key(settings["dictionary"], settings["words"])
+    with _analyzers_lock:
+        found = _analyzers.get(key)
+        if found is not None:
+            _analyzers.move_to_end(key)
+            return found
     words = settings["words"]
     if words is not None:
         words = {word: p if isinstance(p, str) else tuple(p) for word, p in words.items()}
-    _analyzers[key] = Analyzer(settings["dictionary"], words)
-    if len(_analyzers) > CACHE_SIZE:
-        _analyzers.popitem(last=False)
-    return _analyzers[key]
+    created = Analyzer(settings["dictionary"], words)
+    with _analyzers_lock:
+        _analyzers[key] = created
+        _analyzers.move_to_end(key)
+        while len(_analyzers) > CACHE_SIZE:
+            _analyzers.popitem(last=False)
+    return created
+
+
+def settings_key(dictionary: str | None, words: Mapping[str, Any] | None) -> str:
+    """
+    Ключ настроек компонента в кэше анализаторов: пустой у настроек по умолчанию
+
+    Аргументы:
+        dictionary (str | None): Путь к словарю
+        words (Mapping[str, Any] | None): Свои слова
+
+    Вывод:
+        str: SHA-256 настроек
+    """
+    if dictionary is None and words is None:
+        return ""
+    text = json.dumps([dictionary, words], ensure_ascii=False)
+    return hashlib.sha256(text.encode()).hexdigest()
 
 
 def analysis(token: Token) -> Analysis | None:

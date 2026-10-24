@@ -9,7 +9,6 @@ resolution-markers = [
 [manifest]
 requirements = [
     { name = "numpy", specifier = "==2.3.4" },
-    { name = "rumorph", editable = "../" },
     { name = "torch", specifier = "==2.14.1" },
 ]
 
@@ -416,53 +415,6 @@ source = { registry = "https://pypi.org/simple" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c2/f3/d86c845465a2723ad7e1e5c36dcd75ddb82898b3f53be47ebd429fb2fa5d/nvidia_nvtx-13.0.85-py3-none-manylinux1_x86_64.manylinux_2_5_x86_64.whl", hash = "sha256:4936d1d6780fbe68db454f5e72a42ff64d1fd6397df9f363ae786930fd5c1cd4", size = 148047, upload-time = "2025-09-04T08:29:01.761Z" },
     { url = "https://files.pythonhosted.org/packages/a8/64/3708a90d1ebe202ffdeb7185f878a3c84d15c2b2c31858da2ce0583e2def/nvidia_nvtx-13.0.85-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:cb7780edb6b14107373c835bf8b72e7a178bac7367e23da7acb108f973f157a6", size = 148878, upload-time = "2025-09-04T08:28:53.627Z" },
-]
-
-[[package]]
-name = "rumorph"
-version = "0.4.0.dev7"
-source = { editable = "../" }
-
-[package.metadata]
-requires-dist = [{ name = "spacy", marker = "extra == 'spacy'", specifier = ">=3.8,<4" }]
-provides-extras = ["spacy"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "mkdocs", specifier = ">=1.6" },
-    { name = "mkdocs-material", specifier = ">=9.5" },
-    { name = "mkdocs-static-i18n", specifier = ">=1.2" },
-    { name = "mypy", specifier = ">=1.14" },
-    { name = "pre-commit", specifier = ">=4.0" },
-    { name = "pymdown-extensions", specifier = ">=10.0" },
-    { name = "pymorphy3", specifier = "==2.0.6" },
-    { name = "pymorphy3-dicts-ru", specifier = "==2.4.417150.4580142" },
-    { name = "pytest", specifier = ">=8.3" },
-    { name = "pytest-cov", specifier = ">=6.0" },
-    { name = "ruff", specifier = ">=0.9" },
-    { name = "spacy", specifier = ">=3.8,<4" },
-]
-dictionary = [
-    { name = "pymorphy3", specifier = "==2.0.6" },
-    { name = "pymorphy3-dicts-ru", specifier = "==2.4.417150.4580142" },
-]
-docs = [
-    { name = "mkdocs", specifier = ">=1.6" },
-    { name = "mkdocs-material", specifier = ">=9.5" },
-    { name = "mkdocs-static-i18n", specifier = ">=1.2" },
-    { name = "pymdown-extensions", specifier = ">=10.0" },
-]
-lint = [
-    { name = "mypy", specifier = ">=1.14" },
-    { name = "pre-commit", specifier = ">=4.0" },
-    { name = "ruff", specifier = ">=0.9" },
-]
-spacy = [{ name = "spacy", specifier = ">=3.8,<4" }]
-test = [
-    { name = "pymorphy3", specifier = "==2.0.6" },
-    { name = "pymorphy3-dicts-ru", specifier = "==2.4.417150.4580142" },
-    { name = "pytest", specifier = ">=8.3" },
-    { name = "pytest-cov", specifier = ">=6.0" },
 ]
 
 [[package]]

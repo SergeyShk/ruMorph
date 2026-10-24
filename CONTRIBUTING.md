@@ -21,10 +21,11 @@ uv run pre-commit install   # хуки: линтеры на коммите, те
 
 Модуль на Rust собирается при установке пакета в окружение; `uv run` пересобирает его сам, когда меняются файлы `crates/` или `Cargo.toml`. Словарь `python/rumorph/data/ru.dict` в git не хранится: `make dictionary` выгружает словарь pymorphy3-dicts-ru скриптом `scripts/export_pymorphy.py`, скачивает обучающие части трибанков UD_Russian-Taiga и UD_Russian-GSD закрепленного релиза скриптом `scripts/export_ud.py` (счетчики разметки словоформ для частот разборов) и собирает словарь сборщиком `rumorph-build`, вшивая в него веса контекстной модели `data/ru-context.bin`; `make test` и `make build` делают это сами. Полный список команд - `make help`.
 
-Веса контекстной модели хранятся в git. Переобучать модель нужно, когда меняются теги UD словаря (сборщик тогда откажется вшивать старые веса) или соглашения разметки: `scripts/conventions.py` переписывает разметку Taiga и GSD в соглашениях ruMorph и для счетчиков, и для обучения. Обучение скачивает обучающие и проверочные части трибанков и корпус OpenCorpora с проверкой SHA-256, теги корпуса переводит `rumorph-build tags` (нужен cargo); после него словарь собирается заново:
+Веса контекстной модели хранятся в git. Переобучать модель нужно, когда меняются теги UD словаря (сборщик тогда откажется вшивать старые веса) или соглашения разметки: `scripts/conventions.py` переписывает разметку Taiga и GSD в соглашениях ruMorph и для счетчиков, и для обучения. Модель учится на кандидатах словаря без весов, после обучения словарь собирается с ней; обучение скачивает обучающие и проверочные части трибанков и корпус OpenCorpora с проверкой SHA-256, теги корпуса переводит `rumorph-build tags` (нужен cargo). Выгрузки `target/opencorpora` и `target/ud` делает `make dictionary`:
 
 ```bash
-uv run scripts/train_context.py --dictionary python/rumorph/data/ru.dict --data target/context --output data/ru-context.bin
+cargo run --release --locked -p rumorph-build -- target/opencorpora target/ud python/rumorph/data/ru.dict
+uv run --with-editable . scripts/train_context.py --dictionary python/rumorph/data/ru.dict --data target/context --output data/ru-context.bin
 make dictionary
 ```
 

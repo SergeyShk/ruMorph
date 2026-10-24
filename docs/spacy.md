@@ -3,7 +3,7 @@
 Компонент `rumorph` подключает ruMorph к конвейеру [spaCy](https://spacy.io/): размечает токены документа частью речи (`pos_`), признаками [Universal Dependencies](https://universaldependencies.org/) (`morph`) и леммой (`lemma_`) по [разбору с контекстом](analyzer.md#analyze_sentence). В конвейере он заменяет теггер, морфологизатор и лемматизатор.
 
 ``` bash
-pip install rumorph[spacy]
+pip install "rumorph[spacy]"
 ```
 
 Компонент регистрируется в spaCy при установке пакета и подключается по имени, импортировать rumorph не нужно. Для Python 3.14t без GIL у spaCy нет готовых колес.
