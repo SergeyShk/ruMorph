@@ -1026,7 +1026,7 @@
 
 
 <h1 id="comparison">Comparison<a class="headerlink" href="#comparison" title="Permanent link">&para;</a></h1>
-<p>Without context ruMorph analyzes a word like pymorphy3 and mystem, and it is the most accurate of them: on three UD test sets the first analysis gets both the part of speech and the lemma right for 91-94 % of words against 79-85 % for pymorphy3 and mystem. It is also the fastest: 693 thousand tokens per second, 30 times faster than pymorphy3 and 8 times faster than mystem, and it answers a short text together with loading in 6 ms. With context (<a href="../analyzer/#analyze_sentence"><code>analyze_sentence</code></a>) ruMorph is more accurate than all the taggers in the part of speech, lemma and features together on Taiga and GSD, and on SynTagRus it is behind only Stanza, by 0.2 points, although Stanza is trained on SynTagRus and ruMorph has never seen it. Meanwhile it analyzes 108 thousand tokens per second, 39 times faster than Stanza.</p>
+<p>Without context ruMorph analyzes a word like pymorphy3 and mystem, and it is the most accurate of them: on three UD test sets the first analysis gets both the part of speech and the lemma right for 91-94 % of words against 79-85 % for pymorphy3 and mystem. It is also the fastest: 693 thousand tokens per second, 30 times faster than pymorphy3 and 8 times faster than mystem, and it answers a short text together with loading in 6 ms. With context (<a href="../analyzer/#analyze_sentence"><code>analyze_sentence</code></a>) ruMorph is more accurate than all the taggers in the part of speech, lemma and features together on Taiga and GSD, and on SynTagRus it is level with Stanza (93.6 and 93.5 % of words), although Stanza is trained on SynTagRus and ruMorph has never seen it. Meanwhile it analyzes 108 thousand tokens per second, 39 times faster than Stanza.</p>
 <h2 id="quality">Quality<a class="headerlink" href="#quality" title="Permanent link">&para;</a></h2>
 <p>The gold standard is the test parts of the <a href="https://github.com/UniversalDependencies/UD_Russian-SynTagRus">UD_Russian-SynTagRus</a>, <a href="https://github.com/UniversalDependencies/UD_Russian-Taiga">UD_Russian-Taiga</a> and <a href="https://github.com/UniversalDependencies/UD_Russian-GSD">UD_Russian-GSD</a> treebanks from the UD 2.18 release: every system gets their tokens, punctuation is not counted, and lemmas are compared ignoring case and with «е» instead of «ё». The treebanks follow different annotation conventions, so systems should be compared on the same set rather than sets against each other.</p>
 <h3 id="context-free">Without context<a class="headerlink" href="#context-free" title="Permanent link">&para;</a></h3>
@@ -1079,9 +1079,9 @@
 <tbody>
 <tr>
 <td style="text-align: left;">ruMorph in context</td>
-<td style="text-align: left;">97.1</td>
+<td style="text-align: left;">97.2</td>
 <td style="text-align: left;"><strong>98.0</strong></td>
-<td style="text-align: left;">95.0</td>
+<td style="text-align: left;">95.3</td>
 </tr>
 <tr>
 <td style="text-align: left;">Stanza</td>
@@ -1117,7 +1117,7 @@
 <tbody>
 <tr>
 <td style="text-align: left;">ruMorph in context</td>
-<td style="text-align: left;"><strong>94.9</strong></td>
+<td style="text-align: left;"><strong>94.8</strong></td>
 <td style="text-align: left;"><strong>96.8</strong></td>
 <td style="text-align: left;"><strong>93.4</strong></td>
 </tr>
@@ -1155,9 +1155,9 @@
 <tbody>
 <tr>
 <td style="text-align: left;">ruMorph in context</td>
-<td style="text-align: left;">95.3</td>
-<td style="text-align: left;"><strong>97.4</strong></td>
-<td style="text-align: left;">83.1</td>
+<td style="text-align: left;">95.5</td>
+<td style="text-align: left;"><strong>97.5</strong></td>
+<td style="text-align: left;">83.3</td>
 </tr>
 <tr>
 <td style="text-align: left;">Stanza</td>
@@ -1182,7 +1182,7 @@
 </div>
 </div>
 </div>
-<p>The default Stanza model is trained on SynTagRus, so its test part is Stanza's own; the ruMorph context model is trained on the training parts of Taiga and GSD, and SynTagRus is new to it; spaCy ru_core_news_sm and Slovnet are trained on Nerus, news annotated automatically. Slovnet gives no lemmas: in Natasha they come from pymorphy2.</p>
+<p>The default Stanza model is trained on SynTagRus, so its test part is Stanza's own; the ruMorph context model is trained on the training parts of Taiga and GSD and the OpenCorpora corpus, and SynTagRus is new to it; spaCy ru_core_news_sm and Slovnet are trained on Nerus, news annotated automatically. Slovnet gives no lemmas: in Natasha they come from pymorphy2.</p>
 <details class="note">
 <summary>All metrics</summary>
 <p>The case and number of pymorphy3 and mystem are converted to UD by the same table; all features and "all together" (part of speech, lemma and features) only for systems with UD features.</p>
@@ -1214,11 +1214,11 @@
 <tr>
 <td style="text-align: left;">ruMorph in context</td>
 <td style="text-align: left;">98.0</td>
-<td style="text-align: left;">97.1</td>
-<td style="text-align: left;">97.5</td>
+<td style="text-align: left;">97.2</td>
+<td style="text-align: left;">97.8</td>
 <td style="text-align: left;">98.8</td>
-<td style="text-align: left;">95.0</td>
-<td style="text-align: left;">93.3</td>
+<td style="text-align: left;">95.3</td>
+<td style="text-align: left;">93.6</td>
 </tr>
 <tr>
 <td style="text-align: left;">pymorphy3</td>
@@ -1294,11 +1294,11 @@
 <tr>
 <td style="text-align: left;">ruMorph in context</td>
 <td style="text-align: left;">96.8</td>
-<td style="text-align: left;">94.9</td>
-<td style="text-align: left;">96.8</td>
+<td style="text-align: left;">94.8</td>
+<td style="text-align: left;">96.9</td>
 <td style="text-align: left;">98.0</td>
 <td style="text-align: left;">93.4</td>
-<td style="text-align: left;">90.0</td>
+<td style="text-align: left;">90.1</td>
 </tr>
 <tr>
 <td style="text-align: left;">pymorphy3</td>
@@ -1373,12 +1373,12 @@
 </tr>
 <tr>
 <td style="text-align: left;">ruMorph in context</td>
-<td style="text-align: left;">97.4</td>
-<td style="text-align: left;">95.3</td>
-<td style="text-align: left;">90.1</td>
-<td style="text-align: left;">94.7</td>
-<td style="text-align: left;">83.1</td>
-<td style="text-align: left;">81.3</td>
+<td style="text-align: left;">97.5</td>
+<td style="text-align: left;">95.5</td>
+<td style="text-align: left;">90.4</td>
+<td style="text-align: left;">94.8</td>
+<td style="text-align: left;">83.3</td>
+<td style="text-align: left;">81.6</td>
 </tr>
 <tr>
 <td style="text-align: left;">pymorphy3</td>
@@ -1566,7 +1566,7 @@
 <h2 id="method">How it was measured<a class="headerlink" href="#method" title="Permanent link">&para;</a></h2>
 <ul>
 <li>Quality and text analysis - the <a href="https://github.com/SergeyShk/ruMorph/blob/master/scripts/compare.py"><code>scripts/compare.py</code></a> script: <code>uv run --with rumorph==X.Y.Z scripts/compare.py build/compare --chart docs/img/speed.svg</code>, where <code>X.Y.Z</code> is the ruMorph version (without <code>--with</code>, the version from <code>scripts/compare.py.lock</code>; a path to a wheel works instead of the version). It installs the systems into a separate environment with the versions of all packages pinned in <code>scripts/compare.py.lock</code>, downloads the treebank test parts, the models and mystem with checksum verification before measuring and analyzes the gold tokens. The tables converting the parts of speech, case and number of pymorphy3 and mystem to UD are at the top of the script.</li>
-<li>Versions: Python 3.11, ruMorph 0.4.0.dev3 (text analysis speed - 0.4.0.dev2: the analysis has not changed since), pymorphy3 2.0.6 with the pymorphy3-dicts-ru 2.4.417150.4580142 dictionary, mystem 3.1 through pymystem3 0.2.0 without disambiguation (for quality, each word separately; the macOS binary is built for x86_64 and runs through Rosetta 2), spaCy 3.8.16 with the ru_core_news_sm 3.8.0 model, Stanza 1.15.0 with the default model on the CPU (torch 2.14.1), Slovnet 0.6.0 with the slovnet_morph_news_v1 and navec_news_v1 models. Computer - Apple M3 Pro, macOS 26.</li>
+<li>Versions: Python 3.11, ruMorph 0.4.0.dev4 (text analysis speed - 0.4.0.dev2: it has not changed since), pymorphy3 2.0.6 with the pymorphy3-dicts-ru 2.4.417150.4580142 dictionary, mystem 3.1 through pymystem3 0.2.0 without disambiguation (for quality, each word separately; the macOS binary is built for x86_64 and runs through Rosetta 2), spaCy 3.8.16 with the ru_core_news_sm 3.8.0 model, Stanza 1.15.0 with the default model on the CPU (torch 2.14.1), Slovnet 0.6.0 with the slovnet_morph_news_v1 and navec_news_v1 models. Computer - Apple M3 Pro, macOS 26.</li>
 <li>Text analysis speed - 157,706 tokens of the SynTagRus test part with punctuation in one thread: tokens per second - the best of two analyses of the whole part after loading, chart points - importing, loading and analyzing the first 10-100,000 tokens in a new process. Only the call of the system is measured: mystem gets a whole sentence, spaCy analyzes sentences with <code>nlp.pipe</code>, ruMorph in context - <code>analyze_sentence</code> per sentence.</li>
 <li>Operations and memory - ruMorph 0.3.0, pymorphy3 2.0.6, <code>pymorphy3[fast]</code> - the same with the C++ DAWG extension; 128,251 word forms of the SynTagRus test part without punctuation, the best of three runs in one thread, except for the row with threads. <code>inflect</code> - the genitive of the first analyses that have a case, <code>agree</code> - the first analyses of nouns with the number 5, <code>forms</code> - the first analyses of the first 20,000 words. Memory - the growth of the resident memory of the process (<code>ps -o rss</code>) after importing and creating the analyzer, time - the import, creating the analyzer and the first analysis; a further process - the growth of the memory the process does not share with others (USS), in each of four <code>multiprocessing</code> processes.</li>
 </ul>
