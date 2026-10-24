@@ -271,7 +271,7 @@ See the [documentation](https://sergeyshk.github.io/ruMorph/en/cli/) for the opt
 
 <br>
 
-The `rumorph` component (`pip install rumorph[spacy]`) annotates the tokens of a spaCy pipeline with the part of speech, UD features and lemma of the analysis in context. In the `ru_core_news_*` models it replaces the morphologizer and the lemmatizer: on SynTagRus test the part of speech, lemma and features together are right for 93.6 % of words against 82.0 % for `ru_core_news_sm`, and the pipeline runs faster.
+The `rumorph` component (`pip install "rumorph[spacy]"`) annotates the tokens of a spaCy pipeline with the part of speech, UD features and lemma of the analysis in context. In the `ru_core_news_*` models it replaces the morphologizer and the lemmatizer: on SynTagRus test the part of speech, lemma and features together are right for 93.6 % of words against 82.0 % for `ru_core_news_sm`, and the pipeline runs faster.
 
 ```python
 import spacy

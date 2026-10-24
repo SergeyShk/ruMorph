@@ -82,7 +82,10 @@ def test_long_marked_sentence_chunks():
 
 def test_spaces_and_invisible_tokens(nlp):
     tokens = list(nlp("Мы\n\nстали ⁠ друзьями"))
-    assert [(token.pos_, token.lemma_) for token in tokens[1::2]] == [("SPACE", "\n\n"), ("", "")]
+    assert [(token.pos_, token.lemma_) for token in tokens[1::2]] == [
+        ("SPACE", "\n\n"),
+        ("X", "\u2060"),
+    ]
     analyses = rumorph.Analyzer().analyze_sentence(["Мы", "стали", "⁠", "друзьями"])
     assert analyses[2] == []
     assert annotation(tokens[::2]) == [
@@ -118,6 +121,20 @@ def test_extension(nlp):
     assert doc[2]._.rumorph is None
 
 
+def test_analyzer_cache_is_bounded(nlp):
+    docs = []
+    for number in range(rumorph.spacy.CACHE_SIZE + 3):
+        own = spacy.blank("ru")
+        own.add_pipe("rumorph", config={"words": {f"зумер{'а' * number}": "геймер"}})
+        docs.append(own("Зумер"))
+    assert len(rumorph.spacy._analyzers) <= rumorph.spacy.CACHE_SIZE
+    # Вытесненный анализатор создается заново по настройкам документа: свое слово - из словаря
+    assert docs[0][0]._.rumorph.source == "dictionary"
+    # Документ 0.4.0.dev5-dev6: настройки без ключа
+    del docs[0].user_data["rumorph"]["key"]
+    assert docs[0][0]._.rumorph.source == "dictionary"
+
+
 def test_extension_uses_component_settings(nlp):
     own = spacy.blank("ru")
     own.add_pipe("rumorph", config={"words": {"зумер": "геймер"}})
@@ -151,6 +168,16 @@ def test_pickle_in_new_process():
     )
     assert result.returncode == 0, result.stderr.decode(errors="replace")
     assert result.stdout.decode().split() == ["True", "dictionary"]
+
+
+def test_foreign_extension_kept():
+    code = (
+        "from spacy.tokens import Token; Token.set_extension('rumorph', default='own'); "
+        "import rumorph.spacy, spacy; print(spacy.blank('ru')('Мы')[0]._.rumorph)"
+    )
+    result = subprocess.run([sys.executable, "-c", code], capture_output=True, check=False)
+    assert result.returncode == 0, result.stderr.decode(errors="replace")
+    assert result.stdout.decode().split() == ["own"]
 
 
 def test_default_settings_not_stored(nlp):
