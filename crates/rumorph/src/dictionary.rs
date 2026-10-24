@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::ops::Range;
@@ -490,7 +491,8 @@ impl Dictionary {
     /// Разборы слов предложения по убыванию вероятности в контексте: те же разборы, что
     /// у `analyze`, упорядочивает контекстная модель словаря, вероятность - ее оценка. Слова -
     /// токены одного предложения по порядку; предложение из одного слова разбирается, как
-    /// `analyze`. Ошибка - если в словаре нет контекстной модели
+    /// `analyze`, а длиннее `SENTENCE_CHUNK` слов - частями по `SENTENCE_CHUNK`. Ошибка - если
+    /// в словаре нет контекстной модели
     ///
     /// ```
     /// # #[cfg(feature = "bundled")] {
@@ -506,13 +508,28 @@ impl Dictionary {
         words: &[S],
     ) -> Result<Vec<Vec<Analysis>>, Error> {
         let context = self.context()?;
-        let words: Vec<&str> = words.iter().map(AsRef::as_ref).collect();
-        let analyses = words.iter().map(|word| self.analyze(word)).collect();
-        // Без соседних слов модель выбирает хуже частот словаря: слово остается как у `analyze`
-        if words.len() < 2 {
-            return Ok(analyses);
+        let mut sentence = Vec::with_capacity(words.len());
+        for chunk in words.chunks(SENTENCE_CHUNK) {
+            let analyses: Vec<Vec<Analysis>> = chunk
+                .iter()
+                .map(|word| self.analyze(word.as_ref()))
+                .collect();
+            // Без соседних слов модель выбирает хуже частот словаря: слово остается как у `analyze`
+            if chunk.len() < 2 {
+                sentence.extend(analyses);
+                continue;
+            }
+            // Модель видит слово так же, как `analyze`: без ударений, мягких переносов и двойников
+            let normal: Vec<Cow<str>> = chunk
+                .iter()
+                .map(|word| {
+                    normalized_input(word.as_ref()).map_or(Cow::Borrowed(word.as_ref()), Cow::Owned)
+                })
+                .collect();
+            let normal: Vec<&str> = normal.iter().map(AsRef::as_ref).collect();
+            sentence.extend(context.rank(&normal, analyses));
         }
-        Ok(context.rank(&words, analyses))
+        Ok(sentence)
     }
 
     /// Контекстная модель словаря: читается один раз на словарь и его копии
@@ -1659,6 +1676,10 @@ fn has_twin(c: char) -> bool {
 }
 
 /// Латинские буквы, которые пишутся как кириллические, и их кириллические двойники
+/// Длина куска предложения в `Dictionary::analyze_sentence`: длинное предложение модель разбирает
+/// частями - память не растет с длиной входа
+pub const SENTENCE_CHUNK: usize = 256;
+
 const LATIN_TWINS: &str = "aceopxyABCEHKMOPTXY";
 const CYRILLIC_TWINS: &str = "асеорхуАВСЕНКМОРТХУ";
 

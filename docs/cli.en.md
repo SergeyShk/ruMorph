@@ -48,7 +48,7 @@ printf '1\tМы\t_\t_\t_\t_\t2\tnsubj\t_\t_\n2\tстали\t_\t_\t_\t_\t0\troot\
 
 ## Output formats { #formats }
 
-All formats except `jsonl` take the first analysis of a token - the one chosen by the context model from the neighbouring words, and with `--no-context` the most probable one by the dictionary; `jsonl` writes all analyses in this order. A token without analyses gets the lowercase token as the lemma and the part of speech `X`.
+All formats except `jsonl` take the first analysis of a token - the one chosen by the context model from the neighbouring words (a sentence longer than 256 tokens is analyzed in parts of 256, as with [`analyze_sentence`](analyzer.md#analyze_sentence)), and with `--no-context` the most probable one by the dictionary; `jsonl` writes all analyses in this order. A token without analyses gets the lowercase token as the lemma and the part of speech `X`.
 
 ### lemmas
 

@@ -911,6 +911,21 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn long_sentence_in_chunks() {
+        let data = dictionary_bytes_with(&table(), &[], Some(weights(&[("F=Case=Acc", 2.0)])));
+        let dictionary = Dictionary::from_bytes(&data).unwrap();
+        let words: Vec<&str> = ["вижу", "стол"]
+            .into_iter()
+            .cycle()
+            .take(crate::SENTENCE_CHUNK + 3)
+            .collect();
+        let (head, tail) = words.split_at(crate::SENTENCE_CHUNK);
+        let mut chunks = dictionary.analyze_sentence(head).unwrap();
+        chunks.extend(dictionary.analyze_sentence(tail).unwrap());
+        assert_eq!(dictionary.analyze_sentence(&words).unwrap(), chunks);
+    }
+
+    #[test]
     fn dictionary_without_model() {
         let dictionary = Dictionary::from_bytes(&dictionary_bytes_of(&table(), &[])).unwrap();
         let err = dictionary.analyze_sentence(&["стол"]).unwrap_err();

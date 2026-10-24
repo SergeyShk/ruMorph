@@ -61,9 +61,8 @@ pub fn run(args: Vec<OsString>, version: &str, dictionary: Option<&Path>) -> u8 
 
 /// Буфер входа: вывод сбрасывается, когда буфер пуст и следующее чтение может ждать ввода
 const INPUT_BUFFER: usize = 1 << 16;
-/// Наибольший кусок предложения, который команда разбирает за раз: разборы куска и состояния
-/// модели держатся в памяти
-const MAX_CHUNK: usize = 256;
+/// Наибольший кусок предложения, который команда разбирает за раз: как у `analyze_sentence`
+const MAX_CHUNK: usize = crate::SENTENCE_CHUNK;
 
 /// Формат вывода
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

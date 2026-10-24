@@ -37,7 +37,7 @@ pub use builder::Builder;
 #[cfg(feature = "build")]
 #[cfg_attr(docsrs, doc(cfg(feature = "build")))]
 pub use dictionary::GuessIndex;
-pub use dictionary::{Analysis, Dictionary, Entry, Sample, Source, UdTag};
+pub use dictionary::{Analysis, Dictionary, Entry, SENTENCE_CHUNK, Sample, Source, UdTag};
 pub use error::Error;
 
 /// Примеры README крейта - doc-тесты

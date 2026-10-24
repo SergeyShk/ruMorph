@@ -240,6 +240,20 @@ def test_analyze_sentence(morph):
     assert restored.analyze_sentence(words) == sentence
 
 
+def test_analyze_sentence_input(morph):
+    def first(sentence):
+        return [(a[0].lemma, a[0].pos, a[0].feats, a[0].prob) for a in sentence]
+
+    # Модель видит слово, как analyze: без ударений, мягких переносов и латинских двойников
+    plain = morph.analyze_sentence(["Мост", "сделан", "из", "стали"])
+    marked = morph.analyze_sentence(["Мо\u0301ст", "сде\u00adлан", "из", "cтали"])
+    assert first(marked) == first(plain)
+    # Длинное предложение - частями по 256 слов
+    words = ["Мы", "стали", "друзьями"] * 100
+    chunks = morph.analyze_sentence(words[:256]) + morph.analyze_sentence(words[256:])
+    assert first(morph.analyze_sentence(words)) == first(chunks)
+
+
 def test_analyze_sentence_errors(morph, tmp_path):
     with pytest.raises(TypeError, match="набор слов"):
         morph.analyze_sentence("стол")
