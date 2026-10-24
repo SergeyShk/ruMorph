@@ -393,6 +393,9 @@ def corpus_key(pos: str, lemma: str, feats: dict[str, str]) -> tuple:
     if (pos, lemma) == ("SCONJ", "тем"):
         pos, lemma = "PRON", "то"
         feats = {"Animacy": "Inan", "Case": "Ins", "Gender": "Neut", "Number": "Sing"}
+    # Границу имени собственного корпус проводит иначе, чем UD: «Запад», «Дальний Восток» - NOUN
+    if pos == "PROPN":
+        pos = "NOUN"
     # COMP - сравнительная степень прилагательного и наречия; лемма наречия - из другой лексемы
     if feats.get("Degree") == "Cmp":
         return "Cmp", "", tuple(sorted(feats.items()))
@@ -417,21 +420,30 @@ class Corpus:
             if any(tag.split(",")[0] in UNTAGGED for tag, _ in variants):
                 right = set(range(len(keys)))
                 variants = []
-            # У форм «быть» в корпусе лемма «есть»
+            # У форм «быть» в корпусе лемма «есть»; инфинитив «есть» - другой глагол
             be = any(a.lemma == "быть" for a in analyses)
             for tag, lemma in variants:
                 golds = []
-                pair = (tag, "быть" if lemma == "есть" and be else lemma)
+                pair = (tag, "быть" if lemma == "есть" and be and tag[:4] != "INFN" else lemma)
                 for gold_lemma, pos, feats in analyses_of[pair]:
                     core = {k: v for k, v in feats.items() if k in CORE}
                     gold_lemma, core = harmonize_features(gold_lemma, pos, core, analyses)
                     golds.append(corpus_key(pos, gold_lemma, core))
                 found = {i for i, k in enumerate(keys) if k in golds}
                 if not found:
-                    # Лемма корпуса бывает другой: «важнейший» у словаря - «важный» в OpenCorpora
-                    loose = {(g[0], g[2]) for g in golds if g[0] != "Function"}
+                    # Лемма корпуса бывает другой: «важнейший» - «важный», предлог «об» - «о»
+                    loose = {(g[0], g[2]) for g in golds}
                     found = {i for i, k in enumerate(keys) if (k[0], k[2]) in loose}
                 right |= found
+            # Наречие из творительного падежа («вечером», «рядом») корпус и UD различают по-разному
+            adverbs = {i for i, a in enumerate(analyses[:KMAX]) if a.pos == "ADV"}
+            nouns = {
+                i
+                for i, a in enumerate(analyses[:KMAX])
+                if a.pos == "NOUN" and a.feats.get("Case") == "Ins"
+            }
+            if adverbs and nouns and right & (adverbs | nouns):
+                right |= adverbs | nouns
             self.bits.append([7 * (i in right) for i in range(len(keys))])
 
 

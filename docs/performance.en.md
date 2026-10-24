@@ -35,7 +35,7 @@ Taggers see the sentence and choose one analysis; ruMorph here is the analysis i
 
     | System | Part of speech | Lemma | Features |
     | :----- | :------------- | :---- | :------- |
-    | ruMorph in context | **94.7** | **96.8** | **93.5** |
+    | ruMorph in context | **94.8** | **96.8** | **93.4** |
     | Stanza | 94.5 | 94.9 | 90.3 |
     | spaCy ru_core_news_sm | 89.8 | 87.9 | 74.9 |
     | Slovnet (Natasha) | 88.2 | - | 81.1 |
@@ -44,7 +44,7 @@ Taggers see the sentence and choose one analysis; ruMorph here is the analysis i
 
     | System | Part of speech | Lemma | Features |
     | :----- | :------------- | :---- | :------- |
-    | ruMorph in context | 95.5 | **97.4** | 83.4 |
+    | ruMorph in context | 95.5 | **97.5** | 83.3 |
     | Stanza | **96.0** | 95.9 | **83.7** |
     | spaCy ru_core_news_sm | 94.0 | 92.0 | 77.5 |
     | Slovnet (Natasha) | 93.5 | - | 79.8 |
@@ -72,7 +72,7 @@ The default Stanza model is trained on SynTagRus, so its test part is Stanza's o
         | System | Lemma | Part of speech | Case | Number | Features | All together |
         | :----- | :---- | :------------- | :--- | :----- | :------- | :----------- |
         | ruMorph | 95.6 | 92.1 | 86.8 | 95.5 | 81.9 | 78.0 |
-        | ruMorph in context | 96.8 | 94.7 | 96.9 | 98.0 | 93.5 | 90.1 |
+        | ruMorph in context | 96.8 | 94.8 | 96.9 | 98.0 | 93.4 | 90.1 |
         | pymorphy3 | 92.7 | 85.3 | 85.7 | 93.8 | - | - |
         | mystem | 90.5 | 85.2 | 77.0 | 91.7 | - | - |
         | spaCy ru_core_news_sm | 87.9 | 89.8 | 91.7 | 94.0 | 74.9 | 68.8 |
@@ -84,7 +84,7 @@ The default Stanza model is trained on SynTagRus, so its test part is Stanza's o
         | System | Lemma | Part of speech | Case | Number | Features | All together |
         | :----- | :---- | :------------- | :--- | :----- | :------- | :----------- |
         | ruMorph | 96.2 | 93.6 | 80.8 | 93.1 | 72.8 | 71.1 |
-        | ruMorph in context | 97.4 | 95.5 | 90.4 | 94.8 | 83.4 | 81.6 |
+        | ruMorph in context | 97.5 | 95.5 | 90.4 | 94.8 | 83.3 | 81.6 |
         | pymorphy3 | 94.5 | 86.1 | 79.7 | 92.3 | - | - |
         | mystem | 91.2 | 85.5 | 66.3 | 88.1 | - | - |
         | spaCy ru_core_news_sm | 92.0 | 94.0 | 89.5 | 94.7 | 77.5 | 72.0 |

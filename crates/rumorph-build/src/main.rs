@@ -83,16 +83,6 @@ enum Abbreviation {
     Declinable,
 }
 
-/// Варианты служебных слов, у которых в SynTagRus лемма основного слова: часть речи OpenCorpora,
-/// вариант и основное слово. Лексема варианта объединяется с лексемой основного слова
-const VARIANT_LEMMAS: &[(&str, &str, &str)] = &[
-    ("CONJ", "ж", "же"),
-    ("CONJ", "чтоб", "чтобы"),
-    ("PRCL", "б", "бы"),
-    ("PRCL", "ж", "же"),
-    ("PRCL", "чтоб", "чтобы"),
-];
-
 fn build(
     export: &Path,
     ud: &Path,
@@ -257,7 +247,7 @@ fn build(
     let mut lexeme_numbers: HashMap<(u16, String), usize> = HashMap::new();
     let mut lexemes: Vec<SourceLexeme> = Vec::new();
     let mut untyped_pronouns = BTreeSet::new();
-    // Лексемы вариантов и основных слов из VARIANT_LEMMAS по части речи и форме 0
+    // Лексемы вариантов и основных слов из ud::VARIANT_LEMMAS по части речи и форме 0
     let mut variant_lexemes: HashMap<(String, String), usize> = HashMap::new();
     // Лексемы с одной начальной формой и общей словоформой, у которой в них одинаковые лемма UD
     // и часть речи с признаками, объединяются: иначе часть форм слитого разбора недоступна
@@ -298,12 +288,12 @@ fn build(
                             .map(|form| (tag_of(form), spell(paradigm, &stem, form)))
                             .collect::<Vec<_>>(),
                     );
-                    let variant_main = VARIANT_LEMMAS
+                    let variant_main = ud::VARIANT_LEMMAS
                         .iter()
                         .find(|&&(variant_pos, variant, _)| variant_pos == pos && variant == lemma)
                         .map(|&(_, _, main)| main);
                     if variant_main.is_some()
-                        || VARIANT_LEMMAS
+                        || ud::VARIANT_LEMMAS
                             .iter()
                             .any(|&(main_pos, _, main)| main_pos == pos && main == lemma)
                     {
@@ -424,7 +414,7 @@ fn build(
 
     // Вариант и основное слово - одна лексема: «б» - форма лексемы «бы» с ее леммой
     let mut variant_mains: HashMap<usize, usize> = HashMap::new();
-    for &(pos, variant, main) in VARIANT_LEMMAS {
+    for &(pos, variant, main) in ud::VARIANT_LEMMAS {
         let find = |word: &str| {
             variant_lexemes
                 .get(&(pos.to_owned(), word.to_owned()))

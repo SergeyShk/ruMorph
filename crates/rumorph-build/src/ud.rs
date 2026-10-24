@@ -448,6 +448,16 @@ const ADVERB_DEGREES: &[(&str, &str)] = &[
 const GENDER_EXCEPTIONS: &[(&str, &str)] =
     &[("евро", "Masc"), ("масс-медиа", "Neut"), ("медиа", "Neut")];
 
+/// Варианты служебных слов, у которых в SynTagRus лемма основного слова: часть речи OpenCorpora,
+/// вариант и основное слово. Лексема варианта объединяется с лексемой основного слова
+pub const VARIANT_LEMMAS: &[(&str, &str, &str)] = &[
+    ("CONJ", "ж", "же"),
+    ("CONJ", "чтоб", "чтобы"),
+    ("PRCL", "б", "бы"),
+    ("PRCL", "ж", "же"),
+    ("PRCL", "чтоб", "чтобы"),
+];
+
 /// Нарицательные существительные OpenCorpora, которые с заглавной буквы - имена собственные:
 /// небесные тела, единственные в своем роде место, учреждение и лицо, с типом имени, как
 /// в SynTagRus. Их формы единственного числа получают и разбор PROPN, долю которого задают
@@ -972,8 +982,14 @@ pub fn proper_copy(tag: &str, lemma: &str) -> Option<Ud> {
 /// Разборы UD с леммами, которые сборщик выводит из тега OpenCorpora `tag` и леммы `lemma`:
 /// перевод и копии форм. Копии, которые сборщик делает не всем лексемам (пассив - только глаголам
 /// несовершенного вида, пассив которых есть в трибанках), здесь есть у всех; сравнительной степени
-/// наречия нет: ее лемма - из другой лексемы
+/// наречия нет: ее лемма - из другой лексемы. Вариант служебного слова («б») получает лемму
+/// основного, как в словаре
 pub fn derived(tag: &str, lemma: &str) -> Vec<(String, Ud)> {
+    let oc = tag.split([',', ' ']).next().unwrap_or("");
+    let lemma = VARIANT_LEMMAS
+        .iter()
+        .find(|&&(pos, variant, _)| pos == oc && variant == lemma)
+        .map_or(lemma, |&(_, _, main)| main);
     let mut analyses = vec![(lemma.to_owned(), convert(tag, lemma_class(lemma)))];
     analyses.extend(context_copy(lemma, tag).map(|ud| (lemma.to_owned(), ud)));
     analyses.extend(substantive_pronoun(lemma, tag).map(|(pronoun, ud)| (pronoun.to_owned(), ud)));
@@ -1656,6 +1672,10 @@ mod tests {
         assert_eq!(derived("NOUN,inan,femn plur,gent", "земля").len(), 1);
         assert_eq!(
             derived("PRCL", "бы"),
+            pairs(&[("бы", "AUX"), ("бы", "PART")])
+        );
+        assert_eq!(
+            derived("PRCL", "б"),
             pairs(&[("бы", "AUX"), ("бы", "PART")])
         );
         assert_eq!(derived("NUMR,gent", "два").len(), 3);
