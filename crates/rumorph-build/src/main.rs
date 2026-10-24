@@ -90,6 +90,16 @@ fn build(
     context: Option<&Path>,
 ) -> Result<(), Box<dyn Error>> {
     let started = Instant::now();
+    // Веса проверяются до сборки, а не после нее
+    let weights = context
+        .map(|path| {
+            let weights = fs::read(path).map_err(|err| format!("{}: {err}", path.display()))?;
+            rumorph::Builder::new(Vec::new(), Vec::new(), Vec::new())
+                .context(weights.clone())
+                .map_err(|err| format!("{}: {err}", path.display()))?;
+            Ok::<_, Box<dyn Error>>(weights)
+        })
+        .transpose()?;
     let read =
         |name: &str| fs::read_to_string(export.join(name)).map_err(|err| format!("{name}: {err}"));
     let read_ud =
@@ -950,8 +960,7 @@ fn build(
     for (word, list) in &blended {
         builder.set_entry_probabilities(word, list)?;
     }
-    if let Some(context) = context {
-        let weights = fs::read(context).map_err(|err| format!("{}: {err}", context.display()))?;
+    if let Some(weights) = weights {
         builder.context(weights)?;
     }
 
