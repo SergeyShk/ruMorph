@@ -5,6 +5,7 @@ import importlib.resources
 import pickle
 import subprocess
 import sys
+import warnings
 
 import pytest
 
@@ -143,9 +144,20 @@ def test_pickle_in_new_process():
     nlp.add_pipe("rumorph", config={"words": {"зумер": "геймер"}})
     code = (
         "import pickle, sys; doc = pickle.load(sys.stdin.buffer)('Зумеры стали'); "
-        "print(doc[0].lemma_, doc[0]._.rumorph.source)"
+        "print(doc[0].lemma_ == 'зумер', doc[0]._.rumorph.source)"
     )
     result = subprocess.run(
-        [sys.executable, "-c", code], input=pickle.dumps(nlp), capture_output=True, check=True
+        [sys.executable, "-c", code], input=pickle.dumps(nlp), capture_output=True, check=False
     )
-    assert result.stdout.decode().split() == ["зумер", "dictionary"]
+    assert result.returncode == 0, result.stderr.decode(errors="replace")
+    assert result.stdout.decode().split() == ["True", "dictionary"]
+
+
+def test_default_settings_not_stored(nlp):
+    docs = [nlp("Мы стали друзьями."), nlp("Мост сделан из стали.")]
+    assert all("rumorph" not in doc.user_data for doc in docs)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        merged = spacy.tokens.Doc.from_docs(docs)
+    assert merged[2]._.rumorph.lemma == "друг"
+    assert docs[1][1:4].as_doc()[2]._.rumorph.lemma == "сталь"

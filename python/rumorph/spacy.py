@@ -39,8 +39,10 @@ __all__ = ["Component"]
 # предложений делится после токена из знаков конца предложения - как в команде rumorph
 SENTENCE_END = frozenset(".!?…")
 MAX_CHUNK = 256
-# Ключ настроек компонента в `Doc.user_data`: по ним `token._.rumorph` находит анализатор
+# Ключ своих настроек компонента в `Doc.user_data`: по ним `token._.rumorph` находит анализатор;
+# настройки по умолчанию не пишутся - их теряют `Doc.from_docs`, `DocBin` и `Span.as_doc`
 SETTINGS = "rumorph"
+DEFAULT = {"dictionary": None, "words": None}
 # Образец своего слова: слово или пара «слово, часть речи» (в конфиге spaCy пара - список)
 Pattern = str | tuple[str, str] | list[str]
 
@@ -130,7 +132,8 @@ class Component:
             if token.is_space:
                 token.pos_ = "SPACE"
                 token.lemma_ = token.text
-        doc.user_data[SETTINGS] = self.settings
+        if self.settings != DEFAULT:
+            doc.user_data[SETTINGS] = self.settings
         return doc
 
 
@@ -165,7 +168,7 @@ def analysis(token: Token) -> Analysis | None:
     Вывод:
         Analysis | None: Разбор или None, если у словоформы нет такого разбора
     """
-    settings = token.doc.user_data.get(SETTINGS, {"dictionary": None, "words": None})
+    settings = token.doc.user_data.get(SETTINGS, DEFAULT)
     feats = token.morph.to_dict()
     for candidate in analyzer(settings).analyze(token.text):
         if (candidate.lemma, candidate.pos, candidate.feats) == (token.lemma_, token.pos_, feats):

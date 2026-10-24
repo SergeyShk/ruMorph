@@ -80,7 +80,7 @@ The context model analyzes a whole sentence. The component takes sentences from 
 
 ## ruMorph analysis { #extension }
 
-`token._.rumorph` is the ruMorph [analysis](analysis.md) with the lemma, part of speech and features of the token, by the dictionary and own words of the component that annotated the document: it gives the [forms of the word](inflection.md). Its probability does not take the context into account. If the word form has no such analysis - for example, another component changed the annotation of the token - the value is `None`.
+`token._.rumorph` is the ruMorph [analysis](analysis.md) with the lemma, part of speech and features of the token, by the dictionary and own words of the component that annotated the document: it gives the [forms of the word](inflection.md). Its probability does not take the context into account. If the word form has no such analysis - for example, another component changed the annotation of the token - the value is `None`. The document keeps the component's own dictionary and words in `user_data`, so `DocBin(store_user_data=True)` and `span.as_doc(copy_user_data=True)` preserve them, while `Doc.from_docs` does not carry them over.
 
 === "Code"
 
