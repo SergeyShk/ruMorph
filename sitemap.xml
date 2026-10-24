@@ -71,6 +71,13 @@
         <xhtml:link rel="alternate" hreflang="en" href="https://sergeyshk.github.io/ruMorph/en/performance/"/>
     </url>
     <url>
+        <loc>https://sergeyshk.github.io/ruMorph/spacy/</loc>
+        <lastmod>2026-10-24</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="ru" href="https://sergeyshk.github.io/ruMorph/spacy/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://sergeyshk.github.io/ruMorph/en/spacy/"/>
+    </url>
+    <url>
         <loc>https://sergeyshk.github.io/ruMorph/en/</loc>
         <lastmod>2026-10-24</lastmod>
         <changefreq>daily</changefreq>
@@ -139,5 +146,12 @@
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="en" href="https://sergeyshk.github.io/ruMorph/en/performance/"/>
         <xhtml:link rel="alternate" hreflang="ru" href="https://sergeyshk.github.io/ruMorph/performance/"/>
+    </url>
+    <url>
+        <loc>https://sergeyshk.github.io/ruMorph/en/spacy/</loc>
+        <lastmod>2026-10-24</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="https://sergeyshk.github.io/ruMorph/en/spacy/"/>
+        <xhtml:link rel="alternate" hreflang="ru" href="https://sergeyshk.github.io/ruMorph/spacy/"/>
     </url>
 </urlset>
