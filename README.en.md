@@ -38,6 +38,7 @@ Analysis and lemmatization are 6-8 times faster than in pymorphy3 with the `pymo
 * **[Unknown words](https://sergeyshk.github.io/ruMorph/en/analysis/#guess)** - analyses by the ending, hyphenated words and words with prefixes, forms of guessed words
 * **[Inflection](https://sergeyshk.github.io/ruMorph/en/inflection/)** - forms of a lexeme, a form by UD features, agreement with a number
 * **[The rumorph command](https://sergeyshk.github.io/ruMorph/en/cli/)** - analysis of files and streams: lemmas, CoNLL-U, TSV and JSON Lines
+* **[spaCy](https://sergeyshk.github.io/ruMorph/en/spacy/)** - a spaCy pipeline component instead of the tagger, morphologizer and lemmatizer
 * **[Migrating from pymorphy](https://sergeyshk.github.io/ruMorph/en/migration/)** - pymorphy2 and pymorphy3 calls, parts of speech and grammemes and their counterparts
 * **[Comparison](https://sergeyshk.github.io/ruMorph/en/performance/)** - accuracy and speed compared with pymorphy3, mystem, spaCy, Stanza and Slovnet, dictionary loading and memory
 
@@ -262,6 +263,25 @@ $ rumorph --format conllu text.txt > text.conllu
 ```
 
 See the [documentation](https://sergeyshk.github.io/ruMorph/en/cli/) for the options, formats and exit codes.
+
+</details>
+
+<details>
+<summary><b>spaCy</b></summary>
+
+<br>
+
+The `rumorph` component (`pip install rumorph[spacy]`) annotates the tokens of a spaCy pipeline with the part of speech, UD features and lemma of the analysis in context. In the `ru_core_news_*` models it replaces the morphologizer and the lemmatizer: on SynTagRus test the part of speech, lemma and features together are right for 93.6 % of words against 82.0 % for `ru_core_news_sm`, and the pipeline runs faster.
+
+```python
+import spacy
+
+nlp = spacy.load("ru_core_news_sm", exclude=["morphologizer", "lemmatizer"])
+nlp.add_pipe("rumorph", after="parser")
+doc = nlp("Мост сделан из стали.")
+```
+
+See the [documentation](https://sergeyshk.github.io/ruMorph/en/spacy/) for sentences, parameters and the ruMorph analysis of a token.
 
 </details>
 

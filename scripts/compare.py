@@ -420,9 +420,18 @@ def spacy_system(data: Path) -> System:
         return list(nlp.pipe(Doc(nlp.vocab, words=sentence) for sentence in text))
 
     def convert(text: list[list[str]], docs: object) -> list[list[list[Candidate]]]:
-        return [[[(t.lemma_, t.pos_, t.morph.to_dict())] for t in doc] for doc in docs]
+        return [[[(t.lemma_, t.pos_, ud_feats(t.morph.to_dict()))] for t in doc] for doc in docs]
 
     return System(analyze, convert)
+
+
+def ud_feats(feats: dict[str, str]) -> dict[str, str]:
+    """Признаки spaCy в записи UD: лицо у ru_core_news - словом («First»), в UD - цифрой"""
+    person = {"First": "1", "Second": "2", "Third": "3"}
+    return {
+        name: person.get(value, value) if name == "Person" else value
+        for name, value in feats.items()
+    }
 
 
 def stanza_system(data: Path) -> System:
