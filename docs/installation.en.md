@@ -6,6 +6,8 @@ Python 3.11 or newer is required.
 pip install rumorph
 ```
 
+The [spaCy](spacy.md) component is installed together with spaCy: `pip install rumorph[spacy]`; spaCy has no prebuilt wheels for the free-threaded Python 3.14t.
+
 ## Prebuilt wheels
 
 PyPI hosts wheels for Linux (x86_64 and aarch64; manylinux and musllinux for Alpine), macOS (Intel and Apple Silicon) and Windows (x64 and arm64). One wheel serves every Python version starting with 3.11, the free-threaded Python 3.14t has a wheel of its own; Rust is not needed to install them. The dictionary is part of the package and needs no separate installation. The free-threaded Python 3.13t is not supported.

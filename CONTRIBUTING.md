@@ -19,7 +19,14 @@ make dictionary             # собрать словарь из pymorphy3-dicts
 uv run pre-commit install   # хуки: линтеры на коммите, тесты на пуше
 ```
 
-Модуль на Rust собирается при установке пакета в окружение; `uv run` пересобирает его сам, когда меняются файлы `crates/` или `Cargo.toml`. Словарь `python/rumorph/data/ru.dict` в git не хранится: `make dictionary` выгружает словарь pymorphy3-dicts-ru скриптом `scripts/export_pymorphy.py`, скачивает обучающие части трибанков UD_Russian-Taiga и UD_Russian-GSD закрепленного релиза скриптом `scripts/export_ud.py` (счетчики разметки словоформ для частот разборов) и собирает словарь сборщиком `rumorph-build`; `make test` и `make build` делают это сами. Полный список команд - `make help`.
+Модуль на Rust собирается при установке пакета в окружение; `uv run` пересобирает его сам, когда меняются файлы `crates/` или `Cargo.toml`. Словарь `python/rumorph/data/ru.dict` в git не хранится: `make dictionary` выгружает словарь pymorphy3-dicts-ru скриптом `scripts/export_pymorphy.py`, скачивает обучающие части трибанков UD_Russian-Taiga и UD_Russian-GSD закрепленного релиза скриптом `scripts/export_ud.py` (счетчики разметки словоформ для частот разборов) и собирает словарь сборщиком `rumorph-build`, вшивая в него веса контекстной модели `data/ru-context.bin`; `make test` и `make build` делают это сами. Полный список команд - `make help`.
+
+Веса контекстной модели хранятся в git. Переобучать модель нужно, когда меняются теги UD словаря (сборщик тогда откажется вшивать старые веса) или соглашения разметки: `scripts/conventions.py` переписывает разметку Taiga и GSD в соглашениях ruMorph и для счетчиков, и для обучения. Обучение скачивает обучающие и проверочные части трибанков и корпус OpenCorpora с проверкой SHA-256, теги корпуса переводит `rumorph-build tags` (нужен cargo); после него словарь собирается заново:
+
+```bash
+uv run scripts/train_context.py --dictionary python/rumorph/data/ru.dict --data target/context --output data/ru-context.bin
+make dictionary
+```
 
 ## Проверки
 
@@ -51,9 +58,10 @@ make docs-build  # mkdocs build --strict, если менялась докуме
 - `crates/rumorph-build/` - сборка словаря из выгрузки pymorphy3-dicts-ru, перевод тегов OpenCorpora в UD (`ud.rs`) и частоты разборов по счетчикам трибанков UD (`frequencies.rs`).
 - `crates/rumorph-py/` - модуль Python `rumorph._rumorph` на PyO3.
 - `python/rumorph/` - пакет Python поверх модуля; `data/ru.dict` - собранный словарь.
-- `scripts/` - выгрузка словаря pymorphy3-dicts-ru и счетчиков трибанков UD, проверка установленного пакета перед публикацией и сравнение с другими анализаторами (`compare.py`, зависимости закреплены в `compare.py.lock`).
+- `scripts/` - выгрузка словаря pymorphy3-dicts-ru и счетчиков трибанков UD (`export_ud.py`, соглашения разметки - `conventions.py`), обучение контекстной модели (`train_context.py`, зависимости закреплены в `train_context.py.lock`), проверка установленного пакета перед публикацией и сравнение с другими анализаторами (`compare.py`, зависимости закреплены в `compare.py.lock`).
+- `data/` - веса контекстной модели (`ru-context.bin`), которые сборщик вшивает в словарь.
 - `tests/` - тесты пакета Python; `tests/test_pymorphy.py` сверяет разборы с pymorphy3 на частых словоформах, `tests/test_docs.py` - два языка документации.
 - `docs/` - документация MkDocs (Material), `mkdocs.yml` - навигация и перевод ее на английский.
-- `.github/workflows/` - CI (`ci.yml`), публикация (`publish.yml`: словарь собирается один раз и входит в колеса для Linux, macOS и Windows и в исходники), документация (`docs.yml`).
+- `.github/workflows/` - CI (`ci.yml`), публикация (`publish.yml`: словарь собирается один раз и входит в колеса для Linux, macOS и Windows и в исходники), документация (`docs.yml`: сайт публикуется по тегу релиза).
 
 Версия пакета хранится в `pyproject.toml` и в `Cargo.toml` в записи semver (`0.1.0.dev1` - `0.1.0-dev.1`); зависимость `rumorph` от `rumorph-dict-ru` закреплена той же версией (`=0.1.0-dev.1`). Их совпадение проверяет тест. Тег версии запускает `publish.yml`: колеса и исходники собираются один раз, проверяются на всех платформах и публикуются на TestPyPI, а версия без `.devN` затем - на PyPI и крейтами на crates.io. Если публикация прервалась, перезапускайте только упавшие задания (Re-run failed jobs): пересобранные колеса отличаются побайтно, и PyPI их не примет, а задание крейтов пропускает уже опубликованный крейт. Изменения описываются в заметках GitHub Release, отдельного файла CHANGELOG нет.
