@@ -11,10 +11,13 @@
 
 Описание:
     Скачивает обучающие и проверочные части UD_Russian-Taiga и UD_Russian-GSD (CC BY-SA 4.0)
-    закрепленного релиза UD с проверкой SHA-256, приводит их разметку к соглашениям ruMorph
-    (`conventions.py`, признаки - по разборам словаря), разбирает их токены словарем
-    `--dictionary` и учит модель выбирать среди разборов словаря тот, что совпадает с эталоном
-    по части речи, лемме и основным признакам. Модель - BiLSTM над признаками токена (запись, слово, окончания,
+    закрепленного релиза UD и корпус OpenCorpora (CC BY-SA 3.0) с проверкой SHA-256, приводит
+    разметку трибанков к соглашениям ruMorph (`conventions.py`, признаки - по разборам словаря),
+    разбирает их токены словарем `--dictionary` и учит модель выбирать среди разборов словаря
+    тот, что совпадает с эталоном по части речи, лемме и основным признакам. В корпусе OpenCorpora
+    верны разборы, которые сборщик выводит из любого оставшегося варианта токена (`rumorph-build
+    tags`): частично снятая неоднозначность тоже учит модель; часть речи неизменяемых служебных
+    слов корпус не задает - ее соглашения в UD другие. Модель - BiLSTM над признаками токена (запись, слово, окончания,
     теги его разборов) и оценка каждого разбора скалярным произведением с вектором токена.
     Эпоха выбирается по full core на проверочных частях Taiga и GSD. Веса квантуются в int8
     по строкам и пишутся в файл `--output`, который `rumorph-build` вшивает в словарь; точность
@@ -27,11 +30,15 @@
 """
 
 import argparse
+import bz2
 import hashlib
+import json
 import math
 import struct
+import subprocess
 import time
 import urllib.request
+import xml.etree.ElementTree as ET
 from collections import Counter
 from pathlib import Path
 
@@ -64,6 +71,19 @@ SOURCES = {
         },
     ),
 }
+# Корпус OpenCorpora, ревизия 4580223: сайт или его снимок в Wayback Machine
+OPENCORPORA = (
+    "annot.opcorpora.xml.bz2",
+    [
+        "https://web.archive.org/web/20240624222734id_/http://opencorpora.org/files/export/annot/annot.opcorpora.xml.bz2",
+        "https://opencorpora.org/files/export/annot/annot.opcorpora.xml.bz2",
+    ],
+    "dff2b07a3db865eb234515c3c2c51e370fc67b3582f32af7174625c8f2be4422",
+)
+# Теги OpenCorpora без части речи (числа, знаки, латиница, незнакомые слова): верен любой разбор
+UNTAGGED = {"PNCT", "NUMB", "LATN", "ROMN", "SYMB", "UNKN", "TIME", "DATE"}
+# Неизменяемые служебные части речи: их выбор из корпуса OpenCorpora не берется
+FUNCTION = {"ADP", "ADV", "CCONJ", "INTJ", "PART", "SCONJ"}
 TRAIN = [f"ru_taiga-ud-train-{part}.conllu" for part in "abcde"] + ["ru_gsd-ud-train.conllu"]
 DEV = {"Taiga": ["ru_taiga-ud-dev.conllu"], "GSD": ["ru_gsd-ud-dev.conllu"]}
 CORE = (
@@ -89,26 +109,36 @@ MAGIC = b"RUMCTX\0\0"
 FORMAT = 1
 
 
-def download(url: str, path: Path, digest: str) -> None:
+def download(urls: list[str], path: Path, digest: str) -> None:
     """
-    Скачивание файла с проверкой контрольной суммы
+    Скачивание файла с проверкой контрольной суммы: по первому адресу, с которого пришел файл
+    с нужной суммой
 
     Аргументы:
-        url (str): Адрес файла
+        urls (list[str]): Адреса файла
         path (Path): Куда сохранить
         digest (str): SHA-256 файла
 
     Исключения:
-        ValueError: Если контрольная сумма не совпадает
+        ValueError: Если ни один адрес не дал файл с нужной суммой
     """
     if path.exists() and hashlib.sha256(path.read_bytes()).hexdigest() == digest:
         return
-    with urllib.request.urlopen(url, timeout=60) as response:
-        data = response.read()
-    if hashlib.sha256(data).hexdigest() != digest:
-        raise ValueError(f"{url}: контрольная сумма не совпадает")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(data)
+    errors = []
+    for url in urls:
+        try:
+            with urllib.request.urlopen(url, timeout=600) as response:
+                data = response.read()
+        except OSError as err:
+            errors.append(f"{url}: {err}")
+            continue
+        if hashlib.sha256(data).hexdigest() != digest:
+            errors.append(f"{url}: контрольная сумма не совпадает")
+            continue
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+        return
+    raise ValueError("; ".join(errors))
 
 
 def sentences(paths: list[Path]) -> list[list[tuple[str, str, str, dict[str, str]]]]:
@@ -281,6 +311,155 @@ class Data:
                     bits |= 16 | (ours.get("Case") == gold.get("Case")) << 3
                 row.append(bits)
             self.bits.append(row)
+
+
+def opencorpora(path: Path) -> list[list[tuple[str, list[tuple[str, str]]]]]:
+    """
+    Предложения корпуса OpenCorpora: токены и их оставшиеся варианты (тег, лемма); предложения
+    с токеном без вариантов пропускаются
+
+    Аргументы:
+        path (Path): Выгрузка корпуса (`annot.opcorpora.xml.bz2`)
+
+    Вывод:
+        list[list[tuple[str, list[tuple[str, str]]]]]: Предложения
+    """
+    result = []
+    with bz2.open(path) as file:
+        for _, element in ET.iterparse(file):
+            if element.tag != "sentence":
+                continue
+            sentence = []
+            for token in element.iter("token"):
+                variants = [
+                    (",".join(g.get("v", "") for g in lexeme.iter("g")), lexeme.get("t", ""))
+                    for lexeme in token.iter("l")
+                ]
+                if not variants:
+                    sentence = []
+                    break
+                sentence.append((token.get("text", ""), variants))
+            if sentence:
+                result.append(sentence)
+            element.clear()
+    return result
+
+
+def derived(pairs: set[tuple[str, str]]) -> dict[tuple[str, str], list]:
+    """
+    Разборы UD, которые сборщик словаря выводит из тега OpenCorpora и леммы: перевод и копии
+    (`rumorph-build tags`)
+
+    Аргументы:
+        pairs (set[tuple[str, str]]): Пары (тег, лемма)
+
+    Вывод:
+        dict[tuple[str, str], list]: Пара - список (лемма, часть речи, признаки)
+    """
+    ordered = sorted(pairs)
+    output = subprocess.run(
+        ["cargo", "run", "--release", "--locked", "--quiet", "-p", "rumorph-build", "--", "tags"],
+        input="".join(f"{tag}\t{lemma}\n" for tag, lemma in ordered),
+        capture_output=True,
+        text=True,
+        check=True,
+        cwd=Path(__file__).resolve().parent.parent,
+    ).stdout.splitlines()
+    return {
+        pair: [
+            (lemma, pos, dict(f.split("=", 1) for f in feats.split("|")) if feats else {})
+            for lemma, pos, feats in json.loads(line)
+        ]
+        for pair, line in zip(ordered, output, strict=True)
+    }
+
+
+def corpus_key(pos: str, lemma: str, feats: dict[str, str]) -> tuple:
+    """
+    Ключ сравнения разбора словаря с разбором корпуса OpenCorpora: без различий, которых корпус
+    не задает
+
+    Аргументы:
+        pos (str): Часть речи UD
+        lemma (str): Лемма
+        feats (dict[str, str]): Признаки UD
+
+    Вывод:
+        tuple: Часть речи, лемма и основные признаки
+    """
+    feats = {k: v for k, v in feats.items() if k in CORE}
+    lemma = normal(lemma)
+    # «тем» («тем не менее») в OpenCorpora - союз, в UD - местоимение «то»
+    if (pos, lemma) == ("SCONJ", "тем"):
+        pos, lemma = "PRON", "то"
+        feats = {"Animacy": "Inan", "Case": "Ins", "Gender": "Neut", "Number": "Sing"}
+    # Границу имени собственного корпус проводит иначе, чем UD: «Запад», «Дальний Восток» - NOUN
+    if pos == "PROPN":
+        pos = "NOUN"
+    # COMP - сравнительная степень прилагательного и наречия; лемма наречия - из другой лексемы
+    if feats.get("Degree") == "Cmp":
+        return "Cmp", "", tuple(sorted(feats.items()))
+    if pos in FUNCTION and "Case" not in feats:
+        return "Function", lemma, ()
+    return pos, lemma, tuple(sorted(feats.items()))
+
+
+class Corpus:
+    """Токены корпуса OpenCorpora в виде `Data`: биты 7 у разборов, совпавших с вариантами токена"""
+
+    def __init__(self, sents: list, morph: Analyzer, analyses_of: dict) -> None:
+        self.forms = [form for sent in sents for form, _ in sent]
+        self.offsets = np.cumsum([0] + [len(sent) for sent in sents])
+        self.analyses = morph.analyze_many(self.forms)
+        self.evaluated = np.zeros(len(self.forms), dtype=bool)
+        self.bits = []
+        tokens = [variants for sent in sents for _, variants in sent]
+        for variants, analyses in zip(tokens, self.analyses, strict=True):
+            keys = [corpus_key(a.pos, a.lemma, a.feats) for a in analyses[:KMAX]]
+            right = set()
+            if any(tag.split(",")[0] in UNTAGGED for tag, _ in variants):
+                right = set(range(len(keys)))
+                variants = []
+            # У форм «быть» в корпусе лемма «есть»; инфинитив «есть» - другой глагол
+            be = any(a.lemma == "быть" for a in analyses)
+            for tag, lemma in variants:
+                golds = []
+                pair = (tag, "быть" if lemma == "есть" and be and tag[:4] != "INFN" else lemma)
+                for gold_lemma, pos, feats in analyses_of[pair]:
+                    core = {k: v for k, v in feats.items() if k in CORE}
+                    gold_lemma, core = harmonize_features(gold_lemma, pos, core, analyses)
+                    golds.append(corpus_key(pos, gold_lemma, core))
+                found = {i for i, k in enumerate(keys) if k in golds}
+                if not found:
+                    # Лемма корпуса бывает другой: «важнейший» - «важный», предлог «об» - «о»
+                    loose = {(g[0], g[2]) for g in golds}
+                    found = {i for i, k in enumerate(keys) if (k[0], k[2]) in loose}
+                right |= found
+            # Наречие из творительного падежа («вечером», «рядом») корпус и UD различают по-разному
+            adverbs = {i for i, a in enumerate(analyses[:KMAX]) if a.pos == "ADV"}
+            nouns = {
+                i
+                for i, a in enumerate(analyses[:KMAX])
+                if a.pos == "NOUN" and a.feats.get("Case") == "Ins"
+            }
+            if adverbs and nouns and right & (adverbs | nouns):
+                right |= adverbs | nouns
+            self.bits.append([7 * (i in right) for i in range(len(keys))])
+
+
+class Merged:
+    """Несколько наборов токенов как один `Data`"""
+
+    def __init__(self, parts: list) -> None:
+        self.forms = [form for part in parts for form in part.forms]
+        self.analyses = [a for part in parts for a in part.analyses]
+        self.bits = [b for part in parts for b in part.bits]
+        self.evaluated = np.concatenate([part.evaluated for part in parts])
+        offsets, base = [0], 0
+        for part in parts:
+            offsets.extend(base + part.offsets[1:])
+            base += part.offsets[-1]
+        self.offsets = np.array(offsets)
 
 
 class Vocabulary:
@@ -806,13 +985,19 @@ def main() -> None:
     for treebank, (commit, files) in SOURCES.items():
         for file, digest in files.items():
             url = f"https://raw.githubusercontent.com/UniversalDependencies/{treebank}/{commit}/{file}"
-            download(url, args.data / file, digest)
+            download([url], args.data / file, digest)
+    corpus_file, urls, digest = OPENCORPORA
+    download(urls, args.data / corpus_file, digest)
     morph = Analyzer(args.dictionary)
     inventory = sorted(
         {name for pos, feats in morph._ud_tags() for name in tag_names(pos, feats)[0]}
     )
     started = time.time()
-    train_data = Data(sentences([args.data / file for file in TRAIN]), morph)
+    corpus_sents = opencorpora(args.data / corpus_file)
+    pairs = {pair for sent in corpus_sents for _, variants in sent for pair in variants}
+    pairs |= {(tag, "быть") for tag, lemma in pairs if lemma == "есть"}
+    corpus = Corpus(corpus_sents, morph, derived(pairs))
+    train_data = Merged([Data(sentences([args.data / file for file in TRAIN]), morph), corpus])
     dev_data = {
         name: Data(sentences([args.data / file for file in files]), morph)
         for name, files in DEV.items()
@@ -821,7 +1006,7 @@ def main() -> None:
     f = featurize(train_data, vocab)
     dev = {name: (data, featurize(data, vocab)) for name, data in dev_data.items()}
     print(
-        f"данные: {len(train_data.forms)} токенов train, {len(vocab.words)} слов, {len(vocab.suffixes)} окончаний, {len(vocab.tags)} тегов, {time.time() - started:.0f} с"
+        f"данные: {len(train_data.forms)} токенов train (OpenCorpora {len(corpus.forms)}), {len(vocab.words)} слов, {len(vocab.suffixes)} окончаний, {len(vocab.tags)} тегов, {time.time() - started:.0f} с"
     )
 
     model = Model(vocab, args).to(device)

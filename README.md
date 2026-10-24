@@ -32,7 +32,7 @@
 Разбор и лемматизация в 6-8 раз быстрее, чем в pymorphy3 с ускорением `pymorphy3[fast]`, форма по признакам и согласование с количеством - в 16-19 раз; списки слов разбираются без GIL. Части речи, признаки и леммы следуют руководству UD, а где оно молчит - соглашениям трибанка SynTagRus, поэтому результат можно сравнивать с разметкой spaCy, Stanza и других инструментов на UD.
 
 * **[Анализатор](https://sergeyshk.github.io/ruMorph/analyzer/)** - разборы словоформы по убыванию вероятности, разбор списков слов и лемматизация без GIL, проверка словоформы по словарю
-* **[Разбор предложения](https://sergeyshk.github.io/ruMorph/analyzer/#analyze_sentence)** - выбор разбора по соседним словам контекстной моделью: часть речи, лемма и признаки верны у 81-93 % слов против 71-82 % без контекста
+* **[Разбор предложения](https://sergeyshk.github.io/ruMorph/analyzer/#analyze_sentence)** - выбор разбора по соседним словам контекстной моделью: часть речи, лемма и признаки верны у 82-94 % слов против 71-82 % без контекста
 * **[Части речи и признаки UD](https://sergeyshk.github.io/ruMorph/analysis/#ud)** - части речи, признаки и леммы по руководству UD и соглашениям SynTagRus; пометы OpenCorpora, у которых нет признака UD
 * **[Токены вне словаря](https://sergeyshk.github.io/ruMorph/analysis/#rules)** - числа, знаки, латиница, инициалы и сокращения по правилам
 * **[Незнакомые слова](https://sergeyshk.github.io/ruMorph/analysis/#guess)** - разборы по окончанию, слова через дефис и с приставками, формы угаданных слов
@@ -104,7 +104,7 @@ Analysis(word='стали', lemma='стать', pos='VERB', feats='Aspect=Perf|M
 
 ### Разбор предложения
 
-Метод `analyze_sentence` упорядочивает разборы слов предложения с учетом соседних слов: первым идет разбор, который выбрала контекстная модель, а вероятность - ее оценка в этом предложении. Модель (BiLSTM, 0,9 МБ) обучена на трибанках UD_Russian-Taiga и UD_Russian-GSD и входит в словарь пакета; слова - токены одного предложения.
+Метод `analyze_sentence` упорядочивает разборы слов предложения с учетом соседних слов: первым идет разбор, который выбрала контекстная модель, а вероятность - ее оценка в этом предложении. Модель (BiLSTM, 0,9 МБ) обучена на трибанках UD_Russian-Taiga, UD_Russian-GSD и корпусе OpenCorpora и входит в словарь пакета; слова - токены одного предложения.
 
 ```python
 >>> words = ["Я", "читаю", "книги"]
@@ -301,7 +301,7 @@ ruMorph работает с тем же словарем OpenCorpora, что pym
 | pymorphy3 | 84,8 | 82,9 | 84,3 | 23 484 |
 | mystem | 81,9 | 79,4 | 79,9 | 82 191 |
 
-С контекстом (`analyze_sentence`) ruMorph по части речи, лемме и признакам вместе точнее всех теггеров на Taiga и GSD (90,0 и 81,3 % слов против 85,6 и 80,3 % у Stanza), а на SynTagRus уступает только Stanza - 0,2 пункта, хотя Stanza обучена на SynTagRus. При этом он разбирает 108 тыс. токенов в секунду против 2 738 у Stanza. На короткий текст вместе с загрузкой ruMorph отвечает за 6 мс против 0,2-2 с у теггеров, процессы делят словарь, и каждый следующий добавляет 1,2 МБ. Замер - Apple M3 Pro, Python 3.11.
+С контекстом (`analyze_sentence`) ruMorph по части речи, лемме и признакам вместе точнее всех теггеров на Taiga и GSD (90,1 и 81,6 % слов против 85,6 и 80,3 % у Stanza), а на SynTagRus идет вровень со Stanza (93,6 и 93,5 %), хотя Stanza обучена на SynTagRus. При этом он разбирает 108 тыс. токенов в секунду против 2 738 у Stanza. На короткий текст вместе с загрузкой ruMorph отвечает за 6 мс против 0,2-2 с у теггеров, процессы делят словарь, и каждый следующий добавляет 1,2 МБ. Замер - Apple M3 Pro, Python 3.11.
 
 Подробнее - в [документации](https://sergeyshk.github.io/ruMorph/performance/): теггеры с контекстом, график скорости от объема текста, операции в сравнении с pymorphy3, память и как это измерено.
 
@@ -356,7 +356,7 @@ uv run pre-commit install
 
 ## Лицензия
 
-Код распространяется под лицензией [MIT](https://github.com/SergeyShk/ruMorph/blob/master/LICENSE.txt). Словарь в пакете собран из словаря [OpenCorpora](https://opencorpora.org) с частотами и контекстной моделью по трибанкам [UD_Russian-Taiga](https://github.com/UniversalDependencies/UD_Russian-Taiga) и [UD_Russian-GSD](https://github.com/UniversalDependencies/UD_Russian-GSD) и распространяется по лицензии CC BY-SA 4.0 ([LICENSE-DICTIONARY.txt](https://github.com/SergeyShk/ruMorph/blob/master/LICENSE-DICTIONARY.txt)).
+Код распространяется под лицензией [MIT](https://github.com/SergeyShk/ruMorph/blob/master/LICENSE.txt). Словарь в пакете собран из словаря [OpenCorpora](https://opencorpora.org) с частотами и контекстной моделью по трибанкам [UD_Russian-Taiga](https://github.com/UniversalDependencies/UD_Russian-Taiga) и [UD_Russian-GSD](https://github.com/UniversalDependencies/UD_Russian-GSD) и корпусу OpenCorpora и распространяется по лицензии CC BY-SA 4.0 ([LICENSE-DICTIONARY.txt](https://github.com/SergeyShk/ruMorph/blob/master/LICENSE-DICTIONARY.txt)).
 
 ## Цитирование
 

@@ -32,7 +32,7 @@
 Analysis and lemmatization are 6-8 times faster than in pymorphy3 with the `pymorphy3[fast]` speedup, the form by features and agreement with a number are 16-19 times faster; lists of words are analyzed without the GIL. Parts of speech, features and lemmas follow the UD guidelines and, where they are silent, the conventions of the SynTagRus treebank, so the results can be compared with the annotation of spaCy, Stanza and other tools built on UD.
 
 * **[Analyzer](https://sergeyshk.github.io/ruMorph/en/analyzer/)** - analyses of a word form by descending probability, analysis of word lists and lemmatization without the GIL, a dictionary lookup of a word form
-* **[Sentence analysis](https://sergeyshk.github.io/ruMorph/en/analyzer/#analyze_sentence)** - the context model picks the analysis from the neighbouring words: the part of speech, lemma and features are right for 81-93 % of words against 71-82 % without context
+* **[Sentence analysis](https://sergeyshk.github.io/ruMorph/en/analyzer/#analyze_sentence)** - the context model picks the analysis from the neighbouring words: the part of speech, lemma and features are right for 82-94 % of words against 71-82 % without context
 * **[UD parts of speech and features](https://sergeyshk.github.io/ruMorph/en/analysis/#ud)** - parts of speech, features and lemmas by the UD guidelines and the SynTagRus conventions; OpenCorpora labels that have no UD feature
 * **[Tokens outside the dictionary](https://sergeyshk.github.io/ruMorph/en/analysis/#rules)** - numbers, signs, Latin script, initials and abbreviations by rules
 * **[Unknown words](https://sergeyshk.github.io/ruMorph/en/analysis/#guess)** - analyses by the ending, hyphenated words and words with prefixes, forms of guessed words
@@ -104,7 +104,7 @@ See the documentation: [analyzer](https://sergeyshk.github.io/ruMorph/en/analyze
 
 ### Sentence analysis
 
-The `analyze_sentence` method orders the analyses of the words of a sentence using the neighbouring words: the first one is the analysis chosen by the context model, and the probability is its estimate in this sentence. The model (a BiLSTM, 0.9 MB) is trained on the UD_Russian-Taiga and UD_Russian-GSD treebanks and ships with the package dictionary; the words are the tokens of one sentence.
+The `analyze_sentence` method orders the analyses of the words of a sentence using the neighbouring words: the first one is the analysis chosen by the context model, and the probability is its estimate in this sentence. The model (a BiLSTM, 0.9 MB) is trained on the UD_Russian-Taiga and UD_Russian-GSD treebanks and the OpenCorpora corpus and ships with the package dictionary; the words are the tokens of one sentence.
 
 ```python
 >>> words = ["Я", "читаю", "книги"]
@@ -301,7 +301,7 @@ The share of words whose first analysis has the right part of speech and lemma, 
 | pymorphy3 | 84.8 | 82.9 | 84.3 | 23,484 |
 | mystem | 81.9 | 79.4 | 79.9 | 82,191 |
 
-In context (`analyze_sentence`) ruMorph is more accurate than all the taggers in the part of speech, lemma and features together on Taiga and GSD (90.0 and 81.3 % of words against 85.6 and 80.3 % for Stanza), and on SynTagRus it is behind only Stanza, by 0.2 points, although Stanza is trained on SynTagRus. Meanwhile it handles 108 thousand tokens per second against 2,738 for Stanza. ruMorph answers a short text together with loading in 6 ms against 0.2-2 s for the taggers, processes share the dictionary, and every further one adds 1.2 MB. Measured on Apple M3 Pro, Python 3.11.
+In context (`analyze_sentence`) ruMorph is more accurate than all the taggers in the part of speech, lemma and features together on Taiga and GSD (90.1 and 81.6 % of words against 85.6 and 80.3 % for Stanza), and on SynTagRus it is level with Stanza (93.6 and 93.5 %), although Stanza is trained on SynTagRus. Meanwhile it handles 108 thousand tokens per second against 2,738 for Stanza. ruMorph answers a short text together with loading in 6 ms against 0.2-2 s for the taggers, processes share the dictionary, and every further one adds 1.2 MB. Measured on Apple M3 Pro, Python 3.11.
 
 See the [documentation](https://sergeyshk.github.io/ruMorph/en/performance/) for context taggers, the chart of speed by text size, operations compared with pymorphy3, memory and how it was measured.
 
@@ -356,7 +356,7 @@ Bug reports, ideas and pull requests are welcome - the [issues](https://github.c
 
 ## License
 
-The code is distributed under the [MIT](https://github.com/SergeyShk/ruMorph/blob/master/LICENSE.txt) license. The dictionary in the package is built from the [OpenCorpora](https://opencorpora.org) dictionary with frequencies and a context model from the [UD_Russian-Taiga](https://github.com/UniversalDependencies/UD_Russian-Taiga) and [UD_Russian-GSD](https://github.com/UniversalDependencies/UD_Russian-GSD) treebanks and is distributed under the CC BY-SA 4.0 license ([LICENSE-DICTIONARY.txt](https://github.com/SergeyShk/ruMorph/blob/master/LICENSE-DICTIONARY.txt)).
+The code is distributed under the [MIT](https://github.com/SergeyShk/ruMorph/blob/master/LICENSE.txt) license. The dictionary in the package is built from the [OpenCorpora](https://opencorpora.org) dictionary with frequencies and a context model from the [UD_Russian-Taiga](https://github.com/UniversalDependencies/UD_Russian-Taiga) and [UD_Russian-GSD](https://github.com/UniversalDependencies/UD_Russian-GSD) treebanks and the OpenCorpora corpus and is distributed under the CC BY-SA 4.0 license ([LICENSE-DICTIONARY.txt](https://github.com/SergeyShk/ruMorph/blob/master/LICENSE-DICTIONARY.txt)).
 
 ## Citation
 

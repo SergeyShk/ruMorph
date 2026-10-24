@@ -13,5 +13,6 @@ OpenCorpora (лицензия [CC BY-SA 3.0](https://creativecommons.org/license
 [UD_Russian-Taiga](https://github.com/UniversalDependencies/UD_Russian-Taiga) и
 [UD_Russian-GSD](https://github.com/UniversalDependencies/UD_Russian-GSD), релиз 2.18 (лицензия
 [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)); на обучающих и проверочных частях
-этих трибанков обучена контекстная модель. Словарь ruMorph - переработка этих данных
+этих трибанков и на корпусе OpenCorpora, ревизия 4580223 (лицензия CC BY-SA 3.0), обучена контекстная
+модель. Словарь ruMorph - переработка этих данных
 и распространяется по лицензии CC BY-SA 4.0.
