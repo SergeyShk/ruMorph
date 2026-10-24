@@ -24,7 +24,9 @@
     [('мост', 'NOUN'), ('сделать', 'VERB'), ('из', 'ADP'), ('сталь', 'NOUN'), ('.', 'PUNCT')]
 """
 
+import hashlib
 import json
+from collections import OrderedDict
 from collections.abc import Iterator, Mapping
 from typing import Any
 
@@ -42,11 +44,13 @@ MAX_CHUNK = 256
 # Ключ своих настроек компонента в `Doc.user_data`: по ним `token._.rumorph` находит анализатор;
 # настройки по умолчанию не пишутся - их теряют `Doc.from_docs`, `DocBin` и `Span.as_doc`
 SETTINGS = "rumorph"
-DEFAULT = {"dictionary": None, "words": None}
+DEFAULT: dict[str, Any] = {"dictionary": None, "words": None, "key": ""}
 # Образец своего слова: слово или пара «слово, часть речи» (в конфиге spaCy пара - список)
 Pattern = str | tuple[str, str] | list[str]
+# Анализаторов с разными настройками в процессе - не больше стольких: свои слова занимают память
+CACHE_SIZE = 8
 
-_analyzers: dict[str, Analyzer] = {}
+_analyzers: OrderedDict[str, Analyzer] = OrderedDict()
 
 
 @Language.factory(
@@ -98,7 +102,10 @@ class Component:
         patterns = None
         if words is not None:
             patterns = {word: p if isinstance(p, str) else list(p) for word, p in words.items()}
-        self.settings: dict[str, Any] = {"dictionary": dictionary, "words": patterns}
+        self.settings: dict[str, Any] = {"dictionary": dictionary, "words": patterns, "key": ""}
+        if dictionary is not None or patterns is not None:
+            text = json.dumps([dictionary, patterns], ensure_ascii=False)
+            self.settings["key"] = hashlib.sha256(text.encode()).hexdigest()
         self.context = context
         self.analyzer = analyzer(self.settings)
 
@@ -124,10 +131,16 @@ class Component:
             else:
                 analyses = self.analyzer.analyze_many(words)
             for token, candidates in zip(tokens, analyses, strict=True):
-                if candidates:
-                    token.pos_ = candidates[0].pos
-                    token.morph = MorphAnalysis(doc.vocab, candidates[0].feats)
-                    token.lemma_ = candidates[0].lemma
+                if not candidates:
+                    # Невидимые символы: как токен без разбора в команде rumorph
+                    token.pos_, token.lemma_ = "X", token.text.lower()
+                    continue
+                best = candidates[0]
+                token.pos_ = best.pos
+                # Строкой: из словаря признаков spaCy 3.8 копит память на каждом токене
+                feats = "|".join(f"{name}={value}" for name, value in best.feats.items())
+                token.morph = MorphAnalysis(doc.vocab, feats)
+                token.lemma_ = best.lemma
         for token in doc:
             if token.is_space:
                 token.pos_ = "SPACE"
@@ -141,20 +154,25 @@ class Component:
 
 def analyzer(settings: Mapping[str, Any]) -> Analyzer:
     """
-    Анализатор с настройками компонента: один на процесс для одинаковых настроек
+    Анализатор с настройками компонента: один на процесс для одинаковых настроек,
+    давно не нужные вытесняются
 
     Аргументы:
-        settings (Mapping[str, Any]): Словарь и свои слова
+        settings (Mapping[str, Any]): Словарь, свои слова и ключ настроек
 
     Вывод:
         Analyzer: Анализатор
     """
-    key = json.dumps([settings["dictionary"], settings["words"]], ensure_ascii=False)
-    if key not in _analyzers:
-        words = settings["words"]
-        if words is not None:
-            words = {word: p if isinstance(p, str) else tuple(p) for word, p in words.items()}
-        _analyzers[key] = Analyzer(settings["dictionary"], words)
+    key = settings["key"]
+    if key in _analyzers:
+        _analyzers.move_to_end(key)
+        return _analyzers[key]
+    words = settings["words"]
+    if words is not None:
+        words = {word: p if isinstance(p, str) else tuple(p) for word, p in words.items()}
+    _analyzers[key] = Analyzer(settings["dictionary"], words)
+    if len(_analyzers) > CACHE_SIZE:
+        _analyzers.popitem(last=False)
     return _analyzers[key]
 
 
@@ -178,7 +196,9 @@ def analysis(token: Token) -> Analysis | None:
     return None
 
 
-Token.set_extension("rumorph", getter=analysis, force=True)
+# Чужое расширение с тем же именем не затирается
+if not Token.has_extension("rumorph"):
+    Token.set_extension("rumorph", getter=analysis)
 
 
 def sentences(doc: Doc) -> Iterator[list[Token]]:

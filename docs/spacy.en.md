@@ -54,7 +54,7 @@ The share of words with the right part of speech, lemma and UD features on the t
 
 ## Sentences { #sentences }
 
-The context model analyzes a whole sentence. The component takes sentences from the annotation of the document - the parser, `senter` or `sentencizer`, and without it splits the document after sentence-final marks («.», «!», «?», «…»); a sentence longer than 256 tokens is analyzed in parts, as in the [rumorph command](cli.md). Whitespace tokens get the `SPACE` part of speech, as in spaCy models, and the token itself as the lemma.
+The context model analyzes a whole sentence. The component takes sentences from the annotation of the document - the parser, `senter` or `sentencizer`, and without it splits the document after sentence-final marks («.», «!», «?», «…»); a sentence longer than 256 tokens is analyzed in parts, as in the [rumorph command](cli.md). Whitespace tokens get the `SPACE` part of speech, as in spaCy models, and the token itself as the lemma; a token without a ruMorph analysis (invisible characters) gets `X` and the lowercased token as the lemma, as in the rumorph command.
 
 ## Parameters { #config }
 
