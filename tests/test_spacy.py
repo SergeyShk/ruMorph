@@ -3,6 +3,8 @@
 import importlib.metadata
 import importlib.resources
 import pickle
+import subprocess
+import sys
 
 import pytest
 
@@ -69,6 +71,14 @@ def test_long_text_chunks(nlp):
     assert annotation(doc) == expected(words[:256], words[256:])
 
 
+def test_long_marked_sentence_chunks():
+    nlp = spacy.blank("ru")
+    nlp.add_pipe("sentencizer")
+    nlp.add_pipe("rumorph")
+    words = ["Мы", "стали", "друзьями"] * 100
+    assert annotation(nlp(" ".join(words))) == expected(words[:256], words[256:])
+
+
 def test_spaces_and_invisible_tokens(nlp):
     tokens = list(nlp("Мы\n\nстали ⁠ друзьями"))
     assert [(token.pos_, token.lemma_) for token in tokens[1::2]] == [("SPACE", "\n\n"), ("", "")]
@@ -86,12 +96,16 @@ def test_without_context():
     assert doc[2].morph.get("Case") == ["Gen"]
 
 
-def test_config():
+def test_config(tmp_path):
     path = importlib.resources.files("rumorph") / "data" / "ru.dict"
+    words = {"зумер": "геймер", "зечь": ["печь", "VERB"]}
     nlp = spacy.blank("ru")
-    nlp.add_pipe("rumorph", config={"dictionary": str(path), "words": {"зумер": "геймер"}})
-    assert [token.lemma_ for token in nlp("Зумерам нравится")] == ["зумер", "нравиться"]
+    nlp.add_pipe("rumorph", config={"dictionary": str(path), "words": words})
+    lemmas = ["зумер", "зечь", "нравиться"]
+    assert [token.lemma_ for token in nlp("Зумерам зечет нравится")] == lemmas
     assert nlp.get_pipe_meta("rumorph").assigns == ["token.pos", "token.morph", "token.lemma"]
+    nlp.to_disk(tmp_path)
+    assert [token.lemma_ for token in spacy.load(tmp_path)("Зумерам зечет нравится")] == lemmas
 
 
 def test_extension(nlp):
@@ -103,9 +117,35 @@ def test_extension(nlp):
     assert doc[2]._.rumorph is None
 
 
+def test_extension_uses_component_settings(nlp):
+    own = spacy.blank("ru")
+    own.add_pipe("rumorph", config={"words": {"зумер": "геймер"}})
+    doc = own("Зумеры стали друзьями")
+    nlp("Мы стали друзьями")
+    assert doc[0]._.rumorph.source == "dictionary"
+    assert nlp("Зумеры")[0]._.rumorph.source == "guess"
+
+
 def test_serialization(nlp):
-    doc = nlp("Мы стали друзьями")
-    restored = spacy.tokens.Doc(nlp.vocab).from_bytes(doc.to_bytes())
+    own = spacy.blank("ru")
+    own.add_pipe("rumorph", config={"words": {"зумер": "геймер"}})
+    doc = own("Зумеры стали друзьями")
+    restored = spacy.tokens.Doc(own.vocab).from_bytes(doc.to_bytes())
     assert annotation(restored) == annotation(doc)
-    copy = pickle.loads(pickle.dumps(nlp))
-    assert annotation(copy("Мы стали друзьями")) == annotation(doc)
+    assert restored[0]._.rumorph.source == "dictionary"
+    stored = spacy.tokens.DocBin(docs=[nlp("Мы стали друзьями")]).get_docs(nlp.vocab)
+    assert next(stored)[2]._.rumorph.lemma == "друг"
+    assert annotation(pickle.loads(pickle.dumps(own))("Зумеры")) == annotation(doc[:1])
+
+
+def test_pickle_in_new_process():
+    nlp = spacy.blank("ru")
+    nlp.add_pipe("rumorph", config={"words": {"зумер": "геймер"}})
+    code = (
+        "import pickle, sys; doc = pickle.load(sys.stdin.buffer)('Зумеры стали'); "
+        "print(doc[0].lemma_, doc[0]._.rumorph.source)"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code], input=pickle.dumps(nlp), capture_output=True, check=True
+    )
+    assert result.stdout.decode().split() == ["зумер", "dictionary"]

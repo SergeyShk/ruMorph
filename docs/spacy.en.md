@@ -54,14 +54,14 @@ The share of words with the right part of speech, lemma and UD features on the t
 
 ## Sentences { #sentences }
 
-The context model analyzes a whole sentence. The component takes sentences from the annotation of the document - the parser, `senter` or `sentencizer`, and without it splits the document after sentence-final marks («.», «!», «?», «…») and at least every 256 tokens, like the [rumorph command](cli.md). Whitespace tokens get the `SPACE` part of speech, as in spaCy models, and the token itself as the lemma.
+The context model analyzes a whole sentence. The component takes sentences from the annotation of the document - the parser, `senter` or `sentencizer`, and without it splits the document after sentence-final marks («.», «!», «?», «…»); a sentence longer than 256 tokens is analyzed in parts, as in the [rumorph command](cli.md). Whitespace tokens get the `SPACE` part of speech, as in spaCy models, and the token itself as the lemma.
 
 ## Parameters { #config }
 
 | Parameter | Type | Default | Description |
 | :-------- | :--- | :------ | :---------- |
 | `dictionary` | `str` | `None` | Path to the dictionary file; by default - the dictionary from the package |
-| `words` | `dict` | `None` | [Own words](analyzer.md#words) and their patterns |
+| `words` | `dict` | `None` | [Own words](analyzer.md#words) and their patterns; a pattern with a part of speech is a tuple or a list |
 | `context` | `bool` | `True` | Choose the analysis by the neighbouring words; `False` - the most probable analysis of the word form, as with [`analyze`](analyzer.md#analyze) |
 
 === "Code"
@@ -80,7 +80,7 @@ The context model analyzes a whole sentence. The component takes sentences from 
 
 ## ruMorph analysis { #extension }
 
-`token._.rumorph` is the ruMorph [analysis](analysis.md) with the lemma, part of speech and features of the token: it gives the [forms of the word](inflection.md). Its probability does not take the context into account. If another component changed the annotation of the token and the word form has no such analysis, the value is `None`.
+`token._.rumorph` is the ruMorph [analysis](analysis.md) with the lemma, part of speech and features of the token, by the dictionary and own words of the component that annotated the document: it gives the [forms of the word](inflection.md). Its probability does not take the context into account. If the word form has no such analysis - for example, another component changed the annotation of the token - the value is `None`.
 
 === "Code"
 

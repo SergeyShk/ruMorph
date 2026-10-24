@@ -24,7 +24,9 @@
     [('мост', 'NOUN'), ('сделать', 'VERB'), ('из', 'ADP'), ('сталь', 'NOUN'), ('.', 'PUNCT')]
 """
 
-from collections.abc import Iterator
+import json
+from collections.abc import Iterator, Mapping
+from typing import Any
 
 from spacy.language import Language
 from spacy.tokens import Doc, MorphAnalysis, Token
@@ -33,10 +35,16 @@ from ._rumorph import Analysis, Analyzer
 
 __all__ = ["Component"]
 
-# Документ без разметки предложений делится, как в команде rumorph: после токена из знаков
-# конца предложения и не реже чем через MAX_CHUNK токенов
+# Предложение разбирается кусками не длиннее MAX_CHUNK токенов, а документ без разметки
+# предложений делится после токена из знаков конца предложения - как в команде rumorph
 SENTENCE_END = frozenset(".!?…")
 MAX_CHUNK = 256
+# Ключ настроек компонента в `Doc.user_data`: по ним `token._.rumorph` находит анализатор
+SETTINGS = "rumorph"
+# Образец своего слова: слово или пара «слово, часть речи» (в конфиге spaCy пара - список)
+Pattern = str | tuple[str, str] | list[str]
+
+_analyzers: dict[str, Analyzer] = {}
 
 
 @Language.factory(
@@ -48,7 +56,7 @@ def create_component(
     nlp: Language,
     name: str,
     dictionary: str | None,
-    words: dict[str, str | tuple[str, str]] | None,
+    words: dict[str, Pattern] | None,
     context: bool,
 ) -> "Component":
     """
@@ -58,7 +66,7 @@ def create_component(
         nlp (Language): Конвейер
         name (str): Имя компонента в конвейере
         dictionary (str | None): Путь к словарю, None - словарь пакета
-        words (dict[str, str | tuple[str, str]] | None): Свои слова, как у `Analyzer`
+        words (dict[str, Pattern] | None): Свои слова, как у `Analyzer`; пара может быть списком
         context (bool): Выбирать разбор с учетом соседних слов; False - самый вероятный
             разбор слова без контекста, как у `Analyzer.analyze`
 
@@ -74,19 +82,27 @@ class Component:
 
     Аргументы:
         dictionary (str | None): Путь к словарю, None - словарь пакета
-        words (dict[str, str | tuple[str, str]] | None): Свои слова, как у `Analyzer`
+        words (Mapping[str, Pattern] | None): Свои слова, как у `Analyzer`; пара может быть
+            списком
         context (bool): Выбирать разбор с учетом соседних слов
     """
 
     def __init__(
         self,
         dictionary: str | None = None,
-        words: dict[str, str | tuple[str, str]] | None = None,
+        words: Mapping[str, Pattern] | None = None,
         context: bool = True,
     ) -> None:
-        self.analyzer = Analyzer(dictionary, words)
+        patterns = None
+        if words is not None:
+            patterns = {word: p if isinstance(p, str) else list(p) for word, p in words.items()}
+        self.settings: dict[str, Any] = {"dictionary": dictionary, "words": patterns}
         self.context = context
-        Token.set_extension("rumorph", getter=self.analysis, force=True)
+        self.analyzer = analyzer(self.settings)
+
+    def __reduce__(self) -> tuple[type, tuple[Any, ...]]:
+        # pickle хранит настройки, а не словарь
+        return Component, (self.settings["dictionary"], self.settings["words"], self.context)
 
     def __call__(self, doc: Doc) -> Doc:
         """
@@ -114,39 +130,68 @@ class Component:
             if token.is_space:
                 token.pos_ = "SPACE"
                 token.lemma_ = token.text
+        doc.user_data[SETTINGS] = self.settings
         return doc
 
-    def analysis(self, token: Token) -> Analysis | None:
-        """
-        Разбор ruMorph токена (`token._.rumorph`): разбор словоформы с леммой, частью речи
-        и признаками токена; через него доступны формы слова. Вероятность - без контекста
 
-        Аргументы:
-            token (Token): Токен
+def analyzer(settings: Mapping[str, Any]) -> Analyzer:
+    """
+    Анализатор с настройками компонента: один на процесс для одинаковых настроек
 
-        Вывод:
-            Analysis | None: Разбор или None, если у словоформы нет такого разбора
-        """
-        feats = token.morph.to_dict()
-        for analysis in self.analyzer.analyze(token.text):
-            if (analysis.lemma, analysis.pos, analysis.feats) == (token.lemma_, token.pos_, feats):
-                return analysis
-        return None
+    Аргументы:
+        settings (Mapping[str, Any]): Словарь и свои слова
+
+    Вывод:
+        Analyzer: Анализатор
+    """
+    key = json.dumps([settings["dictionary"], settings["words"]], ensure_ascii=False)
+    if key not in _analyzers:
+        words = settings["words"]
+        if words is not None:
+            words = {word: p if isinstance(p, str) else tuple(p) for word, p in words.items()}
+        _analyzers[key] = Analyzer(settings["dictionary"], words)
+    return _analyzers[key]
+
+
+def analysis(token: Token) -> Analysis | None:
+    """
+    Разбор ruMorph токена (`token._.rumorph`): разбор словоформы с леммой, частью речи
+    и признаками токена по словарю компонента, разметившего документ; через него доступны
+    формы слова. Вероятность - без контекста
+
+    Аргументы:
+        token (Token): Токен
+
+    Вывод:
+        Analysis | None: Разбор или None, если у словоформы нет такого разбора
+    """
+    settings = token.doc.user_data.get(SETTINGS, {"dictionary": None, "words": None})
+    feats = token.morph.to_dict()
+    for candidate in analyzer(settings).analyze(token.text):
+        if (candidate.lemma, candidate.pos, candidate.feats) == (token.lemma_, token.pos_, feats):
+            return candidate
+    return None
+
+
+Token.set_extension("rumorph", getter=analysis, force=True)
 
 
 def sentences(doc: Doc) -> Iterator[list[Token]]:
     """
-    Предложения документа: размеченные или до знака конца предложения
+    Куски предложений документа: размеченных или до знака конца предложения, не длиннее
+    `MAX_CHUNK` токенов
 
     Аргументы:
         doc (Doc): Документ
 
     Вывод:
-        Iterator[list[Token]]: Токены предложений
+        Iterator[list[Token]]: Токены кусков
     """
     if doc.has_annotation("SENT_START"):
         for sentence in doc.sents:
-            yield list(sentence)
+            tokens = list(sentence)
+            for start in range(0, len(tokens), MAX_CHUNK):
+                yield tokens[start : start + MAX_CHUNK]
         return
     chunk = []
     for token in doc:
