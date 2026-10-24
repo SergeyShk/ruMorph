@@ -1675,11 +1675,11 @@ fn has_twin(c: char) -> bool {
     LATIN_TWINS.contains(c) || CYRILLIC_TWINS.contains(c)
 }
 
-/// Латинские буквы, которые пишутся как кириллические, и их кириллические двойники
 /// Длина куска предложения в `Dictionary::analyze_sentence`: длинное предложение модель разбирает
-/// частями - память не растет с длиной входа
+/// частями - память модели не растет с длиной входа
 pub const SENTENCE_CHUNK: usize = 256;
 
+/// Латинские буквы, которые пишутся как кириллические, и их кириллические двойники
 const LATIN_TWINS: &str = "aceopxyABCEHKMOPTXY";
 const CYRILLIC_TWINS: &str = "асеорхуАВСЕНКМОРТХУ";
 

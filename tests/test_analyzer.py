@@ -272,8 +272,9 @@ def test_analyze_sentence_errors(morph, tmp_path):
     path.write_bytes(bytes(old))
     analyzer = Analyzer(path)
     assert analyzer.analyze("стол") == morph.analyze("стол")
-    with pytest.raises(ValueError, match="нет контекстной модели"):
-        analyzer.analyze_sentence(["стол"])
+    for words in (["стол"], []):
+        with pytest.raises(ValueError, match="нет контекстной модели"):
+            analyzer.analyze_sentence(words)
 
 
 def test_lemmatize(morph):

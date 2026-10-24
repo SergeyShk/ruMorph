@@ -1186,6 +1186,12 @@ impl Analyzer {
         let words = collect_words(words)?;
         let dictionary = &slf.get().shared.dictionary;
         let mut sentence = Vec::with_capacity(words.len());
+        // Пустое предложение тоже проверяет, есть ли в словаре модель
+        if words.is_empty() {
+            dictionary
+                .analyze_sentence::<&str>(&[])
+                .map_err(|err| PyValueError::new_err(err.to_string()))?;
+        }
         // Части по SENTENCE_CHUNK слов, как в ядре: между ними срабатывает Ctrl+C
         for chunk in words.chunks(rumorph::SENTENCE_CHUNK) {
             let part = py
