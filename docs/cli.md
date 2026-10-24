@@ -48,7 +48,7 @@ printf '1\tМы\t_\t_\t_\t_\t2\tnsubj\t_\t_\n2\tстали\t_\t_\t_\t_\t0\troot\
 
 ## Форматы вывода { #formats }
 
-Все форматы, кроме `jsonl`, берут первый разбор токена - выбранный контекстной моделью по соседним словам, а с `--no-context` - самый вероятный по словарю; `jsonl` пишет все разборы в этом порядке. Токен без разбора получает лемму в нижнем регистре и часть речи `X`.
+Все форматы, кроме `jsonl`, берут первый разбор токена - выбранный контекстной моделью по соседним словам (предложение длиннее 256 токенов модель разбирает частями по 256, как [`analyze_sentence`](analyzer.md#analyze_sentence)), а с `--no-context` - самый вероятный по словарю; `jsonl` пишет все разборы в этом порядке. Токен без разбора получает лемму в нижнем регистре и часть речи `X`.
 
 ### lemmas
 
@@ -83,7 +83,7 @@ echo "Мы стали друзьями." | rumorph -f tsv
 
 ```
 Мы	мы	PRON	Case=Nom|Number=Plur|Person=1|PronType=Prs	1
-стали	стать	VERB	Aspect=Perf|Mood=Ind|Number=Plur|Tense=Past|VerbForm=Fin|Voice=Act	0.999335988750605
+стали	стать	VERB	Aspect=Perf|Mood=Ind|Number=Plur|Tense=Past|VerbForm=Fin|Voice=Act	0.9995066255501905
 друзьями	друг	NOUN	Animacy=Anim|Case=Ins|Gender=Masc|Number=Plur	1
 .	.	PUNCT	_	1
 ```
@@ -106,9 +106,9 @@ echo "Мы стали" | rumorph -f jsonl
     ]},
     {"word": "стали", "analyses": [
       {"lemma": "стать", "pos": "VERB", "feats": {"Aspect": "Perf", "Mood": "Ind", "Number": "Plur", "Tense": "Past", "VerbForm": "Fin", "Voice": "Act"},
-       "labels": ["intr"], "prob": 0.997877109589572, "source": "dictionary"},
+       "labels": ["intr"], "prob": 0.9990479553121936, "source": "dictionary"},
       {"lemma": "сталь", "pos": "NOUN", "feats": {"Animacy": "Inan", "Case": "Nom", "Gender": "Fem", "Number": "Plur"},
-       "labels": [], "prob": 0.0012379386176313068, "source": "dictionary"}
+       "labels": [], "prob": 0.0006122046393944599, "source": "dictionary"}
     ]}
   ]
 }

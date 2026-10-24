@@ -43,8 +43,9 @@ impl Matrix {
 
 /// Число строк плитки `Tiled`
 const TILE: usize = 16;
-/// Число векторов, которые плитка умножает за раз
+/// Число векторов, которые плитка умножает за раз: `Tiled::apply_all` держит столько сумм
 const BATCH: usize = 4;
+const _: () = assert!(BATCH == 4);
 
 /// Матрица по плиткам из `TILE` строк для умножения на много векторов: в плитке столбцы подряд,
 /// в столбце - числа `TILE` строк. Суммы плитки на `BATCH` векторов держатся в регистрах,
@@ -53,31 +54,31 @@ const BATCH: usize = 4;
 struct Tiled {
     rows: usize,
     cols: usize,
-    data: Vec<f32>,
+    columns: Vec<[f32; TILE]>,
 }
 
 impl Tiled {
     fn new(matrix: &Matrix) -> Self {
         let tiles = matrix.rows.div_ceil(TILE);
-        let mut data = vec![0.0; tiles * matrix.cols * TILE];
+        let mut columns = vec![[0.0; TILE]; tiles * matrix.cols];
         for row in 0..matrix.rows {
             let (tile, offset) = (row / TILE, row % TILE);
             for (col, &value) in matrix.row(row).iter().enumerate() {
-                data[(tile * matrix.cols + col) * TILE + offset] = value;
+                columns[tile * matrix.cols + col][offset] = value;
             }
         }
         Tiled {
             rows: matrix.rows,
             cols: matrix.cols,
-            data,
+            columns,
         }
     }
 
     /// `out += self · input` для одного вектора
     fn apply_add(&self, input: &[f32], out: &mut [f32]) {
-        for (tile, weights) in self.data.chunks_exact(self.cols * TILE).enumerate() {
+        for (tile, columns) in self.columns.chunks_exact(self.cols).enumerate() {
             let mut sums = [0.0f32; TILE];
-            for (column, &value) in weights.as_chunks::<TILE>().0.iter().zip(input) {
+            for (column, &value) in columns.iter().zip(input) {
                 for j in 0..TILE {
                     sums[j] += value * column[j];
                 }
@@ -106,15 +107,18 @@ impl Tiled {
                     };
                 }
             }
-            for (tile, weights) in self.data.chunks_exact(self.cols * TILE).enumerate() {
-                let mut sums = [[0.0f32; TILE]; BATCH];
-                for (column, values) in weights.as_chunks::<TILE>().0.iter().zip(&padded) {
-                    for b in 0..BATCH {
-                        for j in 0..TILE {
-                            sums[b][j] += values[b] * column[j];
-                        }
-                    }
+            for (tile, columns) in self.columns.chunks_exact(self.cols).enumerate() {
+                // Четыре отдельные суммы, а не массив: так они остаются в регистрах при любом
+                // профиле сборки (с несколькими единицами кодогенерации массив уходил в память)
+                let (mut s0, mut s1, mut s2, mut s3) =
+                    ([0.0f32; TILE], [0.0; TILE], [0.0; TILE], [0.0; TILE]);
+                for (column, values) in columns.iter().zip(&padded) {
+                    axpy(&mut s0, column, values[0]);
+                    axpy(&mut s1, column, values[1]);
+                    axpy(&mut s2, column, values[2]);
+                    axpy(&mut s3, column, values[3]);
                 }
+                let sums = [s0, s1, s2, s3];
                 for (b, sums) in sums.iter().enumerate().take(batch) {
                     for (j, sum) in sums.iter().enumerate() {
                         let row = tile * TILE + j;
@@ -125,6 +129,14 @@ impl Tiled {
                 }
             }
         }
+    }
+}
+
+/// `sums += value · column`
+#[inline(always)]
+fn axpy(sums: &mut [f32; TILE], column: &[f32; TILE], value: f32) {
+    for (sum, &weight) in sums.iter_mut().zip(column) {
+        *sum += value * weight;
     }
 }
 
@@ -245,7 +257,7 @@ impl<'a> Reader<'a> {
             }
             1 | 2 => {
                 let (rows, cols) = (self.count(MAX_ROWS)?, self.count(MAX_DIM)?);
-                let size = rows * cols;
+                let size = rows.checked_mul(cols).ok_or_else(|| invalid("размер"))?;
                 let data = if kind == 1 {
                     self.f32s(size)?
                 } else {
@@ -474,24 +486,33 @@ impl Model {
         })
     }
 
-    /// Номера тегов разбора с частью речи `pos` и признаками `feats`; неизвестных модели нет
-    fn tag_numbers(&self, pos: &str, feats: &[(&str, &str)]) -> Vec<u32> {
-        let mut feats = feats.to_vec();
+    /// Номера тегов разбора с частью речи `pos` и признаками `feats` в `numbers`; неизвестных
+    /// модели нет. Имена тегов собираются в `name` без новых строк: тегов UD в словаре тысячи
+    fn tag_numbers(
+        &self,
+        pos: &str,
+        feats: &mut [(&str, &str)],
+        name: &mut String,
+        numbers: &mut Vec<u32>,
+    ) {
+        use std::fmt::Write;
         feats.sort_unstable();
-        let mut names = vec![format!("P={pos}")];
-        names.extend(
-            feats
-                .iter()
-                .map(|(name, value)| format!("F={name}={value}")),
-        );
-        let full: Vec<String> = std::iter::once(pos.to_owned())
-            .chain(feats.iter().map(|(name, value)| format!("{name}={value}")))
-            .collect();
-        names.push(format!("C={}", full.join("|")));
-        names
-            .iter()
-            .filter_map(|name| self.tags.get(name).copied())
-            .collect()
+        numbers.clear();
+        let mut find = |name: &str| numbers.extend(self.tags.get(name).copied());
+        name.clear();
+        let _ = write!(name, "P={pos}");
+        find(name);
+        for (feat, value) in feats.iter() {
+            name.clear();
+            let _ = write!(name, "F={feat}={value}");
+            find(name);
+        }
+        name.clear();
+        let _ = write!(name, "C={pos}");
+        for (feat, value) in feats.iter() {
+            let _ = write!(name, "|{feat}={value}");
+        }
+        find(name);
     }
 }
 
@@ -513,9 +534,14 @@ impl Context {
             tag_bias: vec![0.0; ud.len()],
             model,
         };
+        let (mut feats, mut name, mut numbers) = (Vec::new(), String::new(), Vec::new());
         for (number, tag) in ud.iter().enumerate() {
-            let feats: Vec<(&str, &str)> = tag.feats().collect();
-            for tag_number in context.model.tag_numbers(tag.pos(), &feats) {
+            feats.clear();
+            feats.extend(tag.feats());
+            context
+                .model
+                .tag_numbers(tag.pos(), &mut feats, &mut name, &mut numbers);
+            for &tag_number in &numbers {
                 let row = tag_number as usize;
                 let at = number * dc..(number + 1) * dc;
                 add(
@@ -908,6 +934,21 @@ pub(crate) mod tests {
             copy.analyze_sentence(&["вижу", "стол"]).unwrap()[1][0].ud,
             table[0].ud
         );
+    }
+
+    #[test]
+    fn long_sentence_in_chunks() {
+        let data = dictionary_bytes_with(&table(), &[], Some(weights(&[("F=Case=Acc", 2.0)])));
+        let dictionary = Dictionary::from_bytes(&data).unwrap();
+        let words: Vec<&str> = ["вижу", "стол"]
+            .into_iter()
+            .cycle()
+            .take(crate::SENTENCE_CHUNK + 3)
+            .collect();
+        let (head, tail) = words.split_at(crate::SENTENCE_CHUNK);
+        let mut chunks = dictionary.analyze_sentence(head).unwrap();
+        chunks.extend(dictionary.analyze_sentence(tail).unwrap());
+        assert_eq!(dictionary.analyze_sentence(&words).unwrap(), chunks);
     }
 
     #[test]

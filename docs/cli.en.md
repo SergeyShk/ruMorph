@@ -48,7 +48,7 @@ printf '1\tМы\t_\t_\t_\t_\t2\tnsubj\t_\t_\n2\tстали\t_\t_\t_\t_\t0\troot\
 
 ## Output formats { #formats }
 
-All formats except `jsonl` take the first analysis of a token - the one chosen by the context model from the neighbouring words, and with `--no-context` the most probable one by the dictionary; `jsonl` writes all analyses in this order. A token without analyses gets the lowercase token as the lemma and the part of speech `X`.
+All formats except `jsonl` take the first analysis of a token - the one chosen by the context model from the neighbouring words (a sentence longer than 256 tokens is analyzed in parts of 256, as with [`analyze_sentence`](analyzer.md#analyze_sentence)), and with `--no-context` the most probable one by the dictionary; `jsonl` writes all analyses in this order. A token without analyses gets the lowercase token as the lemma and the part of speech `X`.
 
 ### lemmas
 
@@ -83,7 +83,7 @@ echo "Мы стали друзьями." | rumorph -f tsv
 
 ```
 Мы	мы	PRON	Case=Nom|Number=Plur|Person=1|PronType=Prs	1
-стали	стать	VERB	Aspect=Perf|Mood=Ind|Number=Plur|Tense=Past|VerbForm=Fin|Voice=Act	0.999335988750605
+стали	стать	VERB	Aspect=Perf|Mood=Ind|Number=Plur|Tense=Past|VerbForm=Fin|Voice=Act	0.9995066255501905
 друзьями	друг	NOUN	Animacy=Anim|Case=Ins|Gender=Masc|Number=Plur	1
 .	.	PUNCT	_	1
 ```
@@ -106,9 +106,9 @@ echo "Мы стали" | rumorph -f jsonl
     ]},
     {"word": "стали", "analyses": [
       {"lemma": "стать", "pos": "VERB", "feats": {"Aspect": "Perf", "Mood": "Ind", "Number": "Plur", "Tense": "Past", "VerbForm": "Fin", "Voice": "Act"},
-       "labels": ["intr"], "prob": 0.997877109589572, "source": "dictionary"},
+       "labels": ["intr"], "prob": 0.9990479553121936, "source": "dictionary"},
       {"lemma": "сталь", "pos": "NOUN", "feats": {"Animacy": "Inan", "Case": "Nom", "Gender": "Fem", "Number": "Plur"},
-       "labels": [], "prob": 0.0012379386176313068, "source": "dictionary"}
+       "labels": [], "prob": 0.0006122046393944599, "source": "dictionary"}
     ]}
   ]
 }

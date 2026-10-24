@@ -112,7 +112,7 @@ impl UdObjects {
 /// Разбор словоформы
 ///
 /// Описание:
-///     Часть речи и признаки - по Universal Dependencies в соглашениях UD_Russian-SynTagRus.
+///     Часть речи и признаки - по руководству Universal Dependencies и соглашениям SynTagRus.
 ///     Разборы неизменяемы; их можно сравнивать (без вероятности: разбор равен своей форме),
 ///     класть в множества и сохранять через pickle
 ///
@@ -1160,7 +1160,8 @@ impl Analyzer {
     ///     Те же разборы, что у analyze, упорядочивает контекстная модель: первый - разбор,
     ///     который модель выбрала по соседним словам, вероятность - ее оценка в этом
     ///     предложении. Слова - токены одного предложения по порядку; слово без соседей
-    ///     разбирается, как в analyze. Разбор идет без GIL
+    ///     разбирается, как в analyze, а предложение длиннее 256 слов - частями по 256.
+    ///     Разбор идет без GIL
     ///
     /// Аргументы:
     ///     words (Iterable[str]): Токены предложения
@@ -1184,9 +1185,21 @@ impl Analyzer {
         let (py, handle) = (slf.py(), Self::handle(slf));
         let words = collect_words(words)?;
         let dictionary = &slf.get().shared.dictionary;
-        let sentence = py
-            .detach(|| dictionary.analyze_sentence(&words))
-            .map_err(|err| PyValueError::new_err(err.to_string()))?;
+        let mut sentence = Vec::with_capacity(words.len());
+        // Пустое предложение тоже проверяет, есть ли в словаре модель
+        if words.is_empty() {
+            dictionary
+                .analyze_sentence::<&str>(&[])
+                .map_err(|err| PyValueError::new_err(err.to_string()))?;
+        }
+        // Части по SENTENCE_CHUNK слов, как в ядре: между ними срабатывает Ctrl+C
+        for chunk in words.chunks(rumorph::SENTENCE_CHUNK) {
+            let part = py
+                .detach(|| dictionary.analyze_sentence(chunk))
+                .map_err(|err| PyValueError::new_err(err.to_string()))?;
+            sentence.extend(part);
+            py.check_signals()?;
+        }
         sentence
             .into_iter()
             .map(|analyses| {
