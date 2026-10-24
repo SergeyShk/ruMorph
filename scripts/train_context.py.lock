@@ -9,7 +9,7 @@ resolution-markers = [
 [manifest]
 requirements = [
     { name = "numpy", specifier = "==2.3.4" },
-    { name = "rumorph" },
+    { name = "rumorph", editable = "../" },
     { name = "torch", specifier = "==2.14.1" },
 ]
 
@@ -420,18 +420,49 @@ wheels = [
 
 [[package]]
 name = "rumorph"
-version = "0.3.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/b0/05/8e78fc5dd1742fa36208bd2fd92609ccd441678b584edf3d0343aec4185e/rumorph-0.3.0.tar.gz", hash = "sha256:dd7c5d17d61d28af1b7ad7af259a2ca5f23d16ad10054e7a9977818484959289", size = 6889145, upload-time = "2026-10-22T21:18:38.033Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/ff/bf/cb2643e548c3f36d9a53da1519b339c9ce46c32ef197243520c4f65767d2/rumorph-0.3.0-cp311-abi3-macosx_10_12_x86_64.whl", hash = "sha256:5cb44df6e8272d20c19f360ad9e18c575b633524ad6a9fe5f5644a9c4345122f", size = 6994330, upload-time = "2026-10-22T21:18:11.423Z" },
-    { url = "https://files.pythonhosted.org/packages/c3/54/c01494916b60a2bc1cfb75d75f16fd434df82a708df3fca98711697767a5/rumorph-0.3.0-cp311-abi3-macosx_11_0_arm64.whl", hash = "sha256:a812e9bd86999d15da85b71aa149a064c622e26ae6244ae4b52f60663667af7c", size = 6957227, upload-time = "2026-10-22T21:18:13.336Z" },
-    { url = "https://files.pythonhosted.org/packages/87/13/c5f520f41a32cab727d4a724f499b5ab6fc8a996f96f3bba82d5c0be3d89/rumorph-0.3.0-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:8b283652505449789515c19282f78c422d02603d3fb35813ec565eb02560abbe", size = 7002174, upload-time = "2026-10-22T21:18:14.923Z" },
-    { url = "https://files.pythonhosted.org/packages/35/b7/ca8bdb3665960fcef10c557bada8faf61ecaedc029cf4453efddf51cc4d1/rumorph-0.3.0-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:1d845a0119c4aac76e5986695f9f6f4fbbd59535143a524e8cd6509060e22432", size = 7020313, upload-time = "2026-10-22T21:18:16.449Z" },
-    { url = "https://files.pythonhosted.org/packages/ed/4e/ef5e9dc69a41dbcc7627f75240e9ebfb5eac8e66f63fa3865a39eea39e1e/rumorph-0.3.0-cp311-abi3-musllinux_1_2_aarch64.whl", hash = "sha256:c74038aae60956eda838611c2ba0efc7757888d3fc2202bf27b87739ca716373", size = 7178545, upload-time = "2026-10-22T21:18:18.051Z" },
-    { url = "https://files.pythonhosted.org/packages/e7/5b/80682656242f518d2e3b1ca27757585544783f5b0222867506d5d4566df1/rumorph-0.3.0-cp311-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:e672154444d8ca0017b740bf4e60459dafdc03189ee08dc57c80bb7e87914556", size = 7231178, upload-time = "2026-10-22T21:18:19.854Z" },
-    { url = "https://files.pythonhosted.org/packages/15/07/f9388a2077099b3ecd400f9e4799773a1988b0a88c3430f30a49c57c9fe1/rumorph-0.3.0-cp311-abi3-win_amd64.whl", hash = "sha256:db0a1b15c109b71fe507c3a75f91da75b7749e195be5c56f9e6a7f0d0f310a7f", size = 6923773, upload-time = "2026-10-22T21:18:21.41Z" },
-    { url = "https://files.pythonhosted.org/packages/94/b6/c1d629b6cc8b73b42fce567585cf69152a58c42099413a022fa0817cd148/rumorph-0.3.0-cp311-abi3-win_arm64.whl", hash = "sha256:c27acf10b892bb074108f0bc0d04d34ea4e2c83682cf6df2eb28ec8c0381dc98", size = 6891758, upload-time = "2026-10-22T21:18:22.88Z" },
+version = "0.4.0.dev7"
+source = { editable = "../" }
+
+[package.metadata]
+requires-dist = [{ name = "spacy", marker = "extra == 'spacy'", specifier = ">=3.8,<4" }]
+provides-extras = ["spacy"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "mkdocs", specifier = ">=1.6" },
+    { name = "mkdocs-material", specifier = ">=9.5" },
+    { name = "mkdocs-static-i18n", specifier = ">=1.2" },
+    { name = "mypy", specifier = ">=1.14" },
+    { name = "pre-commit", specifier = ">=4.0" },
+    { name = "pymdown-extensions", specifier = ">=10.0" },
+    { name = "pymorphy3", specifier = "==2.0.6" },
+    { name = "pymorphy3-dicts-ru", specifier = "==2.4.417150.4580142" },
+    { name = "pytest", specifier = ">=8.3" },
+    { name = "pytest-cov", specifier = ">=6.0" },
+    { name = "ruff", specifier = ">=0.9" },
+    { name = "spacy", specifier = ">=3.8,<4" },
+]
+dictionary = [
+    { name = "pymorphy3", specifier = "==2.0.6" },
+    { name = "pymorphy3-dicts-ru", specifier = "==2.4.417150.4580142" },
+]
+docs = [
+    { name = "mkdocs", specifier = ">=1.6" },
+    { name = "mkdocs-material", specifier = ">=9.5" },
+    { name = "mkdocs-static-i18n", specifier = ">=1.2" },
+    { name = "pymdown-extensions", specifier = ">=10.0" },
+]
+lint = [
+    { name = "mypy", specifier = ">=1.14" },
+    { name = "pre-commit", specifier = ">=4.0" },
+    { name = "ruff", specifier = ">=0.9" },
+]
+spacy = [{ name = "spacy", specifier = ">=3.8,<4" }]
+test = [
+    { name = "pymorphy3", specifier = "==2.0.6" },
+    { name = "pymorphy3-dicts-ru", specifier = "==2.4.417150.4580142" },
+    { name = "pytest", specifier = ">=8.3" },
+    { name = "pytest-cov", specifier = ">=6.0" },
 ]
 
 [[package]]

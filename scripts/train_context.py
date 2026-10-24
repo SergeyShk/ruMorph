@@ -5,6 +5,9 @@
 #     "numpy==2.3.4",
 #     "torch==2.14.1",
 # ]
+#
+# [tool.uv.sources]
+# rumorph = { path = "..", editable = true }
 # ///
 """
 Обучение контекстной модели ruMorph: выбор разбора словоформы по соседним словам
@@ -22,10 +25,10 @@
     Эпоха выбирается по full core на проверочных частях Taiga и GSD. Веса квантуются в int8
     по строкам и пишутся в файл `--output`, который `rumorph-build` вшивает в словарь; точность
     квантованной модели печатается. Версии пакетов закреплены в train_context.py.lock; ruMorph -
-    сборка проекта, кандидаты которой должны совпадать со словарем.
+    сборка проекта (из репозитория), кандидаты которой должны совпадать со словарем.
 
 Пример использования:
-    uv run --with-editable . scripts/train_context.py --dictionary python/rumorph/data/ru.dict \\
+    uv run scripts/train_context.py --dictionary python/rumorph/data/ru.dict \\
         --data target/context --output data/ru-context.bin
 """
 
@@ -34,6 +37,7 @@ import bz2
 import hashlib
 import json
 import math
+import shutil
 import struct
 import subprocess
 import time
@@ -979,6 +983,9 @@ def main() -> None:
     parser.add_argument("--batch-tokens", type=int, default=4000)
     parser.add_argument("--seed", type=int, default=1)
     args = parser.parse_args()
+    # Разметку корпуса OpenCorpora переводит rumorph-build: без cargo обучение упало бы после загрузок
+    if shutil.which("cargo") is None:
+        parser.error("нужен cargo: теги корпуса OpenCorpora переводит rumorph-build")
     torch.manual_seed(args.seed)
     device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 
