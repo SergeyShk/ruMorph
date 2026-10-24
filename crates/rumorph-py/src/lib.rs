@@ -1,6 +1,7 @@
 //! Модуль Python `rumorph._rumorph`
 
 use std::cell::{RefCell, UnsafeCell};
+use std::cmp::Reverse;
 use std::collections::{BTreeMap, HashMap};
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io::ErrorKind;
@@ -444,8 +445,9 @@ type AnalysisState = (
 /// иначе - среди разборов слова с теми же леммой, частью речи, признаками и пометами;
 /// вероятность берется сохраненная. Разбор, которого в словаре нет (сохранен со словарем
 /// другой версии), восстанавливается как сохранен, но без формы таблицы, а если нет и его
-/// тега - разбор слова, у которого к сохраненным признакам добавились новые («Нидерландов»
-/// без рода в 0.2.0)
+/// тега - разбор слова с теми же леммой, частью речи и источником, у которого совпало больше
+/// всего сохраненных признаков, но больше половины («Нидерландов» без рода в 0.2.0, «будет»
+/// с Tense=Pres в 0.3.0)
 #[pyfunction]
 fn _analysis(py: Python<'_>, analyzer: Py<Analyzer>, state: AnalysisState) -> PyResult<Analysis> {
     let (word, lemma, pos, feats, labels, prob, source, entry) = state;
@@ -467,38 +469,46 @@ fn _analysis(py: Python<'_>, analyzer: Py<Analyzer>, state: AnalysisState) -> Py
         .filter(|feat| !feat.is_empty())
         .map(|feat| feat.split_once('=').unwrap_or((feat, "")))
         .collect();
-    // Тег с теми же частью речи и пометами и с теми же признаками, а при `wider` - и с новыми;
-    // распаковка из другой версии перебирает все теги, поэтому без выделений памяти
-    let tag_like = |tag: &rumorph::UdTag<'_>, wider: bool| {
-        tag.pos() == pos
-            && tag
-                .labels()
-                .eq(labels.split(',').filter(|label| !label.is_empty()))
-            && (wider || tag.feats().len() == wanted.len())
-            && wanted
-                .iter()
-                .all(|&feat| tag.feats().any(|own| own == feat))
+    let same_labels = |tag: &rumorph::UdTag<'_>| {
+        tag.labels()
+            .eq(labels.split(',').filter(|label| !label.is_empty()))
     };
-    let like = |analysis: &rumorph::Analysis, wider: bool| {
-        analysis.word == word
-            && analysis.source == source
-            && analysis.lemma == lemma
+    // Сколько сохраненных признаков есть у тега
+    let matched = |tag: &rumorph::UdTag<'_>| {
+        wanted
+            .iter()
+            .filter(|&&feat| tag.feats().any(|own| own == feat))
+            .count()
+    };
+    // Тег с теми же частью речи, пометами и признаками; распаковка из другой версии перебирает
+    // все теги, поэтому без выделений памяти
+    let tag_like = |tag: &rumorph::UdTag<'_>| {
+        tag.pos() == pos
+            && same_labels(tag)
+            && tag.feats().len() == wanted.len()
+            && matched(tag) == wanted.len()
+    };
+    let same_lexeme = |analysis: &rumorph::Analysis| {
+        analysis.word == word && analysis.source == source && analysis.lemma == lemma
+    };
+    let like = |analysis: &rumorph::Analysis| {
+        same_lexeme(analysis)
             && dictionary
                 .ud_tag(analysis.ud)
-                .is_some_and(|tag| tag_like(&tag, wider))
+                .is_some_and(|tag| tag_like(&tag))
     };
     let found = entry
         .and_then(|(table, form)| {
             dictionary.analysis(&word, rumorph::Entry { table, form }, source)
         })
-        .filter(|analysis| like(analysis, false))
+        .filter(like)
         .or_else(|| {
             let analyses = dictionary.analyze(&word);
             let ud = || {
                 (dictionary.ud_tags().zip(0u16..))
-                    .find_map(|(tag, ud)| tag_like(&tag, false).then_some(ud))
+                    .find_map(|(tag, ud)| tag_like(&tag).then_some(ud))
             };
-            match analyses.iter().position(|analysis| like(analysis, false)) {
+            match analyses.iter().position(like) {
                 Some(at) => analyses.into_iter().nth(at),
                 None => match ud() {
                     Some(ud) => Some(rumorph::Analysis::new(
@@ -508,7 +518,19 @@ fn _analysis(py: Python<'_>, analyzer: Py<Analyzer>, state: AnalysisState) -> Py
                         prob,
                         source,
                     )),
-                    None => analyses.into_iter().find(|analysis| like(analysis, true)),
+                    // Совпасть должно больше половины признаков; из равных - первый, то есть
+                    // самый вероятный
+                    None => analyses
+                        .into_iter()
+                        .filter_map(|analysis| {
+                            let tag = dictionary.ud_tag(analysis.ud)?;
+                            let count = matched(&tag);
+                            let close = wanted.is_empty() || 2 * count > wanted.len();
+                            (same_lexeme(&analysis) && tag.pos() == pos && close)
+                                .then(|| (Reverse((count, same_labels(&tag))), analysis))
+                        })
+                        .min_by_key(|(score, _)| *score)
+                        .map(|(_, analysis)| analysis),
                 },
             }
         });

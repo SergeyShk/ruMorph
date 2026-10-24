@@ -745,6 +745,13 @@ def test_pickle_from_other_dictionary(morph):
     _, (_, state) = netherlands.__reduce__()
     genderless = "|".join(feat for feat in state[3].split("|") if not feat.startswith("Gender="))
     assert restore(analyzer, (*state[:3], genderless, *state[4:7], None)) == netherlands
+    # Тега нет и признак другой (в 0.3.0 «будет» - Tense=Pres с пометой futr): разбор с той же
+    # леммой и частью речи, у которого совпало больше всего признаков
+    will = morph.analyze("будет")[0]
+    _, (_, state) = will.__reduce__()
+    present = state[3].replace("Tense=Fut", "Tense=Pres")
+    old = restore(analyzer, (*state[:3], present, "futr,intr", *state[5:7], None))
+    assert (old, old.inflect(Number="Plur")) == (will, "будут")
 
 
 def test_pickled_analyses_share_tag_objects(morph):
