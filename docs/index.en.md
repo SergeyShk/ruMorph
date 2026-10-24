@@ -43,6 +43,14 @@
 
     [:octicons-arrow-right-24: The rumorph command](cli.md)
 
+-   :material-pipe:{ .lg .middle } __spaCy__
+
+    ---
+
+    A spaCy pipeline component: the part of speech, features and lemma of tokens instead of the tagger, morphologizer and lemmatizer
+
+    [:octicons-arrow-right-24: spaCy](spacy.md)
+
 -   :material-swap-horizontal:{ .lg .middle } __Migrating from pymorphy__
 
     ---

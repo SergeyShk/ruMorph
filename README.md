@@ -38,6 +38,7 @@
 * **[Незнакомые слова](https://sergeyshk.github.io/ruMorph/analysis/#guess)** - разборы по окончанию, слова через дефис и с приставками, формы угаданных слов
 * **[Словоизменение](https://sergeyshk.github.io/ruMorph/inflection/)** - формы лексемы, форма по признакам UD, согласование с количеством
 * **[Команда rumorph](https://sergeyshk.github.io/ruMorph/cli/)** - разбор файлов и потоков: леммы, CoNLL-U, TSV и JSON Lines
+* **[spaCy](https://sergeyshk.github.io/ruMorph/spacy/)** - компонент конвейера spaCy вместо теггера, морфологизатора и лемматизатора
 * **[Переход с pymorphy](https://sergeyshk.github.io/ruMorph/migration/)** - соответствие вызовов pymorphy2 и pymorphy3, частей речи и граммем
 * **[Сравнение](https://sergeyshk.github.io/ruMorph/performance/)** - точность и скорость в сравнении с pymorphy3, mystem, spaCy, Stanza и Slovnet, загрузка словаря и память
 
@@ -262,6 +263,25 @@ $ rumorph --format conllu text.txt > text.conllu
 ```
 
 Подробнее - в [документации](https://sergeyshk.github.io/ruMorph/cli/): параметры, форматы и коды выхода.
+
+</details>
+
+<details>
+<summary><b>spaCy</b></summary>
+
+<br>
+
+Компонент `rumorph` (`pip install rumorph[spacy]`) размечает токены конвейера spaCy частью речи, признаками UD и леммой по разбору с контекстом. В моделях `ru_core_news_*` он заменяет морфологизатор и лемматизатор: на SynTagRus test часть речи, лемма и признаки вместе верны у 93,6 % слов против 82,0 % у `ru_core_news_sm`, а конвейер работает быстрее.
+
+```python
+import spacy
+
+nlp = spacy.load("ru_core_news_sm", exclude=["morphologizer", "lemmatizer"])
+nlp.add_pipe("rumorph", after="parser")
+doc = nlp("Мост сделан из стали.")
+```
+
+Подробнее - в [документации](https://sergeyshk.github.io/ruMorph/spacy/): предложения, параметры и разбор ruMorph токена.
 
 </details>
 

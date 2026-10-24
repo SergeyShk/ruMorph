@@ -43,6 +43,14 @@
 
     [:octicons-arrow-right-24: Команда rumorph](cli.md)
 
+-   :material-pipe:{ .lg .middle } __spaCy__
+
+    ---
+
+    Компонент конвейера spaCy: часть речи, признаки и лемма токенов вместо теггера, морфологизатора и лемматизатора
+
+    [:octicons-arrow-right-24: spaCy](spacy.md)
+
 -   :material-swap-horizontal:{ .lg .middle } __Переход с pymorphy__
 
     ---

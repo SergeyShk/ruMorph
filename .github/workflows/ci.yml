@@ -77,7 +77,8 @@ jobs:
       - name: Cache Rust
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - name: Install dependencies
-        run: uv sync --locked --no-default-groups --group test
+        # У spaCy нет колес для 3.14t: там тесты компонента пропускаются
+        run: uv sync --locked --no-default-groups --group test ${{ matrix.python-version != '3.14t' && '--group spacy' || '' }}
       - name: Build dictionary
         shell: bash
         run: |
@@ -86,7 +87,7 @@ jobs:
           cargo run --release --locked -p rumorph-build -- build/opencorpora build/ud python/rumorph/data/ru.dict data/ru-context.bin
           uv run --no-sync python -c "import hashlib; print(hashlib.sha256(open('python/rumorph/data/ru.dict', 'rb').read()).hexdigest())"
       - name: Run tests
-        run: uv run --no-sync pytest --cov rumorph
+        run: uv run --no-sync pytest --cov rumorph ${{ matrix.python-version == '3.14t' && '--cov-fail-under=0' || '' }}
       - name: Run Rust tests
         run: cargo test -p rumorph -p rumorph-build -p rumorph-dict-ru --all-features --locked
 
