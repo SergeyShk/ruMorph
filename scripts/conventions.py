@@ -112,6 +112,9 @@ def harmonize(treebank: str, sentence: list[Token]) -> None:
     if treebank not in (TAIGA, GSD):
         return
     passive_heads = {t.head for t in sentence if t.deprel == "nsubj:pass"}
+    # Слова, у зависимого которых есть предлог «из»: «один из друзей»
+    with_from = {t.head for t in sentence if t.lemma.lower() == "из" and t.deprel == "case"}
+    partitive_heads = {t.head for t in sentence if t.id in with_from}
     for token in sentence:
         form, lemma = token.form.lower(), token.lemma.lower()
         if token.upos == "ADP" and lemma == form and lemma in SHORT_PREPOSITIONS:
@@ -136,6 +139,12 @@ def harmonize(treebank: str, sentence: list[Token]) -> None:
         ):
             token.feats["Voice"] = "Pass"
             token.lemma = lemma[:-2]
+        # «один из» в SynTagRus и GSD - числительное, Taiga размечает DET
+        partitive = token.id in partitive_heads
+        if treebank == TAIGA and lemma == "один" and token.upos == "DET" and partitive:
+            token.upos = "NUM"
+            token.feats.pop("PronType", None)
+            token.feats.update({"NumForm": "Word", "NumType": "Card"})
         if treebank == GSD:
             if lemma in DETERMINERS and token.upos in ("ADJ", "PRON"):
                 token.upos = "DET"
