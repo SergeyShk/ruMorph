@@ -68,7 +68,7 @@ Lexeme = list[tuple[str, str]]
 def download(urls: list[str], path: Path, digest: str) -> Path:
     """
     Скачивание файла с проверкой контрольной суммы: по первому адресу, с которого пришел файл
-    с нужной суммой; при сбое сети или ответе 5xx - повтор с паузой
+    с нужной суммой; при сбое сети, ответе 429 или 5xx - повтор с паузой
 
     Аргументы:
         urls (list[str]): Адреса файла
@@ -92,7 +92,8 @@ def download(urls: list[str], path: Path, digest: str) -> Path:
                     data = response.read()
             except urllib.error.HTTPError as err:
                 errors.append(f"{url}: {err}")
-                if err.code < 500:
+                # 429 - ограничение частоты запросов Wayback Machine: имеет смысл повторить
+                if err.code < 500 and err.code != 429:
                     break
                 continue
             except (OSError, http.client.HTTPException) as err:
