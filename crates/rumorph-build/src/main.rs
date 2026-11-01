@@ -1,5 +1,6 @@
-//! Сборка словаря ruMorph из выгрузки pymorphy3-dicts-ru (`scripts/export_pymorphy.py`),
-//! счетчиков UD (`scripts/export_ud.py`) и весов контекстной модели (`scripts/train_context.py`)
+//! Сборка словаря ruMorph из выгрузки словаря и корпуса OpenCorpora
+//! (`scripts/export_opencorpora.py`), счетчиков UD (`scripts/export_ud.py`) и весов контекстной
+//! модели (`scripts/train_context.py`)
 
 mod frequencies;
 mod lexemes;
@@ -24,7 +25,7 @@ fn main() -> ExitCode {
         [export, ud, output, context] => build(export, ud, output, Some(context.as_path())),
         _ => {
             eprintln!(
-                "Использование: rumorph-build <выгрузка pymorphy3> <выгрузка UD> <файл словаря> \
+                "Использование: rumorph-build <выгрузка OpenCorpora> <выгрузка UD> <файл словаря> \
                  [веса контекстной модели]\n       rumorph-build tags < теги OpenCorpora"
             );
             return ExitCode::from(2);

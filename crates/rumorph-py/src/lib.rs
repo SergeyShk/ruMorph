@@ -1305,22 +1305,6 @@ impl Analyzer {
         Ok(self.shared.dictionary.is_known(&text(word)?))
     }
 
-    /// Разборы OpenCorpora до перевода в UD и слияния: написание, тег, начальная форма, вероятность
-    /// (для проверки словаря)
-    fn _opencorpora(&self, word: &str) -> Vec<(String, String, String, f64)> {
-        self.shared
-            .dictionary
-            .opencorpora(word)
-            .into_iter()
-            .map(|(spelling, tag, lemma, prob)| (spelling, tag.to_owned(), lemma, prob))
-            .collect()
-    }
-
-    /// Доли разборов словоформы - по частотам корпуса UD (для сверки с pymorphy3 в тестах)
-    fn _table_frequencies(&self, word: &str) -> bool {
-        self.shared.dictionary.table_frequencies(word)
-    }
-
     /// Описание источника словаря в JSON (для проверки словаря в тестах)
     fn _meta(&self) -> &str {
         self.shared.dictionary.meta()

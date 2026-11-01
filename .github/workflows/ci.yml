@@ -79,10 +79,19 @@ jobs:
       - name: Install dependencies
         # У spaCy нет колес для 3.14t: там тесты компонента пропускаются
         run: uv sync --locked --no-default-groups --group test ${{ matrix.python-version != '3.14t' && '--group spacy' || '' }}
+      - name: Cache OpenCorpora
+        # Снимки словаря и корпуса OpenCorpora - из Wayback Machine: скачиваются один раз на версию скрипта
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: build/opencorpora/raw
+          key: opencorpora-${{ hashFiles('scripts/export_opencorpora.py') }}
+          # На Windows хэш скрипта с CRLF другой: подходит любой прежний кэш, download сверяет SHA-256
+          restore-keys: opencorpora-
+          enableCrossOsArchive: true
       - name: Build dictionary
         shell: bash
         run: |
-          uv run --no-sync python scripts/export_pymorphy.py build/opencorpora
+          uv run --no-sync python scripts/export_opencorpora.py build/opencorpora
           uv run --no-sync python scripts/export_ud.py build/ud
           cargo run --release --locked -p rumorph-build -- build/opencorpora build/ud python/rumorph/data/ru.dict data/ru-context.bin
           uv run --no-sync python -c "import hashlib; print(hashlib.sha256(open('python/rumorph/data/ru.dict', 'rb').read()).hexdigest())"

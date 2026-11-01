@@ -1,12 +1,11 @@
 The dictionary bundled with ruMorph (rumorph/data/ru.dict) is built from:
 
-- the OpenCorpora dictionary (https://opencorpora.org), revision 417150, as compiled
-  in the pymorphy3-dicts-ru package version 2.4.417150.4580142, including its
-  P(tag | word) estimates from the OpenCorpora corpus, licensed under the Creative
-  Commons Attribution-ShareAlike 3.0 Unported License (CC BY-SA 3.0);
-- the OpenCorpora annotated corpus (https://opencorpora.org), revision 4580223, on which
-  the context model is also trained, licensed under the Creative Commons
-  Attribution-ShareAlike 3.0 Unported License (CC BY-SA 3.0);
+- the OpenCorpora dictionary (https://opencorpora.org), revision 417258, licensed under
+  the Creative Commons Attribution-ShareAlike 3.0 Unported License (CC BY-SA 3.0);
+- the OpenCorpora annotated corpus (https://opencorpora.org), revision 4580223, from which
+  the P(tag | word) estimates are made and on which the context model is also trained,
+  licensed under the Creative Commons Attribution-ShareAlike 3.0 Unported License
+  (CC BY-SA 3.0);
 - counts of word form annotations in the training parts of the Universal Dependencies
   treebanks, release 2.18 (https://universaldependencies.org), and the weights of the
   context model trained on their training and development parts, licensed under the

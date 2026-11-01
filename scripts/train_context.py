@@ -30,14 +30,12 @@
 
 import argparse
 import bz2
-import hashlib
 import json
 import math
 import shutil
 import struct
 import subprocess
 import time
-import urllib.request
 import xml.etree.ElementTree as ET
 from collections import Counter
 from pathlib import Path
@@ -48,6 +46,7 @@ from torch import nn
 
 import conventions
 from conventions import GSD, TAIGA, harmonize
+from export_opencorpora import CORPUS as OPENCORPORA, download
 
 try:
     from rumorph import Analyzer
@@ -77,15 +76,6 @@ SOURCES = {
         },
     ),
 }
-# Корпус OpenCorpora, ревизия 4580223: сайт или его снимок в Wayback Machine
-OPENCORPORA = (
-    "annot.opcorpora.xml.bz2",
-    [
-        "https://web.archive.org/web/20240624222734id_/http://opencorpora.org/files/export/annot/annot.opcorpora.xml.bz2",
-        "https://opencorpora.org/files/export/annot/annot.opcorpora.xml.bz2",
-    ],
-    "dff2b07a3db865eb234515c3c2c51e370fc67b3582f32af7174625c8f2be4422",
-)
 # Теги OpenCorpora без части речи (числа, знаки, латиница, незнакомые слова): верен любой разбор
 UNTAGGED = {"PNCT", "NUMB", "LATN", "ROMN", "SYMB", "UNKN", "TIME", "DATE"}
 # Неизменяемые служебные части речи: их выбор из корпуса OpenCorpora не берется
@@ -113,38 +103,6 @@ SUFFIX_MAX = 4
 PROB_EDGES = (1e-4, 1e-3, 0.01, 0.03, 0.1, 0.2, 0.35, 0.5, 0.65, 0.8, 0.9, 0.97, 0.995)
 MAGIC = b"RUMCTX\0\0"
 FORMAT = 1
-
-
-def download(urls: list[str], path: Path, digest: str) -> None:
-    """
-    Скачивание файла с проверкой контрольной суммы: по первому адресу, с которого пришел файл
-    с нужной суммой
-
-    Аргументы:
-        urls (list[str]): Адреса файла
-        path (Path): Куда сохранить
-        digest (str): SHA-256 файла
-
-    Исключения:
-        ValueError: Если ни один адрес не дал файл с нужной суммой
-    """
-    if path.exists() and hashlib.sha256(path.read_bytes()).hexdigest() == digest:
-        return
-    errors = []
-    for url in urls:
-        try:
-            with urllib.request.urlopen(url, timeout=600) as response:
-                data = response.read()
-        except OSError as err:
-            errors.append(f"{url}: {err}")
-            continue
-        if hashlib.sha256(data).hexdigest() != digest:
-            errors.append(f"{url}: контрольная сумма не совпадает")
-            continue
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(data)
-        return
-    raise ValueError("; ".join(errors))
 
 
 def sentences(paths: list[Path]) -> list[list[tuple[str, str, str, dict[str, str]]]]:
