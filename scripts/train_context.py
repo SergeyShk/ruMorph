@@ -46,7 +46,8 @@ from torch import nn
 
 import conventions
 from conventions import GSD, TAIGA, harmonize
-from export_opencorpora import CORPUS as OPENCORPORA, download
+from export_opencorpora import CORPUS as OPENCORPORA, corpus_revisions, download
+from export_ud import RELEASE
 
 try:
     from rumorph import Analyzer
@@ -842,18 +843,24 @@ def quantized(array: np.ndarray) -> bool:
 
 
 def write(
-    path: Path, vocab: Vocabulary, weights: dict[str, np.ndarray], args: argparse.Namespace
+    path: Path,
+    vocab: Vocabulary,
+    weights: dict[str, np.ndarray],
+    args: argparse.Namespace,
+    sources: dict,
 ) -> None:
     """
     Файл весов: сигнатура, версия, число записей, затем записи «имя, вид, данные», числа
     little-endian. Вид 0 - строки, 1 - матрица f32, 2 - матрица int8 с масштабом f32 на строку,
-    3 - числа u32, 4 - числа f64
+    3 - числа u32, 4 - числа f64. Запись sources - источники обучения строкой JSON:
+    `rumorph-build` кладет их в описание словаря
 
     Аргументы:
         path (Path): Файл
         vocab (Vocabulary): Таблицы строк
         weights (dict[str, np.ndarray]): Тензоры
         args (argparse.Namespace): Параметры
+        sources (dict): Источники обучения
     """
     entries = []
 
@@ -870,6 +877,7 @@ def write(
     edges = np.array(PROB_EDGES, dtype="<f8")
     entries.append(name("edges") + struct.pack("<BI", 4, len(edges)) + edges.tobytes())
     for key, strings in (
+        ("sources", [json.dumps(sources, ensure_ascii=False)]),
         ("words", vocab.words),
         ("suffixes", vocab.suffixes),
         ("tags", vocab.tags),
@@ -979,7 +987,17 @@ def main() -> None:
     model = Model(vocab, args).to(device)
     train(model, f, dev, args, device)
     quantize_model(model)
-    write(args.output, vocab, tensors(model, args), args)
+    sources = {
+        "treebanks": sorted(SOURCES),
+        "release": RELEASE,
+        "parts": ["train", "dev"],
+        "corpus": {
+            "source": "opencorpora.org",
+            "revision": next(corpus_revisions(args.data / corpus_file)),
+        },
+        "license": "CC BY-SA 4.0",
+    }
+    write(args.output, vocab, tensors(model, args), args, sources)
     for name, (data, df) in dev.items():
         result = metrics(data, df, predict(model, df, device))
         print(

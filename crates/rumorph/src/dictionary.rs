@@ -23,6 +23,8 @@ mod ud;
 #[cfg(any(test, feature = "build"))]
 pub(crate) use context::Model;
 #[cfg(any(test, feature = "build"))]
+pub(crate) use context::sources as context_sources;
+#[cfg(any(test, feature = "build"))]
 pub use guess::GuessIndex;
 pub use own::Sample;
 use parts::with_particle;
