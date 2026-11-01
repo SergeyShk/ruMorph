@@ -30,14 +30,12 @@
 
 import argparse
 import bz2
-import hashlib
 import json
 import math
 import shutil
 import struct
 import subprocess
 import time
-import urllib.request
 import xml.etree.ElementTree as ET
 from collections import Counter
 from pathlib import Path
@@ -48,7 +46,7 @@ from torch import nn
 
 import conventions
 from conventions import GSD, TAIGA, harmonize
-from export_opencorpora import CORPUS as OPENCORPORA
+from export_opencorpora import CORPUS as OPENCORPORA, download
 
 try:
     from rumorph import Analyzer
@@ -105,38 +103,6 @@ SUFFIX_MAX = 4
 PROB_EDGES = (1e-4, 1e-3, 0.01, 0.03, 0.1, 0.2, 0.35, 0.5, 0.65, 0.8, 0.9, 0.97, 0.995)
 MAGIC = b"RUMCTX\0\0"
 FORMAT = 1
-
-
-def download(urls: list[str], path: Path, digest: str) -> None:
-    """
-    Скачивание файла с проверкой контрольной суммы: по первому адресу, с которого пришел файл
-    с нужной суммой
-
-    Аргументы:
-        urls (list[str]): Адреса файла
-        path (Path): Куда сохранить
-        digest (str): SHA-256 файла
-
-    Исключения:
-        ValueError: Если ни один адрес не дал файл с нужной суммой
-    """
-    if path.exists() and hashlib.sha256(path.read_bytes()).hexdigest() == digest:
-        return
-    errors = []
-    for url in urls:
-        try:
-            with urllib.request.urlopen(url, timeout=600) as response:
-                data = response.read()
-        except OSError as err:
-            errors.append(f"{url}: {err}")
-            continue
-        if hashlib.sha256(data).hexdigest() != digest:
-            errors.append(f"{url}: контрольная сумма не совпадает")
-            continue
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(data)
-        return
-    raise ValueError("; ".join(errors))
 
 
 def sentences(paths: list[Path]) -> list[list[tuple[str, str, str, dict[str, str]]]]:

@@ -17,8 +17,11 @@ import argparse
 import base64
 import bz2
 import hashlib
+import http.client
 import json
 import struct
+import time
+import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
 from collections import Counter, defaultdict
@@ -53,6 +56,11 @@ SEPARATE_LINKS = {"7", "21", "23", "27"}
 INITIALS = set("АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЭЮЯ")
 # P(тег | словоформа) - в миллионных долях
 MILLION = 1000000
+# Попыток на адрес, пауза перед повтором (растет с номером попытки) и таймаут операции сокета, с;
+# Wayback Machine временами не отвечает на рукопожатие или обрывает ответ
+ATTEMPTS = 3
+PAUSE = 15
+TIMEOUT = 60
 
 Lexeme = list[tuple[str, str]]
 
@@ -60,7 +68,7 @@ Lexeme = list[tuple[str, str]]
 def download(urls: list[str], path: Path, digest: str) -> Path:
     """
     Скачивание файла с проверкой контрольной суммы: по первому адресу, с которого пришел файл
-    с нужной суммой
+    с нужной суммой; при сбое сети или ответе 5xx - повтор с паузой
 
     Аргументы:
         urls (list[str]): Адреса файла
@@ -77,18 +85,25 @@ def download(urls: list[str], path: Path, digest: str) -> Path:
         return path
     errors = []
     for url in urls:
-        try:
-            with urllib.request.urlopen(url, timeout=600) as response:
-                data = response.read()
-        except OSError as err:
-            errors.append(f"{url}: {err}")
-            continue
-        if hashlib.sha256(data).hexdigest() != digest:
-            errors.append(f"{url}: контрольная сумма не совпадает")
-            continue
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(data)
-        return path
+        for attempt in range(ATTEMPTS):
+            time.sleep(PAUSE * attempt)
+            try:
+                with urllib.request.urlopen(url, timeout=TIMEOUT) as response:
+                    data = response.read()
+            except urllib.error.HTTPError as err:
+                errors.append(f"{url}: {err}")
+                if err.code < 500:
+                    break
+                continue
+            except (OSError, http.client.HTTPException) as err:
+                errors.append(f"{url}: {err!r}")
+                continue
+            if hashlib.sha256(data).hexdigest() != digest:
+                errors.append(f"{url}: контрольная сумма не совпадает")
+                break
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+            return path
     raise ValueError("; ".join(errors))
 
 

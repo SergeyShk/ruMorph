@@ -85,6 +85,8 @@ jobs:
         with:
           path: build/opencorpora/raw
           key: opencorpora-${{ hashFiles('scripts/export_opencorpora.py') }}
+          # На Windows хэш скрипта с CRLF другой: подходит любой прежний кэш, download сверяет SHA-256
+          restore-keys: opencorpora-
           enableCrossOsArchive: true
       - name: Build dictionary
         shell: bash
