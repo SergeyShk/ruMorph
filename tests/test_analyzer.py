@@ -32,8 +32,9 @@ def morph():
 def test_default_dictionary(morph):
     assert morph.path == Path(rumorph.__file__).parent / "data" / "ru.dict"
     meta = json.loads(morph._meta())
-    assert meta["source"] == "pymorphy3-dicts-ru"
-    assert meta["opencorpora_revision"] == "417150"
+    assert meta["source"] == "opencorpora.org"
+    assert meta["opencorpora_revision"] == "417258"
+    assert meta["corpus_revision"] == "4580223"
 
 
 def test_path_argument(morph):
@@ -202,6 +203,14 @@ def test_feats_order_and_probabilities(morph, word):
 def test_proper_nouns_by_letter_case(morph, word, pos):
     # Строчное слово - нарицательное, с заглавной буквы чаще имя собственное
     assert morph.analyze(word)[0].pos == pos
+
+
+@pytest.mark.parametrize(
+    "lemma", ["вселенная", "дума", "земля", "кремль", "луна", "солнце", "христос"]
+)
+def test_proper_copies(morph, lemma):
+    # У единственного числа этих существительных сборщик добавляет разбор PROPN (`ud::PROPER_COPIES`)
+    assert any(a.pos == "PROPN" and a.lemma == lemma for a in morph.analyze(lemma.capitalize()))
 
 
 def test_is_known(morph):

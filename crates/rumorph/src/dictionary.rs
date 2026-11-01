@@ -692,30 +692,6 @@ impl Dictionary {
         self.candidates(word)
     }
 
-    /// Доли разборов словоформы заданы по формам таблиц (частоты корпуса UD), а не по тегам:
-    /// для сверки с pymorphy3
-    #[doc(hidden)]
-    pub fn table_frequencies(&self, word: &str) -> bool {
-        let Some(key) = self.alphabet.input_key(word) else {
-            return false;
-        };
-        let Some(spellings) = self.spellings(&key) else {
-            return false;
-        };
-        let by_entry = |yo: u64| {
-            spellings
-                .probabilities(yo)
-                .and_then(|offset| self.probabilities_at(offset))
-                .is_some_and(|list| list.by_entry)
-        };
-        by_entry(key.yo)
-            || self
-                .matches(&spellings, key.yo)
-                .as_slice()
-                .iter()
-                .any(|&(yo, _)| by_entry(yo))
-    }
-
     /// Разборы OpenCorpora до перевода в UD и слияния: написание, тег, начальная форма парадигмы
     /// и вероятность (без частот - равная доля); для проверки словаря
     #[doc(hidden)]

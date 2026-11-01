@@ -1,6 +1,6 @@
 [package]
 name = "rumorph-build"
-description = "Сборка словаря ruMorph из выгрузки pymorphy3-dicts-ru"
+description = "Сборка словаря ruMorph из выгрузки OpenCorpora"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

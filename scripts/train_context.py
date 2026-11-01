@@ -48,6 +48,7 @@ from torch import nn
 
 import conventions
 from conventions import GSD, TAIGA, harmonize
+from export_opencorpora import CORPUS as OPENCORPORA
 
 try:
     from rumorph import Analyzer
@@ -77,15 +78,6 @@ SOURCES = {
         },
     ),
 }
-# Корпус OpenCorpora, ревизия 4580223: сайт или его снимок в Wayback Machine
-OPENCORPORA = (
-    "annot.opcorpora.xml.bz2",
-    [
-        "https://web.archive.org/web/20240624222734id_/http://opencorpora.org/files/export/annot/annot.opcorpora.xml.bz2",
-        "https://opencorpora.org/files/export/annot/annot.opcorpora.xml.bz2",
-    ],
-    "dff2b07a3db865eb234515c3c2c51e370fc67b3582f32af7174625c8f2be4422",
-)
 # Теги OpenCorpora без части речи (числа, знаки, латиница, незнакомые слова): верен любой разбор
 UNTAGGED = {"PNCT", "NUMB", "LATN", "ROMN", "SYMB", "UNKN", "TIME", "DATE"}
 # Неизменяемые служебные части речи: их выбор из корпуса OpenCorpora не берется

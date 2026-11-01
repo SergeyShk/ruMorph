@@ -336,7 +336,7 @@ git clone https://github.com/SergeyShk/ruMorph.git
 cd ruMorph
 
 make deps        # create the environment, install the dependencies and build the Rust module
-make dictionary  # build the dictionary from pymorphy3-dicts-ru and UD treebanks
+make dictionary  # build the dictionary from the OpenCorpora dictionary and corpus and UD treebanks
 make test        # run the Python tests, the docstring examples (doctest) and the Rust tests
 make lint        # ruff, mypy, rustfmt and clippy
 ```
@@ -359,11 +359,11 @@ Bug reports, ideas and pull requests are welcome - the [issues](https://github.c
 <br>
 
 *   **crates/rumorph** - the analyzer core in Rust: the dictionary format, building, analysis, the context model and inflection
-*   **crates/rumorph-build** - building the dictionary from an export of pymorphy3-dicts-ru, converting the OpenCorpora tags to UD and frequencies of analyses from UD treebanks
+*   **crates/rumorph-build** - building the dictionary from an export of OpenCorpora, converting the OpenCorpora tags to UD and frequencies of analyses from UD treebanks
 *   **crates/rumorph-dict-ru** - the crate with the dictionary for `rumorph` on crates.io
 *   **crates/rumorph-py** - the Python module `rumorph._rumorph` built with PyO3
 *   **python/rumorph** - the Python package
-*   **scripts** - exporting the pymorphy3-dicts-ru dictionary and the UD treebank counts, training the context model, checking the installed package before publishing and comparing with other analyzers
+*   **scripts** - exporting the OpenCorpora dictionary and corpus and the UD treebank counts, training the context model, checking the installed package before publishing and comparing with other analyzers
 *   **data** - the context model weights that the builder embeds into the dictionary
 *   **docs** - MkDocs documentation in Russian and English
 *   **tests** - tests of the Python package

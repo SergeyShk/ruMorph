@@ -31,10 +31,10 @@ else
 	uv sync --all-groups
 endif
 
-dictionary: $(DICTIONARY) ## Собрать словарь из pymorphy3-dicts-ru и трибанков UD
+dictionary: $(DICTIONARY) ## Собрать словарь из словаря и корпуса OpenCorpora и трибанков UD
 
-$(EXPORT_STAMP): $(SCRIPTS_PATH)/export_pymorphy.py uv.lock | deps
-	uv run python $(SCRIPTS_PATH)/export_pymorphy.py $(EXPORT_PATH)
+$(EXPORT_STAMP): $(SCRIPTS_PATH)/export_opencorpora.py | deps
+	uv run python $(SCRIPTS_PATH)/export_opencorpora.py $(EXPORT_PATH)
 	touch $@
 
 $(UD_STAMP): $(SCRIPTS_PATH)/export_ud.py $(SCRIPTS_PATH)/conventions.py | deps

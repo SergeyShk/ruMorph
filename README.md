@@ -336,7 +336,7 @@ git clone https://github.com/SergeyShk/ruMorph.git
 cd ruMorph
 
 make deps        # создать окружение, установить зависимости и собрать модуль на Rust
-make dictionary  # собрать словарь из pymorphy3-dicts-ru и трибанков UD
+make dictionary  # собрать словарь из словаря и корпуса OpenCorpora и трибанков UD
 make test        # запустить тесты Python, примеры из докстрингов (doctest) и тесты Rust
 make lint        # ruff, mypy, rustfmt и clippy
 ```
@@ -359,11 +359,11 @@ uv run pre-commit install
 <br>
 
 *   **crates/rumorph** - ядро анализатора на Rust: формат словаря, сборка, разбор, контекстная модель и словоизменение
-*   **crates/rumorph-build** - сборка словаря из выгрузки pymorphy3-dicts-ru, перевод тегов OpenCorpora в UD и частоты разборов по трибанкам UD
+*   **crates/rumorph-build** - сборка словаря из выгрузки OpenCorpora, перевод тегов OpenCorpora в UD и частоты разборов по трибанкам UD
 *   **crates/rumorph-dict-ru** - крейт со словарем для `rumorph` на crates.io
 *   **crates/rumorph-py** - модуль Python `rumorph._rumorph` на PyO3
 *   **python/rumorph** - пакет Python
-*   **scripts** - выгрузка словаря pymorphy3-dicts-ru и счетчиков трибанков UD, обучение контекстной модели, проверка установленного пакета перед публикацией и сравнение с другими анализаторами
+*   **scripts** - выгрузка словаря и корпуса OpenCorpora и счетчиков трибанков UD, обучение контекстной модели, проверка установленного пакета перед публикацией и сравнение с другими анализаторами
 *   **data** - веса контекстной модели, которые сборщик вшивает в словарь
 *   **docs** - документация MkDocs на русском и английском
 *   **tests** - тесты пакета Python
