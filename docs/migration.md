@@ -1,6 +1,6 @@
 # Переход с pymorphy
 
-У pymorphy2 и pymorphy3 один API: pymorphy3 - продолжение pymorphy2, который не работает на Python 3.11 и новее. ruMorph работает с тем же словарем OpenCorpora, но API у него свое: части речи и признаки [Universal Dependencies](https://universaldependencies.org/) вместо граммем OpenCorpora, вероятность вместо `score`, словоформы строкой, исключения вместо `None`.
+У pymorphy2 и pymorphy3 один API: pymorphy3 - продолжение pymorphy2, который не работает на Python 3.11 и новее. ruMorph работает с тем же словарем OpenCorpora, дополненным словами Викисловаря, но API у него свое: части речи и признаки [Universal Dependencies](https://universaldependencies.org/) вместо граммем OpenCorpora, вероятность вместо `score`, словоформы строкой, исключения вместо `None`.
 
 ``` bash
 pip install rumorph

@@ -68,14 +68,14 @@ The context model analyzes a whole sentence. The component takes sentences from 
 
     ``` python
     nlp = spacy.blank("ru")
-    nlp.add_pipe("rumorph", config={"words": {"зумер": "геймер"}})
-    [token.lemma_ for token in nlp("Зумерам нравится")]
+    nlp.add_pipe("rumorph", config={"words": {"вайбкодер": "геймер"}})
+    [token.lemma_ for token in nlp("Вайбкодерам нравится")]
     ```
 
 === "Result"
 
     ```
-    ['зумер', 'нравиться']
+    ['вайбкодер', 'нравиться']
     ```
 
 ## ruMorph analysis { #extension }

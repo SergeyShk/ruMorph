@@ -960,9 +960,9 @@ fn _analyzer(
 ///     >>> morph = Analyzer()
 ///     >>> [(analysis.lemma, round(analysis.prob, 3)) for analysis in morph.analyze("стали")][:2]
 ///     [('стать', 0.988), ('сталь', 0.005)]
-///     >>> morph = Analyzer(words={"зумер": "геймер", "зечь": ("печь", "VERB")})
-///     >>> morph.analyze("зумерами")[0].lemma, morph.analyze("зечет")[0].lemma
-///     ('зумер', 'зечь')
+///     >>> morph = Analyzer(words={"вайбкодер": "геймер", "зечь": ("печь", "VERB")})
+///     >>> morph.analyze("вайбкодерами")[0].lemma, morph.analyze("зечет")[0].lemma
+///     ('вайбкодер', 'зечь')
 #[pyclass(frozen, module = "rumorph")]
 struct Analyzer {
     shared: Arc<Shared>,
@@ -1146,8 +1146,8 @@ impl Analyzer {
     ///
     /// Пример использования:
     ///     >>> from rumorph import Analyzer
-    ///     >>> [len(analyses) for analyses in Analyzer().analyze_many(["мама", "мыла", "раму", "вайб"])]
-    ///     [1, 4, 2, 1]
+    ///     >>> [len(analyses) for analyses in Analyzer().analyze_many(["мама", "мыла", "раму", "вайбкодер"])]
+    ///     [1, 4, 2, 3]
     fn analyze_many(
         slf: &Bound<'_, Self>,
         words: &Bound<'_, PyAny>,
@@ -1299,7 +1299,7 @@ impl Analyzer {
     /// Пример использования:
     ///     >>> from rumorph import Analyzer
     ///     >>> morph = Analyzer()
-    ///     >>> morph.is_known("Ежи"), morph.is_known("вайб")
+    ///     >>> morph.is_known("Ежи"), morph.is_known("вайбкодер")
     ///     (True, False)
     fn is_known(&self, word: &Bound<'_, PyAny>) -> PyResult<bool> {
         Ok(self.shared.dictionary.is_known(&text(word)?))

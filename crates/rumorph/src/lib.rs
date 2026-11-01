@@ -15,7 +15,7 @@
 //! # Ok::<(), rumorph::Error>(())
 //! ```
 //!
-//! Features: `bundled` (по умолчанию) - словарь OpenCorpora из крейта `rumorph-dict-ru`,
+//! Features: `bundled` (по умолчанию) - словарь ruMorph из крейта `rumorph-dict-ru`,
 //! `build` - сборка своих словарей (`Builder`), `cli` - команда `rumorph`
 //! (`cargo install rumorph --features cli`)
 #![cfg_attr(docsrs, feature(doc_cfg))]

@@ -158,7 +158,7 @@ def test_po_adverbs(morph, word):
     [
         ("экодомов", "экодом", "NOUN"),
         ("микротромбов", "микротромб", "NOUN"),
-        ("антиковидный", "антиковидный", "ADJ"),
+        ("антивайбовый", "антивайбовый", "ADJ"),
     ],
 )
 def test_prefixed(morph, word, lemma, pos):
@@ -187,7 +187,7 @@ def test_pickled_parts(morph):
         ("IT-компания", "it-компания", "NOUN"),
         ("PR-менеджера", "pr-менеджер", "NOUN"),
         # Обе части изменяются: лемма из лемм частей
-        ("дивана-кровати", "диван-кровать", "NOUN"),
+        ("стула-трансформера", "стул-трансформер", "NOUN"),
         ("человека-паука", "человек-паук", "NOUN"),
         ("думал-думал", "думать-думать", "VERB"),
         # Первая часть в начальной форме не меняет лемму
@@ -203,8 +203,8 @@ def test_hyphenated_lemmas(morph, word, lemma, pos):
 
 
 def test_both_parts_inflected_have_no_forms(morph):
-    sofa = morph.analyze("дивана-кровати")[0]
-    assert [form.word for form in sofa.forms()] == ["дивана-кровати"]
+    chair = morph.analyze("стула-трансформера")[0]
+    assert [form.word for form in chair.forms()] == ["стула-трансформера"]
 
 
 @pytest.mark.parametrize(

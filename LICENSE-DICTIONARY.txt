@@ -6,6 +6,11 @@ The dictionary bundled with ruMorph (rumorph/data/ru.dict) is built from:
   the P(tag | word) estimates are made and on which the context model is also trained,
   licensed under the Creative Commons Attribution-ShareAlike 3.0 Unported License
   (CC BY-SA 3.0);
+- nouns, proper names and adjectives of the Russian Wiktionary (https://ru.wiktionary.org)
+  missing from OpenCorpora, by the Wiktionary contributors, from the dump of 2026-10-01 as
+  extracted by wiktextract (https://kaikki.org; snapshot:
+  https://huggingface.co/datasets/SergeyShk/rumorph-wiktionary), licensed under the Creative
+  Commons Attribution-ShareAlike 4.0 International License (CC BY-SA 4.0);
 - counts of word form annotations in the training parts of the Universal Dependencies
   treebanks, release 2.18 (https://universaldependencies.org), and the weights of the
   context model trained on their training and development parts, licensed under the
