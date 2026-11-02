@@ -38,6 +38,7 @@ def test_default_dictionary(morph):
     assert meta["opencorpora_revision"] == "417258"
     assert meta["corpus_revision"] == "4580223"
     assert meta["wiktionary"]["dump"] == "2026-10-01"
+    assert meta["wiktionary"]["file"].endswith("ru-wiktionary-20261001.jsonl.xz")
     assert meta["context"]["release"] == "r2.18"
 
 
@@ -231,6 +232,48 @@ def test_wiktionary_words(morph, word, lemma, pos):
     first = morph.analyze(word)[0]
     assert (first.lemma, first.pos, first.source) == (lemma, pos, "dictionary")
     assert morph.analyze("зумер")[0].inflect(Number="Plur", Case="Gen") == "зумеров"
+
+
+def test_wiktionary_after_opencorpora(morph):
+    # Без долей первый разбор - лексемы OpenCorpora, а не редкого слова Викисловаря («гасило»)
+    first = morph.analyze("гасил")[0]
+    assert (first.lemma, first.pos) == ("гасить", "VERB")
+
+
+@pytest.mark.parametrize(
+    ("word", "lemma"),
+    [
+        ("собой", "соба"),
+        ("тех", "тёха"),
+        ("кроме", "кром"),
+        ("катанье", "катанье"),
+        ("самцов", "самцовый"),
+    ],
+)
+def test_wiktionary_skipped(morph, word, lemma):
+    # Редкое слово с формой частого, вариант лексемы OpenCorpora и краткие формы относительного прилагательного
+    # из шаблона таблицы в словарь не попадают
+    assert lemma not in {a.lemma for a in morph.analyze(word)}
+
+
+def test_wiktionary_yo_cells(morph):
+    # Ячейку, равную заголовку статьи с «ё», wiktextract не пишет: она восстанавливается
+    assert morph.analyze("мудачьё")[0].inflect(Case="Acc") == "мудачьё"
+
+
+def test_rare_capitalized(morph):
+    # Слово с заглавной, которое словарь знает только как редкое нарицательное слово Викисловаря, - прежде всего имя
+    analyses = morph.analyze("Сенна")
+    assert analyses[0].pos == "PROPN"
+    assert any(a.pos == "NOUN" and a.lemma == "сенна" for a in analyses)
+    assert [a.pos for a in morph.analyze("сенна")] == ["NOUN"]
+    assert [a.pos for a in morph.analyze("Мама")] == ["NOUN"]
+    # Прилагательное с заглавной - редко имя; протяжка разбирается, как слово без нее; со своим словом
+    # слово не редкое
+    assert {a.pos for a in morph.analyze("Двухместный")} == {"ADJ"}
+    assert morph.analyze("Се-е-енна")[0].pos == "PROPN"
+    own = Analyzer(words={"сенн": "пляж"}).analyze("Сенна")
+    assert {(a.lemma, a.pos) for a in own} == {("сенна", "NOUN"), ("сенн", "NOUN")}
 
 
 def test_is_known(morph):

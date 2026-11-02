@@ -83,8 +83,9 @@ def test_guessed_inflection(morph):
     assert {form.lemma for form in morph.analyze("дипфейкеру")[0].forms()} == {"дипфейкер"}
 
 
-# Короткие слова в смешанном регистре - чаще единицы измерения: их не угадать по окончанию
-@pytest.mark.parametrize("word", ["вайб1", "Б" + "е" * 200, "МГц", "кГц", "дБ", "мВ"])
+# Короткие слова в смешанном регистре - чаще единицы измерения, а у строчного слова из одной-двух букв
+# окончание ничего не говорит: их не угадать по окончанию
+@pytest.mark.parametrize("word", ["вайб1", "Б" + "е" * 200, "МГц", "кГц", "дБ", "мВ", "ви", "ся"])
 def test_not_guessed(morph, word):
     assert [(a.pos, a.source) for a in morph.analyze(word)] == [("X", "rule")]
 

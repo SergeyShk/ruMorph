@@ -5,7 +5,7 @@ use fst::MapBuilder;
 use crate::Error;
 use crate::alphabet::{Alphabet, MAX_KEY, yo_order};
 use crate::dictionary::{Entry, GuessIndex};
-use crate::format::{self, ENTRY_KEYS, MAX_LIST, MAX_SPELLINGS, Sections, WordValue};
+use crate::format::{self, ENTRY_KEYS, MAX_LIST, MAX_SPELLINGS, RARE_WORD, Sections, WordValue};
 
 /// Сборщик словаря из таблиц тегов, префиксов, суффиксов, парадигм, словоформ и частот
 ///
@@ -24,7 +24,8 @@ pub struct Builder {
     paradigms: Vec<Vec<(u16, u16, u16)>>,
     tables: Vec<(u16, Vec<u32>)>,
     table_numbers: HashMap<(u16, Vec<u32>), u16>,
-    words: BTreeMap<String, Vec<u32>>,
+    /// Разборы словоформ и пометка «все разборы - редкие» (`add_rare_word`)
+    words: BTreeMap<String, (Vec<u32>, bool)>,
     /// Списки частот: ключи - формы таблиц (`true`) или теги, пары «ключ, доля в миллионных»
     probabilities: BTreeMap<String, (bool, Vec<(u32, u32)>)>,
     guesses: BTreeMap<(GuessIndex, String), Vec<(u32, u32)>>,
@@ -181,6 +182,17 @@ impl Builder {
 
     /// Добавляет словоформу с разборами; повторные разборы дописываются
     pub fn add_word(&mut self, word: &str, entries: &[Entry]) -> Result<(), Error> {
+        self.insert_word(word, entries, false)
+    }
+
+    /// Добавляет словоформу с разборами только редких лексем дополнительного словаря (Викисловаря):
+    /// такое слово с заглавной буквы разбирается и как незнакомое имя собственное. Если у словоформы
+    /// есть и обычные разборы (`add_word`), она не редкая
+    pub fn add_rare_word(&mut self, word: &str, entries: &[Entry]) -> Result<(), Error> {
+        self.insert_word(word, entries, true)
+    }
+
+    fn insert_word(&mut self, word: &str, entries: &[Entry], rare: bool) -> Result<(), Error> {
         if word.contains('\0') {
             return Err(Error::Build(format!(
                 "словоформа {word:?} с символом U+0000"
@@ -213,10 +225,15 @@ impl Builder {
             }
             packed.push((u32::from(entry.table) << 16) | u32::from(entry.form));
         }
-        self.words
-            .entry(word.to_owned())
-            .or_default()
-            .extend(packed);
+        match self.words.get_mut(word) {
+            Some((known, all_rare)) => {
+                known.extend(packed);
+                *all_rare &= rare;
+            }
+            None => {
+                self.words.insert(word.to_owned(), (packed, rare));
+            }
+        }
         Ok(())
     }
 
@@ -320,15 +337,15 @@ impl Builder {
         // Одинаковые списки разборов у разных словоформ хранятся один раз; написания одного ключа
         // («все» и «всё») - вместе
         let mut records = Vec::new();
-        let mut offsets: HashMap<&[u32], u32> = HashMap::new();
+        let mut offsets: HashMap<(&[u32], bool), u32> = HashMap::new();
         let mut keys: BTreeMap<Vec<u8>, Spellings> = BTreeMap::new();
-        for (word, packed) in &self.words {
+        for (word, (packed, rare)) in &self.words {
             let key = letters.spelling_key(word).ok_or_else(|| {
                 Error::Build(format!("словоформа {word:?} длиннее {MAX_KEY} букв"))
             })?;
-            let offset = *offsets.entry(packed).or_insert_with(|| {
+            let offset = *offsets.entry((packed, *rare)).or_insert_with(|| {
                 let offset = records.len() as u32;
-                records.push(packed.len() as u32);
+                records.push(packed.len() as u32 | if *rare { RARE_WORD } else { 0 });
                 records.extend_from_slice(packed);
                 offset
             });
@@ -459,7 +476,7 @@ impl Builder {
         let long = |what: &str, owner: &str, len: usize| {
             (len > MAX_LIST).then(|| Error::Build(format!("у {owner} больше {MAX_LIST} {what}")))
         };
-        for (word, entries) in &self.words {
+        for (word, (entries, _)) in &self.words {
             if let Some(err) = long("разборов", &format!("словоформы {word:?}"), entries.len())
             {
                 return Err(err);

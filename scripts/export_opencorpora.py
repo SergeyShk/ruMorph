@@ -9,8 +9,9 @@
     добавляются лексемами OpenCorpora (`wiktionary.py`). Формы лексемы делятся на основу
     и парадигму. Скрипт пишет таблицы
     тегов, префиксов, суффиксов и парадигм (JSON), словоформы с номерами парадигм и форм
-    (words.tsv) и P(тег | словоформа) по разметке корпуса в миллионных долях
-    (probabilities.tsv). Нужна только стандартная библиотека.
+    (words.tsv, запись только лексемы Викисловаря - с пометой «+») и P(тег | словоформа)
+    по разметке корпуса в миллионных долях (probabilities.tsv). Нужна только стандартная
+    библиотека.
 
 Пример использования:
     uv run python scripts/export_opencorpora.py target/opencorpora
@@ -70,6 +71,12 @@ SEPARATE_LINKS = {"7", "21", "23", "27"}
 INITIALS = set("АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЭЮЯ")
 # P(тег | словоформа) - в миллионных долях
 MILLION = 1000000
+# Словоформа OpenCorpora, которая встречается в корпусе не меньше стольких раз, - частая: лексема Викисловаря
+# с такой формой не добавляется
+FREQUENT = 5
+# Доля форм с граммемами лексемы Викисловаря, найденных в одной лексеме OpenCorpora, с которой она - вариант
+# этой лексемы («катанье» у «катание», «шаровый» у «шаровой»)
+VARIANT_SHARE = 0.9
 # Попыток на адрес, пауза перед повтором (растет с номером попытки) и таймаут операции сокета, с;
 # Wayback Machine временами не отвечает на рукопожатие или обрывает ответ
 ATTEMPTS = 3
@@ -333,7 +340,7 @@ def to_paradigm(lexeme: Lexeme) -> tuple[str, tuple[tuple[str, str, str], ...]]:
 
 def compile_dictionary(
     lexemes: list[Lexeme],
-) -> tuple[list[str], list[str], list[list[int]], list[tuple[str, int, int]]]:
+) -> tuple[list[str], list[str], list[list[int]], list[tuple[str, int, int, int]]]:
     """
     Таблицы словаря: теги и парадигмы по порядку появления, суффиксы по алфавиту, словоформы
 
@@ -341,16 +348,16 @@ def compile_dictionary(
         lexemes (list[Lexeme]): Объединенные лексемы
 
     Вывод:
-        tuple[list[str], list[str], list[list[int]], list[tuple[str, int, int]]]: Теги, суффиксы,
+        tuple[list[str], list[str], list[list[int]], list[tuple[str, int, int, int]]]: Теги, суффиксы,
             парадигмы (номера суффиксов, тегов и префиксов форм тремя блоками), словоформы
-            с номерами парадигмы и формы
+            с номерами парадигмы, формы и лексемы
     """
     tags: list[str] = []
     tag_numbers: dict[str, int] = {}
     paradigms: list[tuple[tuple[str, str, str], ...]] = []
     paradigm_numbers: dict[tuple[tuple[str, str, str], ...], int] = {}
     words = []
-    for lexeme in lexemes:
+    for index, lexeme in enumerate(lexemes):
         stem, paradigm = to_paradigm(lexeme)
         for _, tag, _ in paradigm:
             if tag not in tag_numbers:
@@ -360,7 +367,7 @@ def compile_dictionary(
         if number == len(paradigms):
             paradigms.append(paradigm)
         for form, (suffix, _, prefix) in enumerate(paradigm):
-            words.append((prefix + stem + suffix, number, form))
+            words.append((prefix + stem + suffix, number, form, index))
     suffixes = sorted({suffix for paradigm in paradigms for suffix, _, _ in paradigm})
     suffix_numbers = {suffix: number for number, suffix in enumerate(suffixes)}
     prefix_numbers = {prefix: number for number, prefix in enumerate(PARADIGM_PREFIXES)}
@@ -479,7 +486,7 @@ def export(output: Path) -> None:
     snapshot = download(urls, output / "raw" / name, digest)
 
     revision, lexemes, links = parse_dictionary(dictionary)
-    known = {wiktionary.normal(lexeme[0][0]) for lexeme in lexemes.values() if lexeme}
+    known = {wiktionary.normal(form) for lexeme in lexemes.values() for form in lemmas(lexeme)}
     simplify_tags(lexemes)
     for number, lexeme in lexemes.items():
         lexemes[number] = [(form, tag) for form, tag in lexeme if "Init" not in tag]
@@ -487,20 +494,31 @@ def export(output: Path) -> None:
     for lexeme in lexemes.values():
         for _, tag in lexeme:
             spellings.setdefault(grammemes(tag), tag)
-    # Номера новых лексем - после номеров OpenCorpora: парадигмы словаря сохраняют номера
     forms = {form for lexeme in lexemes.values() for form, _ in lexeme}
-    added = wiktionary.lexemes(read_snapshot(snapshot), known, spellings, forms)
+    counts = Counter(text.lower().replace("ё", "е") for text, _ in corpus_words(corpus))
+    frequent = {form.replace("ё", "е") for form in forms} & {
+        form for form, count in counts.items() if count >= FREQUENT
+    }
+    found = wiktionary.lexemes(read_snapshot(snapshot), known, spellings, forms, frequent)
+    added = without_variants(found, lexemes, links)
+    # Номера новых лексем - после номеров OpenCorpora: парадигмы словаря сохраняют номера
     start = max(map(int, lexemes)) + 1
     lexemes.update((str(number), lexeme) for number, lexeme in enumerate(added, start))
     joined = join_lexemes(lexemes, links)
-    tags, suffixes, layouts, words = compile_dictionary(joined)
+    tags, suffixes, layouts, records = compile_dictionary(joined)
     corpus_revision = next(corpus_revisions(corpus))
 
     info = {
         "source": "opencorpora.org",
         "opencorpora_revision": revision,
         "corpus_revision": corpus_revision,
-        "wiktionary": {"dump": "2026-10-01", "lexemes": len(added), "license": "CC BY-SA 4.0"},
+        "wiktionary": {
+            "dump": "2026-10-01",
+            "file": WIKTIONARY[1][0],
+            "sha256": WIKTIONARY[2],
+            "lexemes": len(added),
+            "license": "CC BY-SA 4.0",
+        },
         "license": LICENSE,
     }
     tables = {
@@ -514,12 +532,24 @@ def export(output: Path) -> None:
         (output / name).write_text(json.dumps(table, ensure_ascii=False), encoding="utf-8")
 
     # Порядок словаря до 0.5: от него зависят первый разбор при равных долях и объединение лексем.
+    # Лексемы Викисловаря - в конце списка, их записи - после записей OpenCorpora той же словоформы:
+    # иначе частая парадигма с малым номером ставила редкое слово первым («гасил» - «гасило»).
     # Одинаковые записи омонимичных лексем - одна запись
-    words = sorted(set(words), key=lambda item: record_key(*item))
+    own = len(joined) - len(added)
+    secondary = {record[:3] for record in records if record[3] >= own}
+    secondary -= {record[:3] for record in records if record[3] < own}
+    words = sorted(
+        {record[:3] for record in records},
+        key=lambda item: (item[0].encode(), item in secondary, record_key(*item)),
+    )
+    # Запись только лексемы Викисловаря - с пометой «+»: слово, все разборы которого такие, с заглавной
+    # буквы разбирается и как незнакомое имя собственное
     with (output / "words.tsv").open("w", encoding="utf-8") as file:
         line: list[str] = []
         for number, (word, paradigm, form) in enumerate(words):
-            line.append(f"{paradigm}:{form}")
+            line.append(
+                f"{paradigm}:{form}" + ("+" if (word, paradigm, form) in secondary else "")
+            )
             if number + 1 == len(words) or words[number + 1][0] != word:
                 file.write(f"{word}\t{' '.join(line)}\n")
                 line = []
@@ -527,6 +557,104 @@ def export(output: Path) -> None:
     with (output / "probabilities.tsv").open("w", encoding="utf-8") as file:
         for word, tag, millionths in probabilities(corpus, tags, layouts, words):
             file.write(f"{word}\t{tag}\t{millionths}\n")
+
+
+def lemmas(lexeme: Lexeme) -> list[str]:
+    """
+    Начальные формы лексемы: формы с граммемами формы 0 без помет вариантов («катание» и «катанье»);
+    лемму из них выбирает сборщик
+
+    Аргументы:
+        lexeme (Lexeme): Формы и теги
+
+    Вывод:
+        list[str]: Формы
+    """
+    if not lexeme:
+        return []
+    if not any("V-" in tag for _, tag in lexeme):
+        return [lexeme[0][0]]
+    zero = plain_grammemes(lexeme[0][1])
+    return [form for form, tag in lexeme if plain_grammemes(tag) == zero]
+
+
+def plain_grammemes(tag: str) -> frozenset[str]:
+    """
+    Граммемы тега без помет вариантов (V-ie, V-oy и др.)
+
+    Аргументы:
+        tag (str): Тег OpenCorpora
+
+    Вывод:
+        frozenset[str]: Граммемы
+    """
+    return frozenset(grammeme for grammeme in grammemes(tag) if not grammeme.startswith("V-"))
+
+
+def without_variants(
+    added: list[Lexeme], lexemes: dict[str, Lexeme], links: list[tuple[str, str, str]]
+) -> list[Lexeme]:
+    """
+    Лексемы Викисловаря без вариантов лексем OpenCorpora: формы с граммемами (с точностью до «ё» и помет
+    вариантов) не меньше чем на VARIANT_SHARE - в одной лексеме OpenCorpora той же части речи вместе
+    со связанными (полные и краткие формы прилагательного)
+
+    Аргументы:
+        added (list[Lexeme]): Лексемы Викисловаря
+        lexemes (dict[str, Lexeme]): Лексемы OpenCorpora по номерам
+        links (list[tuple[str, str, str]]): Связи
+
+    Вывод:
+        list[Lexeme]: Лексемы, которые не варианты
+    """
+
+    def key(form: str, tag: str) -> tuple[str, frozenset[str]]:
+        return form.replace("ё", "е"), plain_grammemes(tag)
+
+    # Связи - как в join_lexemes
+    moves: dict[str, str] = {}
+    for start, end, kind in links:
+        if kind in SEPARATE_LINKS:
+            continue
+        target = start
+        while target in moves:
+            target = moves[target]
+        moves[end] = target
+
+    def root(number: str) -> str:
+        while number in moves:
+            number = moves[number]
+        return number
+
+    wanted = {form.replace("ё", "е") for lexeme in added for form, _ in lexeme}
+    index: defaultdict[tuple[str, frozenset[str]], set[str]] = defaultdict(set)
+    for number, lexeme in lexemes.items():
+        for form, tag in lexeme:
+            if form.replace("ё", "е") in wanted:
+                index[key(form, tag)].add(root(number))
+    result = []
+    for lexeme in added:
+        found = Counter(number for form, tag in lexeme for number in index.get(key(form, tag), ()))
+        if not any(
+            count >= VARIANT_SHARE * len(lexeme) and part(lexemes[number]) == part(lexeme)
+            for number, count in found.items()
+            if lexemes[number]
+        ):
+            result.append(lexeme)
+    return result
+
+
+def part(lexeme: Lexeme) -> str:
+    """
+    Часть речи лексемы - первая граммема формы 0
+
+    Аргументы:
+        lexeme (Lexeme): Формы и теги
+
+    Вывод:
+        str: Часть речи
+    """
+    return lexeme[0][1].replace(" ", ",", 1).split(",", 1)[0]
 
 
 def read_snapshot(path: Path) -> Iterator[dict]:

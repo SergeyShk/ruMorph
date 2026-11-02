@@ -15,9 +15,12 @@ pub(crate) const MAX_SPELLINGS: usize = 8;
 pub(crate) const MAX_LIST: usize = 255;
 /// Бит длины списка частот: ключи списка - формы таблиц `(таблица << 16) | форма`, а не теги
 pub(crate) const ENTRY_KEYS: u32 = 1 << 31;
-const VERSION: u32 = 7;
+/// Бит длины списка разборов (с формата 8): все разборы словоформы - редких лексем
+/// дополнительного словаря (Викисловаря)
+pub(crate) const RARE_WORD: u32 = 1 << 31;
+const VERSION: u32 = 8;
 /// Самый старый читаемый формат: в формате 5 нет списков частот по формам таблиц, в форматах 5
-/// и 6 - секции контекстной модели, остальное как в 7
+/// и 6 - секции контекстной модели, до 8 - бита `RARE_WORD`, остальное как в 8
 const OLDEST_VERSION: u32 = 5;
 const HEADER: usize = 16;
 const ALIGN: usize = 8;
@@ -830,6 +833,12 @@ pub(crate) mod tests {
         data[MAGIC.len()..MAGIC.len() + 4].copy_from_slice(&4u32.to_le_bytes());
         let err = layout(&data).err().unwrap();
         assert!(err.to_string().contains("версия формата 4"), "{err}");
+        // Формат 7 - без бита `RARE_WORD`, остальное как в 8; формата 9 еще нет
+        for (version, readable) in [(7u32, true), (9, false)] {
+            let mut data = data.clone();
+            data[MAGIC.len()..MAGIC.len() + 4].copy_from_slice(&version.to_le_bytes());
+            assert_eq!(layout(&with_checksum(data)).is_ok(), readable, "{version}");
+        }
         // Форматы 5 и 6 - без последней секции, контекстной модели
         data.truncate(data.len() - 8);
         for version in [5u32, 6] {

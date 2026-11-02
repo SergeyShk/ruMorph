@@ -179,12 +179,21 @@ fn build(
         [prefix, stem, suffix].concat()
     };
     let text = read("words.tsv")?;
-    // Строка выгрузки: словоформа и ее разборы - парадигма, форма и основа
-    let parse = |number: usize, line: &str| -> Result<(String, Records), String> {
+    // Строка выгрузки: словоформа и ее разборы - парадигма, форма и основа; разбор только лексемы
+    // Викисловаря - с пометой «+», слово из одних таких разборов - редкое
+    let parse = |number: usize, line: &str| -> Result<(String, Records, bool), String> {
         let invalid = || format!("words.tsv:{}: неверная строка {line:?}", number + 1);
         let (word, records) = line.split_once('\t').ok_or_else(invalid)?;
         let mut entries = Vec::new();
+        let mut rare = true;
         for record in records.split(' ') {
+            let record = match record.strip_suffix('+') {
+                Some(record) => record,
+                None => {
+                    rare = false;
+                    record
+                }
+            };
             let (paradigm, form) = record
                 .split_once(':')
                 .and_then(|(p, f)| Some((p.parse::<u16>().ok()?, f.parse::<u16>().ok()?)))
@@ -251,7 +260,7 @@ fn build(
         let mut order: Vec<usize> = (0..entries.len()).collect();
         order.sort_by_key(|&i| keys[i]);
         let entries: Vec<_> = order.into_iter().map(|i| entries[i].clone()).collect();
-        Ok((word.to_owned(), entries))
+        Ok((word.to_owned(), entries, rare))
     };
 
     // Лексема выгрузки - парадигма и основа; у каждой формы - форма леммы и тег UD. Тег UD
@@ -271,7 +280,7 @@ fn build(
     // и часть речи с признаками, объединяются: иначе часть форм слитого разбора недоступна
     let mut parents: Vec<usize> = Vec::new();
     for (number, line) in text.lines().enumerate() {
-        let (_, entries) = parse(number, line)?;
+        let (_, entries, _) = parse(number, line)?;
         let mut keys = Vec::with_capacity(entries.len());
         for (paradigm, form, stem) in entries {
             let layout = &paradigms[paradigm as usize];
@@ -879,7 +888,7 @@ fn build(
     // часто пишут как «е»
     let mut guesses: HashMap<(GuessIndex, String), HashMap<Entry, u32>> = HashMap::new();
     for (number, line) in text.lines().enumerate() {
-        let (word, records) = parse(number, line)?;
+        let (word, records, rare) = parse(number, line)?;
         let mut entries = Vec::with_capacity(records.len());
         for (paradigm, form, stem) in records {
             let lexeme = lexeme_numbers[&(paradigm, stem)];
@@ -918,7 +927,11 @@ fn build(
                     .or_default() += 1;
             }
         }
-        builder.add_word(&word, &entries)?;
+        if rare {
+            builder.add_rare_word(&word, &entries)?;
+        } else {
+            builder.add_word(&word, &entries)?;
+        }
     }
     // Окончание, которое встретилось меньше трех раз, - скорее примета одного слова, чем образец
     let lists: HashMap<(GuessIndex, String), Vec<(Entry, u32)>> = guesses

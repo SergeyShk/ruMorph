@@ -6,8 +6,9 @@
     и категории статьи, формы таблицы с тегами и начала значений. Существительные, имена
     собственные и прилагательные переводятся в лексемы OpenCorpora: формы с тегами в порядке
     и записи тегов лексем OpenCorpora той же части речи. Статьи, лемма которых есть
-    в OpenCorpora, статьи с пометой у первого значения (устаревшие, областные) и таблицы,
-    форма которых не начинается с начала леммы, пропускаются.
+    в OpenCorpora, статьи с пометой у первого значения (устаревшие, областные), нарицательные слова
+    с формой частого слова OpenCorpora и таблицы, форма которых не начинается с начала леммы,
+    пропускаются.
 """
 
 import re
@@ -81,6 +82,9 @@ PLACES = (
     "Штаты",
 )
 INDECLINABLE = "Несклоняемые существительные/ru"
+# Суффиксы относительных прилагательных: краткие формы и сравнительная степень у них - шаблон таблицы
+# («самцов» у «самцовый»), если статья не помечена качественным прилагательным
+RELATIVE = ("овый", "евый", "ёвый", "овой", "евой", "ский", "цкий", "ской", "цкой")
 # Предел длины словоформы в словаре ruMorph; форма из двух букв редкого слова («ит» у «ита») закрыла бы
 # разбор аббревиатуры правилом («ИТ»)
 MAX_LENGTH = 64
@@ -92,6 +96,7 @@ def lexemes(
     known: set[str],
     spellings: Mapping[frozenset[str], str],
     forms: set[str],
+    frequent: set[str],
 ) -> list[Lexeme]:
     """
     Лексемы OpenCorpora из статей Викисловаря
@@ -101,6 +106,7 @@ def lexemes(
         known (set[str]): Леммы OpenCorpora в нижнем регистре с «е» вместо «ё»
         spellings (Mapping[frozenset[str], str]): Записи тегов OpenCorpora по набору граммем
         forms (set[str]): Словоформы OpenCorpora
+        frequent (set[str]): Частые в корпусе словоформы OpenCorpora с «е» вместо «ё»
 
     Вывод:
         list[Lexeme]: Лексемы без повторов
@@ -118,6 +124,11 @@ def lexemes(
         else:
             continue
         if lexeme is None or not consistent(lexeme):
+            continue
+        # Редкое нарицательное слово с формой частого («соба» - «собой», «тёха» - «тех») дало бы ему только
+        # лишний разбор; имя собственное («Гомер» - «Гомера») пишется с заглавной, и у строчного слова его
+        # разбор маловероятен
+        if word.islower() and any(form.replace("ё", "е") in frequent for form, _ in lexeme):
             continue
         # Субстантиват («косая»), pluralia tantum («слова») и несклоняемое слово (буква «люди») без новых
         # форм дали бы словоформам OpenCorpora только лишние разборы
@@ -260,6 +271,13 @@ def noun(entry: Mapping) -> Lexeme | None:
         accusative = table.setdefault((first, "accs"), [])
         if not accusative:
             accusative.append(lemma)
+    # У слова с «ё» ударение не отличает от заголовка и такие ячейки единственного числа: предложный
+    # («шлёпанье») и винительный одушевленного среднего рода («мудачьё»)
+    if "ё" in lemma and first == "sing":
+        for case in ("accs", "loct"):
+            cell = table.setdefault(("sing", case), [])
+            if not cell:
+                cell.append(lemma)
     forms = [form for cell in table.values() for form in cell]
     if INDECLINABLE in categories or (len(forms) > 1 and set(forms) == {lemma}):
         base.append("Fixd")
@@ -456,7 +474,7 @@ def adjective(entry: Mapping) -> Lexeme | None:
         qualities.append("Poss")
     # Краткие формы и сравнительная степень относительных прилагательных («геномен», «ваттнее») - шаблон
     # таблицы, в языке их нет
-    if "relative" in tags:
+    if "relative" in tags or ("qualitative" not in tags and lemma.endswith(RELATIVE)):
         short, comparative = {}, []
     lexeme = []
     base = ",".join(["ADJF", *qualities])
