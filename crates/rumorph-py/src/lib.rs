@@ -1232,6 +1232,86 @@ impl Analyzer {
             .collect()
     }
 
+    /// Разбор документа сегментатора anySeg
+    ///
+    /// Описание:
+    ///     Заполняет столбцы lemma, upos и feats слов документа самым вероятным разбором
+    ///     в контексте предложения, как analyze_sentence; слово без разборов получает лемму
+    ///     в нижнем регистре и часть речи X, прежние значения столбцов заменяются. Документ -
+    ///     anyseg.Document или объект с теми же column("form"), sentences (у предложения -
+    ///     words, у слова - index) и set_columns. Разбор идет без GIL
+    ///
+    /// Аргументы:
+    ///     document (anyseg.Document): Документ
+    ///
+    /// Исключения:
+    ///     ValueError: Если в словаре нет контекстной модели или предложения документа не идут
+    ///         подряд по всем его словам
+    ///
+    /// Пример использования:
+    ///     >>> from anyseg import Segmenter
+    ///     >>> from rumorph import Analyzer
+    ///     >>> document = Segmenter("ru").segment("Мы стали друзьями.")
+    ///     >>> Analyzer().annotate(document)
+    ///     >>> [(word.lemma, word.upos) for word in document.words]
+    ///     [('мы', 'PRON'), ('стать', 'VERB'), ('друг', 'NOUN'), ('.', 'PUNCT')]
+    fn annotate(&self, py: Python<'_>, document: &Bound<'_, PyAny>) -> PyResult<()> {
+        let forms: Vec<String> = document
+            .call_method1(intern!(py, "column"), ("form",))?
+            .extract()?;
+        // Столбцы собираются по порядку предложений: они идут подряд и покрывают все слова
+        let unordered =
+            || PyValueError::new_err("предложения документа не идут подряд по всем его словам");
+        let (mut ranges, mut next) = (Vec::new(), 0);
+        for sentence in document.getattr(intern!(py, "sentences"))?.try_iter()? {
+            let words = sentence?.getattr(intern!(py, "words"))?;
+            let count = words.len()?;
+            let start: usize = match count {
+                0 => next,
+                _ => words
+                    .get_item(0)?
+                    .getattr(intern!(py, "index"))?
+                    .extract()?,
+            };
+            if start != next || start + count > forms.len() {
+                return Err(unordered());
+            }
+            ranges.push(start..start + count);
+            next = start + count;
+        }
+        if next != forms.len() {
+            return Err(unordered());
+        }
+        let dictionary = &self.shared.dictionary;
+        let (mut lemmas, mut parts, mut feats) = (Vec::new(), Vec::new(), Vec::new());
+        // Пустой документ тоже проверяет, есть ли в словаре модель
+        if ranges.is_empty() {
+            dictionary
+                .analyze_sentence::<&str>(&[])
+                .map_err(|err| PyValueError::new_err(err.to_string()))?;
+        }
+        for range in ranges {
+            // Куски по SENTENCE_CHUNK слов, как в analyze_sentence: между ними срабатывает Ctrl+C
+            for chunk in forms[range].chunks(rumorph::SENTENCE_CHUNK) {
+                let fields = py
+                    .detach(|| dictionary.sentence_fields(chunk))
+                    .map_err(|err| PyValueError::new_err(err.to_string()))?;
+                for (lemma, pos, features) in fields {
+                    lemmas.push(lemma);
+                    parts.push(pos);
+                    feats.push(features);
+                }
+                py.check_signals()?;
+            }
+        }
+        let columns = PyDict::new(py);
+        columns.set_item("lemma", lemmas)?;
+        columns.set_item("upos", parts)?;
+        columns.set_item("feats", feats)?;
+        document.call_method(intern!(py, "set_columns"), (), Some(&columns))?;
+        Ok(())
+    }
+
     /// Леммы списка словоформ
     ///
     /// Описание:

@@ -73,7 +73,7 @@ def test_errors(tmp_path):
     assert result.returncode == 2
     assert result.stderr == (
         "rumorph: неизвестное значение параметра --format: xml "
-        "(допустимые: lemmas, conllu, tsv, jsonl)\nСправка: rumorph --help\n"
+        "(допустимые: lemmas, conllu, tsv, jsonl, text)\nСправка: rumorph --help\n"
     )
     result = run(str(tmp_path / "нет.txt"))
     assert result.returncode == 1
@@ -133,8 +133,8 @@ def test_main_in_process(tmp_path, monkeypatch, capfd):
     assert handlers == []
 
 
-def test_line_by_line():
-    # Команда отвечает на каждую строку, не дожидаясь конца ввода: ее можно держать открытой
+def test_paragraph_by_paragraph():
+    # Команда отвечает на каждый абзац, не дожидаясь конца ввода: ее можно держать открытой
     process = subprocess.Popen(
         [sys.executable, "-m", "rumorph"],
         stdin=subprocess.PIPE,
@@ -144,14 +144,19 @@ def test_line_by_line():
     assert process.stdin is not None and process.stdout is not None
     stdout = process.stdout
     try:
-        for _ in range(2):
-            process.stdin.write("Мы стали друзьями\n")
+        # Перед вторым абзацем - пустая строка
+        for expected in (["мы стать друг\n"], ["\n", "мы стать друг\n"]):
+            process.stdin.write("Мы стали друзьями\n\n")
             process.stdin.flush()
             lines: list[str] = []
-            reader = threading.Thread(target=lambda out=lines: out.append(stdout.readline()))
+
+            def read(out: list[str] = lines, count: int = len(expected)) -> None:
+                out.extend(stdout.readline() for _ in range(count))
+
+            reader = threading.Thread(target=read)
             reader.start()
             reader.join(timeout=60)
-            assert lines == ["мы стать друг\n"]
+            assert lines == expected
     finally:
         process.stdin.close()
         process.wait(timeout=60)

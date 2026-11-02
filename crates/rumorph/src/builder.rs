@@ -66,6 +66,7 @@ impl Builder {
     }
 
     /// Источники обучения контекстной модели из файла весов - строка JSON, если она записана
+    #[cfg(feature = "build")]
     #[doc(hidden)]
     pub fn context_sources(weights: &[u8]) -> Result<Option<String>, Error> {
         crate::dictionary::context_sources(weights)

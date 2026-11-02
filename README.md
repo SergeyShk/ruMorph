@@ -32,12 +32,12 @@
 Разбор и лемматизация в 6-8 раз быстрее, чем в pymorphy3 с ускорением `pymorphy3[fast]`, форма по признакам и согласование с количеством - в 16-18 раз; списки слов разбираются без GIL. Части речи, признаки и леммы следуют руководству UD, а где оно молчит - соглашениям трибанка SynTagRus, поэтому результат можно сравнивать с разметкой spaCy, Stanza и других инструментов на UD.
 
 * **[Анализатор](https://sergeyshk.github.io/ruMorph/analyzer/)** - разборы словоформы по убыванию вероятности, разбор списков слов и лемматизация без GIL, проверка словоформы по словарю
-* **[Разбор предложения](https://sergeyshk.github.io/ruMorph/analyzer/#analyze_sentence)** - выбор разбора по соседним словам контекстной моделью: часть речи, лемма и признаки верны у 82-94 % слов против 71-82 % без контекста
+* **[Разбор предложения](https://sergeyshk.github.io/ruMorph/analyzer/#analyze_sentence)** - выбор разбора по соседним словам контекстной моделью: часть речи, лемма и признаки верны у 82-94 % слов против 71-82 % без контекста; документ сегментатора [anySeg](https://github.com/SergeyShk/anySeg) размечает [`annotate`](https://sergeyshk.github.io/ruMorph/analyzer/#annotate)
 * **[Части речи и признаки UD](https://sergeyshk.github.io/ruMorph/analysis/#ud)** - части речи, признаки и леммы по руководству UD и соглашениям SynTagRus; пометы OpenCorpora, у которых нет признака UD
 * **[Токены вне словаря](https://sergeyshk.github.io/ruMorph/analysis/#rules)** - числа, знаки, латиница, инициалы и сокращения по правилам
 * **[Незнакомые слова](https://sergeyshk.github.io/ruMorph/analysis/#guess)** - разборы по окончанию, слова через дефис и с приставками, формы угаданных слов
 * **[Словоизменение](https://sergeyshk.github.io/ruMorph/inflection/)** - формы лексемы, форма по признакам UD, согласование с количеством
-* **[Команда rumorph](https://sergeyshk.github.io/ruMorph/cli/)** - разбор файлов и потоков: леммы, CoNLL-U, TSV и JSON Lines
+* **[Команда rumorph](https://sergeyshk.github.io/ruMorph/cli/)** - разбор файлов и потоков: леммы, CoNLL-U, TSV, JSON Lines и текст с восстановленной «ё»
 * **[spaCy](https://sergeyshk.github.io/ruMorph/spacy/)** - компонент конвейера spaCy вместо теггера, морфологизатора и лемматизатора
 * **[Переход с pymorphy](https://sergeyshk.github.io/ruMorph/migration/)** - соответствие вызовов pymorphy2 и pymorphy3, частей речи и граммем
 * **[Сравнение](https://sergeyshk.github.io/ruMorph/performance/)** - точность и скорость в сравнении с pymorphy3, mystem, spaCy, Stanza и Slovnet, загрузка словаря и память
@@ -254,7 +254,7 @@ Analysis(word='стали', lemma='стать', pos='VERB', feats='Aspect=Perf|M
 
 <br>
 
-Команда ставится вместе с пакетом и разбирает текст из файлов или стандартного ввода: леммы, CoNLL-U, TSV или JSON Lines со всеми разборами. На входе - текст, токены по одному в строке или CoNLL-U, в котором заполняются LEMMA, UPOS и FEATS.
+Команда ставится вместе с пакетом и разбирает текст из файлов или стандартного ввода: леммы, CoNLL-U, TSV, JSON Lines со всеми разборами или исходный текст с «ё», восстановленной по выбранным разборам. На входе - текст (абзацы до пустой строки, токены и предложения находит сегментатор anySeg), токены по одному в строке или CoNLL-U, в котором заполняются LEMMA, UPOS и FEATS.
 
 ```bash
 $ echo "Мы стали друзьями в ковиде." | rumorph

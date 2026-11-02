@@ -14,6 +14,8 @@ pub enum Error {
     Word(String),
     /// Разбор с контекстом недоступен: в словаре нет контекстной модели или она повреждена
     Context(String),
+    /// Документ anySeg не принял столбцы разбора
+    Document(String),
 }
 
 impl fmt::Display for Error {
@@ -23,6 +25,7 @@ impl fmt::Display for Error {
             Error::Format(msg) => write!(f, "неверный формат словаря: {msg}"),
             Error::Build(msg) => write!(f, "ошибка сборки словаря: {msg}"),
             Error::Word(msg) | Error::Context(msg) => write!(f, "{msg}"),
+            Error::Document(msg) => write!(f, "разбор не записан в документ: {msg}"),
         }
     }
 }

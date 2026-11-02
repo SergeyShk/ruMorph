@@ -4,7 +4,7 @@
 rumorph [options] [file ...]
 ```
 
-The command analyzes text from files or the standard input and writes lemmas, parts of speech and [Universal Dependencies](https://universaldependencies.org/) features in one of four formats. It is installed with the package (`pip install rumorph`) and also runs as `python -m rumorph`; without Python, `cargo install rumorph --features cli` installs it. The Rust core does the analysis and the output in one thread: about 100 thousand tokens per second with [context](analyzer.md#analyze_sentence) and about a million without it (`--no-context`).
+The command analyzes text from files or the standard input and writes lemmas, parts of speech and [Universal Dependencies](https://universaldependencies.org/) features in one of five formats. It is installed with the package (`pip install rumorph`) and also runs as `python -m rumorph`; without Python, `cargo install rumorph --features cli` installs it. The Rust core does the analysis and the output in one thread: about 100 thousand tokens per second with [context](analyzer.md#analyze_sentence) and about a million without it (`--no-context`).
 
 ``` bash
 echo "Мы стали друзьями в ковиде." | rumorph
@@ -18,7 +18,7 @@ echo "Мы стали друзьями в ковиде." | rumorph
 
 | Option | Default | Description |
 | :----- | :------ | :---------- |
-| `-f`, `--format` | `lemmas` | [Output format](#formats): `lemmas`, `conllu`, `tsv`, `jsonl` |
+| `-f`, `--format` | `lemmas` | [Output format](#formats): `lemmas`, `conllu`, `tsv`, `jsonl`, `text` |
 | `-i`, `--input` | `text` | [Input](#input): `text`, `tokens`, `conllu` |
 | `-d`, `--dictionary` | the package dictionary | A ruMorph dictionary file |
 | `-w`, `--words` | | A file of [own words](analyzer.md#words): a word and its sample separated by a tab on each line, plus the part of speech if the sample has several; spaces around fields are ignored, empty lines and lines starting with `#` are skipped. The option can be repeated |
@@ -27,13 +27,13 @@ echo "Мы стали друзьями в ковиде." | rumorph
 | `-h`, `--help` | | Show the help |
 | `-V`, `--version` | | Show the version |
 
-Files are read one after another; without files and in place of `-` the standard input is read; the input is in UTF-8: a file in another encoding (cp1251, UTF-16) is not analyzed, and a single line with invalid bytes is analyzed with U+FFFD in their place. An option value is written separately or attached: `-f conllu`, `-fconllu`, `--format=conllu`. On a terminal the result appears after each sentence, and in a pipe or a file whenever the command waits for the next input line: it can be kept open and fed text line by line.
+Files are read one after another; without files and in place of `-` the standard input is read; the input is in UTF-8: a file in another encoding (cp1251, UTF-16) is not analyzed, and a single line with invalid bytes is analyzed with U+FFFD in their place. An option value is written separately or attached: `-f conllu`, `-fconllu`, `--format=conllu`. Text is analyzed by paragraphs: a paragraph is written as soon as a blank line or the end of the input closes it - on a terminal at once, and to a pipe or a file whenever the command waits for the next input line; it can be kept open and fed text paragraph by paragraph. The inputs `tokens` and `conllu` are written sentence by sentence.
 
 In Windows PowerShell 5.1 the `>` redirection and a pipeline (`Get-Content text.txt | rumorph`) corrupt Cyrillic: pass the file as an argument and write the result with the `-o` option (in PowerShell 7 they work too). Text passed with `echo` in cmd comes in the console encoding: run `chcp 65001` first. cmd and PowerShell do not expand file patterns (`*.txt`).
 
 ## Input { #input }
 
-- `text` - text, a sentence is a line. The text is split into tokens simply: words with hyphens and apostrophes between letters («кто-то», «д’Артаньян»), numbers with a period or a comma between digits («3,14»), other signs one by one, the same signs in a row together («...»), emoji with modifiers and flags whole. A zero-width space and other invisible separators split tokens, while a soft hyphen and a word joiner (U+2060) inside a word do not. The period of an abbreviation is split off: «т.е.» is four tokens; for exact splitting pass ready tokens. The context model analyzes a line sentence by sentence - pieces up to a sentence-final mark (`.`, `!`, `?`, `…`).
+- `text` - text: a blank line ends a paragraph. Tokens and sentences are found by the segmenter [anySeg](https://github.com/SergeyShk/anySeg) following the conventions of Universal Dependencies on which the context model is trained: hyphenated words by the UD guidelines («кто-то», «Ростова-на-Дону» is five tokens), numbers, dates and times («3,14», «12.10.2026», «12:30»), abbreviations and initials with their period («т. е.», «А. С.»), addresses, mentions and emoji; stress marks and soft hyphens stay in the token. A sentence may run across a line break: anySeg tells a line break inside a sentence from one of the author. A text without blank lines is split into pieces of about 2 MB after a line.
 - `tokens` - one token per line, an empty line separates sentences; spaces around the token and everything after a tab are ignored, so a table with the token in the first column works too. Analyze a list of separate words with `--no-context`: otherwise the model takes neighbouring words for a sentence.
 - `conllu` - [CoNLL-U](https://universaldependencies.org/format.html): the LEMMA, UPOS and FEATS columns are filled, while the other columns, comments, multiword tokens and empty nodes stay as they are.
 
@@ -52,7 +52,7 @@ All formats except `jsonl` take the first analysis of a token - the one chosen b
 
 ### lemmas
 
-Lemmas separated by spaces, a line per sentence; an empty line of text stays empty.
+Lemmas separated by spaces, a line per sentence; paragraphs are separated by a blank line.
 
 ### conllu
 
@@ -112,6 +112,18 @@ echo "Мы стали" | rumorph -f jsonl
     ]}
   ]
 }
+```
+
+### text
+
+The source text as is - with its line breaks, spaces and punctuation - where only «е» in a token is replaced with «ё» where the chosen analysis writes it, in the case of the token. This way a text without «ё» gets it by context: «все» becomes «всё» or stays «все», «узнаем» becomes «узнаём» or stays «узнаем». A token with a stress mark or a soft hyphen is not changed. The format is for the input `text` only.
+
+``` bash
+echo "Осел стоит у елки, а еще ее ждет еж." | rumorph -f text
+```
+
+```
+Осёл стоит у ёлки, а ещё её ждёт ёж.
 ```
 
 ## Exit codes { #exit-codes }

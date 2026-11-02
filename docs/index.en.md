@@ -39,7 +39,7 @@
 
     ---
 
-    Analysis of files and streams from the command line: lemmas, CoNLL-U, TSV and JSON Lines
+    Analysis of files and streams from the command line: lemmas, CoNLL-U, TSV, JSON Lines and text with «ё»
 
     [:octicons-arrow-right-24: The rumorph command](cli.md)
 

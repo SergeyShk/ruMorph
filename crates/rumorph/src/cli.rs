@@ -8,7 +8,7 @@ use std::io::{self, BufRead, BufReader, BufWriter, IsTerminal, Read, Write};
 use std::iter::Peekable;
 use std::path::{Path, PathBuf};
 
-use unicode_segmentation::{GraphemeIndices, UnicodeSegmentation};
+use anyseg::{Document, Segmenter};
 
 use crate::{Analysis, Dictionary, Sample};
 
@@ -23,12 +23,16 @@ rumorph - морфологический анализ русского текс�
 
 Параметры:
   -f, --format ФОРМАТ    формат вывода:
-                           lemmas - леммы через пробел, строка на предложение (по умолчанию)
+                           lemmas - леммы через пробел, строка на предложение, пустая строка
+                           между абзацами (по умолчанию)
                            conllu - CoNLL-U: лемма, часть речи и признаки самого вероятного разбора
                            tsv - токен, лемма, часть речи, признаки и вероятность через табуляцию
                            jsonl - JSON Lines: предложение в строке, все разборы каждого токена
+                           text - исходный текст, «е» заменена на «ё», где ее пишет выбранный
+                           разбор (только для входа text)
   -i, --input ВХОД       вход:
-                           text - текст, предложение - строка (по умолчанию)
+                           text - текст: пустая строка заканчивает абзац, токены и предложения
+                           находит сегментатор anySeg (по умолчанию)
                            tokens - токен в строке, пустая строка разделяет предложения
                            conllu - CoNLL-U: заполняются LEMMA, UPOS и FEATS
   -d, --dictionary ФАЙЛ  файл словаря ruMorph (по умолчанию - словарь пакета)
@@ -63,6 +67,12 @@ pub fn run(args: Vec<OsString>, version: &str, dictionary: Option<&Path>) -> u8 
 const INPUT_BUFFER: usize = 1 << 16;
 /// Наибольший кусок предложения, который команда разбирает за раз: как у `analyze_sentence`
 const MAX_CHUNK: usize = crate::SENTENCE_CHUNK;
+/// Самый длинный текст без пустых строк, который делится на предложения за раз; длиннее -
+/// режется после строки, чтобы память не росла с длиной входа (как в команде `anyseg`)
+#[cfg(not(test))]
+const PARAGRAPH: usize = 1 << 21;
+#[cfg(test)]
+const PARAGRAPH: usize = 1 << 12;
 
 /// Формат вывода
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -71,6 +81,7 @@ enum Format {
     Conllu,
     Tsv,
     Jsonl,
+    Text,
 }
 
 /// Вид входа
@@ -135,7 +146,8 @@ fn parse(args: Vec<OsString>) -> Result<Command, String> {
                     Some("conllu") => Format::Conllu,
                     Some("tsv") => Format::Tsv,
                     Some("jsonl") => Format::Jsonl,
-                    other => return Err(unknown(name, other, "lemmas, conllu, tsv, jsonl")),
+                    Some("text") => Format::Text,
+                    other => return Err(unknown(name, other, "lemmas, conllu, tsv, jsonl, text")),
                 }
             }
             "-i" | "--input" => {
@@ -156,6 +168,11 @@ fn parse(args: Vec<OsString>) -> Result<Command, String> {
             "--no-context" if inline.is_none() => context = false,
             _ => return Err(format!("неизвестный параметр {option}")),
         }
+    }
+    if format == Format::Text && input != Input::Text {
+        return Err(
+            "формат text - только для входа text: у токенов и CoNLL-U нет исходного текста".into(),
+        );
     }
     Ok(Command::Run {
         format,
@@ -271,6 +288,10 @@ fn execute(
         pending: false,
         sentence: 0,
         context,
+        segmenter: Segmenter::new("ru").expect("русский язык есть в anyseg с feature ru"),
+        paragraphs: 0,
+        text: String::new(),
+        ready: 0,
     };
     let mut code = 0;
     for file in files {
@@ -464,11 +485,19 @@ struct Writer<'a> {
     sentence: usize,
     /// Разборы с контекстной моделью
     context: bool,
+    segmenter: Segmenter,
+    /// Число записанных абзацев: перед следующим в формате lemmas - пустая строка
+    paragraphs: usize,
+    /// Прочитанный и еще не записанный текст и его длина до последней пустой строки: абзацы
+    /// до нее закончены
+    text: String,
+    ready: usize,
 }
 
 impl Writer<'_> {
-    /// Читает вход построчно и пишет разбор каждого предложения; вывод - номер первой строки
-    /// не в UTF-8, если такая была: неверные байты заменяются на U+FFFD
+    /// Читает вход построчно и пишет разбор каждого предложения: текст - как только пустая
+    /// строка или конец входа закончили абзац; вывод - номер первой строки не в UTF-8, если
+    /// такая была: неверные байты заменяются на U+FFFD
     fn process(&mut self, input: Input, reader: &mut dyn Read) -> Result<Option<usize>, Failure> {
         let mut reader = BufReader::with_capacity(INPUT_BUFFER, reader);
         self.flush_pending().map_err(Failure::Write)?;
@@ -494,9 +523,12 @@ impl Writer<'_> {
         // кодировку файла (cp1251, UTF-16 без BOM), после - испорченную строку
         let mut utf8 = false;
         let mut block = Block::default();
+        self.text.clear();
+        self.ready = 0;
+        let mut end = false;
         loop {
             bytes.clear();
-            if self.read_line(&mut reader, &mut bytes)? == 0 {
+            if self.read_line(&mut reader, &mut bytes, &mut end)? == 0 {
                 break;
             }
             number += 1;
@@ -512,16 +544,17 @@ impl Writer<'_> {
                 }
                 Cow::Borrowed(_) => utf8 |= !bytes.is_ascii(),
             }
-            let mut text = decoded.trim_end_matches(['\n', '\r']);
+            let mut line: &str = &decoded;
             if number == 1 {
-                text = text.strip_prefix('\u{feff}').unwrap_or(text);
+                line = line.strip_prefix('\u{feff}').unwrap_or(line);
             }
+            if input == Input::Text {
+                self.push_line(line).map_err(Failure::Write)?;
+                continue;
+            }
+            let text = line.trim_end_matches(['\n', '\r']);
             match input {
-                Input::Text => {
-                    let tokens = Tokens::new(text).peekable();
-                    self.write_tokens(Some(text), tokens, true, true)
-                        .map_err(Failure::Write)?;
-                }
+                Input::Text => {}
                 _ if text.trim().is_empty() => {
                     self.write_block(&block).map_err(Failure::Write)?;
                     block = Block::default();
@@ -538,18 +571,113 @@ impl Writer<'_> {
             }
         }
         self.write_block(&block).map_err(Failure::Write)?;
+        self.ready = self.text.len();
+        self.write_ready().map_err(Failure::Write)?;
         Ok(invalid)
     }
 
-    /// Строка входа с переводом строки; перед чтением, которое может ждать ввода (буфер пуст),
-    /// вывод сбрасывается: команду можно держать открытой и подавать ей текст по строке
+    /// Строка текста с переводом строки: пустая строка заканчивает абзацы до нее, которые
+    /// пишутся кусками около INPUT_BUFFER или перед чтением, которое может ждать ввода; текст
+    /// без пустых строк режется после строки на PARAGRAPH. В формате text пустые строки до
+    /// первого абзаца тоже остаются
+    fn push_line(&mut self, line: &str) -> io::Result<()> {
+        if blank(line) {
+            if !self.text.is_empty() || self.format == Format::Text {
+                self.text.push_str(line);
+                self.ready = self.text.len();
+            }
+            if self.ready >= INPUT_BUFFER {
+                self.write_ready()?;
+            }
+        } else {
+            self.text.push_str(line);
+            if self.text.len() >= PARAGRAPH {
+                self.ready = self.text.len();
+                self.write_ready()?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Текст до последней пустой строки: его абзацы закончены
+    fn write_ready(&mut self) -> io::Result<()> {
+        if self.ready == 0 {
+            return Ok(());
+        }
+        let rest = self.text.split_off(self.ready);
+        let ready = std::mem::replace(&mut self.text, rest);
+        self.ready = 0;
+        if self.format == Format::Text {
+            return self.write_yo(&ready);
+        }
+        if blank(&ready) {
+            return Ok(());
+        }
+        let document = self.segmenter.segment(&ready);
+        for paragraph in 0..document.paragraph_count() {
+            if self.format == Format::Lemmas && self.paragraphs > 0 {
+                writeln!(self.output)?;
+            }
+            self.paragraphs += 1;
+            for sentence in document.paragraph(paragraph).sentences {
+                let span = document.sentence(sentence).span;
+                let tokens = sentence_tokens(&document, sentence);
+                self.write_tokens(
+                    Some(span.slice(document.text())),
+                    tokens.into_iter().peekable(),
+                )?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Текст как есть, только «е» токена заменена на «ё», где ее пишет самый вероятный разбор:
+    /// «Все узнаем» - «Всё узнаем», если так выбрала контекстная модель
+    fn write_yo(&mut self, text: &str) -> io::Result<()> {
+        let document = self.segmenter.segment(text);
+        let spans = document.tokens();
+        let mut out = String::with_capacity(text.len());
+        let mut at = 0;
+        for sentence in 0..document.sentence_count() {
+            let tokens = document.sentence(sentence).tokens;
+            let words: Vec<&str> = tokens
+                .clone()
+                .map(|token| spans[token].slice(text))
+                .collect();
+            for start in (0..words.len()).step_by(MAX_CHUNK) {
+                let chunk = &words[start..words.len().min(start + MAX_CHUNK)];
+                for (offset, analyses) in self.analyze(chunk).into_iter().enumerate() {
+                    let span = spans[tokens.start + start + offset];
+                    out.push_str(&text[at..span.start]);
+                    let word = span.slice(text);
+                    match analyses.first() {
+                        Some(analysis) => out.push_str(&with_yo(word, &analysis.word)),
+                        None => out.push_str(word),
+                    }
+                    at = span.end;
+                }
+            }
+        }
+        out.push_str(&text[at..]);
+        self.output.write_all(out.as_bytes())?;
+        self.end_sentence()
+    }
+
+    /// Строка входа с ее переводом (LF, CR или CRLF), как в команде `anyseg`; перед чтением,
+    /// которое может ждать ввода (буфер пуст), законченные абзацы пишутся, а вывод сбрасывается:
+    /// команду можно держать открытой и подавать ей текст. После конца входа (`end`) ничего
+    /// не читается: в терминале строку без перевода заканчивает один Ctrl+D
     fn read_line(
         &mut self,
         reader: &mut BufReader<&mut dyn Read>,
         bytes: &mut Vec<u8>,
+        end: &mut bool,
     ) -> Result<usize, Failure> {
-        loop {
+        // CR кончил буфер: LF пары CRLF может начать следующий
+        let mut after_cr = false;
+        while !*end {
             if reader.buffer().is_empty() {
+                self.write_ready().map_err(Failure::Write)?;
                 self.flush_pending().map_err(Failure::Write)?;
             }
             let available = match reader.fill_buf() {
@@ -558,18 +686,38 @@ impl Writer<'_> {
                 Err(err) => return Err(Failure::Read(err)),
             };
             if available.is_empty() {
-                return Ok(bytes.len());
+                *end = true;
+                break;
             }
-            let (end, done) = match available.iter().position(|&byte| byte == b'\n') {
+            if after_cr {
+                if available[0] == b'\n' {
+                    bytes.push(b'\n');
+                    reader.consume(1);
+                }
+                break;
+            }
+            let (length, done) = match available
+                .iter()
+                .position(|&byte| byte == b'\n' || byte == b'\r')
+            {
+                Some(at) if available[at] == b'\r' => match available.get(at + 1) {
+                    Some(b'\n') => (at + 2, true),
+                    Some(_) => (at + 1, true),
+                    None => {
+                        after_cr = true;
+                        (at + 1, false)
+                    }
+                },
                 Some(at) => (at + 1, true),
                 None => (available.len(), false),
             };
-            bytes.extend_from_slice(&available[..end]);
-            reader.consume(end);
+            bytes.extend_from_slice(&available[..length]);
+            reader.consume(length);
             if done {
-                return Ok(bytes.len());
+                break;
             }
         }
+        Ok(bytes.len())
     }
 
     /// Предложение из токенов или CoNLL-U
@@ -581,7 +729,7 @@ impl Writer<'_> {
             word,
             space_after: true,
         });
-        self.write_tokens(block.text.as_deref(), tokens.peekable(), false, false)
+        self.write_tokens(block.text.as_deref(), tokens.peekable())
     }
 
     /// Разборы слов предложения: с контекстной моделью или каждого слова отдельно
@@ -598,21 +746,13 @@ impl Writer<'_> {
     }
 
     /// Предложение в формате вывода: токены разбираются кусками (`next_chunk`), а разборы куска
-    /// сразу пишутся, поэтому память не растет с длиной строки. Пустая строка текста
-    /// (`keep_empty`) остается пустой строкой лемм; со `split` кусок кончается и на знаке конца
-    /// предложения
+    /// сразу пишутся, поэтому память не растет с длиной предложения
     fn write_tokens<'t>(
         &mut self,
         text: Option<&str>,
         mut tokens: Peekable<impl Iterator<Item = Token<'t>>>,
-        keep_empty: bool,
-        split: bool,
     ) -> io::Result<()> {
         if tokens.peek().is_none() {
-            if keep_empty && self.format == Format::Lemmas {
-                writeln!(self.output)?;
-                self.end_sentence()?;
-            }
             return Ok(());
         }
         let collected: Vec<Token>;
@@ -640,7 +780,7 @@ impl Writer<'_> {
             _ => Box::new(tokens),
         };
         let (mut chunk, mut piece, mut index) = (Vec::new(), String::new(), 0);
-        while next_chunk(&mut tokens, split, &mut chunk) {
+        while next_chunk(&mut tokens, &mut chunk) {
             let words: Vec<&str> = chunk.iter().map(|token| token.word).collect();
             for (token, analyses) in chunk.iter().zip(self.analyze(&words)) {
                 self.write_token(index, token, &analyses, &mut piece)?;
@@ -649,6 +789,7 @@ impl Writer<'_> {
         }
         match self.format {
             Format::Jsonl => writeln!(self.output, "]}}")?,
+            Format::Text => {}
             _ => writeln!(self.output)?,
         }
         self.end_sentence()
@@ -691,6 +832,7 @@ impl Writer<'_> {
                     lemma(analyses, token.word)
                 )
             }
+            Format::Text => Ok(()),
             Format::Jsonl => {
                 piece.clear();
                 if index > 0 {
@@ -811,27 +953,52 @@ fn foreign_encoding(head: &[u8]) -> Option<usize> {
     None
 }
 
-/// Следующий кусок токенов в `chunk`: не больше `MAX_CHUNK`, а со `split` - и до знака конца
-/// предложения включительно: строку из нескольких предложений модель разбирает по одному.
-/// `false` - токены кончились
-fn next_chunk<'t>(
-    tokens: &mut dyn Iterator<Item = Token<'t>>,
-    split: bool,
-    chunk: &mut Vec<Token<'t>>,
-) -> bool {
+/// Следующий кусок токенов в `chunk`: не больше `MAX_CHUNK`; `false` - токены кончились
+fn next_chunk<'t>(tokens: &mut dyn Iterator<Item = Token<'t>>, chunk: &mut Vec<Token<'t>>) -> bool {
     chunk.clear();
-    for token in tokens {
-        chunk.push(token);
-        let end = !token.word.is_empty()
-            && token
-                .word
-                .chars()
-                .all(|ch| matches!(ch, '.' | '!' | '?' | '…'));
-        if chunk.len() >= MAX_CHUNK || (split && end) {
-            break;
+    chunk.extend(tokens.take(MAX_CHUNK));
+    !chunk.is_empty()
+}
+
+/// Токены предложения документа: пробел после токена - если до следующего токена документа
+/// есть пробельный символ (невидимый разделитель - не пробел) или документ на нем кончается
+fn sentence_tokens(document: &Document, sentence: usize) -> Vec<Token<'_>> {
+    let (text, spans) = (document.text(), document.tokens());
+    document
+        .sentence(sentence)
+        .tokens
+        .map(|token| Token {
+            word: spans[token].slice(text),
+            space_after: spans.get(token + 1).is_none_or(|next| {
+                text[spans[token].end..next.start].contains(char::is_whitespace)
+            }),
+        })
+        .collect()
+}
+
+/// Строка из пробелов, переводов строки и невидимых разделителей: такая строка разделяет
+/// абзацы
+fn blank(line: &str) -> bool {
+    line.chars()
+        .all(|c| c.is_whitespace() || matches!(c, '\u{200b}' | '\u{2060}' | '\u{feff}'))
+}
+
+/// Токен с «ё» на местах, где ее пишет слово разбора: регистр токена сохраняется; токен,
+/// который не совпадает со словом с точностью до регистра и «ё», остается как есть
+fn with_yo<'w>(token: &'w str, word: &str) -> Cow<'w, str> {
+    if !word.contains('ё') || token.chars().count() != word.chars().count() {
+        return Cow::Borrowed(token);
+    }
+    let mut out = String::with_capacity(token.len() + 2);
+    for (ch, target) in token.chars().zip(word.chars()) {
+        let lower = ch.to_lowercase().next().unwrap_or(ch);
+        match (lower, target) {
+            ('е', 'ё') => out.push(if ch.is_uppercase() { 'Ё' } else { 'ё' }),
+            _ if lower == target || (lower, target) == ('ё', 'е') => out.push(ch),
+            _ => return Cow::Borrowed(token),
         }
     }
-    !chunk.is_empty()
+    Cow::Owned(out)
 }
 
 /// Текст предложения из токенов: пробел - после токена со `space_after`
@@ -894,97 +1061,6 @@ fn conllu_line(block: &mut Block, line: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Графема-буква или цифра: с ней идут знаки ударения и другие комбинирующие знаки
-fn word(grapheme: &str) -> bool {
-    grapheme.chars().next().is_some_and(char::is_alphanumeric)
-}
-
-/// Разделитель токенов: графема с пробела или невидимого символа (пробел нулевой ширины,
-/// соединитель слов, BOM, мягкий перенос вне слова), после которого нет пробела в тексте
-fn separator(grapheme: &str) -> bool {
-    grapheme.chars().next().is_some_and(|c| {
-        c.is_whitespace() || matches!(c, '\u{200b}' | '\u{2060}' | '\u{feff}' | '\u{ad}')
-    })
-}
-
-/// Токены строки текста по графемам: слова (с дефисами и апострофами между буквами, мягкими
-/// переносами), числа (с точкой или запятой между цифрами) и знаки; одинаковые знаки подряд
-/// («...», «!!!») - один токен, эмодзи с модификаторами и флаги - одна графема
-struct Tokens<'a> {
-    line: &'a str,
-    graphemes: Peekable<GraphemeIndices<'a>>,
-}
-
-impl<'a> Tokens<'a> {
-    fn new(line: &'a str) -> Self {
-        Tokens {
-            line,
-            graphemes: line.grapheme_indices(true).peekable(),
-        }
-    }
-
-    /// Соединяет ли графема `joiner` слово с графемой `next` после него
-    fn joins(last: &str, joiner: &str, next: &str) -> bool {
-        match joiner {
-            "-" | "\u{2010}" | "\u{2011}" | "'" | "’" | "\u{2060}" | "\u{feff}" => word(next),
-            "." | "," => {
-                last.chars().last().is_some_and(|c| c.is_ascii_digit())
-                    && next.chars().next().is_some_and(|c| c.is_ascii_digit())
-            }
-            _ => false,
-        }
-    }
-}
-
-impl<'a> Iterator for Tokens<'a> {
-    type Item = Token<'a>;
-
-    fn next(&mut self) -> Option<Token<'a>> {
-        let (start, first) = loop {
-            let (at, grapheme) = self.graphemes.next()?;
-            if !separator(grapheme) {
-                break (at, grapheme);
-            }
-        };
-        let (mut end, mut last) = (start + first.len(), first);
-        if word(first) {
-            while let Some(&(at, grapheme)) = self.graphemes.peek() {
-                if word(grapheme) || grapheme == "\u{ad}" {
-                    self.graphemes.next();
-                    (end, last) = (at + grapheme.len(), grapheme);
-                    continue;
-                }
-                let mut ahead = self.graphemes.clone();
-                ahead.next();
-                match ahead.next() {
-                    Some((at, next)) if Self::joins(last, grapheme, next) => {
-                        self.graphemes.next();
-                        self.graphemes.next();
-                        (end, last) = (at + next.len(), next);
-                    }
-                    _ => break,
-                }
-            }
-        } else {
-            while let Some(&(at, grapheme)) = self.graphemes.peek() {
-                if grapheme != first {
-                    break;
-                }
-                self.graphemes.next();
-                end = at + grapheme.len();
-            }
-        }
-        let space_after = self
-            .graphemes
-            .peek()
-            .is_none_or(|&(_, grapheme)| grapheme.chars().next().is_some_and(char::is_whitespace));
-        Some(Token {
-            word: &self.line[start..end],
-            space_after,
-        })
-    }
-}
-
 /// Строка JSON с экранированием
 fn json_string(out: &mut String, text: &str) {
     out.push('"');
@@ -1010,101 +1086,70 @@ mod tests {
     use crate::dictionary::context::tests::weights;
     use crate::dictionary::tests::dictionary_bytes_with;
 
-    fn words(line: &str) -> Vec<(String, bool)> {
-        Tokens::new(line)
-            .map(|token| (token.word.to_owned(), token.space_after))
-            .collect()
+    #[test]
+    fn segments_text_by_paragraphs() {
+        let dict = TestDictionary::new();
+        // Предложение переходит через перевод строки, пустая строка заканчивает абзац
+        assert_eq!(
+            dict.run(&[], "Мама мыла\nраму. Раму!\n\n\nМама.".as_bytes()),
+            (
+                0,
+                "мама мыть рама .\nрама !\n\nмама .\n".into(),
+                String::new()
+            )
+        );
+        // Переводы строк CR и CRLF - как LF
+        assert_eq!(
+            dict.run(&[], "Мама мыла\rраму. Раму!\r\n\r\nМама.\r".as_bytes())
+                .1,
+            "мама мыть рама .\nрама !\n\nмама .\n"
+        );
+        // Пустой вход и вход из пустых строк - без вывода
+        assert_eq!(dict.run(&[], "\n \n\t\n".as_bytes()).1, "");
+        // Пробел после токена - только пробельный символ до следующего токена документа:
+        // невидимый разделитель не пробел, а предложение может кончаться без пробела
+        let (_, conllu, _) = dict.run(&["-f", "conllu"], "Мама\u{200b}раму!Раму.".as_bytes());
+        assert!(
+            conllu.starts_with(
+                "# sent_id = 1\n# text = Мамараму!\n1\tМама\tмама\tNOUN\t_\tCase=Nom|Gender=Fem|Number=Sing\t_\t_\t_\tSpaceAfter=No\n"
+            ),
+            "{conllu}"
+        );
+        assert!(
+            conllu.contains("3\t!\t!\tPUNCT\t_\t_\t_\t_\t_\tSpaceAfter=No\n"),
+            "{conllu}"
+        );
+        // Текст без пустых строк режется после строки на PARAGRAPH, предложения не теряются
+        let long = "Мама мыла раму.\n".repeat(PARAGRAPH / 10);
+        let (code, lemmas, _) = dict.run(&[], long.as_bytes());
+        assert_eq!(
+            (code, lemmas.matches("мама мыть рама .").count()),
+            (0, PARAGRAPH / 10)
+        );
     }
 
     #[test]
-    fn tokenizes_text() {
-        let tokens: Vec<String> = words("Мы стали друзьями... В 2005-м году - 3,14%!")
-            .into_iter()
-            .map(|(word, _)| word)
-            .collect();
+    fn restores_yo_in_text() {
+        let dict = TestDictionary::new();
+        // Текст как есть, «е» - «ё» в регистре токена, где ее пишет разбор
+        let text = "\n Еж, ЕЖ  и еж.\r\n\nМама \u{301}еж\u{301}.\n";
         assert_eq!(
-            tokens,
-            [
-                "Мы",
-                "стали",
-                "друзьями",
-                "...",
-                "В",
-                "2005-м",
-                "году",
-                "-",
-                "3,14",
-                "%",
-                "!"
-            ]
+            dict.run(&["-f", "text"], text.as_bytes()),
+            (
+                0,
+                "\n Ёж, ЁЖ  и ёж.\r\n\nМама \u{301}еж\u{301}.\n".into(),
+                String::new()
+            )
         );
-        let tokens: Vec<String> = words("«Кто-то» д’Артаньян 1.5, а не 1. ё\u{301}жик")
-            .into_iter()
-            .map(|(word, _)| word)
-            .collect();
-        assert_eq!(
-            tokens,
-            [
-                "«",
-                "Кто-то",
-                "»",
-                "д’Артаньян",
-                "1.5",
-                ",",
-                "а",
-                "не",
-                "1",
-                ".",
-                "ё\u{301}жик"
-            ]
-        );
-        assert_eq!(
-            words("Ну,да"),
-            [
-                ("Ну".into(), false),
-                (",".into(), false),
-                ("да".into(), true)
-            ]
-        );
-        assert_eq!(
-            words(" Ну  да "),
-            [("Ну".into(), true), ("да".into(), true)]
-        );
-        assert!(words("   ").is_empty());
-        assert_eq!(
-            words("-кто-"),
-            [
-                ("-".into(), false),
-                ("кто".into(), false),
-                ("-".into(), true)
-            ]
-        );
-        // Эмодзи с селектором, тоном кожи, флаг и семья через ZWJ - по одному токену
-        let tokens: Vec<String> = words("❤️ 👍🏽 🇷🇺 👨‍👩‍👧!!")
-            .into_iter()
-            .map(|(word, _)| word)
-            .collect();
-        assert_eq!(tokens, ["❤️", "👍🏽", "🇷🇺", "👨‍👩‍👧", "!!"]);
-        // Знак после пробела и мягкий перенос вне слова - не токены
-        assert_eq!(
-            words("кот \u{301}пес \u{ad} да"),
-            [
-                ("кот".into(), true),
-                ("пес".into(), true),
-                ("да".into(), true)
-            ]
-        );
-        // Невидимые символы разделяют токены, но пробелом не считаются; мягкий перенос
-        // и соединитель слов - в слове
-        assert_eq!(
-            words("при\u{200b}вет \u{feff}раму при\u{ad}вет при\u{2060}вет"),
-            [
-                ("при".into(), false),
-                ("вет".into(), true),
-                ("раму".into(), true),
-                ("при\u{ad}вет".into(), true),
-                ("при\u{2060}вет".into(), true)
-            ]
+        assert_eq!(with_yo("Еж", "ёж"), "Ёж");
+        assert_eq!(with_yo("еж", "ежи"), "еж");
+        assert_eq!(with_yo("мама", "ёжа"), "мама");
+        // Формат text - только для входа text
+        let (code, _, error) = dict.run(&["-f", "text", "-i", "tokens"], b"");
+        assert_eq!(code, 2);
+        assert!(
+            error.contains("формат text - только для входа text"),
+            "{error}"
         );
     }
 
@@ -1155,7 +1200,7 @@ mod tests {
         assert_eq!(
             args(&["-f", "xml"]),
             Err(
-                "неизвестное значение параметра -f: xml (допустимые: lemmas, conllu, tsv, jsonl)"
+                "неизвестное значение параметра -f: xml (допустимые: lemmas, conllu, tsv, jsonl, text)"
                     .into()
             )
         );
@@ -1203,6 +1248,11 @@ mod tests {
                             ("", "Case=Nom|Gender=Masc|Number=Sing".into()),
                             ("", "Case=Acc|Gender=Masc|Number=Sing".into()),
                         ],
+                    ),
+                    (
+                        "NOUN",
+                        "ёж",
+                        vec![("", "Case=Nom|Gender=Masc|Number=Sing".into())],
                     ),
                 ],
                 &[],
@@ -1432,7 +1482,7 @@ mod tests {
         input.extend_from_slice(b"\xd0\xff\n");
         input.extend_from_slice("раму\n".as_bytes());
         let (code, out, error) = dict.run(&[], &input);
-        assert_eq!((code, out.as_str()), (1, "рама\n\u{fffd}\u{fffd}\nрама\n"));
+        assert_eq!((code, out.as_str()), (1, "рама\n\u{fffd} \u{fffd}\nрама\n"));
         assert_eq!(
             error,
             "rumorph: -: строка 2: не UTF-8, неверные байты заменены на U+FFFD\n"
@@ -1581,7 +1631,7 @@ mod tests {
             "",
             Some(&dict.0),
             interactive,
-            &mut "раму\nраму\n".as_bytes(),
+            &mut "раму\n\nраму\n".as_bytes(),
             output,
             &mut stderr,
         );
@@ -1597,7 +1647,7 @@ mod tests {
             failing: false,
         };
         assert_eq!(run_with(&dict, true, &mut output), (0, String::new()));
-        assert_eq!(output.data, "рама\nрама\n".as_bytes());
+        assert_eq!(output.data, "рама\n\nрама\n".as_bytes());
         // По сбросу на предложение и последний
         assert_eq!(output.flushes, 3);
         // В файл или канал - перед чтением, которое может ждать ввода, и в конце
@@ -1608,36 +1658,48 @@ mod tests {
 
     #[test]
     fn reads_end_of_input_once() {
-        // Конец ввода в терминале не повторяется: второе чтение ждало бы следующего Ctrl+D
-        struct Terminal(bool);
+        // Конец ввода в терминале не повторяется: второе чтение ждало бы следующего Ctrl+D,
+        // в том числе после строки без перевода
+        struct Terminal(Vec<&'static [u8]>, bool);
         impl Read for Terminal {
-            fn read(&mut self, _: &mut [u8]) -> io::Result<usize> {
-                if std::mem::replace(&mut self.0, true) {
+            fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+                if let Some(chunk) = self.0.pop() {
+                    buf[..chunk.len()].copy_from_slice(chunk);
+                    return Ok(chunk.len());
+                }
+                if std::mem::replace(&mut self.1, true) {
                     return Err(io::Error::other("второе чтение после конца ввода"));
                 }
                 Ok(0)
             }
         }
         let dict = TestDictionary::new();
-        let mut stderr = Vec::new();
-        let code = execute(
-            vec!["--no-context".into()],
-            "",
-            Some(&dict.0),
-            true,
-            &mut Terminal(false),
-            &mut Vec::new(),
-            &mut stderr,
-        );
-        assert_eq!(
-            (code, String::from_utf8(stderr).unwrap()),
-            (0, String::new())
-        );
+        for (input, expected) in [(vec![], ""), (vec!["Мама мыла".as_bytes()], "мама мыть\n")]
+        {
+            let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
+            let code = execute(
+                vec!["--no-context".into()],
+                "",
+                Some(&dict.0),
+                true,
+                &mut Terminal(input, false),
+                &mut stdout,
+                &mut stderr,
+            );
+            assert_eq!(
+                (
+                    code,
+                    String::from_utf8(stdout).unwrap(),
+                    String::from_utf8(stderr).unwrap()
+                ),
+                (0, expected.to_owned(), String::new())
+            );
+        }
     }
 
     #[test]
     fn flushes_before_waiting_for_input() {
-        // Вход по строке за чтение, как от программы, которая ждет ответа на каждую строку
+        // Вход по абзацу за чтение, как от программы, которая ждет ответа на каждый абзац
         struct Lines(Vec<&'static [u8]>);
         impl Read for Lines {
             fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
@@ -1654,7 +1716,7 @@ mod tests {
             flushes: 0,
             failing: false,
         };
-        let mut input = Lines(vec!["раму\n".as_bytes(), "раму\n".as_bytes()]);
+        let mut input = Lines(vec!["раму\n\n".as_bytes(), "раму\n\n".as_bytes()]);
         let code = execute(
             vec!["--no-context".into()],
             "",
@@ -1666,9 +1728,9 @@ mod tests {
         );
         assert_eq!(
             (code, output.data.as_slice()),
-            (0, "рама\nрама\n".as_bytes())
+            (0, "рама\n\nрама\n".as_bytes())
         );
-        // После каждой строки и в конце
+        // После каждого абзаца и в конце
         assert_eq!(output.flushes, 3);
     }
 
