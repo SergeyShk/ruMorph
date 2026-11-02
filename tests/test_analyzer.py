@@ -35,6 +35,8 @@ def test_default_dictionary(morph):
     assert meta["source"] == "opencorpora.org"
     assert meta["opencorpora_revision"] == "417258"
     assert meta["corpus_revision"] == "4580223"
+    assert meta["wiktionary"]["dump"] == "2026-10-01"
+    assert meta["context"]["release"] == "r2.18"
 
 
 def test_path_argument(morph):
@@ -213,13 +215,29 @@ def test_proper_copies(morph, lemma):
     assert any(a.pos == "PROPN" and a.lemma == lemma for a in morph.analyze(lemma.capitalize()))
 
 
+@pytest.mark.parametrize(
+    ("word", "lemma", "pos"),
+    [
+        ("зумеры", "зумер", "NOUN"),
+        ("сексапила", "сексапил", "NOUN"),
+        ("колициногенный", "колициногенный", "ADJ"),
+        ("Дутерте", "дутерте", "PROPN"),
+    ],
+)
+def test_wiktionary_words(morph, word, lemma, pos):
+    # Слова Викисловаря, которых нет в OpenCorpora, разбираются по словарю, а не угадываются
+    first = morph.analyze(word)[0]
+    assert (first.lemma, first.pos, first.source) == (lemma, pos, "dictionary")
+    assert morph.analyze("зумер")[0].inflect(Number="Plur", Case="Gen") == "зумеров"
+
+
 def test_is_known(morph):
     assert morph.is_known("Ежи")
     assert morph.is_known("СТАЛИ")
 
 
 def test_analyze_many(morph):
-    words = ["мама", "мыла", "раму", "вайб", "Ёж"]
+    words = ["мама", "мыла", "раму", "вайбкодер", "Ёж"]
     assert morph.analyze_many(words) == [morph.analyze(word) for word in words]
     assert morph.analyze_many(word for word in words) == morph.analyze_many(tuple(words))
     assert morph.analyze_many([]) == []
@@ -243,8 +261,8 @@ def test_analyze_sentence(morph):
     assert morph.analyze_sentence(word for word in words) == sentence
     assert morph.analyze_sentence([]) == []
     # Свои слова и pickle анализатора
-    own = Analyzer(words={"зумер": "геймер"})
-    assert own.analyze_sentence(["Вижу", "зумера"])[1][0].lemma == "зумер"
+    own = Analyzer(words={"вайбкодер": "геймер"})
+    assert own.analyze_sentence(["Вижу", "вайбкодера"])[1][0].lemma == "вайбкодер"
     restored = pickle.loads(pickle.dumps(morph))
     assert restored.analyze_sentence(words) == sentence
 
@@ -287,8 +305,8 @@ def test_analyze_sentence_errors(morph, tmp_path):
 
 
 def test_lemmatize(morph):
-    words = ["Мы", "стали", "друзьями", "в", "ВАЙБЕ", "ковиде"]
-    assert morph.lemmatize(words) == ["мы", "стать", "друг", "в", "вайбе", "ковид"]
+    words = ["Мы", "стали", "друзьями", "в", "ДРИПЕ", "ковиде"]
+    assert morph.lemmatize(words) == ["мы", "стать", "друг", "в", "дрипе", "ковид"]
     assert morph.lemmatize(iter(words)) == morph.lemmatize(words)
 
 
@@ -573,34 +591,38 @@ def test_merged_analyses(morph):
 
 
 def test_own_words():
-    morph = Analyzer(words={"зумер": "геймер", "зечь": ("печь", "VERB"), "тов": "проф"})
-    analysis = morph.analyze("Зумерами")[0]
-    assert (analysis.lemma, analysis.pos, analysis.source) == ("зумер", "NOUN", "dictionary")
-    assert analysis.inflect(Case="Gen", Number="Sing") == "зумера"
-    assert [form.word for form in analysis.forms()][:3] == ["зумер", "зумера", "зумеру"]
-    assert morph.is_known("зумеры")
-    assert not Analyzer().is_known("зумеры")
+    morph = Analyzer(words={"вайбкодер": "геймер", "зечь": ("печь", "VERB"), "тов": "проф"})
+    analysis = morph.analyze("Вайбкодерами")[0]
+    assert (analysis.lemma, analysis.pos, analysis.source) == ("вайбкодер", "NOUN", "dictionary")
+    assert analysis.inflect(Case="Gen", Number="Sing") == "вайбкодера"
+    assert [form.word for form in analysis.forms()][:3] == [
+        "вайбкодер",
+        "вайбкодера",
+        "вайбкодеру",
+    ]
+    assert morph.is_known("вайбкодеры")
+    assert not Analyzer().is_known("вайбкодеры")
     assert {a.pos for a in morph.analyze("зечет")} == {"VERB"}
     assert morph.lemmatize(["тов."]) == ["товарищ"]
     # Анализатор без своих слов их не знает, а pickle сохраняет их
-    assert Analyzer().analyze("зумерами")[0].source == "guess"
+    assert Analyzer().analyze("вайбкодерами")[0].source == "guess"
     restored, copied = pickle.loads(pickle.dumps([morph, analysis]))
     assert copied == analysis
-    assert restored.analyze("зумеру")[0].lemma == "зумер"
-    assert Analyzer(words={}).analyze("зумерами")[0].source == "guess"
+    assert restored.analyze("вайбкодеру")[0].lemma == "вайбкодер"
+    assert Analyzer(words={}).analyze("вайбкодерами")[0].source == "guess"
     # Образец-наречие дает одну форму: сравнительная степень другого корня не переносится
-    adverb = Analyzer(words={"кринжово": "рано"}).analyze("кринжово")[0]
-    assert (adverb.pos, [form.word for form in adverb.forms()]) == ("ADV", ["кринжово"])
+    adverb = Analyzer(words={"вайбово": "рано"}).analyze("вайбово")[0]
+    assert (adverb.pos, [form.word for form in adverb.forms()]) == ("ADV", ["вайбово"])
 
 
 @pytest.mark.parametrize(
     ("word", "sample", "query"),
     [
-        ("зу\u0301мер", "геймер", "зумерами"),
+        ("вайбко\u0301дер", "геймер", "вайбкодерами"),
         ("зе\u0308мер", "геймер", "зёмерами"),
-        ("зу\u00adмер", "геймер", "зумерами"),
-        ("зумeр", "геймер", "зумерами"),
-        ("зумер", "ге\u0301ймер", "зумерами"),
+        ("вайб\u00adкодер", "геймер", "вайбкодерами"),
+        ("вайбкодeр", "геймер", "вайбкодерами"),
+        ("вайбкодер", "ге\u0301ймер", "вайбкодерами"),
     ],
 )
 def test_own_words_in_query_spelling(word, sample, query):
@@ -630,17 +652,17 @@ def test_own_words_like_dictionary_words():
             ValueError,
             "У образца «печь» нет лексем ADJ, есть NOUN, VERB",
         ),
-        ({"бот": "бумер"}, ValueError, "Образца «бумер» нет в словаре"),
+        ({"бот": "вайбкодер"}, ValueError, "Образца «вайбкодер» нет в словаре"),
         ({"": "кот"}, ValueError, "Свое слово пустое"),
         (
-            {"зумер ": "геймер"},
+            {"вайбкодер ": "геймер"},
             ValueError,
-            "Свое слово «зумер » с пробелом, управляющим или невидимым символом не найдется в тексте",
+            "Свое слово «вайбкодер » с пробелом, управляющим или невидимым символом не найдется в тексте",
         ),
         ({"а": "мама"}, ValueError, "«а» не изменяется по образцу «мама»"),
         ({"кошка": "мышь"}, ValueError, "«кошка» не изменяется по образцу «мышь»"),
-        ("зумер", TypeError, "Свои слова должны быть словарем «слово: образец», а не str"),
-        ({"зумер": 1}, TypeError, "Образец должен быть строкой или парой строк"),
+        ("вайбкодер", TypeError, "Свои слова должны быть словарем «слово: образец», а не str"),
+        ({"вайбкодер": 1}, TypeError, "Образец должен быть строкой или парой строк"),
         ({1: "кот"}, TypeError, "Свое слово должно быть строкой, а не int"),
         (
             type("Items", (), {"items": lambda self: [1]})(),
@@ -661,17 +683,17 @@ def test_own_words_errors(words, error, message):
 
 def test_own_words_with_separators():
     # Табуляция, перевод строки и пустая часть речи не прячутся за копию с похожей записью
-    morph = Analyzer(words={"зумер": "геймер"})
+    morph = Analyzer(words={"вайбкодер": "геймер"})
     for words in [
-        {"зумер": ("геймер", "")},
-        {"зумер": "геймер\t"},
-        {"зумер": "геймер\t\nбумер\tзумер"},
+        {"вайбкодер": ("геймер", "")},
+        {"вайбкодер": "геймер\t"},
+        {"вайбкодер": "геймер\t\nбумер\tвайбкодер"},
         {"кот\tстол": "NOUN"},
-        {"зумер": ("печь", "VERB\r")},
+        {"вайбкодер": ("печь", "VERB\r")},
     ]:
         with pytest.raises(ValueError):
             Analyzer(words=words)
-    assert morph.analyze("зумерами")[0].lemma == "зумер"
+    assert morph.analyze("вайбкодерами")[0].lemma == "вайбкодер"
 
 
 def test_own_words_items_error():
@@ -835,8 +857,8 @@ def test_own_words_release_file(morph, tmp_path):
     # удаляется, как только остался только анализатор со словарем пакета
     path = tmp_path / "ru.dict"
     shutil.copy(morph.path, path)
-    analyzer = Analyzer(path, words={"зумер": "геймер"})
-    assert analyzer.analyze("зумерами")[0].lemma == "зумер"
+    analyzer = Analyzer(path, words={"вайбкодер": "геймер"})
+    assert analyzer.analyze("вайбкодерами")[0].lemma == "вайбкодер"
     del analyzer
     Analyzer()
     path.unlink()
@@ -846,12 +868,12 @@ def test_own_words_release_file(morph, tmp_path):
 def test_deleted_file_with_own_words(morph, tmp_path):
     path = tmp_path / "ru.dict"
     shutil.copy(morph.path, path)
-    analyzer = Analyzer(path, words={"зумер": "геймер"})
-    blob = pickle.dumps(analyzer.analyze("зумерами")[0])
+    analyzer = Analyzer(path, words={"вайбкодер": "геймер"})
+    blob = pickle.dumps(analyzer.analyze("вайбкодерами")[0])
     path.unlink()
     # В другом потоке ручки анализатора нет: берется словарь, загруженный из этого файла
     with ThreadPoolExecutor(1) as pool:
-        assert pool.submit(pickle.loads, blob).result().lemma == "зумер"
+        assert pool.submit(pickle.loads, blob).result().lemma == "вайбкодер"
     # Словарь файла держит и анализатор со своими словами, когда последним загружен другой
     Analyzer()
     with ThreadPoolExecutor(1) as pool:
@@ -861,15 +883,16 @@ def test_deleted_file_with_own_words(morph, tmp_path):
 def test_pickle_with_many_own_words():
     # Свои слова в pickle - одна строка, и в другом потоке копия словаря находится по ней
     words: dict[str, str | tuple[str, str]] = {
-        f"зумер{chr(ord('а') + i // 32)}{chr(ord('а') + i % 32)}": "геймер" for i in range(1000)
+        f"вайбкодер{chr(ord('а') + i // 32)}{chr(ord('а') + i % 32)}": "геймер"
+        for i in range(1000)
     }
     words["зечь"] = ("печь", "VERB")
     analyzer = Analyzer(words=words)
-    blob = pickle.dumps([analyzer.analyze("зечет")[0], analyzer.analyze("зумербб")[0]])
+    blob = pickle.dumps([analyzer.analyze("зечет")[0], analyzer.analyze("вайбкодербб")[0]])
     with ThreadPoolExecutor(1) as pool:
         verb, noun = pool.submit(pickle.loads, blob).result()
-    assert (verb.lemma, verb.pos, noun.lemma) == ("зечь", "VERB", "зумербб")
-    assert pickle.loads(pickle.dumps(analyzer)).analyze("зумербб")[0].source == "dictionary"
+    assert (verb.lemma, verb.pos, noun.lemma) == ("зечь", "VERB", "вайбкодербб")
+    assert pickle.loads(pickle.dumps(analyzer)).analyze("вайбкодербб")[0].source == "dictionary"
 
 
 @pytest.mark.skipif(not hasattr(os, "fork"), reason="нет fork")

@@ -27,7 +27,7 @@
 
 ---
 
-**ruMorph** is a morphological analyzer of Russian: a Rust core with a Python API. For a word form the analyzer finds its analyses in the [OpenCorpora](https://opencorpora.org) dictionary - the initial form (lemma), the part of speech and the [Universal Dependencies](https://universaldependencies.org/) features - orders them by probability and builds the forms of the word.
+**ruMorph** is a morphological analyzer of Russian: a Rust core with a Python API. For a word form the analyzer finds its analyses in the [OpenCorpora](https://opencorpora.org) dictionary and the words of [Wiktionary](https://ru.wiktionary.org) - the initial form (lemma), the part of speech and the [Universal Dependencies](https://universaldependencies.org/) features - orders them by probability and builds the forms of the word.
 
 Analysis and lemmatization are 6-8 times faster than in pymorphy3 with the `pymorphy3[fast]` speedup, the form by features and agreement with a number are 16-18 times faster; lists of words are analyzed without the GIL. Parts of speech, features and lemmas follow the UD guidelines and, where they are silent, the conventions of the SynTagRus treebank, so the results can be compared with the annotation of spaCy, Stanza and other tools built on UD.
 
@@ -95,7 +95,7 @@ The `analyze` method returns the analyses of a word form by descending probabili
 Analysis(word='стали', lemma='стать', pos='VERB', feats='Aspect=Perf|Mood=Ind|Number=Plur|Tense=Past|VerbForm=Fin|Voice=Act', labels='intr', prob=0.9877829877829878, source='dictionary')
 >>> [len(analyses) for analyses in morph.analyze_many(["мама", "мыла", "раму"])]
 [1, 4, 2]
->>> morph.is_known("Ежи"), morph.is_known("вайб")
+>>> morph.is_known("Ежи"), morph.is_known("вайбкодер")
 (True, False)
 ```
 
@@ -193,22 +193,22 @@ For a word in Cyrillic that is not in the dictionary, the analyzer guesses the a
 *   A hyphenated word is analyzed by its last part: «крэш-тестов» - «крэш-тест», «Мак-Киннона» - «мак-киннон», and a word with a drawl or a stutter by the dictionary word without them: «не-е-ет» - «нет», «с-спасибо» - «спасибо»
 *   A word with a known prefix - «эко», «анти», «супер», «микро» and others - is analyzed by the dictionary word without it: «экодомов» - «экодом»
 *   A guessed analysis has forms, and they keep the capital letters: «Мак-Киннона» in the dative - «Мак-Киннону»
-*   A word that must be analyzed exactly can be added after a sample - a dictionary word that inflects the same way: `Analyzer(words={"зумер": "геймер"})`
+*   A word that must be analyzed exactly can be added after a sample - a dictionary word that inflects the same way: `Analyzer(words={"вайбкодер": "геймер"})`
 
 ```python
 >>> from rumorph import Analyzer
 
 >>> morph = Analyzer()
->>> [(a.lemma, a.pos, a.feats["Case"], a.source) for a in morph.analyze("чатботу")][:1]
-[('чатбот', 'NOUN', 'Dat', 'guess')]
+>>> [(a.lemma, a.pos, a.feats["Case"], a.source) for a in morph.analyze("дипфейкеру")][:1]
+[('дипфейкер', 'NOUN', 'Dat', 'guess')]
 >>> guess = morph.analyze("Мартова")[0]
 >>> guess.lemma, guess.pos, guess.feats["NameType"], guess.inflect(Case="Dat")
 ('мартов', 'PROPN', 'Sur', 'Мартову')
 >>> morph.analyze("крэш-тестов")[0].lemma, morph.analyze("экодомов")[0].lemma
 ('крэш-тест', 'экодом')
->>> zoomers = Analyzer(words={"зумер": "геймер"})
->>> zoomers.analyze("зумерами")[0].lemma, zoomers.is_known("зумеры")
-('зумер', True)
+>>> coders = Analyzer(words={"вайбкодер": "геймер"})
+>>> coders.analyze("вайбкодерами")[0].lemma, coders.is_known("вайбкодеры")
+('вайбкодер', True)
 ```
 
 See the [documentation](https://sergeyshk.github.io/ruMorph/en/analysis/#guess).
@@ -290,7 +290,7 @@ See the [documentation](https://sergeyshk.github.io/ruMorph/en/spacy/) for sente
 
 <br>
 
-ruMorph works with the same OpenCorpora dictionary as pymorphy2 and pymorphy3, but has its own API: UD parts of speech and features instead of OpenCorpora grammemes, a probability instead of `score`, word forms as strings, exceptions instead of `None`. Here `morph` is the analyzer, `p` is a pymorphy analysis and `a` is a ruMorph analysis:
+ruMorph works with the same OpenCorpora dictionary as pymorphy2 and pymorphy3, extended with the words of Wiktionary, but has its own API: UD parts of speech and features instead of OpenCorpora grammemes, a probability instead of `score`, word forms as strings, exceptions instead of `None`. Here `morph` is the analyzer, `p` is a pymorphy analysis and `a` is a ruMorph analysis:
 
 | pymorphy2, pymorphy3 | ruMorph |
 | :------------------- | :------ |
@@ -336,7 +336,7 @@ git clone https://github.com/SergeyShk/ruMorph.git
 cd ruMorph
 
 make deps        # create the environment, install the dependencies and build the Rust module
-make dictionary  # build the dictionary from the OpenCorpora dictionary and corpus and UD treebanks
+make dictionary  # build the dictionary from OpenCorpora, Wiktionary and UD treebanks
 make test        # run the Python tests, the docstring examples (doctest) and the Rust tests
 make lint        # ruff, mypy, rustfmt and clippy
 ```
@@ -359,11 +359,11 @@ Bug reports, ideas and pull requests are welcome - the [issues](https://github.c
 <br>
 
 *   **crates/rumorph** - the analyzer core in Rust: the dictionary format, building, analysis, the context model and inflection
-*   **crates/rumorph-build** - building the dictionary from an export of OpenCorpora, converting the OpenCorpora tags to UD and frequencies of analyses from UD treebanks
+*   **crates/rumorph-build** - building the dictionary from an export of OpenCorpora and Wiktionary, converting the OpenCorpora tags to UD and frequencies of analyses from UD treebanks
 *   **crates/rumorph-dict-ru** - the crate with the dictionary for `rumorph` on crates.io
 *   **crates/rumorph-py** - the Python module `rumorph._rumorph` built with PyO3
 *   **python/rumorph** - the Python package
-*   **scripts** - exporting the OpenCorpora dictionary and corpus and the UD treebank counts, training the context model, checking the installed package before publishing and comparing with other analyzers
+*   **scripts** - exporting the OpenCorpora dictionary and corpus, converting the words of Wiktionary, exporting the UD treebank counts, training the context model, checking the installed package before publishing and comparing with other analyzers
 *   **data** - the context model weights that the builder embeds into the dictionary
 *   **docs** - MkDocs documentation in Russian and English
 *   **tests** - tests of the Python package

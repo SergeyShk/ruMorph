@@ -2,7 +2,7 @@
 
 ![ruMorph](img/rumorph.svg)
 
-**ruMorph** is a morphological analyzer of Russian: a Rust core with a Python API. For a word form the analyzer finds its analyses in the OpenCorpora dictionary - the initial form (lemma), the part of speech and the [Universal Dependencies](https://universaldependencies.org/) features - orders them by probability and builds the forms of the word.
+**ruMorph** is a morphological analyzer of Russian: a Rust core with a Python API. For a word form the analyzer finds its analyses in the OpenCorpora dictionary and the words of Wiktionary - the initial form (lemma), the part of speech and the [Universal Dependencies](https://universaldependencies.org/) features - orders them by probability and builds the forms of the word.
 
 !!! note "Early version"
     Before 1.0 the API may change between 0.x versions, changes are described in the release notes.
@@ -112,11 +112,11 @@ Prebuilt wheels and building from source are described on the [Installation](ins
 ??? note "Project structure"
 
     *   **crates/rumorph** - the Rust core of the analyzer: dictionary format, building, analysis, the context model and inflection
-    *   **crates/rumorph-build** - building the dictionary from the OpenCorpora export, converting OpenCorpora tags to UD and frequencies of analyses from UD treebanks
+    *   **crates/rumorph-build** - building the dictionary from the OpenCorpora and Wiktionary export, converting OpenCorpora tags to UD and frequencies of analyses from UD treebanks
     *   **crates/rumorph-dict-ru** - the crate with the dictionary for `rumorph` on crates.io
     *   **crates/rumorph-py** - the Python module `rumorph._rumorph` on PyO3
     *   **python/rumorph** - the Python package
-    *   **scripts** - exporting the OpenCorpora dictionary and corpus and the UD treebank counts, training the context model, checking the installed package before publishing and comparing with other analyzers
+    *   **scripts** - exporting the OpenCorpora dictionary and corpus, converting the words of Wiktionary, exporting the UD treebank counts, training the context model, checking the installed package before publishing and comparing with other analyzers
     *   **data** - the weights of the context model that the builder embeds into the dictionary
     *   **docs** - MkDocs documentation in Russian and English
     *   **tests** - tests of the Python package

@@ -65,6 +65,12 @@ impl Builder {
         self
     }
 
+    /// Источники обучения контекстной модели из файла весов - строка JSON, если она записана
+    #[doc(hidden)]
+    pub fn context_sources(weights: &[u8]) -> Result<Option<String>, Error> {
+        crate::dictionary::context_sources(weights)
+    }
+
     /// Веса контекстной модели - файл `scripts/train_context.py`; проверяются при добавлении
     pub fn context(&mut self, weights: Vec<u8>) -> Result<&mut Self, Error> {
         crate::dictionary::Model::parse(&weights)?;

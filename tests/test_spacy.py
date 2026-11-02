@@ -102,14 +102,14 @@ def test_without_context():
 
 def test_config(tmp_path):
     path = importlib.resources.files("rumorph") / "data" / "ru.dict"
-    words = {"зумер": "геймер", "зечь": ["печь", "VERB"]}
+    words = {"вайбкодер": "геймер", "зечь": ["печь", "VERB"]}
     nlp = spacy.blank("ru")
     nlp.add_pipe("rumorph", config={"dictionary": str(path), "words": words})
-    lemmas = ["зумер", "зечь", "нравиться"]
-    assert [token.lemma_ for token in nlp("Зумерам зечет нравится")] == lemmas
+    lemmas = ["вайбкодер", "зечь", "нравиться"]
+    assert [token.lemma_ for token in nlp("Вайбкодерам зечет нравится")] == lemmas
     assert nlp.get_pipe_meta("rumorph").assigns == ["token.pos", "token.morph", "token.lemma"]
     nlp.to_disk(tmp_path)
-    assert [token.lemma_ for token in spacy.load(tmp_path)("Зумерам зечет нравится")] == lemmas
+    assert [token.lemma_ for token in spacy.load(tmp_path)("Вайбкодерам зечет нравится")] == lemmas
 
 
 def test_extension(nlp):
@@ -125,8 +125,8 @@ def test_analyzer_cache_is_bounded(nlp):
     docs = []
     for number in range(rumorph.spacy.CACHE_SIZE + 3):
         own = spacy.blank("ru")
-        own.add_pipe("rumorph", config={"words": {f"зумер{'а' * number}": "геймер"}})
-        docs.append(own("Зумер"))
+        own.add_pipe("rumorph", config={"words": {f"вайбкодер{'а' * number}": "геймер"}})
+        docs.append(own("Вайбкодер"))
     assert len(rumorph.spacy._analyzers) <= rumorph.spacy.CACHE_SIZE
     # Вытесненный анализатор создается заново по настройкам документа: свое слово - из словаря
     assert docs[0][0]._.rumorph.source == "dictionary"
@@ -137,31 +137,31 @@ def test_analyzer_cache_is_bounded(nlp):
 
 def test_extension_uses_component_settings(nlp):
     own = spacy.blank("ru")
-    own.add_pipe("rumorph", config={"words": {"зумер": "геймер"}})
-    doc = own("Зумеры стали друзьями")
+    own.add_pipe("rumorph", config={"words": {"вайбкодер": "геймер"}})
+    doc = own("Вайбкодеры стали друзьями")
     nlp("Мы стали друзьями")
     assert doc[0]._.rumorph.source == "dictionary"
-    assert nlp("Зумеры")[0]._.rumorph.source == "guess"
+    assert nlp("Вайбкодеры")[0]._.rumorph.source == "guess"
 
 
 def test_serialization(nlp):
     own = spacy.blank("ru")
-    own.add_pipe("rumorph", config={"words": {"зумер": "геймер"}})
-    doc = own("Зумеры стали друзьями")
+    own.add_pipe("rumorph", config={"words": {"вайбкодер": "геймер"}})
+    doc = own("Вайбкодеры стали друзьями")
     restored = spacy.tokens.Doc(own.vocab).from_bytes(doc.to_bytes())
     assert annotation(restored) == annotation(doc)
     assert restored[0]._.rumorph.source == "dictionary"
     stored = spacy.tokens.DocBin(docs=[nlp("Мы стали друзьями")]).get_docs(nlp.vocab)
     assert next(stored)[2]._.rumorph.lemma == "друг"
-    assert annotation(pickle.loads(pickle.dumps(own))("Зумеры")) == annotation(doc[:1])
+    assert annotation(pickle.loads(pickle.dumps(own))("Вайбкодеры")) == annotation(doc[:1])
 
 
 def test_pickle_in_new_process():
     nlp = spacy.blank("ru")
-    nlp.add_pipe("rumorph", config={"words": {"зумер": "геймер"}})
+    nlp.add_pipe("rumorph", config={"words": {"вайбкодер": "геймер"}})
     code = (
-        "import pickle, sys; doc = pickle.load(sys.stdin.buffer)('Зумеры стали'); "
-        "print(doc[0].lemma_ == 'зумер', doc[0]._.rumorph.source)"
+        "import pickle, sys; doc = pickle.load(sys.stdin.buffer)('Вайбкодеры стали'); "
+        "print(doc[0].lemma_ == 'вайбкодер', doc[0]._.rumorph.source)"
     )
     result = subprocess.run(
         [sys.executable, "-c", code], input=pickle.dumps(nlp), capture_output=True, check=False
@@ -189,7 +189,7 @@ def test_default_settings_not_stored(nlp):
     assert merged[2]._.rumorph.lemma == "друг"
     assert docs[1][1:4].as_doc()[2]._.rumorph.lemma == "сталь"
     own = spacy.blank("ru")
-    own.add_pipe("rumorph", config={"words": {"вайб": "шарф"}})
-    doc = nlp(own("Какой вайб"))
+    own.add_pipe("rumorph", config={"words": {"дрип": "шарф"}})
+    doc = nlp(own("Какой дрип"))
     assert "rumorph" not in doc.user_data
     assert doc[1]._.rumorph.lemma == doc[1].lemma_

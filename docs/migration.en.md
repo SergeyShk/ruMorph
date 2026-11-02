@@ -1,6 +1,6 @@
 # Migrating from pymorphy
 
-pymorphy2 and pymorphy3 share one API: pymorphy3 continues pymorphy2, which does not work on Python 3.11 and newer. ruMorph uses the same OpenCorpora dictionary but has its own API: [Universal Dependencies](https://universaldependencies.org/) parts of speech and features instead of OpenCorpora grammemes, a probability instead of `score`, word forms as strings, exceptions instead of `None`.
+pymorphy2 and pymorphy3 share one API: pymorphy3 continues pymorphy2, which does not work on Python 3.11 and newer. ruMorph uses the same OpenCorpora dictionary, extended with the words of Wiktionary, but has its own API: [Universal Dependencies](https://universaldependencies.org/) parts of speech and features instead of OpenCorpora grammemes, a probability instead of `score`, word forms as strings, exceptions instead of `None`.
 
 ``` bash
 pip install rumorph

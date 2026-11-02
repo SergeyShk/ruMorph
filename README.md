@@ -27,7 +27,7 @@
 
 ---
 
-**ruMorph** - морфологический анализатор русского языка: ядро на Rust и API для Python. Для словоформы анализатор находит по словарю [OpenCorpora](https://opencorpora.org) варианты разбора - начальную форму (лемму), часть речи и признаки [Universal Dependencies](https://universaldependencies.org/) - упорядочивает их по вероятности и строит формы слова.
+**ruMorph** - морфологический анализатор русского языка: ядро на Rust и API для Python. Для словоформы анализатор находит по словарю [OpenCorpora](https://opencorpora.org) и словам [Викисловаря](https://ru.wiktionary.org) варианты разбора - начальную форму (лемму), часть речи и признаки [Universal Dependencies](https://universaldependencies.org/) - упорядочивает их по вероятности и строит формы слова.
 
 Разбор и лемматизация в 6-8 раз быстрее, чем в pymorphy3 с ускорением `pymorphy3[fast]`, форма по признакам и согласование с количеством - в 16-18 раз; списки слов разбираются без GIL. Части речи, признаки и леммы следуют руководству UD, а где оно молчит - соглашениям трибанка SynTagRus, поэтому результат можно сравнивать с разметкой spaCy, Stanza и других инструментов на UD.
 
@@ -95,7 +95,7 @@ uv add rumorph
 Analysis(word='стали', lemma='стать', pos='VERB', feats='Aspect=Perf|Mood=Ind|Number=Plur|Tense=Past|VerbForm=Fin|Voice=Act', labels='intr', prob=0.9877829877829878, source='dictionary')
 >>> [len(analyses) for analyses in morph.analyze_many(["мама", "мыла", "раму"])]
 [1, 4, 2]
->>> morph.is_known("Ежи"), morph.is_known("вайб")
+>>> morph.is_known("Ежи"), morph.is_known("вайбкодер")
 (True, False)
 ```
 
@@ -193,22 +193,22 @@ Analysis(word='стали', lemma='стать', pos='VERB', feats='Aspect=Perf|M
 *   Слово через дефис разбирается по последней части: «крэш-тестов» - «крэш-тест», «Мак-Киннона» - «мак-киннон», а слово с протяжкой или заиканием - по словарному слову без них: «не-е-ет» - «нет», «с-спасибо» - «спасибо»
 *   Слово с известной приставкой - «эко», «анти», «супер», «микро» и другими - разбирается по словарному слову без нее: «экодомов» - «экодом»
 *   У угаданного разбора есть формы, и они сохраняют заглавные буквы: «Мак-Киннона» в дательном падеже - «Мак-Киннону»
-*   Слово, которое нужно разбирать точно, можно добавить по образцу - словарному слову, которое изменяется так же: `Analyzer(words={"зумер": "геймер"})`
+*   Слово, которое нужно разбирать точно, можно добавить по образцу - словарному слову, которое изменяется так же: `Analyzer(words={"вайбкодер": "геймер"})`
 
 ```python
 >>> from rumorph import Analyzer
 
 >>> morph = Analyzer()
->>> [(a.lemma, a.pos, a.feats["Case"], a.source) for a in morph.analyze("чатботу")][:1]
-[('чатбот', 'NOUN', 'Dat', 'guess')]
+>>> [(a.lemma, a.pos, a.feats["Case"], a.source) for a in morph.analyze("дипфейкеру")][:1]
+[('дипфейкер', 'NOUN', 'Dat', 'guess')]
 >>> guess = morph.analyze("Мартова")[0]
 >>> guess.lemma, guess.pos, guess.feats["NameType"], guess.inflect(Case="Dat")
 ('мартов', 'PROPN', 'Sur', 'Мартову')
 >>> morph.analyze("крэш-тестов")[0].lemma, morph.analyze("экодомов")[0].lemma
 ('крэш-тест', 'экодом')
->>> zoomers = Analyzer(words={"зумер": "геймер"})
->>> zoomers.analyze("зумерами")[0].lemma, zoomers.is_known("зумеры")
-('зумер', True)
+>>> coders = Analyzer(words={"вайбкодер": "геймер"})
+>>> coders.analyze("вайбкодерами")[0].lemma, coders.is_known("вайбкодеры")
+('вайбкодер', True)
 ```
 
 Подробнее - в [документации](https://sergeyshk.github.io/ruMorph/analysis/#guess).
@@ -290,7 +290,7 @@ doc = nlp("Мост сделан из стали.")
 
 <br>
 
-ruMorph работает с тем же словарем OpenCorpora, что pymorphy2 и pymorphy3, но API у него свое: части речи и признаки UD вместо граммем OpenCorpora, вероятность вместо `score`, словоформы строкой, исключения вместо `None`. Здесь `morph` - анализатор, `p` - разбор pymorphy, `a` - разбор ruMorph:
+ruMorph работает с тем же словарем OpenCorpora, что pymorphy2 и pymorphy3, дополненным словами Викисловаря, но API у него свое: части речи и признаки UD вместо граммем OpenCorpora, вероятность вместо `score`, словоформы строкой, исключения вместо `None`. Здесь `morph` - анализатор, `p` - разбор pymorphy, `a` - разбор ruMorph:
 
 | pymorphy2, pymorphy3 | ruMorph |
 | :------------------- | :------ |
@@ -336,7 +336,7 @@ git clone https://github.com/SergeyShk/ruMorph.git
 cd ruMorph
 
 make deps        # создать окружение, установить зависимости и собрать модуль на Rust
-make dictionary  # собрать словарь из словаря и корпуса OpenCorpora и трибанков UD
+make dictionary  # собрать словарь из OpenCorpora, Викисловаря и трибанков UD
 make test        # запустить тесты Python, примеры из докстрингов (doctest) и тесты Rust
 make lint        # ruff, mypy, rustfmt и clippy
 ```
@@ -359,11 +359,11 @@ uv run pre-commit install
 <br>
 
 *   **crates/rumorph** - ядро анализатора на Rust: формат словаря, сборка, разбор, контекстная модель и словоизменение
-*   **crates/rumorph-build** - сборка словаря из выгрузки OpenCorpora, перевод тегов OpenCorpora в UD и частоты разборов по трибанкам UD
+*   **crates/rumorph-build** - сборка словаря из выгрузки OpenCorpora и Викисловаря, перевод тегов OpenCorpora в UD и частоты разборов по трибанкам UD
 *   **crates/rumorph-dict-ru** - крейт со словарем для `rumorph` на crates.io
 *   **crates/rumorph-py** - модуль Python `rumorph._rumorph` на PyO3
 *   **python/rumorph** - пакет Python
-*   **scripts** - выгрузка словаря и корпуса OpenCorpora и счетчиков трибанков UD, обучение контекстной модели, проверка установленного пакета перед публикацией и сравнение с другими анализаторами
+*   **scripts** - выгрузка словаря и корпуса OpenCorpora, перевод слов Викисловаря, выгрузка счетчиков трибанков UD, обучение контекстной модели, проверка установленного пакета перед публикацией и сравнение с другими анализаторами
 *   **data** - веса контекстной модели, которые сборщик вшивает в словарь
 *   **docs** - документация MkDocs на русском и английском
 *   **tests** - тесты пакета Python

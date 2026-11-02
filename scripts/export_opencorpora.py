@@ -1,10 +1,13 @@
 """
-Выгрузка словаря и корпуса OpenCorpora в текстовые таблицы для сборщика rumorph-build
+Выгрузка словаря и корпуса OpenCorpora и слов Викисловаря в текстовые таблицы для сборщика rumorph-build
 
 Описание:
-    Словарь и корпус OpenCorpora - снимки Wayback Machine (opencorpora.org не отвечает)
-    с проверкой SHA-256. Лексемы объединяются по связям, у набора граммем остается одна
-    запись тега, формы лексемы делятся на основу и парадигму. Скрипт пишет таблицы
+    Словарь и корпус OpenCorpora - снимки Wayback Machine (opencorpora.org не отвечает),
+    Викисловарь - снимок в датасете Hugging Face (`wiktionary_snapshot.py`), все с проверкой
+    SHA-256. Лексемы объединяются по связям, у набора граммем остается одна запись тега.
+    Существительные, имена собственные и прилагательные Викисловаря, которых нет в OpenCorpora,
+    добавляются лексемами OpenCorpora (`wiktionary.py`). Формы лексемы делятся на основу
+    и парадигму. Скрипт пишет таблицы
     тегов, префиксов, суффиксов и парадигм (JSON), словоформы с номерами парадигм и форм
     (words.tsv) и P(тег | словоформа) по разметке корпуса в миллионных долях
     (probabilities.tsv). Нужна только стандартная библиотека.
@@ -19,6 +22,7 @@ import bz2
 import hashlib
 import http.client
 import json
+import lzma
 import struct
 import time
 import urllib.error
@@ -27,6 +31,8 @@ import xml.etree.ElementTree as ET
 from collections import Counter, defaultdict
 from collections.abc import Iterator
 from pathlib import Path
+
+import wiktionary
 
 LICENSE = "CC BY-SA 3.0"
 # Файл, адреса (снимок Wayback Machine, затем сайт) и SHA-256; ревизии 417258 и 4580223.
@@ -46,6 +52,14 @@ CORPUS = (
         "https://opencorpora.org/files/export/annot/annot.opcorpora.xml.bz2",
     ],
     "dff2b07a3db865eb234515c3c2c51e370fc67b3582f32af7174625c8f2be4422",
+)
+# Русские статьи Викисловаря с таблицами форм: выгрузка ru.wiktionary.org 01.10.2026 (kaikki.org, 30.10.2026)
+WIKTIONARY = (
+    "ru-wiktionary-20261001.jsonl.xz",
+    [
+        "https://huggingface.co/datasets/SergeyShk/rumorph-wiktionary/resolve/768e78b0f415f51c60d73c15362218452e30dbcc/ru-wiktionary-20261001.jsonl.xz",
+    ],
+    "0ff28409baca56faf67d83fdfc47e967dd6e61b30e5d9afc32c65af80a5a62c5",
 )
 # Префиксы парадигм: превосходная степень («наибольший») и «по» сравнительной («побольше»)
 PARADIGM_PREFIXES = ["", "по", "наи"]
@@ -461,11 +475,23 @@ def export(output: Path) -> None:
     dictionary = download(urls, output / "raw" / name, digest)
     name, urls, digest = CORPUS
     corpus = download(urls, output / "raw" / name, digest)
+    name, urls, digest = WIKTIONARY
+    snapshot = download(urls, output / "raw" / name, digest)
 
     revision, lexemes, links = parse_dictionary(dictionary)
+    known = {wiktionary.normal(lexeme[0][0]) for lexeme in lexemes.values() if lexeme}
     simplify_tags(lexemes)
     for number, lexeme in lexemes.items():
         lexemes[number] = [(form, tag) for form, tag in lexeme if "Init" not in tag]
+    spellings: dict[frozenset[str], str] = {}
+    for lexeme in lexemes.values():
+        for _, tag in lexeme:
+            spellings.setdefault(grammemes(tag), tag)
+    # Номера новых лексем - после номеров OpenCorpora: парадигмы словаря сохраняют номера
+    forms = {form for lexeme in lexemes.values() for form, _ in lexeme}
+    added = wiktionary.lexemes(read_snapshot(snapshot), known, spellings, forms)
+    start = max(map(int, lexemes)) + 1
+    lexemes.update((str(number), lexeme) for number, lexeme in enumerate(added, start))
     joined = join_lexemes(lexemes, links)
     tags, suffixes, layouts, words = compile_dictionary(joined)
     corpus_revision = next(corpus_revisions(corpus))
@@ -474,6 +500,7 @@ def export(output: Path) -> None:
         "source": "opencorpora.org",
         "opencorpora_revision": revision,
         "corpus_revision": corpus_revision,
+        "wiktionary": {"dump": "2026-10-01", "lexemes": len(added), "license": "CC BY-SA 4.0"},
         "license": LICENSE,
     }
     tables = {
@@ -500,6 +527,21 @@ def export(output: Path) -> None:
     with (output / "probabilities.tsv").open("w", encoding="utf-8") as file:
         for word, tag, millionths in probabilities(corpus, tags, layouts, words):
             file.write(f"{word}\t{tag}\t{millionths}\n")
+
+
+def read_snapshot(path: Path) -> Iterator[dict]:
+    """
+    Статьи снимка Викисловаря
+
+    Аргументы:
+        path (Path): Снимок, JSON Lines в xz
+
+    Вывод:
+        Iterator[dict]: Статьи
+    """
+    with lzma.open(path, "rt", encoding="utf-8") as file:
+        for line in file:
+            yield json.loads(line)
 
 
 def corpus_revisions(path: Path) -> Iterator[str]:

@@ -14,11 +14,11 @@ def morph():
 @pytest.mark.parametrize(
     ("word", "lemma", "pos"),
     [
-        ("зумерами", "зумер", "NOUN"),
-        ("ковидом", "ковид", "NOUN"),
-        ("чатботу", "чатбот", "NOUN"),
+        ("вайбкодерами", "вайбкодер", "NOUN"),
+        ("донатером", "донатер", "NOUN"),
+        ("дипфейкеру", "дипфейкер", "NOUN"),
         ("загуглил", "загуглить", "VERB"),
-        ("хайповый", "хайповый", "ADJ"),
+        ("вайбовый", "вайбовый", "ADJ"),
     ],
 )
 def test_lowercase_guess(morph, word, lemma, pos):
@@ -66,21 +66,21 @@ def test_yo_written_as_e(morph):
 
 
 def test_capitalized_prefixed_forms(morph):
-    adjective = next(a for a in morph.analyze("Кринжовый") if a.pos == "ADJ")
+    adjective = next(a for a in morph.analyze("Кринжастый") if a.pos == "ADJ")
     words = [form.word for form in adjective.forms()]
-    assert "Покринжовее" in words
+    assert "Покринжастее" in words
     assert not any(char.isupper() for word in words for char in word[1:])
-    comparative = next(form for form in adjective.forms() if form.word == "Покринжовее")
+    comparative = next(form for form in adjective.forms() if form.word == "Покринжастее")
     assert pickle.loads(pickle.dumps(comparative)) == comparative
     # Формы формы с приставкой сохраняют заглавную букву
-    assert [form.word for form in comparative.forms()][:2] == ["Кринжовый", "Кринжового"]
-    assert comparative.inflect(Degree="Pos", Case="Gen") == "Кринжового"
+    assert [form.word for form in comparative.forms()][:2] == ["Кринжастый", "Кринжастого"]
+    assert comparative.inflect(Degree="Pos", Case="Gen") == "Кринжастого"
 
 
 def test_guessed_inflection(morph):
-    assert morph.analyze("зумер")[0].agree(5) == "зумеров"
+    assert morph.analyze("вайбкодер")[0].agree(5) == "вайбкодеров"
     assert morph.analyze("загуглить")[0].inflect(Tense="Past", Gender="Fem") == "загуглила"
-    assert {form.lemma for form in morph.analyze("чатботу")[0].forms()} == {"чатбот"}
+    assert {form.lemma for form in morph.analyze("дипфейкеру")[0].forms()} == {"дипфейкер"}
 
 
 # Короткие слова в смешанном регистре - чаще единицы измерения: их не угадать по окончанию
@@ -113,7 +113,11 @@ def test_mixed_case(morph, word, lemma, pos):
 
 
 def test_mixed_case_forms(morph):
-    assert [form.word for form in morph.analyze("УрО")[0].forms()][:3] == ["УрО", "Ура", "Уру"]
+    assert [form.word for form in morph.analyze("МосГор")[0].forms()][:3] == [
+        "МосГор",
+        "МосГора",
+        "МосГору",
+    ]
     assert morph.analyze("ФПиКА")[0].inflect(Case="Dat") == "ФПиКе"
 
 
@@ -121,11 +125,11 @@ def test_order_of_sources(morph):
     assert morph.analyze("мама")[0].source == "dictionary"
     assert morph.analyze("НКО")[0].source == "rule"
     assert morph.analyze("2026")[0].source == "rule"
-    assert morph.analyze("Зумер")[0].source == "guess"
+    assert morph.analyze("Вайбкодер")[0].source == "guess"
 
 
 def test_pickled_guesses(morph):
-    analyses = morph.analyze("Мартова") + morph.analyze("зумерами")
+    analyses = morph.analyze("Мартова") + morph.analyze("вайбкодерами")
     analyses += analyses[0].forms()
     restored = pickle.loads(pickle.dumps(analyses))
     assert restored == analyses

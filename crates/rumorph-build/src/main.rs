@@ -137,6 +137,13 @@ fn build(
             "frequencies".into(),
             json("sources.json", read_ud("sources.json")?)?,
         );
+        let sources = weights
+            .as_deref()
+            .map(Builder::context_sources)
+            .transpose()?;
+        if let Some(sources) = sources.flatten() {
+            fields.insert("context".into(), json("sources", sources)?);
+        }
     }
     builder.meta(meta.to_string());
     // Парадигмы по формам: новые парадигмы (объединенные лексемы, копии форм) не повторяются

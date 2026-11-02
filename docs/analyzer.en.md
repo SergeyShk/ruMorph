@@ -4,7 +4,7 @@
 Analyzer(path=None, words=None)
 ```
 
-Morphological analyzer: for a word form it finds all [analyses](analysis.md) in the OpenCorpora dictionary - the initial form, the part of speech and the [Universal Dependencies](https://universaldependencies.org/) features - and orders them by probability. The dictionary is loaded when the first analyzer is created: analyzers with the same dictionary file in a process share it, so a new analyzer is created instantly. The last loaded dictionary stays in the process even without analyzers, so process pool tasks and an analyzer created for a single call do not load the dictionary again.
+Morphological analyzer: for a word form it finds all [analyses](analysis.md) in the OpenCorpora dictionary and the words of Wiktionary - the initial form, the part of speech and the [Universal Dependencies](https://universaldependencies.org/) features - and orders them by probability. The dictionary is loaded when the first analyzer is created: analyzers with the same dictionary file in a process share it, so a new analyzer is created instantly. The last loaded dictionary stays in the process even without analyzers, so process pool tasks and an analyzer created for a single call do not load the dictionary again.
 
 Exceptions:
 
@@ -39,22 +39,22 @@ The object keeps the dictionary path in `path` of type `Path`, read-only. The di
 
 ## Own words { #words }
 
-A word that is not in the dictionary can be added after a sample - a dictionary word that inflects the same way: «зумер» like «геймер», «кринж» like «пляж». The word and the sample are written in the same form, usually the initial one; stress marks, soft hyphens and look-alike Latin letters in them are normalized as in a query. The own word gets all forms of the sample with its own stem and then behaves like a dictionary word: `source` is `"dictionary"`, `is_known` finds it, `forms`, `inflect` and `agree` work. If the sample has lexemes of different parts of speech («печь» is a noun and a verb), the sample is a pair with the UD part of speech: `{"зечь": ("печь", "VERB")}`; otherwise the analyzer is not created. An own word listed earlier can be a sample too: `{"зумер": "геймер", "бумер": "зумер"}`. Own words belong to this analyzer only, and pickle saves them with it.
+A word that is not in the dictionary can be added after a sample - a dictionary word that inflects the same way: «вайбкодер» like «геймер», «дрип» like «пляж». The word and the sample are written in the same form, usually the initial one; stress marks, soft hyphens and look-alike Latin letters in them are normalized as in a query. The own word gets all forms of the sample with its own stem and then behaves like a dictionary word: `source` is `"dictionary"`, `is_known` finds it, `forms`, `inflect` and `agree` work. If the sample has lexemes of different parts of speech («печь» is a noun and a verb), the sample is a pair with the UD part of speech: `{"зечь": ("печь", "VERB")}`; otherwise the analyzer is not created. An own word listed earlier can be a sample too: `{"вайбкодер": "геймер", "промптер": "вайбкодер"}`. Own words belong to this analyzer only, and pickle saves them with it.
 
 Own words are kept in a copy of the dictionary, about 3.5 KB per word (35 MB for 10 thousand words). Processes share the dictionary mapped into memory, but each process builds the copy itself. The last built copy stays in memory after the analyzers are deleted until another one is built or another dictionary is loaded: tasks of a process pool do not build it again.
 
 === "Code"
 
     ``` python
-    morph = Analyzer(words={"зумер": "геймер", "кринж": "пляж"})
-    zoomer = morph.analyze("зумерами")[0]
-    zoomer.lemma, zoomer.inflect(Case="Dat", Number="Sing"), morph.lemmatize(["кринжем"])
+    morph = Analyzer(words={"вайбкодер": "геймер", "дрип": "пляж"})
+    coder = morph.analyze("вайбкодерами")[0]
+    coder.lemma, coder.inflect(Case="Dat", Number="Sing"), morph.lemmatize(["дрипом"])
     ```
 
 === "Result"
 
     ```
-    ('зумер', 'зумеру', ['кринж'])
+    ('вайбкодер', 'вайбкодеру', ['дрип'])
     ```
 
 ## Methods
@@ -84,7 +84,7 @@ Exceptions:
 
     ``` python
     [(a.lemma, a.pos, a.feats.get("Case"), round(a.prob, 3)) for a in morph.analyze("стали")]
-    [(a.lemma, a.source) for a in morph.analyze("чатботу")][:2]
+    [(a.lemma, a.source) for a in morph.analyze("дипфейкеру")][:1]
     ```
 
 === "Result"
@@ -96,7 +96,7 @@ Exceptions:
      ('сталь', 'NOUN', 'Dat', 0.001),
      ('сталь', 'NOUN', 'Loc', 0.001),
      ('сталь', 'NOUN', 'Acc', 0.001)]
-    [('чатбот', 'guess'), ('чатбота', 'guess')]
+    [('дипфейкер', 'guess')]
     ```
 
 </div>
@@ -236,7 +236,7 @@ Exceptions:
 === "Code"
 
     ``` python
-    morph.is_known("Ежи"), morph.is_known("вайб")
+    morph.is_known("Ежи"), morph.is_known("дипфейкер")
     ```
 
 === "Result"
@@ -249,7 +249,7 @@ Exceptions:
 
 ## Dictionary { #dictionary }
 
-The package dictionary is built from the [OpenCorpora](https://opencorpora.org) dictionary: about 3.1 million word forms. The probabilities of analyses come from the OpenCorpora corpus and are refined by the annotation of the Universal Dependencies treebanks [UD_Russian-Taiga](https://github.com/UniversalDependencies/UD_Russian-Taiga) and [UD_Russian-GSD](https://github.com/UniversalDependencies/UD_Russian-GSD): this way «ничего» is more often a pronoun than an adverb. Word forms missing from every corpus get equally probable analyses. The dictionary is distributed under the [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) license.
+The package dictionary is built from the [OpenCorpora](https://opencorpora.org) dictionary and the words of [Wiktionary](https://ru.wiktionary.org) missing from it - nouns, proper names and adjectives («зумер», «джун»): about 3.8 million word forms in all. The probabilities of analyses come from the OpenCorpora corpus and are refined by the annotation of the Universal Dependencies treebanks [UD_Russian-Taiga](https://github.com/UniversalDependencies/UD_Russian-Taiga) and [UD_Russian-GSD](https://github.com/UniversalDependencies/UD_Russian-GSD): this way «ничего» is more often a pronoun than an adverb. Word forms missing from every corpus get equally probable analyses. The dictionary is distributed under the [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) license.
 
 ## Threads and processes { #parallel }
 

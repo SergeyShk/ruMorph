@@ -381,36 +381,51 @@ pub(crate) struct Model {
     query_bias: Vec<f32>,
 }
 
+/// Записи файла весов `scripts/train_context.py`: сигнатура, версия, число записей и записи
+fn read(data: &[u8]) -> Result<Entries<'_>, Error> {
+    if data.get(..MAGIC.len()) != Some(MAGIC.as_slice()) {
+        return Err(invalid("нет сигнатуры файла весов"));
+    }
+    let mut reader = Reader {
+        data,
+        at: MAGIC.len(),
+    };
+    let format = reader.u32()?;
+    if format != FORMAT {
+        return Err(invalid(&format!(
+            "версия файла весов {format}, поддерживается {FORMAT}"
+        )));
+    }
+    let count = reader.count(256)?;
+    let mut entries = HashMap::new();
+    for _ in 0..count {
+        let len = usize::from(u16::from_le_bytes(
+            reader.take(2)?.try_into().map_err(|_| invalid("имя"))?,
+        ));
+        let name =
+            std::str::from_utf8(reader.take(len)?).map_err(|_| invalid("имя записи не в UTF-8"))?;
+        entries.insert(name, reader.value()?);
+    }
+    if reader.at != data.len() {
+        return Err(invalid("лишние данные после записей"));
+    }
+    Ok(Entries(entries))
+}
+
+/// Источники обучения из записи `sources` файла весов - строка JSON; в весах до 0.5.0 ее нет
+#[cfg(any(test, feature = "build"))]
+pub(crate) fn sources(data: &[u8]) -> Result<Option<String>, Error> {
+    match read(data)?.0.remove("sources") {
+        None => Ok(None),
+        Some(Value::Strings(strings)) if strings.len() == 1 => Ok(Some(strings[0].to_owned())),
+        Some(_) => Err(invalid("sources - не одна строка")),
+    }
+}
+
 impl Model {
     /// Веса из файла `scripts/train_context.py`: размеры всех матриц проверяются
     pub fn parse(data: &[u8]) -> Result<Self, Error> {
-        if data.get(..MAGIC.len()) != Some(MAGIC.as_slice()) {
-            return Err(invalid("нет сигнатуры файла весов"));
-        }
-        let mut reader = Reader {
-            data,
-            at: MAGIC.len(),
-        };
-        let format = reader.u32()?;
-        if format != FORMAT {
-            return Err(invalid(&format!(
-                "версия файла весов {format}, поддерживается {FORMAT}"
-            )));
-        }
-        let count = reader.count(256)?;
-        let mut entries = HashMap::new();
-        for _ in 0..count {
-            let len = usize::from(u16::from_le_bytes(
-                reader.take(2)?.try_into().map_err(|_| invalid("имя"))?,
-            ));
-            let name = std::str::from_utf8(reader.take(len)?)
-                .map_err(|_| invalid("имя записи не в UTF-8"))?;
-            entries.insert(name, reader.value()?);
-        }
-        if reader.at != data.len() {
-            return Err(invalid("лишние данные после записей"));
-        }
-        let mut entries = Entries(entries);
+        let mut entries = read(data)?;
         let Value::Numbers(config) = entries.take("config")? else {
             return Err(invalid("config - не числа"));
         };
@@ -910,6 +925,25 @@ pub(crate) mod tests {
             ("NOUN", "стол", vec![("", noun("Nom")), ("", noun("Acc"))]),
             ("VERB", "виж", vec![("у", "Person=1".into())]),
         ]
+    }
+
+    #[test]
+    fn training_sources() {
+        let mut data = weights(&[("P=NOUN", 0.0)]);
+        assert_eq!(sources(&data).unwrap(), None);
+        let count = u32::from_le_bytes(data[12..16].try_into().unwrap());
+        data[12..16].copy_from_slice(&(count + 1).to_le_bytes());
+        entry(
+            &mut data,
+            "sources",
+            0,
+            &strings(&[r#"{"release":"r2.18"}"#]),
+        );
+        assert_eq!(
+            sources(&data).unwrap().as_deref(),
+            Some(r#"{"release":"r2.18"}"#)
+        );
+        assert!(Model::parse(&data).is_ok());
     }
 
     #[test]
