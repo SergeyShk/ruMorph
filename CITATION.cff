@@ -6,8 +6,8 @@ authors:
   - family-names: Shkarin
     given-names: Sergey
     email: kouki.sergey@gmail.com
-version: 0.4.0
-date-released: 2026-10-23
+version: 0.5.0
+date-released: 2026-11-02
 repository-code: "https://github.com/SergeyShk/ruMorph"
 url: "https://sergeyshk.github.io/ruMorph/"
 license:
@@ -23,5 +23,6 @@ keywords:
   - inflection
   - universal dependencies
   - opencorpora
+  - wiktionary
   - rust
-abstract: "ruMorph is a morphological analyzer of Russian with a Rust core and a Python API. For a word form it finds the analyses in the OpenCorpora dictionary - the lemma, the part of speech and the Universal Dependencies features following the UD guidelines and, where they are silent, the SynTagRus conventions - and orders them by probability; a BiLSTM context model chooses the analysis of every word of a sentence by its neighbours. Numbers, signs, Latin script and abbreviations are analyzed by rules, and the analyses of unknown words are guessed by their endings, hyphenated parts and prefixes. Every analysis gives the forms of its lexeme, the form with the requested features and the form that agrees with a number. Lists of words are analyzed without the GIL; the package includes the rumorph command and a spaCy component."
+abstract: "ruMorph is a morphological analyzer of Russian with a Rust core and a Python API. For a word form it finds the analyses in a dictionary built from OpenCorpora and the words of Wiktionary missing from it - the lemma, the part of speech and the Universal Dependencies features following the UD guidelines and, where they are silent, the SynTagRus conventions - and orders them by probability; a BiLSTM context model chooses the analysis of every word of a sentence by its neighbours. Numbers, signs, Latin script and abbreviations are analyzed by rules, and the analyses of unknown words are guessed by their endings, hyphenated parts and prefixes. Every analysis gives the forms of its lexeme, the form with the requested features and the form that agrees with a number. Lists of words and documents of the anySeg segmenter are analyzed without the GIL; the package includes the rumorph command and a spaCy component."

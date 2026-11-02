@@ -15,7 +15,7 @@ git clone https://github.com/SergeyShk/ruMorph.git
 cd ruMorph
 
 make deps                   # создать окружение, установить все зависимости и собрать модуль на Rust
-make dictionary             # собрать словарь из словаря и корпуса OpenCorpora и трибанков UD
+make dictionary             # собрать словарь из словаря и корпуса OpenCorpora, слов Викисловаря и трибанков UD
 uv run pre-commit install   # хуки: линтеры на коммите, тесты на пуше
 ```
 
