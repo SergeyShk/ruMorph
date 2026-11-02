@@ -268,6 +268,12 @@ def test_rare_capitalized(morph):
     assert any(a.pos == "NOUN" and a.lemma == "сенна" for a in analyses)
     assert [a.pos for a in morph.analyze("сенна")] == ["NOUN"]
     assert [a.pos for a in morph.analyze("Мама")] == ["NOUN"]
+    # Прилагательное с заглавной - редко имя; протяжка разбирается, как слово без нее; со своим словом
+    # слово не редкое
+    assert {a.pos for a in morph.analyze("Двухместный")} == {"ADJ"}
+    assert morph.analyze("Се-е-енна")[0].pos == "PROPN"
+    own = Analyzer(words={"сенн": "пляж"}).analyze("Сенна")
+    assert {(a.lemma, a.pos) for a in own} == {("сенна", "NOUN"), ("сенн", "NOUN")}
 
 
 def test_is_known(morph):

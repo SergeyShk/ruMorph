@@ -58,8 +58,9 @@ const MIN_LOWERCASE_LENGTH: usize = 3;
 impl Dictionary {
     /// Слово с заглавной буквы, все разборы которого - редких лексем дополнительного словаря
     /// (Викисловаря) без имени собственного, разбирается и как незнакомое имя собственное:
-    /// в обучающих частях UD Taiga и GSD такие слова с заглавной - имена в 84 % случаев, почти
-    /// как незнакомые словарю («Сенна», «Робинзон»)
+    /// в обучающих частях UD Taiga и GSD такие существительные с заглавной - имена в 87 % случаев,
+    /// почти как незнакомые словарю («Сенна», «Робинзон»), а прилагательные - в 4 %
+    /// («Двухместный»), и у них разборы не добавляются
     pub(super) fn add_rare_proper(&self, word: &str, analyses: &mut Vec<Analysis>) {
         let mut chars = word.chars();
         let titlecase = chars.next().is_some_and(char::is_uppercase)
@@ -70,7 +71,15 @@ impl Dictionary {
                 .get(usize::from(analysis.ud))
                 .is_some_and(|&proper| proper)
         };
-        if !titlecase || analyses.iter().any(proper) || !self.rare_word(word) {
+        let adjective = |analysis: &Analysis| {
+            self.ud_tag(analysis.ud)
+                .is_some_and(|tag| tag.pos() == "ADJ")
+        };
+        if !titlecase
+            || analyses.iter().any(proper)
+            || analyses.iter().all(adjective)
+            || !self.rare_word(word)
+        {
             return;
         }
         let lower = word.to_lowercase();

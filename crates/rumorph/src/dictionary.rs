@@ -1348,11 +1348,15 @@ impl Dictionary {
         lists.get(start..start + count)
     }
 
-    /// Все разборы словоформы `word` - редких лексем дополнительного словаря (бит `RARE_WORD`)
+    /// Все разборы словоформы `word` - редких лексем дополнительного словаря (бит `RARE_WORD`),
+    /// и своих слов с ней нет
     pub(super) fn rare_word(&self, word: &str) -> bool {
         let Some(key) = self.alphabet.input_key(word) else {
             return false;
         };
+        if self.is_own(&key) {
+            return false;
+        }
         let Some(spellings) = self.spellings(&key) else {
             return false;
         };

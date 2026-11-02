@@ -183,6 +183,7 @@ impl Dictionary {
             let mut found = self.merge(self.candidates(&plain));
             self.reweight_numerals(&mut found);
             self.weigh_by_case(&plain, &mut found);
+            self.add_rare_proper(&plain, &mut found);
             let analyses: Vec<Analysis> = found
                 .into_iter()
                 .map(|analysis| Analysis {
