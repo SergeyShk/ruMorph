@@ -147,7 +147,7 @@ Exceptions:
 analyze_sentence(words)
 ```
 
-Analyses of the words of a sentence in context: the same analyses as with [`analyze`](#analyze) are ordered by the context model - the first one is the analysis it chose from the neighbouring words, and `prob` is its estimate in this sentence. Without context «книги» is in the genitive (it is more frequent), in «Я читаю книги» the model picks the accusative, and «стали» in «Мост сделан из стали» is the noun «сталь», not the verb «стать». With context the part of speech, lemma and features of the first analysis are right for 82-94 % of words against 71-82 % without it ([Comparison](performance.md)). The words are the tokens of one sentence in order: ruMorph does not split text into sentences and tokens. A word without neighbours is analyzed as with `analyze`: without context the model chooses worse than the dictionary frequencies. A sentence longer than 256 words is analyzed in parts of 256, so the memory of the model does not grow with the length of the input. The model is trained on the [UD_Russian-Taiga](https://github.com/UniversalDependencies/UD_Russian-Taiga) and [UD_Russian-GSD](https://github.com/UniversalDependencies/UD_Russian-GSD) treebanks and the [OpenCorpora](https://opencorpora.org) corpus and ships with the package dictionary.
+Analyses of the words of a sentence in context: the same analyses as with [`analyze`](#analyze) are ordered by the context model - the first one is the analysis it chose from the neighbouring words, and `prob` is its estimate in this sentence. Without context «книги» is in the genitive (it is more frequent), in «Я читаю книги» the model picks the accusative, and «стали» in «Мост сделан из стали» is the noun «сталь», not the verb «стать». With context the part of speech, lemma and features of the first analysis are right for 82-94 % of words against 71-82 % without it ([Comparison](performance.md)). The words are the tokens of one sentence in order; the segmenter anySeg splits text into sentences and tokens, and [`annotate`](#annotate) analyzes a document. A word without neighbours is analyzed as with `analyze`: without context the model chooses worse than the dictionary frequencies. A sentence longer than 256 words is analyzed in parts of 256, so the memory of the model does not grow with the length of the input. The model is trained on the [UD_Russian-Taiga](https://github.com/UniversalDependencies/UD_Russian-Taiga) and [UD_Russian-GSD](https://github.com/UniversalDependencies/UD_Russian-GSD) treebanks and the [OpenCorpora](https://opencorpora.org) corpus and ships with the package dictionary.
 
 | Parameter | Type | Default | Description |
 | :-------- | :--- | :------ | :---------- |
@@ -173,6 +173,48 @@ Exceptions:
     ['Nom', None, 'Gen']
     ['Nom', None, 'Acc']
     сталь
+    ```
+
+</div>
+
+<div class="metric-card" markdown>
+
+### Analysis of a document { #annotate }
+
+`annotate` · `None`
+{ .metric-meta }
+
+``` {.python .signature}
+annotate(document)
+```
+
+Analyzes a document of the segmenter [anySeg](https://github.com/SergeyShk/anySeg) in one call: the columns `lemma`, `upos` and `feats` of its words get the most probable analysis in the context of the sentence, as with [`analyze_sentence`](#analyze_sentence), replacing the earlier values. anySeg finds the tokens and the sentences following the conventions of Universal Dependencies on which the context model is trained. A word without analyses gets its lowercased form as the lemma and the part of speech `X`. The annotated document is written in CoNLL-U by its method `to_conllu`. anySeg is a separate package (`pip install anyseg`); any other object with the methods `column("form")` and `set_columns` and the sentences `sentences` whose words `words` have a number `index` fits too.
+
+| Parameter | Type | Default | Description |
+| :-------- | :--- | :------ | :---------- |
+| `document` | `anyseg.Document` | - | A document: `Segmenter("ru").segment(text)` |
+
+Exceptions:
+
+- `ValueError` - the dictionary has no context model.
+
+=== "Code"
+
+    ``` python
+    from anyseg import Segmenter
+
+    document = Segmenter("ru").segment("Мост сделан из стали. Мы стали друзьями.")
+    morph.annotate(document)
+    [(word.form, word.lemma, word.upos) for word in document.sentences[1].words]
+    ```
+
+=== "Result"
+
+    ```
+    [('Мы', 'мы', 'PRON'),
+     ('стали', 'стать', 'VERB'),
+     ('друзьями', 'друг', 'NOUN'),
+     ('.', '.', 'PUNCT')]
     ```
 
 </div>

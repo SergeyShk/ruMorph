@@ -12,7 +12,9 @@ import time
 import zlib
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from types import SimpleNamespace
 
+import anyseg
 import pytest
 
 import rumorph
@@ -302,6 +304,65 @@ def test_analyze_sentence_errors(morph, tmp_path):
     for words in (["стол"], []):
         with pytest.raises(ValueError, match="нет контекстной модели"):
             analyzer.analyze_sentence(words)
+    for text in ("Стол.", ""):
+        with pytest.raises(ValueError, match="нет контекстной модели"):
+            analyzer.annotate(anyseg.Segmenter("ru").segment(text))
+
+
+class Document:
+    """Документ с интерфейсом anyseg.Document: формы, предложения из номеров слов, столбцы"""
+
+    def __init__(self, forms, sentences):
+        self.forms, self.columns = forms, {}
+        self.sentences = [
+            SimpleNamespace(words=[SimpleNamespace(index=index) for index in sentence])
+            for sentence in sentences
+        ]
+
+    def column(self, name):
+        return self.forms if name == "form" else self.columns[name]
+
+    def set_columns(self, **columns):
+        self.columns.update(columns)
+
+
+def test_annotate(morph):
+    document = anyseg.Segmenter("ru").segment("Мост сделан из стали.\n\nМы стали друзьями.")
+    morph.annotate(document)
+    assert [word.lemma for word in document.sentences[0].words] == [
+        "мост",
+        "сделать",
+        "из",
+        "сталь",
+        ".",
+    ]
+    # Столбцы - первый разбор analyze_sentence каждого предложения
+    expected = []
+    for sentence in document.sentences:
+        forms = [word.form for word in sentence.words]
+        for analyses in morph.analyze_sentence(forms):
+            first = analyses[0]
+            feats = "|".join(f"{name}={value}" for name, value in first.feats.items()) or None
+            expected.append((first.lemma, first.pos, feats))
+    names = ("lemma", "upos", "feats")
+    assert list(zip(*(document.column(name) for name in names), strict=True)) == expected
+    assert "4\tстали\tсталь\tNOUN" in document.to_conllu()
+    # Документ - любой объект с тем же интерфейсом; разбор заменяет прежние столбцы
+    own = Document(["Мы", "стали", "друзьями", "\u200b"], [[0, 1, 2], [3], []])
+    own.columns["lemma"] = ["?"] * 4
+    morph.annotate(own)
+    assert own.columns == {
+        "lemma": ["мы", "стать", "друг", "\u200b"],
+        "upos": ["PRON", "VERB", "NOUN", "X"],
+        "feats": [
+            "Case=Nom|Number=Plur|Person=1|PronType=Prs",
+            "Aspect=Perf|Mood=Ind|Number=Plur|Tense=Past|VerbForm=Fin|Voice=Act",
+            "Animacy=Anim|Case=Ins|Gender=Masc|Number=Plur",
+            None,
+        ],
+    }
+    with pytest.raises(ValueError, match="слова предложения не из документа"):
+        morph.annotate(Document(["Мы"], [[0, 1]]))
 
 
 def test_lemmatize(morph):

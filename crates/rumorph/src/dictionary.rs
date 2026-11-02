@@ -14,6 +14,12 @@ use crate::format::{
 };
 
 pub(crate) mod context;
+#[cfg(feature = "anyseg")]
+mod document;
+
+/// Поля CoNLL-U разбора слова: лемма, часть речи и признаки (без признаков - `None`)
+#[doc(hidden)]
+pub type Fields<'d> = (String, &'d str, Option<String>);
 mod guess;
 mod own;
 mod parts;
@@ -22,7 +28,7 @@ mod ud;
 
 #[cfg(any(test, feature = "build"))]
 pub(crate) use context::Model;
-#[cfg(any(test, feature = "build"))]
+#[cfg(feature = "build")]
 pub(crate) use context::sources as context_sources;
 #[cfg(any(test, feature = "build"))]
 pub use guess::GuessIndex;
@@ -532,6 +538,28 @@ impl Dictionary {
             sentence.extend(context.rank(&normal, analyses));
         }
         Ok(sentence)
+    }
+
+    /// Поля CoNLL-U самого вероятного в контексте разбора каждого слова предложения: лемма,
+    /// часть речи и признаки (без признаков - `None`); слово без разборов - в нижнем регистре
+    /// с частью речи X. Ошибка - если в словаре нет контекстной модели
+    #[doc(hidden)]
+    pub fn sentence_fields<S: AsRef<str>>(&self, words: &[S]) -> Result<Vec<Fields<'_>>, Error> {
+        let sentence = self.analyze_sentence(words)?;
+        Ok(words
+            .iter()
+            .zip(sentence)
+            .map(|(word, analyses)| match analyses.into_iter().next() {
+                Some(analysis) => {
+                    let tag = self.ud_tag(analysis.ud);
+                    let feats = tag
+                        .filter(|tag| tag.feats().len() > 0)
+                        .map(UdTag::feats_string);
+                    (analysis.lemma, tag.map_or("X", UdTag::pos), feats)
+                }
+                None => (word.as_ref().to_lowercase(), "X", None),
+            })
+            .collect())
     }
 
     /// Контекстная модель словаря: читается один раз на словарь и его копии

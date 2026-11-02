@@ -73,7 +73,8 @@ cache-keys = [
 ]
 
 [dependency-groups]
-test = ["pytest>=8.3", "pytest-cov>=6.0"]
+# anyseg - документы для Analyzer.annotate и токенизатор spaCy в тестах
+test = ["pytest>=8.3", "pytest-cov>=6.0", "anyseg>=0.2"]
 # Нет колес для 3.14t: CI ставит группу на остальных версиях
 spacy = ["spacy>=3.8,<4"]
 lint = ["mypy>=1.14", "pre-commit>=4.0", "ruff>=0.9"]

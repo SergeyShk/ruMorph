@@ -193,3 +193,22 @@ def test_default_settings_not_stored(nlp):
     doc = nlp(own("Какой дрип"))
     assert "rumorph" not in doc.user_data
     assert doc[1]._.rumorph.lemma == doc[1].lemma_
+
+
+def test_anyseg_tokenizer():
+    # Токены и предложения anySeg: пробельные токены - SPACE, модель их не видит
+    tokenizer = {"@tokenizers": "anyseg.Tokenizer.v1"}
+    nlp = spacy.blank("ru", config={"nlp": {"tokenizer": tokenizer}})
+    nlp.add_pipe("anyseg_sentencizer")
+    nlp.add_pipe("rumorph")
+    doc = nlp("Мы стали\nдрузьями в 1914 г.  Мост сделан из стали.")
+    words = [(token.text, token.pos_, token.lemma_) for token in doc if not token.is_space]
+    assert words[:3] == [
+        ("Мы", "PRON", "мы"),
+        ("стали", "VERB", "стать"),
+        ("друзьями", "NOUN", "друг"),
+    ]
+    assert ("г", "NOUN", "год") in words
+    assert words[-2:] == [("стали", "NOUN", "сталь"), (".", "PUNCT", ".")]
+    assert [token.pos_ for token in doc if token.is_space] == ["SPACE", "SPACE"]
+    assert [sentence.text for sentence in doc.sents][-1] == "Мост сделан из стали."

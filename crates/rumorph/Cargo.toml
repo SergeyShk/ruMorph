@@ -14,24 +14,26 @@ categories = ["text-processing"]
 
 [features]
 default = ["bundled"]
-# Словарь OpenCorpora из крейта rumorph-dict-ru: Dictionary::bundled
+# Словарь ruMorph из крейта rumorph-dict-ru: Dictionary::bundled
 bundled = ["dep:rumorph-dict-ru"]
+# Разбор документа сегментатора anySeg: Dictionary::annotate
+anyseg = ["dep:anyseg"]
 # Сборка своих словарей: Builder и GuessIndex
 build = []
 # Команда rumorph: cargo install rumorph --features cli
-cli = ["dep:unicode-segmentation"]
+cli = ["anyseg"]
 
 [[bin]]
 name = "rumorph"
 required-features = ["cli"]
 
 [dependencies]
+anyseg = { version = "0.2.0", optional = true, default-features = false, features = ["ru"] }
 bytemuck = "1.25.2"
 crc32fast = "1.5.3"
 fst = "0.4.7"
 memmap2 = "0.9.11"
 rumorph-dict-ru = { version = "=0.5.0-dev.3", path = "../rumorph-dict-ru", optional = true }
-unicode-segmentation = { version = "1.13.3", optional = true }
 
 [package.metadata.docs.rs]
 all-features = true
