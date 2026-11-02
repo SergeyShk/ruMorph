@@ -305,7 +305,7 @@ impl Dictionary {
         Self::from_storage(Storage::of_static(data))
     }
 
-    /// Словарь OpenCorpora из крейта `rumorph-dict-ru`; словарь проверяется при каждом вызове
+    /// Словарь ruMorph из крейта `rumorph-dict-ru`; словарь проверяется при каждом вызове
     /// (около 4 мс), поэтому его создают один раз и делят между потоками
     ///
     /// ```
