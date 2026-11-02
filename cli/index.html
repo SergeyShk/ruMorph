@@ -27,7 +27,7 @@
       
       
       <link rel="icon" href="../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
     
     
       
@@ -35,10 +35,10 @@
       
     
     
-      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
       
         
-        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
       
       
 
@@ -863,6 +863,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#text" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        text
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1018,6 +1029,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#text" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        text
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1057,7 +1079,7 @@
 <h1 id="rumorph">Команда rumorph<a class="headerlink" href="#rumorph" title="Permanent link">&para;</a></h1>
 <div class="highlight"><pre><span></span><code>rumorph<span class="w"> </span><span class="o">[</span>параметры<span class="o">]</span><span class="w"> </span><span class="o">[</span>файл<span class="w"> </span>...<span class="o">]</span>
 </code></pre></div>
-<p>Команда разбирает текст из файлов или стандартного ввода и пишет леммы, части речи и признаки <a href="https://universaldependencies.org/">Universal Dependencies</a> в одном из четырех форматов. Она ставится вместе с пакетом (<code>pip install rumorph</code>) и запускается и как <code>python -m rumorph</code>; без Python ее ставит <code>cargo install rumorph --features cli</code>. Разбор и вывод выполняет ядро на Rust в одном потоке: около 100 тыс. токенов в секунду с <a href="../analyzer/#analyze_sentence">контекстом</a> и около миллиона без него (<code>--no-context</code>).</p>
+<p>Команда разбирает текст из файлов или стандартного ввода и пишет леммы, части речи и признаки <a href="https://universaldependencies.org/">Universal Dependencies</a> в одном из пяти форматов. Она ставится вместе с пакетом (<code>pip install rumorph</code>) и запускается и как <code>python -m rumorph</code>; без Python ее ставит <code>cargo install rumorph --features cli</code>. Разбор и вывод выполняет ядро на Rust в одном потоке: около 100 тыс. токенов в секунду с <a href="../analyzer/#analyze_sentence">контекстом</a> и около миллиона без него (<code>--no-context</code>).</p>
 <div class="highlight"><pre><span></span><code><span class="nb">echo</span><span class="w"> </span><span class="s2">"Мы стали друзьями в ковиде."</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>rumorph
 </code></pre></div>
 <div class="highlight"><pre><span></span><code>мы стать друг в ковид .
@@ -1075,7 +1097,7 @@
 <tr>
 <td style="text-align: left;"><code>-f</code>, <code>--format</code></td>
 <td style="text-align: left;"><code>lemmas</code></td>
-<td style="text-align: left;"><a href="#formats">Формат вывода</a>: <code>lemmas</code>, <code>conllu</code>, <code>tsv</code>, <code>jsonl</code></td>
+<td style="text-align: left;"><a href="#formats">Формат вывода</a>: <code>lemmas</code>, <code>conllu</code>, <code>tsv</code>, <code>jsonl</code>, <code>text</code></td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>-i</code>, <code>--input</code></td>
@@ -1114,11 +1136,11 @@
 </tr>
 </tbody>
 </table>
-<p>Файлы читаются по очереди, без файлов и вместо <code>-</code> - стандартный ввод; вход - в UTF-8: файл в другой кодировке (cp1251, UTF-16) не разбирается, а отдельная строка с неверными байтами разбирается с U+FFFD вместо них. Значение параметра пишется отдельно или слитно: <code>-f conllu</code>, <code>-fconllu</code>, <code>--format=conllu</code>. В терминал результат выводится после каждого предложения, а в канал и файл - всякий раз, когда команда ждет следующую строку входа: ее можно держать открытой и подавать текст по строке.</p>
+<p>Файлы читаются по очереди, без файлов и вместо <code>-</code> - стандартный ввод; вход - в UTF-8: файл в другой кодировке (cp1251, UTF-16) не разбирается, а отдельная строка с неверными байтами разбирается с U+FFFD вместо них. Значение параметра пишется отдельно или слитно: <code>-f conllu</code>, <code>-fconllu</code>, <code>--format=conllu</code>. Текст разбирается по абзацам: абзац выводится, как только его закончит пустая строка или конец входа, - в терминал сразу, а в канал и файл всякий раз, когда команда ждет следующую строку входа; ее можно держать открытой и подавать текст абзацами. Входы <code>tokens</code> и <code>conllu</code> выводятся по предложению.</p>
 <p>В Windows PowerShell 5.1 перенаправление <code>&gt;</code> и конвейер (<code>Get-Content text.txt | rumorph</code>) портят кириллицу: передавайте файл аргументом, а результат пишите параметром <code>-o</code> (в PowerShell 7 работают и они). Текст из <code>echo</code> в cmd приходит в кодировке консоли: перед ним нужна команда <code>chcp 65001</code>. Шаблоны файлов (<code>*.txt</code>) cmd и PowerShell не раскрывают.</p>
 <h2 id="input">Вход<a class="headerlink" href="#input" title="Permanent link">&para;</a></h2>
 <ul>
-<li><code>text</code> - текст, предложение - строка. Текст делится на токены просто: слова - с дефисами и апострофами между буквами («кто-то», «д’Артаньян»), числа - с точкой или запятой между цифрами («3,14»), остальные знаки - по одному, одинаковые знаки подряд - вместе («...»), эмодзи с модификаторами и флаги - целиком. Пробел нулевой ширины и другие невидимые разделители делят токены, а мягкий перенос и соединитель слов (U+2060) внутри слова - нет. Точка сокращения отделяется: «т.е.» - четыре токена; для точного деления текста подайте готовые токены. Контекстная модель разбирает строку по предложениям - кускам до знака конца предложения (<code>.</code>, <code>!</code>, <code>?</code>, <code>…</code>).</li>
+<li><code>text</code> - текст: пустая строка заканчивает абзац. Токены и предложения находит сегментатор <a href="https://github.com/SergeyShk/anySeg">anySeg</a> по соглашениям Universal Dependencies, на которых обучена контекстная модель: слова через дефис по руководству UD («кто-то», «Ростова-на-Дону» - пять токенов), числа, даты и время («3,14», «12.10.2026», «12:30»), сокращения и инициалы с точкой («т. е.», «А. С.»), адреса, упоминания и эмодзи; ударения и мягкие переносы остаются в токене. Предложение может переходить через перевод строки: anySeg отличает перевод строки внутри предложения от авторского. Текст без пустых строк разбирается кусками около 512 КБ, которые кончаются на границе предложения, а строка длиннее куска делится на пробеле: память не растет с длиной входа.</li>
 <li><code>tokens</code> - токен в строке, пустая строка разделяет предложения; пробелы по краям и все после табуляции не учитываются, так что подходит и таблица с токеном в первом столбце. Список отдельных слов разбирайте с <code>--no-context</code>: иначе модель примет соседние слова за предложение.</li>
 <li><code>conllu</code> - <a href="https://universaldependencies.org/format.html">CoNLL-U</a>: заполняются столбцы LEMMA, UPOS и FEATS, а остальные столбцы, комментарии, многословные токены и пустые узлы остаются как есть.</li>
 </ul>
@@ -1130,12 +1152,14 @@
 <h2 id="formats">Форматы вывода<a class="headerlink" href="#formats" title="Permanent link">&para;</a></h2>
 <p>Все форматы, кроме <code>jsonl</code>, берут первый разбор токена - выбранный контекстной моделью по соседним словам (предложение длиннее 256 токенов модель разбирает частями по 256, как <a href="../analyzer/#analyze_sentence"><code>analyze_sentence</code></a>), а с <code>--no-context</code> - самый вероятный по словарю; <code>jsonl</code> пишет все разборы в этом порядке. Токен без разбора получает лемму в нижнем регистре и часть речи <code>X</code>.</p>
 <h3 id="lemmas">lemmas<a class="headerlink" href="#lemmas" title="Permanent link">&para;</a></h3>
-<p>Леммы через пробел, строка на предложение; пустая строка текста остается пустой.</p>
+<p>Леммы через пробел, строка на предложение; абзацы разделяет пустая строка.</p>
 <h3 id="conllu">conllu<a class="headerlink" href="#conllu" title="Permanent link">&para;</a></h3>
-<p>CoNLL-U: номер, токен, лемма, часть речи и признаки, <code>SpaceAfter=No</code> у токена, за которым в тексте нет пробела, и комментарии <code>sent_id</code> и <code>text</code>. Текст в <code>text</code> собирается из токенов, как требует CoNLL-U: пробелы между токенами - по одному, без пробелов по краям и невидимых символов, у входа <code>tokens</code> - токены через пробел.</p>
+<p>CoNLL-U, как его пишет anySeg: номер, токен, лемма, часть речи и признаки, комментарии <code>sent_id</code> и <code>text</code>. У входа <code>text</code> файл начинает комментарий <code>newdoc</code>, а абзац - <code>newpar</code>; в MISC - <code>SpaceAfter=No</code> у токена, за которым в абзаце нет пробела, и <code>SpacesAfter</code>, если там не один пробел (<code>SpacesAfter=\n</code> - перевод строки). Комментарий <code>text</code> собирается из токенов и промежутков между ними в одну строку, без невидимых символов, у входа <code>tokens</code> - из токенов через пробел. Токены, леммы и текст - в Unicode NFC, как требует CoNLL-U.</p>
 <div class="highlight"><pre><span></span><code><span class="nb">echo</span><span class="w"> </span><span class="s2">"Мы стали друзьями в ковиде."</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>rumorph<span class="w"> </span>-f<span class="w"> </span>conllu
 </code></pre></div>
-<div class="highlight"><pre><span></span><code># sent_id = 1
+<div class="highlight"><pre><span></span><code># newdoc
+# newpar
+# sent_id = 1
 # text = Мы стали друзьями в ковиде.
 1   Мы  мы  PRON    _   Case=Nom|Number=Plur|Person=1|PronType=Prs  _   _   _   _
 2   стали   стать   VERB    _   Aspect=Perf|Mood=Ind|Number=Plur|Tense=Past|VerbForm=Fin|Voice=Act  _   _   _   _
@@ -1149,7 +1173,7 @@
 <div class="highlight"><pre><span></span><code><span class="nb">echo</span><span class="w"> </span><span class="s2">"Мы стали друзьями."</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>rumorph<span class="w"> </span>-f<span class="w"> </span>tsv
 </code></pre></div>
 <div class="highlight"><pre><span></span><code>Мы  мы  PRON    Case=Nom|Number=Plur|Person=1|PronType=Prs  1
-стали   стать   VERB    Aspect=Perf|Mood=Ind|Number=Plur|Tense=Past|VerbForm=Fin|Voice=Act  0.9995066255501905
+стали   стать   VERB    Aspect=Perf|Mood=Ind|Number=Plur|Tense=Past|VerbForm=Fin|Voice=Act  0.9997926079645355
 друзьями    друг    NOUN    Animacy=Anim|Case=Ins|Gender=Masc|Number=Plur   1
 .   .   PUNCT   _   1
 </code></pre></div>
@@ -1166,12 +1190,18 @@
 <span class="w">    </span><span class="p">]},</span>
 <span class="w">    </span><span class="p">{</span><span class="nt">"word"</span><span class="p">:</span><span class="w"> </span><span class="s2">"стали"</span><span class="p">,</span><span class="w"> </span><span class="nt">"analyses"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
 <span class="w">      </span><span class="p">{</span><span class="nt">"lemma"</span><span class="p">:</span><span class="w"> </span><span class="s2">"стать"</span><span class="p">,</span><span class="w"> </span><span class="nt">"pos"</span><span class="p">:</span><span class="w"> </span><span class="s2">"VERB"</span><span class="p">,</span><span class="w"> </span><span class="nt">"feats"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"Aspect"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Perf"</span><span class="p">,</span><span class="w"> </span><span class="nt">"Mood"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Ind"</span><span class="p">,</span><span class="w"> </span><span class="nt">"Number"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Plur"</span><span class="p">,</span><span class="w"> </span><span class="nt">"Tense"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Past"</span><span class="p">,</span><span class="w"> </span><span class="nt">"VerbForm"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Fin"</span><span class="p">,</span><span class="w"> </span><span class="nt">"Voice"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Act"</span><span class="p">},</span>
-<span class="w">       </span><span class="nt">"labels"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"intr"</span><span class="p">],</span><span class="w"> </span><span class="nt">"prob"</span><span class="p">:</span><span class="w"> </span><span class="mf">0.9990479553121936</span><span class="p">,</span><span class="w"> </span><span class="nt">"source"</span><span class="p">:</span><span class="w"> </span><span class="s2">"dictionary"</span><span class="p">},</span>
-<span class="w">      </span><span class="p">{</span><span class="nt">"lemma"</span><span class="p">:</span><span class="w"> </span><span class="s2">"сталь"</span><span class="p">,</span><span class="w"> </span><span class="nt">"pos"</span><span class="p">:</span><span class="w"> </span><span class="s2">"NOUN"</span><span class="p">,</span><span class="w"> </span><span class="nt">"feats"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"Animacy"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Inan"</span><span class="p">,</span><span class="w"> </span><span class="nt">"Case"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Nom"</span><span class="p">,</span><span class="w"> </span><span class="nt">"Gender"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Fem"</span><span class="p">,</span><span class="w"> </span><span class="nt">"Number"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Plur"</span><span class="p">},</span>
-<span class="w">       </span><span class="nt">"labels"</span><span class="p">:</span><span class="w"> </span><span class="p">[],</span><span class="w"> </span><span class="nt">"prob"</span><span class="p">:</span><span class="w"> </span><span class="mf">0.0006122046393944599</span><span class="p">,</span><span class="w"> </span><span class="nt">"source"</span><span class="p">:</span><span class="w"> </span><span class="s2">"dictionary"</span><span class="p">}</span>
+<span class="w">       </span><span class="nt">"labels"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"intr"</span><span class="p">],</span><span class="w"> </span><span class="nt">"prob"</span><span class="p">:</span><span class="w"> </span><span class="mf">0.9997641726802856</span><span class="p">,</span><span class="w"> </span><span class="nt">"source"</span><span class="p">:</span><span class="w"> </span><span class="s2">"dictionary"</span><span class="p">},</span>
+<span class="w">      </span><span class="p">{</span><span class="nt">"lemma"</span><span class="p">:</span><span class="w"> </span><span class="s2">"сталь"</span><span class="p">,</span><span class="w"> </span><span class="nt">"pos"</span><span class="p">:</span><span class="w"> </span><span class="s2">"NOUN"</span><span class="p">,</span><span class="w"> </span><span class="nt">"feats"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"Animacy"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Inan"</span><span class="p">,</span><span class="w"> </span><span class="nt">"Case"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Acc"</span><span class="p">,</span><span class="w"> </span><span class="nt">"Gender"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Fem"</span><span class="p">,</span><span class="w"> </span><span class="nt">"Number"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Plur"</span><span class="p">},</span>
+<span class="w">       </span><span class="nt">"labels"</span><span class="p">:</span><span class="w"> </span><span class="p">[],</span><span class="w"> </span><span class="nt">"prob"</span><span class="p">:</span><span class="w"> </span><span class="mf">0.0001246478260593029</span><span class="p">,</span><span class="w"> </span><span class="nt">"source"</span><span class="p">:</span><span class="w"> </span><span class="s2">"dictionary"</span><span class="p">}</span>
 <span class="w">    </span><span class="p">]}</span>
 <span class="w">  </span><span class="p">]</span>
 <span class="p">}</span>
+</code></pre></div>
+<h3 id="text">text<a class="headerlink" href="#text" title="Permanent link">&para;</a></h3>
+<p>Исходный текст как есть - с переводами строк, пробелами и знаками, - только «е» в токене заменена на «ё» там, где ее пишет выбранный разбор, в регистре токена. Так текст без «ё» получает ее по контексту: «все» - «всё» или «все», «узнаем» - «узнаём» или «узнаем». Без контекста (<code>--no-context</code>) «ё» ставится, только если ее пишут все разборы токена: «все» и «звезды» не меняются. Токен с ударением или мягким переносом не меняется, BOM в начале файла остается. Формат - только для входа <code>text</code>.</p>
+<div class="highlight"><pre><span></span><code><span class="nb">echo</span><span class="w"> </span><span class="s2">"Осел стоит у елки, а еще ее ждет еж."</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>rumorph<span class="w"> </span>-f<span class="w"> </span>text
+</code></pre></div>
+<div class="highlight"><pre><span></span><code>Осёл стоит у ёлки, а ещё её ждёт ёж.
 </code></pre></div>
 <h2 id="exit-codes">Коды выхода<a class="headerlink" href="#exit-codes" title="Permanent link">&para;</a></h2>
 <table>
@@ -1287,10 +1317,10 @@
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.top", "content.code.copy", "search.highlight", "search.suggest"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "\u0421\u043a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u043d\u043e \u0432 \u0431\u0443\u0444\u0435\u0440", "clipboard.copy": "\u041a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u0432 \u0431\u0443\u0444\u0435\u0440", "search.result.more.one": "\u0415\u0449\u0451 1 \u043d\u0430 \u044d\u0442\u043e\u0439 \u0441\u0442\u0440\u0430\u043d\u0438\u0446\u0435", "search.result.more.other": "\u0415\u0449\u0451 # \u043d\u0430 \u044d\u0442\u043e\u0439 \u0441\u0442\u0440\u0430\u043d\u0438\u0446\u0435", "search.result.none": "\u0421\u043e\u0432\u043f\u0430\u0434\u0435\u043d\u0438\u0439 \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d\u043e", "search.result.one": "\u041d\u0430\u0439\u0434\u0435\u043d\u043e 1 \u0441\u043e\u0432\u043f\u0430\u0434\u0435\u043d\u0438\u0435", "search.result.other": "\u041d\u0430\u0439\u0434\u0435\u043d\u043e \u0441\u043e\u0432\u043f\u0430\u0434\u0435\u043d\u0438\u0439: #", "search.result.placeholder": "\u041d\u0430\u0447\u043d\u0438\u0442\u0435 \u043f\u0435\u0447\u0430\u0442\u0430\u0442\u044c \u0434\u043b\u044f \u043f\u043e\u0438\u0441\u043a\u0430", "search.result.term.missing": "\u041e\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u0435\u0442", "select.version": "\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0432\u0435\u0440\u0441\u0438\u044e"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.top", "content.code.copy", "search.highlight", "search.suggest"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "\u0421\u043a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u043d\u043e \u0432 \u0431\u0443\u0444\u0435\u0440", "clipboard.copy": "\u041a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u0432 \u0431\u0443\u0444\u0435\u0440", "search.result.more.one": "\u0415\u0449\u0451 1 \u043d\u0430 \u044d\u0442\u043e\u0439 \u0441\u0442\u0440\u0430\u043d\u0438\u0446\u0435", "search.result.more.other": "\u0415\u0449\u0451 # \u043d\u0430 \u044d\u0442\u043e\u0439 \u0441\u0442\u0440\u0430\u043d\u0438\u0446\u0435", "search.result.none": "\u0421\u043e\u0432\u043f\u0430\u0434\u0435\u043d\u0438\u0439 \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d\u043e", "search.result.one": "\u041d\u0430\u0439\u0434\u0435\u043d\u043e 1 \u0441\u043e\u0432\u043f\u0430\u0434\u0435\u043d\u0438\u0435", "search.result.other": "\u041d\u0430\u0439\u0434\u0435\u043d\u043e \u0441\u043e\u0432\u043f\u0430\u0434\u0435\u043d\u0438\u0439: #", "search.result.placeholder": "\u041d\u0430\u0447\u043d\u0438\u0442\u0435 \u043f\u0435\u0447\u0430\u0442\u0430\u0442\u044c \u0434\u043b\u044f \u043f\u043e\u0438\u0441\u043a\u0430", "search.result.term.missing": "\u041e\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u0435\u0442", "select.version": "\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0432\u0435\u0440\u0441\u0438\u044e"}, "version": null}</script>
     
     
-      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../assets/javascripts/bundle.c21346df.min.js"></script>
       
     
   </body>

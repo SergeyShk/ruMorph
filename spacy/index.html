@@ -25,7 +25,7 @@
       
       
       <link rel="icon" href="../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
     
     
       
@@ -33,10 +33,10 @@
       
     
     
-      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
       
         
-        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
       
       
 
@@ -1009,19 +1009,41 @@
 <td style="text-align: left;">82,0</td>
 <td style="text-align: left;">75,5</td>
 <td style="text-align: left;">74,8</td>
-<td style="text-align: left;">5 628</td>
+<td style="text-align: left;">8 554</td>
 </tr>
 <tr>
 <td style="text-align: left;">ru_core_news_sm с rumorph</td>
 <td style="text-align: left;"><strong>93,7</strong></td>
-<td style="text-align: left;"><strong>90,2</strong></td>
-<td style="text-align: left;"><strong>81,6</strong></td>
-<td style="text-align: left;"><strong>8 842</strong></td>
+<td style="text-align: left;"><strong>90,3</strong></td>
+<td style="text-align: left;"><strong>81,7</strong></td>
+<td style="text-align: left;"><strong>16 574</strong></td>
 </tr>
 </tbody>
 </table>
 <h2 id="sentences">Предложения<a class="headerlink" href="#sentences" title="Permanent link">&para;</a></h2>
-<p>Контекстная модель разбирает предложение целиком. Предложения компонент берет из разметки документа - парсера, <code>senter</code> или <code>sentencizer</code>, а если ее нет, делит документ после знаков конца предложения («.», «!», «?», «…»); предложение длиннее 256 токенов разбирается частями, как в <a href="../cli/">команде rumorph</a>. Пробельные токены получают часть речи <code>SPACE</code>, как в моделях spaCy, а лемма у них - сам токен; токен без разбора ruMorph (невидимые символы) - <code>X</code> и лемму в нижнем регистре, как в команде rumorph.</p>
+<p>Контекстная модель разбирает предложение целиком. Предложения компонент берет из разметки документа - парсера, <code>senter</code> или <code>sentencizer</code>, а если ее нет, делит документ после знаков конца предложения («.», «!», «?», «…»); предложение длиннее 256 токенов разбирается частями, как в <a href="../cli/">команде rumorph</a>. Пробельные токены и токены из одних невидимых разделителей (BOM, U+200B, U+2060, мягкий перенос) получают часть речи <code>SPACE</code>, как в моделях spaCy, а лемма у них - сам токен: модель их не видит. Токен без разбора ruMorph (невидимый символ внутри слова) - <code>X</code> и лемму в нижнем регистре, как в команде rumorph.</p>
+<p>Токены и начала предложений по соглашениям Universal Dependencies, на которых обучена контекстная модель, дает сегментатор <a href="https://github.com/SergeyShk/anySeg">anySeg</a> (<code>pip install "anyseg[spacy]"</code>): токенизатор <code>anyseg.Tokenizer.v1</code> и компонент <code>anyseg_sentencizer</code> ставятся перед <code>rumorph</code>. На тексте тестовых частей трибанков границы токенов anySeg совпадают с эталоном у 99,0-99,6 % слов против 97,6-98,7 % у токенизатора spaCy, а часть речи и лемма компонента верны у доли слов на 0,7-1,4 п. п. выше.</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="3:2"><input checked="checked" id="__tabbed_3_1" name="__tabbed_3" type="radio" /><input id="__tabbed_3_2" name="__tabbed_3" type="radio" /><div class="tabbed-labels"><label for="__tabbed_3_1">Код</label><label for="__tabbed_3_2">Результат</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="n">nlp</span> <span class="o">=</span> <span class="n">spacy</span><span class="o">.</span><span class="n">blank</span><span class="p">(</span><span class="s2">"ru"</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="p">{</span><span class="s2">"nlp"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"tokenizer"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"@tokenizers"</span><span class="p">:</span> <span class="s2">"anyseg.Tokenizer.v1"</span><span class="p">}}})</span>
+<span class="n">_</span> <span class="o">=</span> <span class="n">nlp</span><span class="o">.</span><span class="n">add_pipe</span><span class="p">(</span><span class="s2">"anyseg_sentencizer"</span><span class="p">)</span>
+<span class="n">nlp</span><span class="o">.</span><span class="n">add_pipe</span><span class="p">(</span><span class="s2">"rumorph"</span><span class="p">)</span>
+<span class="p">[(</span><span class="n">token</span><span class="o">.</span><span class="n">text</span><span class="p">,</span> <span class="n">token</span><span class="o">.</span><span class="n">lemma_</span><span class="p">)</span> <span class="k">for</span> <span class="n">token</span> <span class="ow">in</span> <span class="n">nlp</span><span class="p">(</span><span class="s2">"В 1914 г. мы стали друзьями."</span><span class="p">)]</span>
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code>[('В', 'в'),
+ ('1914', '1914'),
+ ('г.', 'год'),
+ ('мы', 'мы'),
+ ('стали', 'стать'),
+ ('друзьями', 'друг'),
+ ('.', '.')]
+</code></pre></div>
+</div>
+</div>
+</div>
 <h2 id="config">Параметры<a class="headerlink" href="#config" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -1053,23 +1075,23 @@
 </tr>
 </tbody>
 </table>
-<div class="tabbed-set tabbed-alternate" data-tabs="3:2"><input checked="checked" id="__tabbed_3_1" name="__tabbed_3" type="radio" /><input id="__tabbed_3_2" name="__tabbed_3" type="radio" /><div class="tabbed-labels"><label for="__tabbed_3_1">Код</label><label for="__tabbed_3_2">Результат</label></div>
+<div class="tabbed-set tabbed-alternate" data-tabs="4:2"><input checked="checked" id="__tabbed_4_1" name="__tabbed_4" type="radio" /><input id="__tabbed_4_2" name="__tabbed_4" type="radio" /><div class="tabbed-labels"><label for="__tabbed_4_1">Код</label><label for="__tabbed_4_2">Результат</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
 <div class="highlight"><pre><span></span><code><span class="n">nlp</span> <span class="o">=</span> <span class="n">spacy</span><span class="o">.</span><span class="n">blank</span><span class="p">(</span><span class="s2">"ru"</span><span class="p">)</span>
-<span class="n">nlp</span><span class="o">.</span><span class="n">add_pipe</span><span class="p">(</span><span class="s2">"rumorph"</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="p">{</span><span class="s2">"words"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"зумер"</span><span class="p">:</span> <span class="s2">"геймер"</span><span class="p">}})</span>
-<span class="p">[</span><span class="n">token</span><span class="o">.</span><span class="n">lemma_</span> <span class="k">for</span> <span class="n">token</span> <span class="ow">in</span> <span class="n">nlp</span><span class="p">(</span><span class="s2">"Зумерам нравится"</span><span class="p">)]</span>
+<span class="n">nlp</span><span class="o">.</span><span class="n">add_pipe</span><span class="p">(</span><span class="s2">"rumorph"</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="p">{</span><span class="s2">"words"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"вайбкодер"</span><span class="p">:</span> <span class="s2">"геймер"</span><span class="p">}})</span>
+<span class="p">[</span><span class="n">token</span><span class="o">.</span><span class="n">lemma_</span> <span class="k">for</span> <span class="n">token</span> <span class="ow">in</span> <span class="n">nlp</span><span class="p">(</span><span class="s2">"Вайбкодерам нравится"</span><span class="p">)]</span>
 </code></pre></div>
 </div>
 <div class="tabbed-block">
-<div class="highlight"><pre><span></span><code>['зумер', 'нравиться']
+<div class="highlight"><pre><span></span><code>['вайбкодер', 'нравиться']
 </code></pre></div>
 </div>
 </div>
 </div>
 <h2 id="extension">Разбор ruMorph<a class="headerlink" href="#extension" title="Permanent link">&para;</a></h2>
 <p><code>token._.rumorph</code> - <a href="../analysis/">разбор</a> ruMorph с леммой, частью речи и признаками токена по словарю и своим словам компонента, разметившего документ: через него доступны <a href="../inflection/">формы слова</a>. Вероятность у него - без учета контекста. Если у словоформы нет такого разбора - например, разметку токена изменил другой компонент, - значение - <code>None</code>. Свои словарь и слова компонента документ хранит в <code>user_data</code>, поэтому их сохраняют <code>DocBin(store_user_data=True)</code> и <code>span.as_doc(copy_user_data=True)</code>, а <code>Doc.from_docs</code> не переносит.</p>
-<div class="tabbed-set tabbed-alternate" data-tabs="4:2"><input checked="checked" id="__tabbed_4_1" name="__tabbed_4" type="radio" /><input id="__tabbed_4_2" name="__tabbed_4" type="radio" /><div class="tabbed-labels"><label for="__tabbed_4_1">Код</label><label for="__tabbed_4_2">Результат</label></div>
+<div class="tabbed-set tabbed-alternate" data-tabs="5:2"><input checked="checked" id="__tabbed_5_1" name="__tabbed_5" type="radio" /><input id="__tabbed_5_2" name="__tabbed_5" type="radio" /><div class="tabbed-labels"><label for="__tabbed_5_1">Код</label><label for="__tabbed_5_2">Результат</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
 <div class="highlight"><pre><span></span><code><span class="n">doc</span> <span class="o">=</span> <span class="n">nlp</span><span class="p">(</span><span class="s2">"Мы стали друзьями"</span><span class="p">)</span>
@@ -1165,10 +1187,10 @@
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.top", "content.code.copy", "search.highlight", "search.suggest"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "\u0421\u043a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u043d\u043e \u0432 \u0431\u0443\u0444\u0435\u0440", "clipboard.copy": "\u041a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u0432 \u0431\u0443\u0444\u0435\u0440", "search.result.more.one": "\u0415\u0449\u0451 1 \u043d\u0430 \u044d\u0442\u043e\u0439 \u0441\u0442\u0440\u0430\u043d\u0438\u0446\u0435", "search.result.more.other": "\u0415\u0449\u0451 # \u043d\u0430 \u044d\u0442\u043e\u0439 \u0441\u0442\u0440\u0430\u043d\u0438\u0446\u0435", "search.result.none": "\u0421\u043e\u0432\u043f\u0430\u0434\u0435\u043d\u0438\u0439 \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d\u043e", "search.result.one": "\u041d\u0430\u0439\u0434\u0435\u043d\u043e 1 \u0441\u043e\u0432\u043f\u0430\u0434\u0435\u043d\u0438\u0435", "search.result.other": "\u041d\u0430\u0439\u0434\u0435\u043d\u043e \u0441\u043e\u0432\u043f\u0430\u0434\u0435\u043d\u0438\u0439: #", "search.result.placeholder": "\u041d\u0430\u0447\u043d\u0438\u0442\u0435 \u043f\u0435\u0447\u0430\u0442\u0430\u0442\u044c \u0434\u043b\u044f \u043f\u043e\u0438\u0441\u043a\u0430", "search.result.term.missing": "\u041e\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u0435\u0442", "select.version": "\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0432\u0435\u0440\u0441\u0438\u044e"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.top", "content.code.copy", "search.highlight", "search.suggest"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "\u0421\u043a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u043d\u043e \u0432 \u0431\u0443\u0444\u0435\u0440", "clipboard.copy": "\u041a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u0432 \u0431\u0443\u0444\u0435\u0440", "search.result.more.one": "\u0415\u0449\u0451 1 \u043d\u0430 \u044d\u0442\u043e\u0439 \u0441\u0442\u0440\u0430\u043d\u0438\u0446\u0435", "search.result.more.other": "\u0415\u0449\u0451 # \u043d\u0430 \u044d\u0442\u043e\u0439 \u0441\u0442\u0440\u0430\u043d\u0438\u0446\u0435", "search.result.none": "\u0421\u043e\u0432\u043f\u0430\u0434\u0435\u043d\u0438\u0439 \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d\u043e", "search.result.one": "\u041d\u0430\u0439\u0434\u0435\u043d\u043e 1 \u0441\u043e\u0432\u043f\u0430\u0434\u0435\u043d\u0438\u0435", "search.result.other": "\u041d\u0430\u0439\u0434\u0435\u043d\u043e \u0441\u043e\u0432\u043f\u0430\u0434\u0435\u043d\u0438\u0439: #", "search.result.placeholder": "\u041d\u0430\u0447\u043d\u0438\u0442\u0435 \u043f\u0435\u0447\u0430\u0442\u0430\u0442\u044c \u0434\u043b\u044f \u043f\u043e\u0438\u0441\u043a\u0430", "search.result.term.missing": "\u041e\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u0435\u0442", "select.version": "\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0432\u0435\u0440\u0441\u0438\u044e"}, "version": null}</script>
     
     
-      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../assets/javascripts/bundle.c21346df.min.js"></script>
       
     
   </body>

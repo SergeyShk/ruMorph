@@ -25,7 +25,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
     
     
       
@@ -33,10 +33,10 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
       
       
 
@@ -1009,19 +1009,41 @@
 <td style="text-align: left;">82.0</td>
 <td style="text-align: left;">75.5</td>
 <td style="text-align: left;">74.8</td>
-<td style="text-align: left;">5,628</td>
+<td style="text-align: left;">8,554</td>
 </tr>
 <tr>
 <td style="text-align: left;">ru_core_news_sm with rumorph</td>
 <td style="text-align: left;"><strong>93.7</strong></td>
-<td style="text-align: left;"><strong>90.2</strong></td>
-<td style="text-align: left;"><strong>81.6</strong></td>
-<td style="text-align: left;"><strong>8,842</strong></td>
+<td style="text-align: left;"><strong>90.3</strong></td>
+<td style="text-align: left;"><strong>81.7</strong></td>
+<td style="text-align: left;"><strong>16,574</strong></td>
 </tr>
 </tbody>
 </table>
 <h2 id="sentences">Sentences<a class="headerlink" href="#sentences" title="Permanent link">&para;</a></h2>
-<p>The context model analyzes a whole sentence. The component takes sentences from the annotation of the document - the parser, <code>senter</code> or <code>sentencizer</code>, and without it splits the document after sentence-final marks («.», «!», «?», «…»); a sentence longer than 256 tokens is analyzed in parts, as in the <a href="../cli/">rumorph command</a>. Whitespace tokens get the <code>SPACE</code> part of speech, as in spaCy models, and the token itself as the lemma; a token without a ruMorph analysis (invisible characters) gets <code>X</code> and the lowercased token as the lemma, as in the rumorph command.</p>
+<p>The context model analyzes a whole sentence. The component takes sentences from the annotation of the document - the parser, <code>senter</code> or <code>sentencizer</code>, and without it splits the document after sentence-final marks («.», «!», «?», «…»); a sentence longer than 256 tokens is analyzed in parts, as in the <a href="../cli/">rumorph command</a>. Whitespace tokens and tokens of invisible separators only (BOM, U+200B, U+2060, the soft hyphen) get the <code>SPACE</code> part of speech, as in spaCy models, and the token itself as the lemma: the model does not see them. A token without a ruMorph analysis (an invisible character inside a word) gets <code>X</code> and the lowercased token as the lemma, as in the rumorph command.</p>
+<p>Tokens and sentence starts following the conventions of Universal Dependencies on which the context model is trained come from the segmenter <a href="https://github.com/SergeyShk/anySeg">anySeg</a> (<code>pip install "anyseg[spacy]"</code>): the tokenizer <code>anyseg.Tokenizer.v1</code> and the component <code>anyseg_sentencizer</code> go before <code>rumorph</code>. On the text of the test parts of the treebanks the token boundaries of anySeg match the gold standard for 99.0-99.6 % of words against 97.6-98.7 % for the spaCy tokenizer, and the part of speech and lemma of the component are right for a share of words 0.7-1.4 points higher.</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="3:2"><input checked="checked" id="__tabbed_3_1" name="__tabbed_3" type="radio" /><input id="__tabbed_3_2" name="__tabbed_3" type="radio" /><div class="tabbed-labels"><label for="__tabbed_3_1">Code</label><label for="__tabbed_3_2">Result</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="n">nlp</span> <span class="o">=</span> <span class="n">spacy</span><span class="o">.</span><span class="n">blank</span><span class="p">(</span><span class="s2">"ru"</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="p">{</span><span class="s2">"nlp"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"tokenizer"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"@tokenizers"</span><span class="p">:</span> <span class="s2">"anyseg.Tokenizer.v1"</span><span class="p">}}})</span>
+<span class="n">_</span> <span class="o">=</span> <span class="n">nlp</span><span class="o">.</span><span class="n">add_pipe</span><span class="p">(</span><span class="s2">"anyseg_sentencizer"</span><span class="p">)</span>
+<span class="n">nlp</span><span class="o">.</span><span class="n">add_pipe</span><span class="p">(</span><span class="s2">"rumorph"</span><span class="p">)</span>
+<span class="p">[(</span><span class="n">token</span><span class="o">.</span><span class="n">text</span><span class="p">,</span> <span class="n">token</span><span class="o">.</span><span class="n">lemma_</span><span class="p">)</span> <span class="k">for</span> <span class="n">token</span> <span class="ow">in</span> <span class="n">nlp</span><span class="p">(</span><span class="s2">"В 1914 г. мы стали друзьями."</span><span class="p">)]</span>
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code>[('В', 'в'),
+ ('1914', '1914'),
+ ('г.', 'год'),
+ ('мы', 'мы'),
+ ('стали', 'стать'),
+ ('друзьями', 'друг'),
+ ('.', '.')]
+</code></pre></div>
+</div>
+</div>
+</div>
 <h2 id="config">Parameters<a class="headerlink" href="#config" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -1053,23 +1075,23 @@
 </tr>
 </tbody>
 </table>
-<div class="tabbed-set tabbed-alternate" data-tabs="3:2"><input checked="checked" id="__tabbed_3_1" name="__tabbed_3" type="radio" /><input id="__tabbed_3_2" name="__tabbed_3" type="radio" /><div class="tabbed-labels"><label for="__tabbed_3_1">Code</label><label for="__tabbed_3_2">Result</label></div>
+<div class="tabbed-set tabbed-alternate" data-tabs="4:2"><input checked="checked" id="__tabbed_4_1" name="__tabbed_4" type="radio" /><input id="__tabbed_4_2" name="__tabbed_4" type="radio" /><div class="tabbed-labels"><label for="__tabbed_4_1">Code</label><label for="__tabbed_4_2">Result</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
 <div class="highlight"><pre><span></span><code><span class="n">nlp</span> <span class="o">=</span> <span class="n">spacy</span><span class="o">.</span><span class="n">blank</span><span class="p">(</span><span class="s2">"ru"</span><span class="p">)</span>
-<span class="n">nlp</span><span class="o">.</span><span class="n">add_pipe</span><span class="p">(</span><span class="s2">"rumorph"</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="p">{</span><span class="s2">"words"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"зумер"</span><span class="p">:</span> <span class="s2">"геймер"</span><span class="p">}})</span>
-<span class="p">[</span><span class="n">token</span><span class="o">.</span><span class="n">lemma_</span> <span class="k">for</span> <span class="n">token</span> <span class="ow">in</span> <span class="n">nlp</span><span class="p">(</span><span class="s2">"Зумерам нравится"</span><span class="p">)]</span>
+<span class="n">nlp</span><span class="o">.</span><span class="n">add_pipe</span><span class="p">(</span><span class="s2">"rumorph"</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="p">{</span><span class="s2">"words"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"вайбкодер"</span><span class="p">:</span> <span class="s2">"геймер"</span><span class="p">}})</span>
+<span class="p">[</span><span class="n">token</span><span class="o">.</span><span class="n">lemma_</span> <span class="k">for</span> <span class="n">token</span> <span class="ow">in</span> <span class="n">nlp</span><span class="p">(</span><span class="s2">"Вайбкодерам нравится"</span><span class="p">)]</span>
 </code></pre></div>
 </div>
 <div class="tabbed-block">
-<div class="highlight"><pre><span></span><code>['зумер', 'нравиться']
+<div class="highlight"><pre><span></span><code>['вайбкодер', 'нравиться']
 </code></pre></div>
 </div>
 </div>
 </div>
 <h2 id="extension">ruMorph analysis<a class="headerlink" href="#extension" title="Permanent link">&para;</a></h2>
 <p><code>token._.rumorph</code> is the ruMorph <a href="../analysis/">analysis</a> with the lemma, part of speech and features of the token, by the dictionary and own words of the component that annotated the document: it gives the <a href="../inflection/">forms of the word</a>. Its probability does not take the context into account. If the word form has no such analysis - for example, another component changed the annotation of the token - the value is <code>None</code>. The document keeps the component's own dictionary and words in <code>user_data</code>, so <code>DocBin(store_user_data=True)</code> and <code>span.as_doc(copy_user_data=True)</code> preserve them, while <code>Doc.from_docs</code> does not carry them over.</p>
-<div class="tabbed-set tabbed-alternate" data-tabs="4:2"><input checked="checked" id="__tabbed_4_1" name="__tabbed_4" type="radio" /><input id="__tabbed_4_2" name="__tabbed_4" type="radio" /><div class="tabbed-labels"><label for="__tabbed_4_1">Code</label><label for="__tabbed_4_2">Result</label></div>
+<div class="tabbed-set tabbed-alternate" data-tabs="5:2"><input checked="checked" id="__tabbed_5_1" name="__tabbed_5" type="radio" /><input id="__tabbed_5_2" name="__tabbed_5" type="radio" /><div class="tabbed-labels"><label for="__tabbed_5_1">Code</label><label for="__tabbed_5_2">Result</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
 <div class="highlight"><pre><span></span><code><span class="n">doc</span> <span class="o">=</span> <span class="n">nlp</span><span class="p">(</span><span class="s2">"Мы стали друзьями"</span><span class="p">)</span>
@@ -1165,10 +1187,10 @@
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.top", "content.code.copy", "search.highlight", "search.suggest"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.top", "content.code.copy", "search.highlight", "search.suggest"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
       
     
   </body>

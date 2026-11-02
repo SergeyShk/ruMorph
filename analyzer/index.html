@@ -27,7 +27,7 @@
       
       
       <link rel="icon" href="../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
     
     
       
@@ -35,10 +35,10 @@
       
     
     
-      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
       
         
-        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
       
       
 
@@ -772,6 +772,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#annotate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Разбор документа
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#lemmatize" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1030,6 +1041,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#annotate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Разбор документа
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#lemmatize" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1101,7 +1123,7 @@
 <h1 id="_1">Анализатор<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h1>
 <div class="signature highlight"><pre><span></span><code><span class="n">Analyzer</span><span class="p">(</span><span class="n">path</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">words</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
 </code></pre></div>
-<p>Морфологический анализатор: для словоформы находит по словарю OpenCorpora все варианты <a href="../analysis/">разбора</a> - начальную форму, часть речи и признаки <a href="https://universaldependencies.org/">Universal Dependencies</a> - и упорядочивает их по вероятности. Словарь загружается при создании первого анализатора: анализаторы с тем же файлом словаря в процессе делят его, поэтому новый анализатор создается мгновенно. Последний загруженный словарь остается в процессе и без анализаторов, поэтому задачи пула процессов и анализатор, созданный на один вызов, не загружают словарь заново.</p>
+<p>Морфологический анализатор: для словоформы находит по словарю OpenCorpora и словам Викисловаря все варианты <a href="../analysis/">разбора</a> - начальную форму, часть речи и признаки <a href="https://universaldependencies.org/">Universal Dependencies</a> - и упорядочивает их по вероятности. Словарь загружается при создании первого анализатора: анализаторы с тем же файлом словаря в процессе делят его, поэтому новый анализатор создается мгновенно. Последний загруженный словарь остается в процессе и без анализаторов, поэтому задачи пула процессов и анализатор, созданный на один вызов, не загружают словарь заново.</p>
 <p>Исключения:</p>
 <ul>
 <li><code>FileNotFoundError</code> - нет файла словаря;</li>
@@ -1149,20 +1171,20 @@
 </tr>
 </tbody>
 </table>
-<p>Объект хранит путь к словарю в <code>path</code> типа <code>Path</code>, только для чтения. Файл словаря отображается в память: процессы с одним файлом делят его память, поэтому каждый следующий процесс с анализатором занимает около 1,2 МБ. Пока анализатор существует, файл нельзя перезаписывать на месте, а заменить новым файлом можно; в Windows открытый файл не заменяется и не удаляется. Последний загруженный словарь остается открытым и после удаления анализаторов - до загрузки словаря из другого файла или выхода из процесса: чтобы освободить файл своего словаря, например перед его удалением в Windows, удалите его анализаторы и разборы и создайте анализатор со словарем пакета: <code>Analyzer()</code>. Словарь - доверенные данные, как код: загрузка отвергает поврежденный файл, но не любой специально подделанный, поэтому словари из ненадежных источников загружать не стоит.</p>
+<p>Объект хранит путь к словарю в <code>path</code> типа <code>Path</code>, только для чтения. Файл словаря отображается в память: процессы с одним файлом делят его память, поэтому каждый следующий процесс с анализатором занимает около 1,5 МБ. Пока анализатор существует, файл нельзя перезаписывать на месте, а заменить новым файлом можно; в Windows открытый файл не заменяется и не удаляется. Последний загруженный словарь остается открытым и после удаления анализаторов - до загрузки словаря из другого файла или выхода из процесса: чтобы освободить файл своего словаря, например перед его удалением в Windows, удалите его анализаторы и разборы и создайте анализатор со словарем пакета: <code>Analyzer()</code>. Словарь - доверенные данные, как код: загрузка отвергает поврежденный файл, но не любой специально подделанный, поэтому словари из ненадежных источников загружать не стоит.</p>
 <h2 id="words">Свои слова<a class="headerlink" href="#words" title="Permanent link">&para;</a></h2>
-<p>Слово, которого нет в словаре, можно добавить по образцу - словарному слову, которое изменяется так же: «зумер» - как «геймер», «кринж» - как «пляж». Слово и образец пишутся в одной форме, обычно в начальной; знаки ударения, мягкие переносы и латинские буквы-двойники в них приводятся, как в запросе. Свое слово получает все формы образца со своей основой и дальше ведет себя как словарное: <code>source</code> - <code>"dictionary"</code>, <code>is_known</code> его находит, работают <code>forms</code>, <code>inflect</code> и <code>agree</code>. Если у образца лексемы разных частей речи («печь» - существительное и глагол), образец - пара с частью речи UD: <code>{"зечь": ("печь", "VERB")}</code>; иначе анализатор не создается. Образцом может быть и свое слово, стоящее раньше: <code>{"зумер": "геймер", "бумер": "зумер"}</code>. Свои слова есть только у этого анализатора, а pickle сохраняет их вместе с ним.</p>
+<p>Слово, которого нет в словаре, можно добавить по образцу - словарному слову, которое изменяется так же: «вайбкодер» - как «геймер», «дрип» - как «пляж». Слово и образец пишутся в одной форме, обычно в начальной; знаки ударения, мягкие переносы и латинские буквы-двойники в них приводятся, как в запросе. Свое слово получает все формы образца со своей основой и дальше ведет себя как словарное: <code>source</code> - <code>"dictionary"</code>, <code>is_known</code> его находит, работают <code>forms</code>, <code>inflect</code> и <code>agree</code>. Если у образца лексемы разных частей речи («печь» - существительное и глагол), образец - пара с частью речи UD: <code>{"зечь": ("печь", "VERB")}</code>; иначе анализатор не создается. Образцом может быть и свое слово, стоящее раньше: <code>{"вайбкодер": "геймер", "промптер": "вайбкодер"}</code>. Свои слова есть только у этого анализатора, а pickle сохраняет их вместе с ним.</p>
 <p>Свои слова хранятся в копии словаря, около 3,5 КБ на слово (35 МБ на 10 тыс. слов). Отображенный в память словарь процессы делят, а копию каждый процесс собирает сам. Последняя собранная копия остается в памяти и после удаления анализаторов, пока не собрана другая или не загружен другой словарь: задачи пула процессов не собирают ее заново.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="2:2"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Код</label><label for="__tabbed_2_2">Результат</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<div class="highlight"><pre><span></span><code><span class="n">morph</span> <span class="o">=</span> <span class="n">Analyzer</span><span class="p">(</span><span class="n">words</span><span class="o">=</span><span class="p">{</span><span class="s2">"зумер"</span><span class="p">:</span> <span class="s2">"геймер"</span><span class="p">,</span> <span class="s2">"кринж"</span><span class="p">:</span> <span class="s2">"пляж"</span><span class="p">})</span>
-<span class="n">zoomer</span> <span class="o">=</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"зумерами"</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
-<span class="n">zoomer</span><span class="o">.</span><span class="n">lemma</span><span class="p">,</span> <span class="n">zoomer</span><span class="o">.</span><span class="n">inflect</span><span class="p">(</span><span class="n">Case</span><span class="o">=</span><span class="s2">"Dat"</span><span class="p">,</span> <span class="n">Number</span><span class="o">=</span><span class="s2">"Sing"</span><span class="p">),</span> <span class="n">morph</span><span class="o">.</span><span class="n">lemmatize</span><span class="p">([</span><span class="s2">"кринжем"</span><span class="p">])</span>
+<div class="highlight"><pre><span></span><code><span class="n">morph</span> <span class="o">=</span> <span class="n">Analyzer</span><span class="p">(</span><span class="n">words</span><span class="o">=</span><span class="p">{</span><span class="s2">"вайбкодер"</span><span class="p">:</span> <span class="s2">"геймер"</span><span class="p">,</span> <span class="s2">"дрип"</span><span class="p">:</span> <span class="s2">"пляж"</span><span class="p">})</span>
+<span class="n">coder</span> <span class="o">=</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"вайбкодерами"</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+<span class="n">coder</span><span class="o">.</span><span class="n">lemma</span><span class="p">,</span> <span class="n">coder</span><span class="o">.</span><span class="n">inflect</span><span class="p">(</span><span class="n">Case</span><span class="o">=</span><span class="s2">"Dat"</span><span class="p">,</span> <span class="n">Number</span><span class="o">=</span><span class="s2">"Sing"</span><span class="p">),</span> <span class="n">morph</span><span class="o">.</span><span class="n">lemmatize</span><span class="p">([</span><span class="s2">"дрипом"</span><span class="p">])</span>
 </code></pre></div>
 </div>
 <div class="tabbed-block">
-<div class="highlight"><pre><span></span><code>('зумер', 'зумеру', ['кринж'])
+<div class="highlight"><pre><span></span><code>('вайбкодер', 'вайбкодеру', ['дрип'])
 </code></pre></div>
 </div>
 </div>
@@ -1200,7 +1222,7 @@
 <div class="tabbed-content">
 <div class="tabbed-block">
 <div class="highlight"><pre><span></span><code><span class="p">[(</span><span class="n">a</span><span class="o">.</span><span class="n">lemma</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">pos</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">feats</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"Case"</span><span class="p">),</span> <span class="nb">round</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">prob</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"стали"</span><span class="p">)]</span>
-<span class="p">[(</span><span class="n">a</span><span class="o">.</span><span class="n">lemma</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">source</span><span class="p">)</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"чатботу"</span><span class="p">)][:</span><span class="mi">2</span><span class="p">]</span>
+<span class="p">[(</span><span class="n">a</span><span class="o">.</span><span class="n">lemma</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">source</span><span class="p">)</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"дипфейкеру"</span><span class="p">)][:</span><span class="mi">1</span><span class="p">]</span>
 </code></pre></div>
 </div>
 <div class="tabbed-block">
@@ -1210,7 +1232,7 @@
  ('сталь', 'NOUN', 'Dat', 0.001),
  ('сталь', 'NOUN', 'Loc', 0.001),
  ('сталь', 'NOUN', 'Acc', 0.001)]
-[('чатбот', 'guess'), ('чатбота', 'guess')]
+[('дипфейкер', 'guess')]
 </code></pre></div>
 </div>
 </div>
@@ -1262,7 +1284,7 @@
 <p class="metric-meta"><code>analyze_sentence</code> · <code>list[list[Analysis]]</code></p>
 <div class="signature highlight"><pre><span></span><code><span class="n">analyze_sentence</span><span class="p">(</span><span class="n">words</span><span class="p">)</span>
 </code></pre></div>
-<p>Разборы слов предложения с учетом контекста: те же разборы, что у <a href="#analyze"><code>analyze</code></a>, упорядочивает контекстная модель - первым идет разбор, который она выбрала по соседним словам, а <code>prob</code> - ее оценка в этом предложении. Без контекста «книги» - в родительном падеже (так чаще), в «Я читаю книги» модель выбирает винительный, а «стали» в «Мост сделан из стали» - существительное «сталь», а не глагол «стать». С контекстом часть речи, лемма и признаки первого разбора верны у 82-94 % слов против 71-82 % без него (<a href="../performance/">Сравнение</a>). Слова - токены одного предложения по порядку: ruMorph не делит текст на предложения и токены. Слово без соседей разбирается, как у <code>analyze</code>: без контекста модель выбирает хуже частот словаря. Предложение длиннее 256 слов модель разбирает частями по 256, чтобы ее память не росла с длиной входа. Модель обучена на трибанках <a href="https://github.com/UniversalDependencies/UD_Russian-Taiga">UD_Russian-Taiga</a>, <a href="https://github.com/UniversalDependencies/UD_Russian-GSD">UD_Russian-GSD</a> и корпусе <a href="https://opencorpora.org">OpenCorpora</a> и входит в словарь пакета.</p>
+<p>Разборы слов предложения с учетом контекста: те же разборы, что у <a href="#analyze"><code>analyze</code></a>, упорядочивает контекстная модель - первым идет разбор, который она выбрала по соседним словам, а <code>prob</code> - ее оценка в этом предложении. Без контекста «книги» - в родительном падеже (так чаще), в «Я читаю книги» модель выбирает винительный, а «стали» в «Мост сделан из стали» - существительное «сталь», а не глагол «стать». С контекстом часть речи, лемма и признаки первого разбора верны у 82-94 % слов против 71-82 % без него (<a href="../performance/">Сравнение</a>). Слова - токены одного предложения по порядку; текст на предложения и токены делит сегментатор anySeg, а документ разбирает <a href="#annotate"><code>annotate</code></a>. Слово без соседей разбирается, как у <code>analyze</code>: без контекста модель выбирает хуже частот словаря. Предложение длиннее 256 слов модель разбирает частями по 256, чтобы ее память не росла с длиной входа. Модель обучена на трибанках <a href="https://github.com/UniversalDependencies/UD_Russian-Taiga">UD_Russian-Taiga</a>, <a href="https://github.com/UniversalDependencies/UD_Russian-GSD">UD_Russian-GSD</a> и корпусе <a href="https://opencorpora.org">OpenCorpora</a> и входит в словарь пакета.</p>
 <table>
 <thead>
 <tr>
@@ -1305,6 +1327,61 @@
 </div>
 </div>
 <div class="metric-card">
+<h3 id="annotate">Разбор документа<a class="headerlink" href="#annotate" title="Permanent link">&para;</a></h3>
+<p class="metric-meta"><code>annotate</code> · <code>None</code></p>
+<div class="signature highlight"><pre><span></span><code><span class="n">annotate</span><span class="p">(</span><span class="n">document</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">context</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</code></pre></div>
+<p>Разбор документа сегментатора <a href="https://github.com/SergeyShk/anySeg">anySeg</a> одним вызовом: столбцы <code>lemma</code>, <code>upos</code> и <code>feats</code> его слов получают самый вероятный разбор в контексте предложения, как у <a href="#analyze_sentence"><code>analyze_sentence</code></a>, или без контекста, как у <a href="#analyze"><code>analyze</code></a>, а прежние значения заменяются. Токены и предложения находит anySeg по соглашениям Universal Dependencies, на которых обучена контекстная модель. Слово без разборов получает лемму в нижнем регистре и часть речи <code>X</code>. Размеченный документ записывается в CoNLL-U методом <code>to_conllu</code>. anySeg - отдельный пакет (<code>pip install anyseg</code>); подойдет и другой объект с методами <code>column("form")</code> и <code>set_columns</code> и предложениями <code>sentences</code>, у которых есть слова <code>words</code> с номером <code>index</code>.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Параметр</th>
+<th style="text-align: left;">Тип</th>
+<th style="text-align: left;">По умолчанию</th>
+<th style="text-align: left;">Описание</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>document</code></td>
+<td style="text-align: left;"><code>anyseg.Document</code></td>
+<td style="text-align: left;">-</td>
+<td style="text-align: left;">Документ: <code>Segmenter("ru").segment(text)</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>context</code></td>
+<td style="text-align: left;"><code>bool</code></td>
+<td style="text-align: left;"><code>True</code></td>
+<td style="text-align: left;">Выбирать разбор по соседним словам; <code>False</code> - по частотам словаря, в разы быстрее и без контекстной модели</td>
+</tr>
+</tbody>
+</table>
+<p>Исключения:</p>
+<ul>
+<li><code>ValueError</code> - нужна контекстная модель, а ее в словаре нет, или предложения документа не идут подряд по всем его словам.</li>
+<li><code>TypeError</code> - формы документа не строки или номер слова не целое число.</li>
+</ul>
+<div class="tabbed-set tabbed-alternate" data-tabs="6:2"><input checked="checked" id="__tabbed_6_1" name="__tabbed_6" type="radio" /><input id="__tabbed_6_2" name="__tabbed_6" type="radio" /><div class="tabbed-labels"><label for="__tabbed_6_1">Код</label><label for="__tabbed_6_2">Результат</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">anyseg</span><span class="w"> </span><span class="kn">import</span> <span class="n">Segmenter</span>
+
+<span class="n">document</span> <span class="o">=</span> <span class="n">Segmenter</span><span class="p">(</span><span class="s2">"ru"</span><span class="p">)</span><span class="o">.</span><span class="n">segment</span><span class="p">(</span><span class="s2">"Мост сделан из стали. Мы стали друзьями."</span><span class="p">)</span>
+<span class="n">morph</span><span class="o">.</span><span class="n">annotate</span><span class="p">(</span><span class="n">document</span><span class="p">)</span>
+<span class="p">[(</span><span class="n">word</span><span class="o">.</span><span class="n">form</span><span class="p">,</span> <span class="n">word</span><span class="o">.</span><span class="n">lemma</span><span class="p">,</span> <span class="n">word</span><span class="o">.</span><span class="n">upos</span><span class="p">)</span> <span class="k">for</span> <span class="n">word</span> <span class="ow">in</span> <span class="n">document</span><span class="o">.</span><span class="n">sentences</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">words</span><span class="p">]</span>
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code>[('Мы', 'мы', 'PRON'),
+ ('стали', 'стать', 'VERB'),
+ ('друзьями', 'друг', 'NOUN'),
+ ('.', '.', 'PUNCT')]
+</code></pre></div>
+</div>
+</div>
+</div>
+</div>
+<div class="metric-card">
 <h3 id="lemmatize">Лемматизация<a class="headerlink" href="#lemmatize" title="Permanent link">&para;</a></h3>
 <p class="metric-meta"><code>lemmatize</code> · <code>list[str]</code></p>
 <div class="signature highlight"><pre><span></span><code><span class="n">lemmatize</span><span class="p">(</span><span class="n">words</span><span class="p">)</span>
@@ -1332,7 +1409,7 @@
 <ul>
 <li><code>TypeError</code> - строка вместо набора слов, слово, которое не строка.</li>
 </ul>
-<div class="tabbed-set tabbed-alternate" data-tabs="6:2"><input checked="checked" id="__tabbed_6_1" name="__tabbed_6" type="radio" /><input id="__tabbed_6_2" name="__tabbed_6" type="radio" /><div class="tabbed-labels"><label for="__tabbed_6_1">Код</label><label for="__tabbed_6_2">Результат</label></div>
+<div class="tabbed-set tabbed-alternate" data-tabs="7:2"><input checked="checked" id="__tabbed_7_1" name="__tabbed_7" type="radio" /><input id="__tabbed_7_2" name="__tabbed_7" type="radio" /><div class="tabbed-labels"><label for="__tabbed_7_1">Код</label><label for="__tabbed_7_2">Результат</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
 <div class="highlight"><pre><span></span><code><span class="n">morph</span><span class="o">.</span><span class="n">lemmatize</span><span class="p">(</span><span class="s2">"Мы стали друзьями в ковиде"</span><span class="o">.</span><span class="n">split</span><span class="p">())</span>
@@ -1373,10 +1450,10 @@
 <ul>
 <li><code>TypeError</code> - слово, которое не строка.</li>
 </ul>
-<div class="tabbed-set tabbed-alternate" data-tabs="7:2"><input checked="checked" id="__tabbed_7_1" name="__tabbed_7" type="radio" /><input id="__tabbed_7_2" name="__tabbed_7" type="radio" /><div class="tabbed-labels"><label for="__tabbed_7_1">Код</label><label for="__tabbed_7_2">Результат</label></div>
+<div class="tabbed-set tabbed-alternate" data-tabs="8:2"><input checked="checked" id="__tabbed_8_1" name="__tabbed_8" type="radio" /><input id="__tabbed_8_2" name="__tabbed_8" type="radio" /><div class="tabbed-labels"><label for="__tabbed_8_1">Код</label><label for="__tabbed_8_2">Результат</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<div class="highlight"><pre><span></span><code><span class="n">morph</span><span class="o">.</span><span class="n">is_known</span><span class="p">(</span><span class="s2">"Ежи"</span><span class="p">),</span> <span class="n">morph</span><span class="o">.</span><span class="n">is_known</span><span class="p">(</span><span class="s2">"вайб"</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><span class="n">morph</span><span class="o">.</span><span class="n">is_known</span><span class="p">(</span><span class="s2">"Ежи"</span><span class="p">),</span> <span class="n">morph</span><span class="o">.</span><span class="n">is_known</span><span class="p">(</span><span class="s2">"дипфейкер"</span><span class="p">)</span>
 </code></pre></div>
 </div>
 <div class="tabbed-block">
@@ -1387,10 +1464,10 @@
 </div>
 </div>
 <h2 id="dictionary">Словарь<a class="headerlink" href="#dictionary" title="Permanent link">&para;</a></h2>
-<p>Словарь пакета собран из словаря <a href="https://opencorpora.org">OpenCorpora</a>: около 3,1 млн словоформ. Вероятности разборов взяты из корпуса OpenCorpora и уточнены по разметке трибанков Universal Dependencies <a href="https://github.com/UniversalDependencies/UD_Russian-Taiga">UD_Russian-Taiga</a> и <a href="https://github.com/UniversalDependencies/UD_Russian-GSD">UD_Russian-GSD</a>: так «ничего» чаще местоимение, чем наречие. У словоформ, которых нет ни в одном корпусе, разборы равновероятны. Словарь распространяется по лицензии <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>.</p>
+<p>Словарь пакета собран из словаря <a href="https://opencorpora.org">OpenCorpora</a> и слов <a href="https://ru.wiktionary.org">Викисловаря</a>, которых в нем нет: существительных, имен собственных и прилагательных («зумер», «джун») - всего около 3,8 млн словоформ. Вероятности разборов взяты из корпуса OpenCorpora и уточнены по разметке трибанков Universal Dependencies <a href="https://github.com/UniversalDependencies/UD_Russian-Taiga">UD_Russian-Taiga</a> и <a href="https://github.com/UniversalDependencies/UD_Russian-GSD">UD_Russian-GSD</a>: так «ничего» чаще местоимение, чем наречие. У словоформ, которых нет ни в одном корпусе, разборы равновероятны. Словарь распространяется по лицензии <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>.</p>
 <h2 id="parallel">Потоки и процессы<a class="headerlink" href="#parallel" title="Permanent link">&para;</a></h2>
-<p>Один анализатор можно использовать из нескольких потоков: <code>analyze_many</code> и <code>lemmatize</code> отпускают GIL и разбирают списки параллельно, а в Python 3.14t без GIL параллельно работают и <code>analyze</code>, <code>is_known</code>, <code>inflect</code> и <code>agree</code>. Общий анализатор не медленнее отдельного на каждый поток, поэтому заводить анализатор на поток не нужно. Без GIL потоки упираются в удаление объектов разборов: <code>forms</code> в потоках почти не ускоряется, а <code>analyze_many</code> на длинных списках - слабо, поэтому такие списки лучше разбирать кусками по тысяче-другой слов. Анализатор и разборы сохраняются через pickle, поэтому работают с <code>multiprocessing</code> и joblib: процессы делят отображенный в память словарь, сколько бы разборов они ни получили (копию со <a href="#words">своими словами</a> каждый процесс собирает сам). pickle хранит путь к словарю: при распаковке берется анализатор с тем же путем, разборы которого есть в потоке, иначе словарь загружается по пути, а если файла уже нет - берется словарь, загруженный из него в процессе. Разбор, сохраненный со словарем другой версии, находится по написанию, лемме и тегу; если такого разбора в словаре нет, он восстанавливается как сохранен, но без других форм, а если в словаре нет и его тега - берется разбор слова с теми же леммой и частью речи, у которого совпало больше всего признаков (род «Нидерландов», будущее время «будет» из 0.3.0). Подынтерпретаторы Python 3.14 (<code>InterpreterPoolExecutor</code>) не поддерживаются: используйте потоки или процессы. Передача разборов между процессами дороже самого разбора, поэтому в процессах лучше получать леммы и поля разборов, а разборы - в потоках.</p>
-<div class="tabbed-set tabbed-alternate" data-tabs="8:2"><input checked="checked" id="__tabbed_8_1" name="__tabbed_8" type="radio" /><input id="__tabbed_8_2" name="__tabbed_8" type="radio" /><div class="tabbed-labels"><label for="__tabbed_8_1">Код</label><label for="__tabbed_8_2">Результат</label></div>
+<p>Один анализатор можно использовать из нескольких потоков: <code>analyze_many</code>, <code>lemmatize</code>, <code>analyze_sentence</code> и <code>annotate</code> отпускают GIL и разбирают списки и документы параллельно, а в Python 3.14t без GIL параллельно работают и <code>analyze</code>, <code>is_known</code>, <code>inflect</code> и <code>agree</code>. Общий анализатор не медленнее отдельного на каждый поток, поэтому заводить анализатор на поток не нужно. Без GIL потоки упираются в удаление объектов разборов: <code>forms</code> в потоках почти не ускоряется, а <code>analyze_many</code> на длинных списках - слабо, поэтому такие списки лучше разбирать кусками по тысяче-другой слов. Анализатор и разборы сохраняются через pickle, поэтому работают с <code>multiprocessing</code> и joblib: процессы делят отображенный в память словарь, сколько бы разборов они ни получили (копию со <a href="#words">своими словами</a> каждый процесс собирает сам). pickle хранит путь к словарю: при распаковке берется анализатор с тем же путем, разборы которого есть в потоке, иначе словарь загружается по пути, а если файла уже нет - берется словарь, загруженный из него в процессе. Разбор, сохраненный со словарем другой версии, находится по написанию, лемме и тегу; если такого разбора в словаре нет, он восстанавливается как сохранен, но без других форм, а если в словаре нет и его тега - берется разбор слова с теми же леммой и частью речи, у которого совпало больше всего признаков (род «Нидерландов», будущее время «будет» из 0.3.0). Подынтерпретаторы Python 3.14 (<code>InterpreterPoolExecutor</code>) не поддерживаются: используйте потоки или процессы. Передача разборов между процессами дороже самого разбора, поэтому в процессах лучше получать леммы и поля разборов, а разборы - в потоках. Документ anySeg через pickle не передается: документы размечают потоки, а в процессе текст делится на предложения и размечается внутри задачи, которая возвращает <code>to_conllu()</code> или столбцы.</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="9:2"><input checked="checked" id="__tabbed_9_1" name="__tabbed_9" type="radio" /><input id="__tabbed_9_2" name="__tabbed_9" type="radio" /><div class="tabbed-labels"><label for="__tabbed_9_1">Код</label><label for="__tabbed_9_2">Результат</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
 <div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">concurrent.futures</span><span class="w"> </span><span class="kn">import</span> <span class="n">ThreadPoolExecutor</span>
@@ -1489,10 +1566,10 @@
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.top", "content.code.copy", "search.highlight", "search.suggest"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "\u0421\u043a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u043d\u043e \u0432 \u0431\u0443\u0444\u0435\u0440", "clipboard.copy": "\u041a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u0432 \u0431\u0443\u0444\u0435\u0440", "search.result.more.one": "\u0415\u0449\u0451 1 \u043d\u0430 \u044d\u0442\u043e\u0439 \u0441\u0442\u0440\u0430\u043d\u0438\u0446\u0435", "search.result.more.other": "\u0415\u0449\u0451 # \u043d\u0430 \u044d\u0442\u043e\u0439 \u0441\u0442\u0440\u0430\u043d\u0438\u0446\u0435", "search.result.none": "\u0421\u043e\u0432\u043f\u0430\u0434\u0435\u043d\u0438\u0439 \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d\u043e", "search.result.one": "\u041d\u0430\u0439\u0434\u0435\u043d\u043e 1 \u0441\u043e\u0432\u043f\u0430\u0434\u0435\u043d\u0438\u0435", "search.result.other": "\u041d\u0430\u0439\u0434\u0435\u043d\u043e \u0441\u043e\u0432\u043f\u0430\u0434\u0435\u043d\u0438\u0439: #", "search.result.placeholder": "\u041d\u0430\u0447\u043d\u0438\u0442\u0435 \u043f\u0435\u0447\u0430\u0442\u0430\u0442\u044c \u0434\u043b\u044f \u043f\u043e\u0438\u0441\u043a\u0430", "search.result.term.missing": "\u041e\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u0435\u0442", "select.version": "\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0432\u0435\u0440\u0441\u0438\u044e"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.top", "content.code.copy", "search.highlight", "search.suggest"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "\u0421\u043a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u043d\u043e \u0432 \u0431\u0443\u0444\u0435\u0440", "clipboard.copy": "\u041a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u0432 \u0431\u0443\u0444\u0435\u0440", "search.result.more.one": "\u0415\u0449\u0451 1 \u043d\u0430 \u044d\u0442\u043e\u0439 \u0441\u0442\u0440\u0430\u043d\u0438\u0446\u0435", "search.result.more.other": "\u0415\u0449\u0451 # \u043d\u0430 \u044d\u0442\u043e\u0439 \u0441\u0442\u0440\u0430\u043d\u0438\u0446\u0435", "search.result.none": "\u0421\u043e\u0432\u043f\u0430\u0434\u0435\u043d\u0438\u0439 \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d\u043e", "search.result.one": "\u041d\u0430\u0439\u0434\u0435\u043d\u043e 1 \u0441\u043e\u0432\u043f\u0430\u0434\u0435\u043d\u0438\u0435", "search.result.other": "\u041d\u0430\u0439\u0434\u0435\u043d\u043e \u0441\u043e\u0432\u043f\u0430\u0434\u0435\u043d\u0438\u0439: #", "search.result.placeholder": "\u041d\u0430\u0447\u043d\u0438\u0442\u0435 \u043f\u0435\u0447\u0430\u0442\u0430\u0442\u044c \u0434\u043b\u044f \u043f\u043e\u0438\u0441\u043a\u0430", "search.result.term.missing": "\u041e\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u0435\u0442", "select.version": "\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0432\u0435\u0440\u0441\u0438\u044e"}, "version": null}</script>
     
     
-      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../assets/javascripts/bundle.c21346df.min.js"></script>
       
     
   </body>

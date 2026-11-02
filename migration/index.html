@@ -27,7 +27,7 @@
       
       
       <link rel="icon" href="../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
     
     
       
@@ -35,10 +35,10 @@
       
     
     
-      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
       
         
-        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
       
       
 
@@ -960,7 +960,7 @@
 
 
 <h1 id="pymorphy">Переход с pymorphy<a class="headerlink" href="#pymorphy" title="Permanent link">&para;</a></h1>
-<p>У pymorphy2 и pymorphy3 один API: pymorphy3 - продолжение pymorphy2, который не работает на Python 3.11 и новее. ruMorph работает с тем же словарем OpenCorpora, но API у него свое: части речи и признаки <a href="https://universaldependencies.org/">Universal Dependencies</a> вместо граммем OpenCorpora, вероятность вместо <code>score</code>, словоформы строкой, исключения вместо <code>None</code>.</p>
+<p>У pymorphy2 и pymorphy3 один API: pymorphy3 - продолжение pymorphy2, который не работает на Python 3.11 и новее. ruMorph работает с тем же словарем OpenCorpora, дополненным словами Викисловаря, но API у него свое: части речи и признаки <a href="https://universaldependencies.org/">Universal Dependencies</a> вместо граммем OpenCorpora, вероятность вместо <code>score</code>, словоформы строкой, исключения вместо <code>None</code>.</p>
 <div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span>rumorph
 </code></pre></div>
 <p>Словарь входит в пакет, отдельный пакет словаря не нужен.</p>
@@ -1288,7 +1288,7 @@
 <li><strong>Разборы</strong>, которые в UD совпадают (союз и наречие «так»), объединены в один, их вероятности сложены, поэтому разборов бывает меньше, чем у pymorphy.</li>
 <li><strong>Формы</strong> <code>inflect</code> и <code>agree</code> возвращают строку, а не разбор; если формы нет, бросают <a href="../exceptions/"><code>FormNotFoundError</code></a>, подкласс <code>LookupError</code>.</li>
 <li><strong>Токены вне словаря</strong> <a href="../analysis/#rules">разбираются по правилам</a> с частями речи и признаками UD: «2005-го» - порядковое прилагательное в родительном падеже с формами («2005-му»), а не несклоняемое существительное, как у pymorphy3.</li>
-<li><strong>Скорость.</strong> Разбор и лемматизация в 6-8 раз быстрее, чем у <code>pymorphy3[fast]</code>, и в 34-62 раза - чем у pymorphy3 без него, а списки слов разбираются без GIL, см. <a href="../performance/">Сравнение</a>.</li>
+<li><strong>Скорость.</strong> Разбор и лемматизация в 6-8 раз быстрее, чем у <code>pymorphy3[fast]</code>, и в 33-59 раз - чем у pymorphy3 без него, а списки слов разбираются без GIL, см. <a href="../performance/">Сравнение</a>.</li>
 </ul>
 
 
@@ -1372,10 +1372,10 @@
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.top", "content.code.copy", "search.highlight", "search.suggest"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "\u0421\u043a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u043d\u043e \u0432 \u0431\u0443\u0444\u0435\u0440", "clipboard.copy": "\u041a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u0432 \u0431\u0443\u0444\u0435\u0440", "search.result.more.one": "\u0415\u0449\u0451 1 \u043d\u0430 \u044d\u0442\u043e\u0439 \u0441\u0442\u0440\u0430\u043d\u0438\u0446\u0435", "search.result.more.other": "\u0415\u0449\u0451 # \u043d\u0430 \u044d\u0442\u043e\u0439 \u0441\u0442\u0440\u0430\u043d\u0438\u0446\u0435", "search.result.none": "\u0421\u043e\u0432\u043f\u0430\u0434\u0435\u043d\u0438\u0439 \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d\u043e", "search.result.one": "\u041d\u0430\u0439\u0434\u0435\u043d\u043e 1 \u0441\u043e\u0432\u043f\u0430\u0434\u0435\u043d\u0438\u0435", "search.result.other": "\u041d\u0430\u0439\u0434\u0435\u043d\u043e \u0441\u043e\u0432\u043f\u0430\u0434\u0435\u043d\u0438\u0439: #", "search.result.placeholder": "\u041d\u0430\u0447\u043d\u0438\u0442\u0435 \u043f\u0435\u0447\u0430\u0442\u0430\u0442\u044c \u0434\u043b\u044f \u043f\u043e\u0438\u0441\u043a\u0430", "search.result.term.missing": "\u041e\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u0435\u0442", "select.version": "\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0432\u0435\u0440\u0441\u0438\u044e"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.top", "content.code.copy", "search.highlight", "search.suggest"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "\u0421\u043a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u043d\u043e \u0432 \u0431\u0443\u0444\u0435\u0440", "clipboard.copy": "\u041a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u0432 \u0431\u0443\u0444\u0435\u0440", "search.result.more.one": "\u0415\u0449\u0451 1 \u043d\u0430 \u044d\u0442\u043e\u0439 \u0441\u0442\u0440\u0430\u043d\u0438\u0446\u0435", "search.result.more.other": "\u0415\u0449\u0451 # \u043d\u0430 \u044d\u0442\u043e\u0439 \u0441\u0442\u0440\u0430\u043d\u0438\u0446\u0435", "search.result.none": "\u0421\u043e\u0432\u043f\u0430\u0434\u0435\u043d\u0438\u0439 \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d\u043e", "search.result.one": "\u041d\u0430\u0439\u0434\u0435\u043d\u043e 1 \u0441\u043e\u0432\u043f\u0430\u0434\u0435\u043d\u0438\u0435", "search.result.other": "\u041d\u0430\u0439\u0434\u0435\u043d\u043e \u0441\u043e\u0432\u043f\u0430\u0434\u0435\u043d\u0438\u0439: #", "search.result.placeholder": "\u041d\u0430\u0447\u043d\u0438\u0442\u0435 \u043f\u0435\u0447\u0430\u0442\u0430\u0442\u044c \u0434\u043b\u044f \u043f\u043e\u0438\u0441\u043a\u0430", "search.result.term.missing": "\u041e\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u0435\u0442", "select.version": "\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0432\u0435\u0440\u0441\u0438\u044e"}, "version": null}</script>
     
     
-      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../assets/javascripts/bundle.c21346df.min.js"></script>
       
     
   </body>

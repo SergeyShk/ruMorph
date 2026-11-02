@@ -27,7 +27,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
     
     
       
@@ -35,10 +35,10 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
       
       
 
@@ -960,7 +960,7 @@
 
 
 <h1 id="migrating-from-pymorphy">Migrating from pymorphy<a class="headerlink" href="#migrating-from-pymorphy" title="Permanent link">&para;</a></h1>
-<p>pymorphy2 and pymorphy3 share one API: pymorphy3 continues pymorphy2, which does not work on Python 3.11 and newer. ruMorph uses the same OpenCorpora dictionary but has its own API: <a href="https://universaldependencies.org/">Universal Dependencies</a> parts of speech and features instead of OpenCorpora grammemes, a probability instead of <code>score</code>, word forms as strings, exceptions instead of <code>None</code>.</p>
+<p>pymorphy2 and pymorphy3 share one API: pymorphy3 continues pymorphy2, which does not work on Python 3.11 and newer. ruMorph uses the same OpenCorpora dictionary, extended with the words of Wiktionary, but has its own API: <a href="https://universaldependencies.org/">Universal Dependencies</a> parts of speech and features instead of OpenCorpora grammemes, a probability instead of <code>score</code>, word forms as strings, exceptions instead of <code>None</code>.</p>
 <div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span>rumorph
 </code></pre></div>
 <p>The dictionary is included in the package, no separate dictionary package is needed.</p>
@@ -1288,7 +1288,7 @@
 <li><strong>Analyses</strong> that coincide in UD (the conjunction and the adverb «так») are merged into one with the sum of their probabilities, so there may be fewer analyses than in pymorphy.</li>
 <li><strong>Forms</strong> from <code>inflect</code> and <code>agree</code> are strings, not analyses; when there is no form, they raise <a href="../exceptions/"><code>FormNotFoundError</code></a>, a subclass of <code>LookupError</code>.</li>
 <li><strong>Tokens outside the dictionary</strong> are <a href="../analysis/#rules">analyzed by rules</a> with UD parts of speech and features: «2005-го» is an ordinal adjective in the genitive with forms («2005-му»), not an indeclinable noun as in pymorphy3.</li>
-<li><strong>Speed.</strong> Analysis and lemmatization are 6-8 times faster than with <code>pymorphy3[fast]</code> and 34-62 times faster than with pymorphy3 without it, and lists of words are processed without the GIL, see <a href="../performance/">Comparison</a>.</li>
+<li><strong>Speed.</strong> Analysis and lemmatization are 6-8 times faster than with <code>pymorphy3[fast]</code> and 33-59 times faster than with pymorphy3 without it, and lists of words are processed without the GIL, see <a href="../performance/">Comparison</a>.</li>
 </ul>
 
 
@@ -1372,10 +1372,10 @@
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.top", "content.code.copy", "search.highlight", "search.suggest"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.top", "content.code.copy", "search.highlight", "search.suggest"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
       
     
   </body>
