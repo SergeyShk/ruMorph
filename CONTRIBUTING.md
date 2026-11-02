@@ -19,7 +19,7 @@ make dictionary             # собрать словарь из словаря 
 uv run pre-commit install   # хуки: линтеры на коммите, тесты на пуше
 ```
 
-Модуль на Rust собирается при установке пакета в окружение; `uv run` пересобирает его сам, когда меняются файлы `crates/` или `Cargo.toml`. Словарь `python/rumorph/data/ru.dict` в git не хранится: `make dictionary` скачивает словарь и корпус OpenCorpora (снимки Wayback Machine) и снимок Викисловаря (датасет [SergeyShk/rumorph-wiktionary](https://huggingface.co/datasets/SergeyShk/rumorph-wiktionary) на Hugging Face, делает его `scripts/wiktionary_snapshot.py`) и выгружает их скриптом `scripts/export_opencorpora.py` (слова Викисловаря переводит в лексемы OpenCorpora `scripts/wiktionary.py`), скачивает обучающие части трибанков UD_Russian-Taiga и UD_Russian-GSD закрепленного релиза скриптом `scripts/export_ud.py` (счетчики разметки словоформ для частот разборов) и собирает словарь сборщиком `rumorph-build`, вшивая в него веса контекстной модели `data/ru-context.bin`; `make test` и `make build` делают это сами. Полный список команд - `make help`.
+Модуль на Rust собирается при установке пакета в окружение; `uv run` пересобирает его сам, когда меняются файлы `crates/` или `Cargo.toml`. Словарь `python/rumorph/data/ru.dict` в git не хранится: `make dictionary` скачивает словарь и корпус OpenCorpora (снимки Wayback Machine, копия - датасет [SergeyShk/rumorph-opencorpora](https://huggingface.co/datasets/SergeyShk/rumorph-opencorpora)) и снимок Викисловаря (датасет [SergeyShk/rumorph-wiktionary](https://huggingface.co/datasets/SergeyShk/rumorph-wiktionary) на Hugging Face, делает его `scripts/wiktionary_snapshot.py`) и выгружает их скриптом `scripts/export_opencorpora.py` (слова Викисловаря переводит в лексемы OpenCorpora `scripts/wiktionary.py`), скачивает обучающие части трибанков UD_Russian-Taiga и UD_Russian-GSD закрепленного релиза скриптом `scripts/export_ud.py` (счетчики разметки словоформ для частот разборов) и собирает словарь сборщиком `rumorph-build`, вшивая в него веса контекстной модели `data/ru-context.bin`; `make test` и `make build` делают это сами. Полный список команд - `make help`.
 
 Веса контекстной модели хранятся в git. Переобучать модель нужно, когда меняются теги UD словаря (сборщик тогда откажется вшивать старые веса) или соглашения разметки: `scripts/conventions.py` переписывает разметку Taiga и GSD в соглашениях ruMorph и для счетчиков, и для обучения. Модель учится на кандидатах словаря без весов, после обучения словарь собирается с ней; обучение скачивает обучающие и проверочные части трибанков и корпус OpenCorpora с проверкой SHA-256, теги корпуса переводит `rumorph-build tags` (нужен cargo). Выгрузки `target/opencorpora` и `target/ud` делает `make dictionary`:
 
@@ -38,6 +38,8 @@ make lint        # ruff check --fix, ruff format, mypy, cargo fmt, cargo clippy
 make test-cov    # pytest с примерами из докстрингов (doctest) и порогом покрытия, cargo test
 make docs-build  # mkdocs build --strict, если менялась документация
 ```
+
+Лицензии крейтов Rust, собранных в модуль, лежат в `THIRD-PARTY-NOTICES.txt` и попадают в колеса; после изменения `Cargo.lock` файл пишется заново командой `uv run python scripts/notices.py`, иначе тест `test_third_party_notices` упадет.
 
 То же самое выполняет CI на Python 3.11-3.14 и 3.14t без GIL (Linux), на Windows и macOS для одной версии Python, а также проверяет сборку на минимальной версии Rust 1.88. Повышая минимальную версию Rust, меняйте ее в `rust-version` в `Cargo.toml`, в задаче `msrv` в `ci.yml` и в документации.
 
@@ -59,7 +61,7 @@ make docs-build  # mkdocs build --strict, если менялась докуме
 - `crates/rumorph-build/` - сборка словаря из выгрузки OpenCorpora, перевод тегов OpenCorpora в UD (`ud.rs`) и частоты разборов по счетчикам трибанков UD (`frequencies.rs`).
 - `crates/rumorph-py/` - модуль Python `rumorph._rumorph` на PyO3.
 - `python/rumorph/` - пакет Python поверх модуля; `data/ru.dict` - собранный словарь.
-- `scripts/` - выгрузка словаря и корпуса OpenCorpora (`export_opencorpora.py`), снимок и перевод слов Викисловаря (`wiktionary_snapshot.py`, `wiktionary.py`), выгрузка счетчиков трибанков UD (`export_ud.py`, соглашения разметки - `conventions.py`), обучение контекстной модели (`train_context.py`, зависимости закреплены в `train_context.py.lock`), проверка установленного пакета перед публикацией и сравнение с другими анализаторами (`compare.py`, зависимости закреплены в `compare.py.lock`).
+- `scripts/` - выгрузка словаря и корпуса OpenCorpora (`export_opencorpora.py`), снимок и перевод слов Викисловаря (`wiktionary_snapshot.py`, `wiktionary.py`), выгрузка счетчиков трибанков UD (`export_ud.py`, соглашения разметки - `conventions.py`), обучение контекстной модели (`train_context.py`, зависимости закреплены в `train_context.py.lock`), проверка установленного пакета перед публикацией и сравнение с другими анализаторами (`compare.py`, зависимости закреплены в `compare.py.lock`), лицензии крейтов модуля (`notices.py`).
 - `data/` - веса контекстной модели (`ru-context.bin`), которые сборщик вшивает в словарь.
 - `tests/` - тесты пакета Python; `tests/test_docs.py` - два языка документации.
 - `docs/` - документация MkDocs (Material), `mkdocs.yml` - навигация и перевод ее на английский.

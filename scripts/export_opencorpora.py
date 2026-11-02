@@ -20,6 +20,7 @@
 import argparse
 import base64
 import bz2
+import gzip
 import hashlib
 import http.client
 import json
@@ -36,13 +37,13 @@ from pathlib import Path
 import wiktionary
 
 LICENSE = "CC BY-SA 3.0"
-# Файл, адреса (снимок Wayback Machine, затем сайт) и SHA-256; ревизии 417258 и 4580223.
-# Корпус - и данные обучения контекстной модели (train_context.py)
+# Файл, адреса (снимок Wayback Machine, затем его копия в датасете Hugging Face: opencorpora.org не отвечает)
+# и SHA-256; ревизии 417258 и 4580223. Корпус - и данные обучения контекстной модели (train_context.py)
 DICTIONARY = (
     "dict.opcorpora.xml.bz2",
     [
         "https://web.archive.org/web/20240423122538id_/https://www.opencorpora.org/files/export/dict/dict.opcorpora.xml.bz2",
-        "https://opencorpora.org/files/export/dict/dict.opcorpora.xml.bz2",
+        "https://huggingface.co/datasets/SergeyShk/rumorph-opencorpora/resolve/b8b223d8f5118406c27b67715a91bdbf5c6f5626/dict.opcorpora.xml.bz2",
     ],
     "f27150955c5f0978ece14348096f7d1380fc3564b08fdf99f129ede586309b6c",
 )
@@ -50,7 +51,7 @@ CORPUS = (
     "annot.opcorpora.xml.bz2",
     [
         "https://web.archive.org/web/20240624222734id_/http://opencorpora.org/files/export/annot/annot.opcorpora.xml.bz2",
-        "https://opencorpora.org/files/export/annot/annot.opcorpora.xml.bz2",
+        "https://huggingface.co/datasets/SergeyShk/rumorph-opencorpora/resolve/b8b223d8f5118406c27b67715a91bdbf5c6f5626/annot.opcorpora.xml.bz2",
     ],
     "dff2b07a3db865eb234515c3c2c51e370fc67b3582f32af7174625c8f2be4422",
 )
@@ -89,7 +90,8 @@ Lexeme = list[tuple[str, str]]
 def download(urls: list[str], path: Path, digest: str) -> Path:
     """
     Скачивание файла с проверкой контрольной суммы: по первому адресу, с которого пришел файл
-    с нужной суммой; при сбое сети, ответе 429 или 5xx - повтор с паузой
+    с нужной суммой; при сбое сети, ответе 429 или 5xx - повтор с паузой. Сервер может сжать
+    ответ gzip
 
     Аргументы:
         urls (list[str]): Адреса файла
@@ -109,15 +111,18 @@ def download(urls: list[str], path: Path, digest: str) -> Path:
         for attempt in range(ATTEMPTS):
             time.sleep(PAUSE * attempt)
             try:
-                with urllib.request.urlopen(url, timeout=TIMEOUT) as response:
+                request = urllib.request.Request(url, headers={"Accept-Encoding": "gzip"})
+                with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
                     data = response.read()
+                    if response.headers.get("Content-Encoding") == "gzip":
+                        data = gzip.decompress(data)
             except urllib.error.HTTPError as err:
                 errors.append(f"{url}: {err}")
                 # 429 - ограничение частоты запросов Wayback Machine: имеет смысл повторить
                 if err.code < 500 and err.code != 429:
                     break
                 continue
-            except (OSError, http.client.HTTPException) as err:
+            except (OSError, EOFError, http.client.HTTPException) as err:
                 errors.append(f"{url}: {err!r}")
                 continue
             if hashlib.sha256(data).hexdigest() != digest:

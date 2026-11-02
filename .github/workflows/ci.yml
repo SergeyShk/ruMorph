@@ -80,13 +80,23 @@ jobs:
         # У spaCy нет колес для 3.14t: там тесты компонента пропускаются
         run: uv sync --locked --no-default-groups --group test ${{ matrix.python-version != '3.14t' && '--group spacy' || '' }}
       - name: Cache OpenCorpora
-        # Снимки словаря и корпуса OpenCorpora - из Wayback Machine: скачиваются один раз на версию скрипта
+        # Снимки словаря и корпуса OpenCorpora (Wayback Machine, копия на Hugging Face) и Викисловаря:
+        # скачиваются один раз на версию скрипта
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: build/opencorpora/raw
           key: opencorpora-${{ hashFiles('scripts/export_opencorpora.py') }}
           # На Windows хэш скрипта с CRLF другой: подходит любой прежний кэш, download сверяет SHA-256
           restore-keys: opencorpora-
+          enableCrossOsArchive: true
+      - name: Cache UD
+        # Обучающие части трибанков UD_Russian-Taiga и GSD - с GitHub: скачиваются один раз на версию скрипта,
+        # download сверяет SHA-256 и файлов кэша
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: build/ud/raw
+          key: ud-${{ hashFiles('scripts/export_ud.py') }}
+          restore-keys: ud-
           enableCrossOsArchive: true
       - name: Build dictionary
         shell: bash
@@ -95,6 +105,14 @@ jobs:
           uv run --no-sync python scripts/export_ud.py build/ud
           cargo run --release --locked -p rumorph-build -- build/opencorpora build/ud python/rumorph/data/ru.dict data/ru-context.bin
           uv run --no-sync python -c "import hashlib; print(hashlib.sha256(open('python/rumorph/data/ru.dict', 'rb').read()).hexdigest())"
+      - name: Check dictionary size
+        # Словарь едет на crates.io в архиве крейта rumorph-dict-ru, а там предел - 10 МиБ: PR, меняющий
+        # только скрипты словаря, проверяет его здесь, а не на релизном теге
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        run: |
+          size="$(gzip -9 -c python/rumorph/data/ru.dict | wc -c)"
+          echo "ru.dict compressed: $size bytes"
+          [ "$size" -lt 10420224 ] || { echo "The compressed dictionary does not fit the crates.io limit of 10 MiB"; exit 1; }
       - name: Run tests
         run: uv run --no-sync pytest --cov rumorph ${{ matrix.python-version == '3.14t' && '--cov-fail-under=0' || '' }}
       - name: Run Rust tests

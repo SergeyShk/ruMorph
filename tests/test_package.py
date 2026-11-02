@@ -79,3 +79,18 @@ def test_wheel_contents(tmp_path):
     ]
     assert len(modules) == 1
     assert all(name.startswith(("rumorph/", "rumorph-")) for name in names)
+    licenses = {name.rsplit("/", 1)[1] for name in names if "/licenses/" in name}
+    assert licenses == {"LICENSE.txt", "LICENSE-DICTIONARY.txt", "THIRD-PARTY-NOTICES.txt"}
+
+
+@pytest.mark.skipif(shutil.which("cargo") is None, reason="крейты читает cargo")
+def test_third_party_notices(tmp_path):
+    # Лицензии крейтов модуля следуют Cargo.lock: после его изменения - python scripts/notices.py
+    path = tmp_path / "notices.txt"
+    subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "notices.py"), str(path)],
+        capture_output=True,
+        check=True,
+    )
+    expected = (ROOT / "THIRD-PARTY-NOTICES.txt").read_text(encoding="utf-8")
+    assert path.read_text(encoding="utf-8") == expected, "python scripts/notices.py"

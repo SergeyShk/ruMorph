@@ -36,8 +36,13 @@ def test_formats(tmp_path):
     tsv = run("--format", "tsv", str(path)).stdout.splitlines()
     assert tsv[1].split("\t")[:3] == ["стали", "стать", "VERB"]
     conllu = run("-f", "conllu", str(path)).stdout.splitlines()
-    assert conllu[:2] == ["# sent_id = 1", "# text = Мы стали друзьями в ковиде."]
-    columns = conllu[6].split("\t")
+    assert conllu[:4] == [
+        "# newdoc",
+        "# newpar",
+        "# sent_id = 1",
+        "# text = Мы стали друзьями в ковиде.",
+    ]
+    columns = conllu[8].split("\t")
     assert columns[:4] == ["5", "ковиде", "ковид", "NOUN"]
     assert (columns[5], columns[9]) == (
         "Animacy=Inan|Case=Loc|Gender=Masc|Number=Sing",
@@ -168,7 +173,7 @@ def test_output_file_and_encoding(tmp_path):
     result = run("-f", "conllu", "-o", str(output), str(path))
     assert (result.returncode, result.stdout, result.stderr) == (0, "", "")
     assert (
-        output.read_text(encoding="utf-8").splitlines()[1]
+        output.read_text(encoding="utf-8").splitlines()[3]
         == "# text = Мы стали друзьями в ковиде."
     )
     # Стандартный ввод из файла вывода: файл не затирается
