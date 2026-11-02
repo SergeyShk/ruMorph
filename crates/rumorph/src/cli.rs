@@ -610,6 +610,10 @@ impl Writer<'_> {
     /// остаются
     fn push_line(&mut self, line: &str, whole: bool) -> io::Result<()> {
         if whole && blank(line) {
+            // Пустая строка после абзаца, записанного целиком (`write_long`), кончает его
+            if blank(&self.text) {
+                self.continued = false;
+            }
             if !self.text.is_empty() || self.format == Format::Text {
                 self.text.push_str(line);
                 self.ready = self.text.len();
@@ -657,7 +661,16 @@ impl Writer<'_> {
             self.write_yo(&document, written, keep)?;
         } else {
             self.write_sentences(&document, written)?;
-            self.continued = true;
+            // Остаток продолжает абзац, только если начало абзаца уже записано: последнее
+            // предложение может само начинать абзац (после U+2029)
+            self.continued = match document.sentence_count() {
+                0 => self.continued,
+                1 => true,
+                count => {
+                    let last = document.paragraph(document.paragraph_count() - 1);
+                    last.sentences.start < count - 1
+                }
+            };
         }
         self.text = text[keep..].to_owned();
         self.ready = 0;
@@ -710,11 +723,13 @@ impl Writer<'_> {
                 .collect();
             for start in (0..words.len()).step_by(MAX_CHUNK) {
                 let chunk = &words[start..words.len().min(start + MAX_CHUNK)];
+                // Одно слово модель не разбирает: разборы - по частотам словаря
+                let modeled = self.context && chunk.len() > 1;
                 for (offset, analyses) in self.analyze(chunk).into_iter().enumerate() {
                     let span = spans[tokens.start + start + offset];
                     out.push_str(&text[at..span.start]);
                     let word = span.slice(text);
-                    match yo_spelling(&analyses, self.context) {
+                    match yo_spelling(&analyses, modeled) {
                         Some(spelling) => out.push_str(&with_yo(word, spelling)),
                         None => out.push_str(word),
                     }
@@ -1014,11 +1029,13 @@ fn foreign_encoding(head: &[u8]) -> Option<usize> {
     if head.starts_with(&[0xFF, 0xFE]) || head.starts_with(&[0xFE, 0xFF]) {
         return Some(1);
     }
-    // Строки - как у `read_line`: CRLF дает лишнюю пустую строку, но ее номер не виден
-    for (index, line) in head
-        .split(|&byte| byte == b'\n' || byte == b'\r')
-        .enumerate()
-    {
+    // Строки - как у `read_line`: LF, CR и CRLF
+    let lines = head.split(|&byte| byte == b'\n').flat_map(|line| {
+        line.strip_suffix(b"\r")
+            .unwrap_or(line)
+            .split(|&byte| byte == b'\r')
+    });
+    for (index, line) in lines.enumerate() {
         if line.contains(&0) {
             return Some(index + 1);
         }
@@ -1301,6 +1318,16 @@ mod tests {
         // Строка без пробелов режется по границе символа
         let word = "ё".repeat(PARAGRAPH);
         assert_eq!(dict.run(&["-f", "text"], word.as_bytes()).1, word);
+        // Абзац, записанный целиком (длинное предложение без знаков), кончает пустая строка,
+        // а последнее предложение куска может само начинать абзац (U+2029)
+        let speech = "мама мыла раму ".repeat(PARAGRAPH / 10) + "\n\nРаму.\n";
+        let (_, lemmas, _) = dict.run(&[], speech.as_bytes());
+        assert!(lemmas.ends_with(" рама\n\nрама .\n"), "{lemmas}");
+        let (_, conllu, _) = dict.run(&["-f", "conllu"], speech.as_bytes());
+        assert_eq!(conllu.matches("# newpar").count(), 2);
+        let separated = "Мама мыла раму.\u{2029}".repeat(PARAGRAPH / 10);
+        let (_, conllu, _) = dict.run(&["-f", "conllu"], separated.as_bytes());
+        assert_eq!(conllu.matches("# newpar").count(), PARAGRAPH / 10);
     }
 
     #[test]
@@ -1335,6 +1362,10 @@ mod tests {
         let (code, out, error) = dict.run(&[], b"\xd0\x9c\xd0\xb0\xd0\xbc\xd0\xb0.\r\xff\r");
         assert_eq!((code, out.as_str()), (1, "мама .\n\u{fffd}\n"));
         assert!(error.contains("строка 2: не UTF-8"), "{error}");
+        // CRLF - один перевод строки: номер строки - как у LF
+        let (code, _, error) = dict.run(&[], b"Hello.\r\nWorld\xff.\r\n");
+        assert_eq!(code, 1);
+        assert!(error.contains("файл не в UTF-8 (строка 2)"), "{error}");
     }
 
     #[test]
@@ -1350,8 +1381,14 @@ mod tests {
                 String::new()
             )
         );
-        // Без контекста «ё» ставится, только если ее пишут все разборы токена
+        // Без контекста «ё» ставится, только если ее пишут все разборы токена; так же - у слова
+        // без соседей, которое модель не разбирает
         assert_eq!(dict.run(&["-f", "text"], "Все еж.".as_bytes()).1, "Все ёж.");
+        let context = TestDictionary::with_context();
+        assert_eq!(
+            context.run(&["-f", "text"], "Все\n\nЕж\n".as_bytes()).1,
+            "Все\n\nЁж\n"
+        );
         assert_eq!(with_yo("Еж", "ёж"), "Ёж");
         assert_eq!(with_yo("еж", "ежи"), "еж");
         assert_eq!(with_yo("мама", "ёжа"), "мама");
