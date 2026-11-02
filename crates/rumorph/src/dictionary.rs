@@ -10,7 +10,8 @@ use fst::Map;
 use crate::Error;
 use crate::alphabet::{Alphabet, Key, yo_order};
 use crate::format::{
-    self, ENTRY_KEYS, Layout, MAX_LIST, MAX_SPELLINGS, Slice, Storage, Strings, WordValue,
+    self, ENTRY_KEYS, Layout, MAX_LIST, MAX_SPELLINGS, RARE_WORD, Slice, Storage, Strings,
+    WordValue,
 };
 
 pub(crate) mod context;
@@ -613,6 +614,7 @@ impl Dictionary {
         if !analyses.is_empty() {
             self.reweight_numerals(&mut analyses);
             self.weigh_by_case(word, &mut analyses);
+            self.add_rare_proper(word, &mut analyses);
             return analyses;
         }
         let analyses = self.rules(word);
@@ -1337,7 +1339,31 @@ impl Dictionary {
 
     /// Список разборов: `(таблица << 16) | форма` каждого
     fn records_at(&self, offset: u32) -> Option<&[u32]> {
-        list(self.records(), offset, 1)
+        let lists = self.records();
+        let start = offset as usize + 1;
+        let count = (*lists.get(start - 1)? & !RARE_WORD) as usize;
+        if count > MAX_LIST {
+            return None;
+        }
+        lists.get(start..start + count)
+    }
+
+    /// Все разборы словоформы `word` - редких лексем дополнительного словаря (бит `RARE_WORD`)
+    pub(super) fn rare_word(&self, word: &str) -> bool {
+        let Some(key) = self.alphabet.input_key(word) else {
+            return false;
+        };
+        let Some(spellings) = self.spellings(&key) else {
+            return false;
+        };
+        let matches = self.matches(&spellings, key.yo);
+        let records = self.records();
+        !matches.as_slice().is_empty()
+            && matches.as_slice().iter().all(|&(_, offset)| {
+                records
+                    .get(offset as usize)
+                    .is_some_and(|&header| header & RARE_WORD != 0)
+            })
     }
 
     /// Список частот: пары «тег, P(тег | словоформа) в миллионных долях»
@@ -1877,7 +1903,7 @@ impl Dictionary {
                 .get((packed >> 16) as usize)
                 .is_some_and(|&count| ((packed & 0xFFFF) as usize) < count)
         };
-        walk_lists(self.records(), 1, |items| {
+        walk_lists(self.records(), 1, !RARE_WORD, |items| {
             items.iter().all(|&packed| entry(packed))
         })?;
         // Длина списка частот - с битом ключей: список проверяется своим обходом
@@ -1903,18 +1929,23 @@ impl Dictionary {
             }
             start += 1 + probabilities.pairs.len();
         }
-        walk_lists(self.guess_records(), 2, |items| {
+        walk_lists(self.guess_records(), 2, u32::MAX, |items| {
             items.chunks(2).all(|pair| entry(pair[0]))
         })
     }
 }
 
-/// Обход списков вида «длина, элементы по `width` чисел»
-fn walk_lists(lists: &[u32], width: usize, valid: impl Fn(&[u32]) -> bool) -> Result<(), Error> {
+/// Обход списков вида «длина, элементы по `width` чисел»; длина - биты `mask` первого числа
+fn walk_lists(
+    lists: &[u32],
+    width: usize,
+    mask: u32,
+    valid: impl Fn(&[u32]) -> bool,
+) -> Result<(), Error> {
     let invalid = |msg: &str| Err(Error::Format(msg.into()));
     let mut start = 0;
     while start < lists.len() {
-        let count = lists[start] as usize;
+        let count = (lists[start] & mask) as usize;
         if count > MAX_LIST {
             return invalid("список длиннее 255 элементов");
         }
@@ -2576,6 +2607,11 @@ pub(super) mod tests {
 
     /// Словарь для угадывания: нарицательное «кот» (кот, кота) и фамилия «петров» (петров, петрова)
     fn guessing() -> Dictionary {
+        Dictionary::from_bytes(&guessing_builder().build().unwrap()).unwrap()
+    }
+
+    /// Сборщик словаря `guessing`: таблица 0 - нарицательное, 1 - фамилия
+    fn guessing_builder() -> Builder {
         let mut builder = Builder::new(
             vec!["NOUN,nomn".into(), "NOUN,gent".into()],
             vec![String::new()],
@@ -2609,7 +2645,37 @@ pub(super) mod tests {
         builder
             .add_guesses(GuessIndex::Proper, "ова", &[(entry(proper, 1), 3)])
             .unwrap();
-        Dictionary::from_bytes(&builder.build().unwrap()).unwrap()
+        builder
+    }
+
+    #[test]
+    fn rare_capitalized_word_is_also_a_proper_noun() {
+        let mut builder = guessing_builder();
+        // «зумова» - только у редкой лексемы, у «мурова» тот же разбор обычный, у «кота» - оба
+        builder.add_rare_word("зумова", &[entry(0, 1)]).unwrap();
+        builder.add_word("мурова", &[entry(0, 1)]).unwrap();
+        builder.add_rare_word("кота", &[entry(0, 1)]).unwrap();
+        let dict = Dictionary::from_bytes(&builder.build().unwrap()).unwrap();
+        assert!(dict.rare_word("Зумова"));
+        assert!(!dict.rare_word("мурова") && !dict.rare_word("кота"));
+        let summary = |word: &str| -> Vec<(String, &str, Source)> {
+            dict.analyze(word)
+                .into_iter()
+                .map(|a| (a.lemma, dict.pos(a.ud), a.source))
+                .collect()
+        };
+        // С заглавной - еще и угаданное имя собственное с долей, как у незнакомого слова
+        assert_eq!(
+            summary("Зумова"),
+            [
+                ("зумов".into(), "PROPN", Source::Guess),
+                ("зумов".into(), "NOUN", Source::Dictionary)
+            ]
+        );
+        assert!((dict.analyze("Зумова")[0].prob - 0.91).abs() < 1e-12);
+        for word in ["зумова", "Мурова", "Кота"] {
+            assert_eq!(summary(word).len(), 1, "{word}");
+        }
     }
 
     #[test]

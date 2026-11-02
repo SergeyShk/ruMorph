@@ -51,7 +51,48 @@ const MAX_GUESSED_LENGTH: usize = 100;
 /// единица измерения
 const MIN_MIXED_LENGTH: usize = 5;
 
+/// Наименьшая длина угадываемого строчного слова: у слова из одной-двух букв («ви», «ся») окончание
+/// ничего не говорит, оно разбирается по правилу; с заглавной («Рэ», «Ли») это обычно имя
+const MIN_LOWERCASE_LENGTH: usize = 3;
+
 impl Dictionary {
+    /// Слово с заглавной буквы, все разборы которого - редких лексем дополнительного словаря
+    /// (Викисловаря) без имени собственного, разбирается и как незнакомое имя собственное:
+    /// в обучающих частях UD Taiga и GSD такие слова с заглавной - имена в 84 % случаев, почти
+    /// как незнакомые словарю («Сенна», «Робинзон»)
+    pub(super) fn add_rare_proper(&self, word: &str, analyses: &mut Vec<Analysis>) {
+        let mut chars = word.chars();
+        let titlecase = chars.next().is_some_and(char::is_uppercase)
+            && chars.clone().next().is_some()
+            && chars.all(char::is_lowercase);
+        let proper = |analysis: &Analysis| {
+            self.proper_nouns
+                .get(usize::from(analysis.ud))
+                .is_some_and(|&proper| proper)
+        };
+        if !titlecase || analyses.iter().any(proper) || !self.rare_word(word) {
+            return;
+        }
+        let lower = word.to_lowercase();
+        let guessed = self.guess_with(&[(GuessIndex::Proper, 1.0)], word, &lower, None);
+        if guessed.is_empty() {
+            return;
+        }
+        let share = if adjectival(&lower) {
+            ADJECTIVAL_PROPER_SHARE
+        } else {
+            PROPER_SHARE
+        };
+        for analysis in analyses.iter_mut() {
+            analysis.prob *= 1.0 - share;
+        }
+        analyses.extend(guessed.into_iter().map(|analysis| Analysis {
+            prob: analysis.prob * share,
+            ..analysis
+        }));
+        analyses.sort_by(|a, b| b.prob.total_cmp(&a.prob));
+    }
+
     /// Угаданные разборы незнакомого слова кириллицей в нижнем регистре или с заглавной буквы
     pub(super) fn guess(&self, word: &str) -> Vec<Analysis> {
         let chars: Vec<char> = word.chars().collect();
@@ -83,7 +124,9 @@ impl Dictionary {
             && !chars.iter().all(|c| c.is_uppercase());
         let lowercase_tail = capitals >= 2 && chars[capitals..].iter().all(|c| c.is_lowercase());
         if lowercase || chars[0].is_lowercase() || (lowercase_tail && !abbreviation_with_ending) {
-            if mixed && chars.len() < MIN_MIXED_LENGTH {
+            if (mixed && chars.len() < MIN_MIXED_LENGTH)
+                || (lowercase && chars.len() < MIN_LOWERCASE_LENGTH)
+            {
                 return Vec::new();
             }
             return self.guess_with(&[(GuessIndex::Common, 1.0)], word, &lower, None);
