@@ -196,7 +196,7 @@ Analyzes a document of the segmenter [anySeg](https://github.com/SergeyShk/anySe
 
 Exceptions:
 
-- `ValueError` - the dictionary has no context model.
+- `ValueError` - the dictionary has no context model or the sentences of the document do not run in order over all its words.
 
 === "Code"
 

@@ -62,8 +62,9 @@ cargo install rumorph --features cli
 echo "Мы стали друзьями в ковиде." | rumorph -f conllu
 ```
 
-Команда пишет леммы, части речи и признаки UD в форматах `lemmas`, `conllu`, `tsv` и `jsonl`;
-параметры - в [документации](https://sergeyshk.github.io/ruMorph/cli/).
+Команда пишет леммы, части речи и признаки UD в форматах `lemmas`, `conllu`, `tsv` и `jsonl`,
+а формат `text` - исходный текст с «ё» по выбранным разборам; параметры - в
+[документации](https://sergeyshk.github.io/ruMorph/cli/).
 
 ## Features
 

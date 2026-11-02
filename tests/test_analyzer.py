@@ -361,8 +361,15 @@ def test_annotate(morph):
             None,
         ],
     }
-    with pytest.raises(ValueError, match="слова предложения не из документа"):
-        morph.annotate(Document(["Мы"], [[0, 1]]))
+    # Предложения идут подряд и покрывают все слова документа
+    for forms, sentences in (
+        (["Мы"], [[0, 1]]),
+        (["Мы", "стали", "друзьями"], [[1, 2], [0]]),
+        (["Мы", "стали"], [[0]]),
+        (["Мы", "стали", "друзьями"], [[0, 2]]),
+    ):
+        with pytest.raises(ValueError, match="не идут подряд по всем его словам"):
+            morph.annotate(Document(forms, sentences))
 
 
 def test_lemmatize(morph):

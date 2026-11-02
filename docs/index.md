@@ -39,7 +39,7 @@
 
     ---
 
-    Разбор файлов и потоков из командной строки: леммы, CoNLL-U, TSV и JSON Lines
+    Разбор файлов и потоков из командной строки: леммы, CoNLL-U, TSV, JSON Lines и текст с «ё»
 
     [:octicons-arrow-right-24: Команда rumorph](cli.md)
 

@@ -25,6 +25,8 @@ impl Dictionary {
     /// [`Error::Context`], если в словаре нет контекстной модели; [`Error::Document`], если
     /// документ не принял столбцы
     pub fn annotate(&self, document: &mut Document) -> Result<(), Error> {
+        // Пустой документ тоже проверяет, есть ли в словаре модель
+        self.analyze_sentence::<&str>(&[])?;
         let count = document.word_count();
         let (mut lemmas, mut parts, mut feats) = (
             Vec::with_capacity(count),
@@ -49,5 +51,23 @@ impl Dictionary {
         document
             .set_columns(columns, None)
             .map_err(|err| Error::Document(err.to_string()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::Error;
+    use crate::dictionary::tests::dictionary;
+
+    #[test]
+    fn needs_context_model() {
+        let segmenter = anyseg::Segmenter::new("ru").unwrap();
+        for text in ["", "Все стали."] {
+            let result = dictionary().annotate(&mut segmenter.segment(text));
+            assert!(
+                matches!(result, Err(Error::Context(_))),
+                "{text:?}: {result:?}"
+            );
+        }
     }
 }

@@ -1245,7 +1245,8 @@ impl Analyzer {
     ///     document (anyseg.Document): Документ
     ///
     /// Исключения:
-    ///     ValueError: Если в словаре нет контекстной модели
+    ///     ValueError: Если в словаре нет контекстной модели или предложения документа не идут
+    ///         подряд по всем его словам
     ///
     /// Пример использования:
     ///     >>> from anyseg import Segmenter
@@ -1258,21 +1259,28 @@ impl Analyzer {
         let forms: Vec<String> = document
             .call_method1(intern!(py, "column"), ("form",))?
             .extract()?;
-        let mut ranges = Vec::new();
+        // Столбцы собираются по порядку предложений: они идут подряд и покрывают все слова
+        let unordered =
+            || PyValueError::new_err("предложения документа не идут подряд по всем его словам");
+        let (mut ranges, mut next) = (Vec::new(), 0);
         for sentence in document.getattr(intern!(py, "sentences"))?.try_iter()? {
             let words = sentence?.getattr(intern!(py, "words"))?;
             let count = words.len()?;
             let start: usize = match count {
-                0 => 0,
+                0 => next,
                 _ => words
                     .get_item(0)?
                     .getattr(intern!(py, "index"))?
                     .extract()?,
             };
-            match forms.get(start..start + count) {
-                Some(_) => ranges.push(start..start + count),
-                None => return Err(PyValueError::new_err("слова предложения не из документа")),
+            if start != next || start + count > forms.len() {
+                return Err(unordered());
             }
+            ranges.push(start..start + count);
+            next = start + count;
+        }
+        if next != forms.len() {
+            return Err(unordered());
         }
         let dictionary = &self.shared.dictionary;
         let (mut lemmas, mut parts, mut feats) = (Vec::new(), Vec::new(), Vec::new());

@@ -1999,7 +1999,7 @@ pub(super) mod tests {
         builder.build().unwrap()
     }
 
-    fn dictionary() -> Dictionary {
+    pub(super) fn dictionary() -> Dictionary {
         Dictionary::from_bytes(&dictionary_bytes()).unwrap()
     }
 

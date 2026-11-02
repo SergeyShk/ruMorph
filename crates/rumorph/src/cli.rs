@@ -525,9 +525,10 @@ impl Writer<'_> {
         let mut block = Block::default();
         self.text.clear();
         self.ready = 0;
+        let mut end = false;
         loop {
             bytes.clear();
-            if self.read_line(&mut reader, &mut bytes)? == 0 {
+            if self.read_line(&mut reader, &mut bytes, &mut end)? == 0 {
                 break;
             }
             number += 1;
@@ -662,15 +663,19 @@ impl Writer<'_> {
         self.end_sentence()
     }
 
-    /// Строка входа с переводом строки; перед чтением, которое может ждать ввода (буфер пуст),
-    /// вывод сбрасывается: команду можно держать открытой и подавать ей текст по строке
+    /// Строка входа с ее переводом (LF, CR или CRLF), как в команде `anyseg`; перед чтением,
+    /// которое может ждать ввода (буфер пуст), законченные абзацы пишутся, а вывод сбрасывается:
+    /// команду можно держать открытой и подавать ей текст. После конца входа (`end`) ничего
+    /// не читается: в терминале строку без перевода заканчивает один Ctrl+D
     fn read_line(
         &mut self,
         reader: &mut BufReader<&mut dyn Read>,
         bytes: &mut Vec<u8>,
+        end: &mut bool,
     ) -> Result<usize, Failure> {
-        loop {
-            // Чтение может ждать ввода: сначала пишутся законченные абзацы
+        // CR кончил буфер: LF пары CRLF может начать следующий
+        let mut after_cr = false;
+        while !*end {
             if reader.buffer().is_empty() {
                 self.write_ready().map_err(Failure::Write)?;
                 self.flush_pending().map_err(Failure::Write)?;
@@ -681,18 +686,38 @@ impl Writer<'_> {
                 Err(err) => return Err(Failure::Read(err)),
             };
             if available.is_empty() {
-                return Ok(bytes.len());
+                *end = true;
+                break;
             }
-            let (end, done) = match available.iter().position(|&byte| byte == b'\n') {
+            if after_cr {
+                if available[0] == b'\n' {
+                    bytes.push(b'\n');
+                    reader.consume(1);
+                }
+                break;
+            }
+            let (length, done) = match available
+                .iter()
+                .position(|&byte| byte == b'\n' || byte == b'\r')
+            {
+                Some(at) if available[at] == b'\r' => match available.get(at + 1) {
+                    Some(b'\n') => (at + 2, true),
+                    Some(_) => (at + 1, true),
+                    None => {
+                        after_cr = true;
+                        (at + 1, false)
+                    }
+                },
                 Some(at) => (at + 1, true),
                 None => (available.len(), false),
             };
-            bytes.extend_from_slice(&available[..end]);
-            reader.consume(end);
+            bytes.extend_from_slice(&available[..length]);
+            reader.consume(length);
             if done {
-                return Ok(bytes.len());
+                break;
             }
         }
+        Ok(bytes.len())
     }
 
     /// Предложение из токенов или CoNLL-U
@@ -935,16 +960,18 @@ fn next_chunk<'t>(tokens: &mut dyn Iterator<Item = Token<'t>>, chunk: &mut Vec<T
     !chunk.is_empty()
 }
 
-/// Токены предложения документа: пробел после токена - если следующий начинается не сразу
-/// за ним или предложение на нем кончается
+/// Токены предложения документа: пробел после токена - если до следующего токена документа
+/// есть пробельный символ (невидимый разделитель - не пробел) или документ на нем кончается
 fn sentence_tokens(document: &Document, sentence: usize) -> Vec<Token<'_>> {
-    let spans = document.tokens();
-    let range = document.sentence(sentence).tokens;
-    range
-        .clone()
+    let (text, spans) = (document.text(), document.tokens());
+    document
+        .sentence(sentence)
+        .tokens
         .map(|token| Token {
-            word: spans[token].slice(document.text()),
-            space_after: token + 1 == range.end || spans[token + 1].start > spans[token].end,
+            word: spans[token].slice(text),
+            space_after: spans.get(token + 1).is_none_or(|next| {
+                text[spans[token].end..next.start].contains(char::is_whitespace)
+            }),
         })
         .collect()
 }
@@ -1071,8 +1098,27 @@ mod tests {
                 String::new()
             )
         );
+        // Переводы строк CR и CRLF - как LF
+        assert_eq!(
+            dict.run(&[], "Мама мыла\rраму. Раму!\r\n\r\nМама.\r".as_bytes())
+                .1,
+            "мама мыть рама .\nрама !\n\nмама .\n"
+        );
         // Пустой вход и вход из пустых строк - без вывода
         assert_eq!(dict.run(&[], "\n \n\t\n".as_bytes()).1, "");
+        // Пробел после токена - только пробельный символ до следующего токена документа:
+        // невидимый разделитель не пробел, а предложение может кончаться без пробела
+        let (_, conllu, _) = dict.run(&["-f", "conllu"], "Мама\u{200b}раму!Раму.".as_bytes());
+        assert!(
+            conllu.starts_with(
+                "# sent_id = 1\n# text = Мамараму!\n1\tМама\tмама\tNOUN\t_\tCase=Nom|Gender=Fem|Number=Sing\t_\t_\t_\tSpaceAfter=No\n"
+            ),
+            "{conllu}"
+        );
+        assert!(
+            conllu.contains("3\t!\t!\tPUNCT\t_\t_\t_\t_\t_\tSpaceAfter=No\n"),
+            "{conllu}"
+        );
         // Текст без пустых строк режется после строки на PARAGRAPH, предложения не теряются
         let long = "Мама мыла раму.\n".repeat(PARAGRAPH / 10);
         let (code, lemmas, _) = dict.run(&[], long.as_bytes());
@@ -1612,31 +1658,43 @@ mod tests {
 
     #[test]
     fn reads_end_of_input_once() {
-        // Конец ввода в терминале не повторяется: второе чтение ждало бы следующего Ctrl+D
-        struct Terminal(bool);
+        // Конец ввода в терминале не повторяется: второе чтение ждало бы следующего Ctrl+D,
+        // в том числе после строки без перевода
+        struct Terminal(Vec<&'static [u8]>, bool);
         impl Read for Terminal {
-            fn read(&mut self, _: &mut [u8]) -> io::Result<usize> {
-                if std::mem::replace(&mut self.0, true) {
+            fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+                if let Some(chunk) = self.0.pop() {
+                    buf[..chunk.len()].copy_from_slice(chunk);
+                    return Ok(chunk.len());
+                }
+                if std::mem::replace(&mut self.1, true) {
                     return Err(io::Error::other("второе чтение после конца ввода"));
                 }
                 Ok(0)
             }
         }
         let dict = TestDictionary::new();
-        let mut stderr = Vec::new();
-        let code = execute(
-            vec!["--no-context".into()],
-            "",
-            Some(&dict.0),
-            true,
-            &mut Terminal(false),
-            &mut Vec::new(),
-            &mut stderr,
-        );
-        assert_eq!(
-            (code, String::from_utf8(stderr).unwrap()),
-            (0, String::new())
-        );
+        for (input, expected) in [(vec![], ""), (vec!["Мама мыла".as_bytes()], "мама мыть\n")]
+        {
+            let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
+            let code = execute(
+                vec!["--no-context".into()],
+                "",
+                Some(&dict.0),
+                true,
+                &mut Terminal(input, false),
+                &mut stdout,
+                &mut stderr,
+            );
+            assert_eq!(
+                (
+                    code,
+                    String::from_utf8(stdout).unwrap(),
+                    String::from_utf8(stderr).unwrap()
+                ),
+                (0, expected.to_owned(), String::new())
+            );
+        }
     }
 
     #[test]
