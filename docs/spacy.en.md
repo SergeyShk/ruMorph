@@ -49,14 +49,14 @@ The share of words with the right part of speech, lemma and UD features on the t
 
 | Pipeline | SynTagRus | Taiga | GSD | Speed |
 | :------- | :-------- | :---- | :-- | :---- |
-| ru_core_news_sm | 82.0 | 75.5 | 74.8 | 5,628 |
-| ru_core_news_sm with rumorph | **93.7** | **90.2** | **81.6** | **8,842** |
+| ru_core_news_sm | 82.0 | 75.6 | 74.8 | 8,554 |
+| ru_core_news_sm with rumorph | **93.7** | **90.3** | **81.7** | **16,574** |
 
 ## Sentences { #sentences }
 
 The context model analyzes a whole sentence. The component takes sentences from the annotation of the document - the parser, `senter` or `sentencizer`, and without it splits the document after sentence-final marks («.», «!», «?», «…»); a sentence longer than 256 tokens is analyzed in parts, as in the [rumorph command](cli.md). Whitespace tokens and tokens of invisible separators only (BOM, U+200B, U+2060, the soft hyphen) get the `SPACE` part of speech, as in spaCy models, and the token itself as the lemma: the model does not see them. A token without a ruMorph analysis (an invisible character inside a word) gets `X` and the lowercased token as the lemma, as in the rumorph command.
 
-Tokens and sentence starts following the conventions of Universal Dependencies on which the context model is trained come from the segmenter [anySeg](https://github.com/SergeyShk/anySeg) (`pip install "anyseg[spacy]"`): the tokenizer `anyseg.Tokenizer.v1` and the component `anyseg_sentencizer` go before `rumorph`.
+Tokens and sentence starts following the conventions of Universal Dependencies on which the context model is trained come from the segmenter [anySeg](https://github.com/SergeyShk/anySeg) (`pip install "anyseg[spacy]"`): the tokenizer `anyseg.Tokenizer.v1` and the component `anyseg_sentencizer` go before `rumorph`. On the text of the test parts of the treebanks the token boundaries of anySeg match the gold standard for 99.0-99.6 % of words against 97.6-98.7 % for the spaCy tokenizer, and the part of speech and lemma of the component are right for a share of words 0.7-1.4 points higher.
 
 === "Code"
 
@@ -70,7 +70,13 @@ Tokens and sentence starts following the conventions of Universal Dependencies o
 === "Result"
 
     ```
-    [('В', 'в'), ('1914', '1914'), ('г.', 'год'), ('мы', 'мы'), ('стали', 'стать'), ('друзьями', 'друг'), ('.', '.')]
+    [('В', 'в'),
+     ('1914', '1914'),
+     ('г.', 'год'),
+     ('мы', 'мы'),
+     ('стали', 'стать'),
+     ('друзьями', 'друг'),
+     ('.', '.')]
     ```
 
 ## Parameters { #config }

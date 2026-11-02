@@ -17,7 +17,7 @@
 
 ```toml
 [dependencies]
-rumorph = "0.4"
+rumorph = "0.5"
 ```
 
 Словарь OpenCorpora входит в крейт [`rumorph-dict-ru`](https://crates.io/crates/rumorph-dict-ru)
@@ -46,8 +46,8 @@ fn main() -> Result<(), rumorph::Error> {
     assert_eq!(dictionary.ud_tag(sentence[2][0].ud).unwrap().feat("Case"), Some("Acc"));
 
     // Свое слово изменяется по образцу словарного; копия словаря делит отображенный файл
-    let zoomers = dictionary.clone().with_words([("зумер", "геймер")])?;
-    assert_eq!(zoomers.analyze("зумерами")[0].lemma, "зумер");
+    let coders = dictionary.clone().with_words([("вайбкодер", "геймер")])?;
+    assert_eq!(coders.analyze("вайбкодерами")[0].lemma, "вайбкодер");
     Ok(())
 }
 ```
@@ -70,12 +70,13 @@ echo "Мы стали друзьями в ковиде." | rumorph -f conllu
 
 - `bundled` (по умолчанию) - словарь из крейта `rumorph-dict-ru`: `Dictionary::bundled`.
 - `anyseg` - разбор документа сегментатора [anySeg](https://crates.io/crates/anyseg): `Dictionary::annotate`
-  заполняет LEMMA, UPOS и FEATS его слов.
+  записывает в столбцы LEMMA, UPOS и FEATS документа леммы, части речи и признаки UD, найденные ruMorph;
+  крейт anySeg - `rumorph::anyseg`.
 - `build` - сборка своих словарей: `Builder`.
 - `cli` - команда `rumorph`, текст на токены и предложения в ней делит anySeg.
 
 ## Лицензия
 
 Код распространяется под лицензией MIT. Словарь в крейте `rumorph-dict-ru` собран из словаря
-[OpenCorpora](https://opencorpora.org) с частотами по трибанкам UD Taiga и GSD и контекстной моделью
-по ним и корпусу OpenCorpora и распространяется по лицензии CC BY-SA 4.0.
+[OpenCorpora](https://opencorpora.org) и слов [Викисловаря](https://ru.wiktionary.org) с частотами по трибанкам
+UD Taiga и GSD и контекстной моделью по ним и корпусу OpenCorpora и распространяется по лицензии CC BY-SA 4.0.

@@ -317,11 +317,11 @@ The share of words whose first analysis has the right part of speech and lemma, 
 
 | System | SynTagRus | Taiga | GSD | Tokens per second |
 | :----- | :-------- | :---- | :-- | :---------------- |
-| ruMorph | **94.1** | **90.7** | **92.0** | **639,969** |
-| pymorphy3 | 84.8 | 82.9 | 84.3 | 23,263 |
-| mystem | 81.9 | 79.4 | 79.9 | 81,138 |
+| ruMorph | **94.1** | **90.8** | **92.1** | **650,493** |
+| pymorphy3 | 84.8 | 82.9 | 84.3 | 22,815 |
+| mystem | 81.9 | 79.4 | 79.9 | 79,730 |
 
-In context (`analyze_sentence`) ruMorph is more accurate than all the taggers in the part of speech, lemma and features together on Taiga and GSD (90.2 and 81.6 % of words against 85.6 and 80.3 % for Stanza), and on SynTagRus it is level with Stanza (93.7 and 93.5 %), although Stanza is trained on SynTagRus. Meanwhile it handles 109 thousand tokens per second against 2,858 for Stanza. ruMorph answers a short text together with loading in 6 ms against 0.2-2 s for the taggers, processes share the dictionary, and every further one adds 1.2 MB. Measured on Apple M3 Pro, Python 3.11.
+In context (`analyze_sentence`) ruMorph is more accurate than all the taggers in the part of speech, lemma and features together on Taiga and GSD (90.4 and 81.7 % of words against 85.6 and 80.3 % for Stanza), and on SynTagRus it is level with Stanza (93.7 and 93.5 %), although Stanza is trained on SynTagRus. Meanwhile it handles 107 thousand tokens per second against 2,921 for Stanza. ruMorph answers a short text together with loading in 6 ms against 0.2-2 s for the taggers, processes share the dictionary, and every further one adds 1.5 MB. Measured on Apple M3 Pro, Python 3.11.
 
 See the [documentation](https://sergeyshk.github.io/ruMorph/en/performance/) for context taggers, the chart of speed by text size, operations compared with pymorphy3, memory and how it was measured.
 
