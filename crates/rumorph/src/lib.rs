@@ -16,7 +16,7 @@
 //! ```
 //!
 //! Features: `bundled` (по умолчанию) - словарь ruMorph из крейта `rumorph-dict-ru`,
-//! `anyseg` - разбор документа сегментатора anySeg (`Dictionary::annotate`), `build` - сборка
+//! `anyseg` - разбор документа сегментатора anySeg (`Dictionary::annotate`, крейт - `rumorph::anyseg`), `build` - сборка
 //! своих словарей (`Builder`), `cli` - команда `rumorph` (`cargo install rumorph --features cli`)
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
@@ -31,6 +31,10 @@ mod dictionary;
 mod error;
 mod format;
 
+/// Сегментатор anySeg той версии, документы которой принимает `Dictionary::annotate`
+#[cfg(feature = "anyseg")]
+#[cfg_attr(docsrs, doc(cfg(feature = "anyseg")))]
+pub use anyseg;
 #[cfg(feature = "build")]
 #[cfg_attr(docsrs, doc(cfg(feature = "build")))]
 pub use builder::Builder;

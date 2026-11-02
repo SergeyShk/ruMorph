@@ -160,7 +160,7 @@ dependencies = [
 
 [[package]]
 name = "rumorph"
-version = "0.5.0-dev.4"
+version = "0.5.0-dev.5"
 dependencies = [
  "anyseg",
  "bytemuck",
@@ -168,11 +168,12 @@ dependencies = [
  "fst",
  "memmap2",
  "rumorph-dict-ru",
+ "unicode-normalization",
 ]
 
 [[package]]
 name = "rumorph-build"
-version = "0.5.0-dev.4"
+version = "0.5.0-dev.5"
 dependencies = [
  "rumorph",
  "serde_json",
@@ -180,11 +181,11 @@ dependencies = [
 
 [[package]]
 name = "rumorph-dict-ru"
-version = "0.5.0-dev.4"
+version = "0.5.0-dev.5"
 
 [[package]]
 name = "rumorph-py"
-version = "0.5.0-dev.4"
+version = "0.5.0-dev.5"
 dependencies = [
  "pyo3",
  "rumorph",

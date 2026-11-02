@@ -81,16 +81,17 @@ def test_long_marked_sentence_chunks():
 
 
 def test_spaces_and_invisible_tokens(nlp):
+    # Токен из невидимых разделителей - пробел: модель его не видит
     tokens = list(nlp("Мы\n\nстали ⁠ друзьями"))
     assert [(token.pos_, token.lemma_) for token in tokens[1::2]] == [
         ("SPACE", "\n\n"),
-        ("X", "\u2060"),
+        ("SPACE", "\u2060"),
     ]
-    analyses = rumorph.Analyzer().analyze_sentence(["Мы", "стали", "⁠", "друзьями"])
-    assert analyses[2] == []
-    assert annotation(tokens[::2]) == [
-        (a[0].lemma, a[0].pos, a[0].feats) for a in (analyses[0], analyses[1], analyses[3])
-    ]
+    analyses = rumorph.Analyzer().analyze_sentence(["Мы", "стали", "друзьями"])
+    assert annotation(tokens[::2]) == [(a[0].lemma, a[0].pos, a[0].feats) for a in analyses]
+    # Разделитель внутри токена - токен без разбора
+    joined = nlp("Мы\u200bстали")
+    assert [(token.pos_, token.lemma_) for token in joined] == [("X", "мы\u200bстали")]
 
 
 def test_without_context():
@@ -212,3 +213,11 @@ def test_anyseg_tokenizer():
     assert words[-2:] == [("стали", "NOUN", "сталь"), (".", "PUNCT", ".")]
     assert [token.pos_ for token in doc if token.is_space] == ["SPACE", "SPACE"]
     assert [sentence.text for sentence in doc.sents][-1] == "Мост сделан из стали."
+    # Промежуток из невидимых разделителей у токенизатора anySeg - тоже пробел
+    doc = nlp("\ufeffМост сделан из\u200b\u200bстали.")
+    assert [(token.text, token.pos_) for token in doc if token.pos_ in ("SPACE", "NOUN")] == [
+        ("\ufeff", "SPACE"),
+        ("Мост", "NOUN"),
+        ("\u200b\u200b", "SPACE"),
+        ("стали", "NOUN"),
+    ]

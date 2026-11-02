@@ -21,7 +21,7 @@ anyseg = ["dep:anyseg"]
 # Сборка своих словарей: Builder и GuessIndex
 build = []
 # Команда rumorph: cargo install rumorph --features cli
-cli = ["anyseg"]
+cli = ["anyseg", "dep:unicode-normalization"]
 
 [[bin]]
 name = "rumorph"
@@ -29,11 +29,12 @@ required-features = ["cli"]
 
 [dependencies]
 anyseg = { version = "0.2.0", optional = true, default-features = false, features = ["ru"] }
+unicode-normalization = { version = "0.1.26", optional = true }
 bytemuck = "1.25.2"
 crc32fast = "1.5.3"
 fst = "0.4.7"
 memmap2 = "0.9.11"
-rumorph-dict-ru = { version = "=0.5.0-dev.4", path = "../rumorph-dict-ru", optional = true }
+rumorph-dict-ru = { version = "=0.5.0-dev.5", path = "../rumorph-dict-ru", optional = true }
 
 [package.metadata.docs.rs]
 all-features = true

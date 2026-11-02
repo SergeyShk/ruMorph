@@ -541,16 +541,37 @@ impl Dictionary {
         Ok(sentence)
     }
 
-    /// Поля CoNLL-U самого вероятного в контексте разбора каждого слова предложения: лемма,
-    /// часть речи и признаки (без признаков - `None`); слово без разборов - в нижнем регистре
-    /// с частью речи X. Ошибка - если в словаре нет контекстной модели
+    /// Поля CoNLL-U самого вероятного разбора каждого слова предложения: лемма, часть речи
+    /// и признаки (без признаков - `None`); слово без разборов - в нижнем регистре с частью
+    /// речи X. С контекстом (`context`) разбор выбирает модель кусками по `SENTENCE_CHUNK`
+    /// слов, без него - частоты словаря. Ошибка - если нужна модель, а ее в словаре нет
     #[doc(hidden)]
-    pub fn sentence_fields<S: AsRef<str>>(&self, words: &[S]) -> Result<Vec<Fields<'_>>, Error> {
-        let sentence = self.analyze_sentence(words)?;
-        Ok(words
-            .iter()
-            .zip(sentence)
-            .map(|(word, analyses)| match analyses.into_iter().next() {
+    pub fn sentence_fields<S: AsRef<str>>(
+        &self,
+        words: &[S],
+        context: bool,
+    ) -> Result<Vec<Fields<'_>>, Error> {
+        let mut fields = Vec::with_capacity(words.len());
+        for chunk in words.chunks(SENTENCE_CHUNK) {
+            if context {
+                self.push_fields(chunk, self.analyze_sentence(chunk)?, &mut fields);
+            } else {
+                let analyses = chunk.iter().map(|word| self.analyze(word.as_ref()));
+                self.push_fields(chunk, analyses, &mut fields);
+            }
+        }
+        Ok(fields)
+    }
+
+    /// Поля `sentence_fields` слов `words` с разборами `analyses` - в `fields`
+    fn push_fields<'d, S: AsRef<str>>(
+        &'d self,
+        words: &[S],
+        analyses: impl IntoIterator<Item = Vec<Analysis>>,
+        fields: &mut Vec<Fields<'d>>,
+    ) {
+        for (word, analyses) in words.iter().zip(analyses) {
+            fields.push(match analyses.into_iter().next() {
                 Some(analysis) => {
                     let tag = self.ud_tag(analysis.ud);
                     let feats = tag
@@ -559,8 +580,8 @@ impl Dictionary {
                     (analysis.lemma, tag.map_or("X", UdTag::pos), feats)
                 }
                 None => (word.as_ref().to_lowercase(), "X", None),
-            })
-            .collect())
+            });
+        }
     }
 
     /// Контекстная модель словаря: читается один раз на словарь и его копии

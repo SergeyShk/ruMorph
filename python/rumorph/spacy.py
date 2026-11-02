@@ -27,6 +27,7 @@
 import hashlib
 import json
 import threading
+import unicodedata
 from collections import OrderedDict
 from collections.abc import Iterator, Mapping
 from typing import Any
@@ -50,6 +51,9 @@ DEFAULT: dict[str, Any] = {"dictionary": None, "words": None, "key": ""}
 Pattern = str | tuple[str, str] | list[str]
 # Анализаторов с разными настройками в процессе - не больше стольких: свои слова занимают память
 CACHE_SIZE = 8
+# Невидимые разделители, как в anySeg: токен из них и пробелов (BOM, U+200B между словами у токенизатора
+# anySeg) - пробел, модель его не видит
+SEPARATORS = frozenset("\u00ad\u200b\u200c\u200d\u2060\ufeff")
 
 _analyzers: OrderedDict[str, Analyzer] = OrderedDict()
 _analyzers_lock = threading.Lock()
@@ -127,7 +131,7 @@ class Component:
             Doc: Тот же документ
         """
         for sentence in sentences(doc):
-            tokens = [token for token in sentence if not token.is_space]
+            tokens = [token for token in sentence if not space(token)]
             words = [token.text for token in tokens]
             if self.context:
                 analyses = self.analyzer.analyze_sentence(words)
@@ -145,7 +149,7 @@ class Component:
                 token.morph = MorphAnalysis(doc.vocab, feats)
                 token.lemma_ = best.lemma
         for token in doc:
-            if token.is_space:
+            if space(token):
                 token.pos_ = "SPACE"
                 token.lemma_ = token.text
         if self.settings != DEFAULT:
@@ -153,6 +157,22 @@ class Component:
         else:
             doc.user_data.pop(SETTINGS, None)
         return doc
+
+
+def space(token: Token) -> bool:
+    """
+    Токен - пробел: из пробельных, управляющих символов и невидимых разделителей
+
+    Аргументы:
+        token (Token): Токен
+
+    Вывод:
+        bool: Пробел ли токен
+    """
+    return token.is_space or all(
+        character.isspace() or character in SEPARATORS or unicodedata.category(character) == "Cc"
+        for character in token.text
+    )
 
 
 def analyzer(settings: Mapping[str, Any]) -> Analyzer:

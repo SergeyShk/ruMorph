@@ -15,14 +15,12 @@
 """
 
 import argparse
-import gzip
-import hashlib
 import json
-import urllib.request
 from collections import Counter
 from pathlib import Path
 
 from conventions import harmonize, sentences
+from export_opencorpora import download
 
 RELEASE = "r2.18"
 LICENSE = "CC BY-SA 4.0"
@@ -45,30 +43,6 @@ SOURCES = {
         },
     ),
 }
-
-
-def download(url: str, path: Path, digest: str) -> None:
-    """
-    Скачивание файла с проверкой контрольной суммы
-
-    Аргументы:
-        url (str): Адрес файла
-        path (Path): Куда сохранить
-        digest (str): SHA-256 файла
-
-    Исключения:
-        ValueError: Если контрольная сумма не совпадает
-    """
-    if path.exists() and hashlib.sha256(path.read_bytes()).hexdigest() == digest:
-        return
-    request = urllib.request.Request(url, headers={"Accept-Encoding": "gzip"})
-    with urllib.request.urlopen(request, timeout=300) as response:
-        data = response.read()
-        if response.headers.get("Content-Encoding") == "gzip":
-            data = gzip.decompress(data)
-    if hashlib.sha256(data).hexdigest() != digest:
-        raise ValueError(f"{url}: контрольная сумма не совпадает")
-    path.write_bytes(data)
 
 
 def normal(text: str) -> str:
@@ -99,7 +73,7 @@ def export(output: Path) -> None:
         for name, digest in files.items():
             path = raw / name
             url = f"https://raw.githubusercontent.com/UniversalDependencies/{treebank}/{commit}/{name}"
-            download(url, path, digest)
+            download([url], path, digest)
             # Разметка - в соглашениях ruMorph (conventions.py); многословные токены и пустые
             # узлы - не словоформы
             for sentence in sentences(path):

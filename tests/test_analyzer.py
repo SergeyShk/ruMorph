@@ -350,6 +350,10 @@ def test_analyze_sentence_errors(morph, tmp_path):
     for text in ("Стол.", ""):
         with pytest.raises(ValueError, match="нет контекстной модели"):
             analyzer.annotate(anyseg.Segmenter("ru").segment(text))
+    # Без контекста модель не нужна
+    document = anyseg.Segmenter("ru").segment("Стол.")
+    analyzer.annotate(document, context=False)
+    assert document.column("lemma") == ["стол", "."]
 
 
 class Document:
@@ -404,15 +408,32 @@ def test_annotate(morph):
             None,
         ],
     }
+    # Без контекста - первый разбор analyze каждого слова
+    morph.annotate(document, context=False)
+    assert document.column("lemma") == [
+        morph.analyze(word)[0].lemma for word in document.column("form")
+    ]
     # Предложения идут подряд и покрывают все слова документа
     for forms, sentences in (
         (["Мы"], [[0, 1]]),
         (["Мы", "стали", "друзьями"], [[1, 2], [0]]),
         (["Мы", "стали"], [[0]]),
         (["Мы", "стали", "друзьями"], [[0, 2]]),
+        (["Мы"], [[-1]]),
     ):
         with pytest.raises(ValueError, match="не идут подряд по всем его словам"):
             morph.annotate(Document(forms, sentences))
+    # Формы - строки, слова предложения - набор, номера слов - целые числа; суррогат - U+FFFD
+    for forms, sentences, message in (
+        (["Мы", None], [[0, 1]], "Каждое слово должно быть строкой"),
+        ("Мы", [[0]], "Ожидается набор слов"),
+        (["Мы"], [["0"]], "Номер слова должен быть целым числом, а не str"),
+    ):
+        with pytest.raises(TypeError, match=message):
+            morph.annotate(Document(forms, sentences))
+    surrogate = Document(["\ud800"], [[0]])
+    morph.annotate(surrogate)
+    assert surrogate.columns["lemma"] == ["\ufffd"]
 
 
 def test_lemmatize(morph):

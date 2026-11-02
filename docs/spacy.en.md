@@ -54,7 +54,7 @@ The share of words with the right part of speech, lemma and UD features on the t
 
 ## Sentences { #sentences }
 
-The context model analyzes a whole sentence. The component takes sentences from the annotation of the document - the parser, `senter` or `sentencizer`, and without it splits the document after sentence-final marks («.», «!», «?», «…»); a sentence longer than 256 tokens is analyzed in parts, as in the [rumorph command](cli.md). Whitespace tokens get the `SPACE` part of speech, as in spaCy models, and the token itself as the lemma; a token without a ruMorph analysis (invisible characters) gets `X` and the lowercased token as the lemma, as in the rumorph command.
+The context model analyzes a whole sentence. The component takes sentences from the annotation of the document - the parser, `senter` or `sentencizer`, and without it splits the document after sentence-final marks («.», «!», «?», «…»); a sentence longer than 256 tokens is analyzed in parts, as in the [rumorph command](cli.md). Whitespace tokens and tokens of invisible separators only (BOM, U+200B, U+2060, the soft hyphen) get the `SPACE` part of speech, as in spaCy models, and the token itself as the lemma: the model does not see them. A token without a ruMorph analysis (an invisible character inside a word) gets `X` and the lowercased token as the lemma, as in the rumorph command.
 
 Tokens and sentence starts following the conventions of Universal Dependencies on which the context model is trained come from the segmenter [anySeg](https://github.com/SergeyShk/anySeg) (`pip install "anyseg[spacy]"`): the tokenizer `anyseg.Tokenizer.v1` and the component `anyseg_sentencizer` go before `rumorph`.
 
@@ -62,7 +62,7 @@ Tokens and sentence starts following the conventions of Universal Dependencies o
 
     ``` python
     nlp = spacy.blank("ru", config={"nlp": {"tokenizer": {"@tokenizers": "anyseg.Tokenizer.v1"}}})
-    nlp.add_pipe("anyseg_sentencizer")
+    _ = nlp.add_pipe("anyseg_sentencizer")
     nlp.add_pipe("rumorph")
     [(token.text, token.lemma_) for token in nlp("В 1914 г. мы стали друзьями.")]
     ```
