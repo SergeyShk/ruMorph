@@ -19,7 +19,7 @@ Lexeme = list[tuple[str, str]]
 # («пельмéнный»), «^△» - помета отклонения от схемы склонения
 PLAIN = str.maketrans(
     {"\u0301": None, "\u0300": None, "^": None, "△": None}
-    | dict(zip("ѐѝЀЍáàéèóòý", "еиЕИааееооу", strict=True))
+    | dict(zip("ѐѝáàéèóòý", "еиааееооу", strict=True))
 )
 LETTERS = set("абвгдеёжзийклмнопрстуфхцчшщъыьэюя-")
 # Второй предложный - с предлогом в скобках: «(в, на) снегу»
@@ -88,7 +88,10 @@ MIN_LENGTH = 3
 
 
 def lexemes(
-    entries: Iterable[Mapping], known: set[str], spellings: Mapping[frozenset[str], str]
+    entries: Iterable[Mapping],
+    known: set[str],
+    spellings: Mapping[frozenset[str], str],
+    forms: set[str],
 ) -> list[Lexeme]:
     """
     Лексемы OpenCorpora из статей Викисловаря
@@ -97,6 +100,7 @@ def lexemes(
         entries (Iterable[Mapping]): Статьи снимка
         known (set[str]): Леммы OpenCorpora в нижнем регистре с «е» вместо «ё»
         spellings (Mapping[frozenset[str], str]): Записи тегов OpenCorpora по набору граммем
+        forms (set[str]): Словоформы OpenCorpora
 
     Вывод:
         list[Lexeme]: Лексемы без повторов
@@ -115,6 +119,13 @@ def lexemes(
             continue
         if lexeme is None or not consistent(lexeme):
             continue
+        # Субстантиват («косая»), pluralia tantum («слова») и несклоняемое слово (буква «люди») без новых
+        # форм дали бы словоформам OpenCorpora только лишние разборы
+        tag = lexeme[0][1]
+        if all(form in forms for form, _ in lexeme) and (
+            "adjective" in entry["tags"] or "Pltm" in tag or "Fixd" in tag
+        ):
+            continue
         lexeme = [(form, spelling(tag, spellings)) for form, tag in lexeme]
         if tuple(lexeme) not in seen:
             seen.add(tuple(lexeme))
@@ -132,7 +143,7 @@ def normal(word: str) -> str:
     Вывод:
         str: Запись
     """
-    return word.translate(PLAIN).lower().replace("ё", "е")
+    return word.lower().translate(PLAIN).replace("ё", "е")
 
 
 def marked(glosses: Iterable[str]) -> bool:
@@ -200,7 +211,7 @@ def cells(entry: Mapping) -> dict[tuple[str, ...], list[str]]:
         if any(mark in raw for mark in DOUBTFUL) or "stressed" in tags:
             continue
         tags = list(tags) + [RAW_CASES[mark] for mark in raw if mark in RAW_CASES]
-        plain = form.translate(PLAIN).lower()
+        plain = form.lower().translate(PLAIN)
         found = result.setdefault(tuple(sorted(tags)), [])
         if plain and plain not in found:
             found.append(plain)
@@ -219,9 +230,12 @@ def noun(entry: Mapping) -> Lexeme | None:
             собственных
     """
     word, tags, categories = entry["word"], set(entry["tags"]), set(entry["categories"])
-    proper = proper_kind(categories)
-    if word[:1].isupper() != bool(proper):
+    # Тематические категории нарицательных слов похожи на категории имен: «Моряки/ru», «Имена/ru»
+    proper = proper_kind(categories) if word[:1].isupper() else None
+    if word[:1].isupper() and proper is None:
         return None
+    if proper == "Geox":
+        tags.discard("animate")
     lemma = word.lower()
     table = noun_table(entry, by_gender=proper == "Surn")
     if proper == "Surn":
@@ -333,9 +347,14 @@ def surname(lemma: str, table: dict[tuple[str, str], list[str]]) -> Lexeme | Non
     Вывод:
         Lexeme | None: Формы и теги или None, если нет мужских форм
     """
-    if not table.get(("masc", "nomn")):
+    if not any(key == "masc" for key, _ in table):
         return None
-    put_first(table[("masc", "nomn")], lemma)
+    put_first(table.setdefault(("masc", "nomn"), []), lemma)
+    # Ячейки, равные заголовку, wiktextract не пишет: без женских форм женская фамилия несклоняемая («Ковалёнок»)
+    if not any(key == "femn" for key, _ in table):
+        table.update(
+            {("femn", case): [lemma] for case in ("nomn", "gent", "datv", "accs", "ablt", "loct")}
+        )
     if {form for forms in table.values() for form in forms} == {lemma}:
         return [
             (lemma, f"NOUN,anim,ms-f,Fixd,Surn {number},{case}")
@@ -428,9 +447,10 @@ def adjective(entry: Mapping) -> Lexeme | None:
         lemma.endswith("ий") and any(form.endswith("ье") for form in neuter)
     ):
         qualities.append("Poss")
-    # Краткие формы относительных прилагательных («геномен») - шаблон таблицы, в языке их нет
+    # Краткие формы и сравнительная степень относительных прилагательных («геномен», «ваттнее») - шаблон
+    # таблицы, в языке их нет
     if "relative" in tags:
-        short = {}
+        short, comparative = {}, []
     lexeme = []
     base = ",".join(["ADJF", *qualities])
     for group in ("masc", "femn", "neut", "plur"):

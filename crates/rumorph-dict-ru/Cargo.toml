@@ -1,6 +1,6 @@
 [package]
 name = "rumorph-dict-ru"
-description = "Russian dictionary for the ruMorph morphological analyzer, built from OpenCorpora"
+description = "Russian dictionary for the ruMorph morphological analyzer, built from OpenCorpora and Wiktionary"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

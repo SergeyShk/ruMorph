@@ -31,9 +31,9 @@ else
 	uv sync --all-groups
 endif
 
-dictionary: $(DICTIONARY) ## Собрать словарь из словаря и корпуса OpenCorpora и трибанков UD
+dictionary: $(DICTIONARY) ## Собрать словарь из OpenCorpora, Викисловаря и трибанков UD
 
-$(EXPORT_STAMP): $(SCRIPTS_PATH)/export_opencorpora.py | deps
+$(EXPORT_STAMP): $(SCRIPTS_PATH)/export_opencorpora.py $(SCRIPTS_PATH)/wiktionary.py | deps
 	uv run python $(SCRIPTS_PATH)/export_opencorpora.py $(EXPORT_PATH)
 	touch $@
 

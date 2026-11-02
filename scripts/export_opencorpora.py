@@ -488,7 +488,8 @@ def export(output: Path) -> None:
         for _, tag in lexeme:
             spellings.setdefault(grammemes(tag), tag)
     # Номера новых лексем - после номеров OpenCorpora: парадигмы словаря сохраняют номера
-    added = wiktionary.lexemes(read_snapshot(snapshot), known, spellings)
+    forms = {form for lexeme in lexemes.values() for form, _ in lexeme}
+    added = wiktionary.lexemes(read_snapshot(snapshot), known, spellings, forms)
     start = max(map(int, lexemes)) + 1
     lexemes.update((str(number), lexeme) for number, lexeme in enumerate(added, start))
     joined = join_lexemes(lexemes, links)
