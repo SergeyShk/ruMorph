@@ -16,8 +16,8 @@
 //! ```
 //!
 //! Features: `bundled` (по умолчанию) - словарь ruMorph из крейта `rumorph-dict-ru`,
-//! `build` - сборка своих словарей (`Builder`), `cli` - команда `rumorph`
-//! (`cargo install rumorph --features cli`)
+//! `anyseg` - разбор документа сегментатора anySeg (`Dictionary::annotate`), `build` - сборка
+//! своих словарей (`Builder`), `cli` - команда `rumorph` (`cargo install rumorph --features cli`)
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 mod alphabet;

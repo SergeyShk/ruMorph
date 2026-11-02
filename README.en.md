@@ -32,12 +32,12 @@
 Analysis and lemmatization are 6-8 times faster than in pymorphy3 with the `pymorphy3[fast]` speedup, the form by features and agreement with a number are 16-18 times faster; lists of words are analyzed without the GIL. Parts of speech, features and lemmas follow the UD guidelines and, where they are silent, the conventions of the SynTagRus treebank, so the results can be compared with the annotation of spaCy, Stanza and other tools built on UD.
 
 * **[Analyzer](https://sergeyshk.github.io/ruMorph/en/analyzer/)** - analyses of a word form by descending probability, analysis of word lists and lemmatization without the GIL, a dictionary lookup of a word form
-* **[Sentence analysis](https://sergeyshk.github.io/ruMorph/en/analyzer/#analyze_sentence)** - the context model picks the analysis from the neighbouring words: the part of speech, lemma and features are right for 82-94 % of words against 71-82 % without context
+* **[Sentence analysis](https://sergeyshk.github.io/ruMorph/en/analyzer/#analyze_sentence)** - the context model picks the analysis from the neighbouring words: the part of speech, lemma and features are right for 82-94 % of words against 71-82 % without context; [`annotate`](https://sergeyshk.github.io/ruMorph/en/analyzer/#annotate) annotates a document of the segmenter [anySeg](https://github.com/SergeyShk/anySeg)
 * **[UD parts of speech and features](https://sergeyshk.github.io/ruMorph/en/analysis/#ud)** - parts of speech, features and lemmas by the UD guidelines and the SynTagRus conventions; OpenCorpora labels that have no UD feature
 * **[Tokens outside the dictionary](https://sergeyshk.github.io/ruMorph/en/analysis/#rules)** - numbers, signs, Latin script, initials and abbreviations by rules
 * **[Unknown words](https://sergeyshk.github.io/ruMorph/en/analysis/#guess)** - analyses by the ending, hyphenated words and words with prefixes, forms of guessed words
 * **[Inflection](https://sergeyshk.github.io/ruMorph/en/inflection/)** - forms of a lexeme, a form by UD features, agreement with a number
-* **[The rumorph command](https://sergeyshk.github.io/ruMorph/en/cli/)** - analysis of files and streams: lemmas, CoNLL-U, TSV and JSON Lines
+* **[The rumorph command](https://sergeyshk.github.io/ruMorph/en/cli/)** - analysis of files and streams: lemmas, CoNLL-U, TSV, JSON Lines and text with «ё» restored
 * **[spaCy](https://sergeyshk.github.io/ruMorph/en/spacy/)** - a spaCy pipeline component instead of the tagger, morphologizer and lemmatizer
 * **[Migrating from pymorphy](https://sergeyshk.github.io/ruMorph/en/migration/)** - pymorphy2 and pymorphy3 calls, parts of speech and grammemes and their counterparts
 * **[Comparison](https://sergeyshk.github.io/ruMorph/en/performance/)** - accuracy and speed compared with pymorphy3, mystem, spaCy, Stanza and Slovnet, dictionary loading and memory
@@ -254,7 +254,7 @@ See the [documentation](https://sergeyshk.github.io/ruMorph/en/inflection/).
 
 <br>
 
-The command is installed with the package and analyzes text from files or the standard input: lemmas, CoNLL-U, TSV or JSON Lines with all analyses. The input is text, one token per line or CoNLL-U with the LEMMA, UPOS and FEATS columns to fill.
+The command is installed with the package and analyzes text from files or the standard input: lemmas, CoNLL-U, TSV, JSON Lines with all analyses or the source text with «ё» restored by the chosen analyses. The input is text (paragraphs up to a blank line, tokens and sentences found by the segmenter anySeg), one token per line or CoNLL-U with the LEMMA, UPOS and FEATS columns to fill.
 
 ```bash
 $ echo "Мы стали друзьями в ковиде." | rumorph

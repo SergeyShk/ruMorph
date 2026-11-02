@@ -68,8 +68,10 @@ echo "Мы стали друзьями в ковиде." | rumorph -f conllu
 ## Features
 
 - `bundled` (по умолчанию) - словарь из крейта `rumorph-dict-ru`: `Dictionary::bundled`.
+- `anyseg` - разбор документа сегментатора [anySeg](https://crates.io/crates/anyseg): `Dictionary::annotate`
+  заполняет LEMMA, UPOS и FEATS его слов.
 - `build` - сборка своих словарей: `Builder`.
-- `cli` - команда `rumorph`.
+- `cli` - команда `rumorph`, текст на токены и предложения в ней делит anySeg.
 
 ## Лицензия
 
