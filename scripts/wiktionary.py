@@ -248,6 +248,13 @@ def noun(entry: Mapping) -> Lexeme | None:
         return None
     first = "plur" if "Pltm" in base else "sing"
     put_first(table.setdefault((first, "nomn"), []), lemma)
+    # Топоним, который Викисловарь пометил одушевленным («Квинсленд»), склоняется по его таблице: винительный
+    # там равен родительному, а у неодушевленного он равен именительному
+    if proper == "Geox" and "animate" in entry["tags"]:
+        for number in ("sing", "plur"):
+            accusative = table.get((number, "accs"))
+            if accusative and accusative == table.get((number, "gent")):
+                table[(number, "accs")] = list(table.get((number, "nomn"), []))
     # Ячейку, равную заголовку, wiktextract не пишет («грог»): винительный - как именительный
     if "inan" in base and ("Pltm" in base or "femn" not in base or lemma.endswith("ь")):
         accusative = table.setdefault((first, "accs"), [])
