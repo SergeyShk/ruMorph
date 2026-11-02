@@ -168,6 +168,7 @@ dependencies = [
  "fst",
  "memmap2",
  "rumorph-dict-ru",
+ "unicode-normalization",
 ]
 
 [[package]]

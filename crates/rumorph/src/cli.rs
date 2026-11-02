@@ -9,6 +9,7 @@ use std::iter::Peekable;
 use std::path::{Path, PathBuf};
 
 use anyseg::{Document, Segmenter};
+use unicode_normalization::{UnicodeNormalization, is_nfc};
 
 use crate::{Analysis, Dictionary, Sample};
 
@@ -67,10 +68,11 @@ pub fn run(args: Vec<OsString>, version: &str, dictionary: Option<&Path>) -> u8 
 const INPUT_BUFFER: usize = 1 << 16;
 /// Наибольший кусок предложения, который команда разбирает за раз: как у `analyze_sentence`
 const MAX_CHUNK: usize = crate::SENTENCE_CHUNK;
-/// Самый длинный текст без пустых строк, который делится на предложения за раз; длиннее -
-/// режется после строки, чтобы память не росла с длиной входа (как в команде `anyseg`)
+/// Самый длинный текст без пустых строк, который делится на предложения за раз: длиннее -
+/// пишется без последнего предложения, а строка длиннее режется на пробеле, чтобы память не росла
+/// с длиной входа. Блоки больше 4 МиБ аллокатор macOS системе не возвращает
 #[cfg(not(test))]
-const PARAGRAPH: usize = 1 << 21;
+const PARAGRAPH: usize = 1 << 19;
 #[cfg(test)]
 const PARAGRAPH: usize = 1 << 12;
 
@@ -292,6 +294,10 @@ fn execute(
         paragraphs: 0,
         text: String::new(),
         ready: 0,
+        continued: false,
+        newdoc: false,
+        newpar: false,
+        carry: Vec::new(),
     };
     let mut code = 0;
     for file in files {
@@ -450,11 +456,12 @@ enum Failure {
     Write(io::Error),
 }
 
-/// Токен предложения: словоформа и есть ли после нее пробел в тексте
+/// Токен предложения: словоформа и текст до следующего токена абзаца (`None` - абзац на нем
+/// кончается или текста нет)
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Token<'a> {
     word: &'a str,
-    space_after: bool,
+    after: Option<&'a str>,
 }
 
 /// Строка предложения CoNLL-U: комментарий или строка без разбора как есть либо слово -
@@ -492,6 +499,13 @@ struct Writer<'a> {
     /// до нее закончены
     text: String,
     ready: usize,
+    /// Текст продолжает абзац, разрезанный по длине: его первый абзац - не новый
+    continued: bool,
+    /// Перед следующим предложением CoNLL-U - `# newdoc` (начало файла) и `# newpar`
+    newdoc: bool,
+    newpar: bool,
+    /// Конец строки длиннее PARAGRAPH, который отдаст следующее чтение
+    carry: Vec<u8>,
 }
 
 impl Writer<'_> {
@@ -524,16 +538,27 @@ impl Writer<'_> {
         let mut utf8 = false;
         let mut block = Block::default();
         self.text.clear();
-        self.ready = 0;
+        self.carry.clear();
+        (self.ready, self.continued) = (0, false);
+        (self.newdoc, self.newpar) = (input == Input::Text, false);
         let mut end = false;
+        // Строка текста длиннее PARAGRAPH читается кусками: `starts` - кусок начинает строку
+        let limit = if input == Input::Text {
+            PARAGRAPH
+        } else {
+            usize::MAX
+        };
+        let mut starts = true;
         loop {
             bytes.clear();
-            if self.read_line(&mut reader, &mut bytes, &mut end)? == 0 {
+            let Some(ended) = self.read_line(&mut reader, &mut bytes, &mut end, limit)? else {
                 break;
-            }
-            number += 1;
+            };
+            let first = starts;
+            starts = ended;
+            number += usize::from(first);
             let utf16 = bytes.starts_with(&[0xFF, 0xFE]) || bytes.starts_with(&[0xFE, 0xFF]);
-            if (number == 1 && utf16) || (!utf8 && bytes.contains(&0)) {
+            if (number == 1 && first && utf16) || (!utf8 && bytes.contains(&0)) {
                 return Err(Failure::Encoding(number));
             }
             let decoded = String::from_utf8_lossy(&bytes);
@@ -545,11 +570,13 @@ impl Writer<'_> {
                 Cow::Borrowed(_) => utf8 |= !bytes.is_ascii(),
             }
             let mut line: &str = &decoded;
-            if number == 1 {
+            // Формат text выводит текст как есть, с BOM
+            if number == 1 && first && self.format != Format::Text {
                 line = line.strip_prefix('\u{feff}').unwrap_or(line);
             }
             if input == Input::Text {
-                self.push_line(line).map_err(Failure::Write)?;
+                self.push_line(line, first && ended)
+                    .map_err(Failure::Write)?;
                 continue;
             }
             let text = line.trim_end_matches(['\n', '\r']);
@@ -576,12 +603,13 @@ impl Writer<'_> {
         Ok(invalid)
     }
 
-    /// Строка текста с переводом строки: пустая строка заканчивает абзацы до нее, которые
-    /// пишутся кусками около INPUT_BUFFER или перед чтением, которое может ждать ввода; текст
-    /// без пустых строк режется после строки на PARAGRAPH. В формате text пустые строки до
-    /// первого абзаца тоже остаются
-    fn push_line(&mut self, line: &str) -> io::Result<()> {
-        if blank(line) {
+    /// Строка текста с переводом строки или кусок длинной строки (`line` - не вся строка):
+    /// пустая строка заканчивает абзацы до нее, которые пишутся кусками около INPUT_BUFFER или
+    /// перед чтением, которое может ждать ввода; текст без пустых строк длиннее PARAGRAPH
+    /// пишется без последнего предложения. В формате text пустые строки до первого абзаца тоже
+    /// остаются
+    fn push_line(&mut self, line: &str, whole: bool) -> io::Result<()> {
+        if whole && blank(line) {
             if !self.text.is_empty() || self.format == Format::Text {
                 self.text.push_str(line);
                 self.ready = self.text.len();
@@ -592,8 +620,7 @@ impl Writer<'_> {
         } else {
             self.text.push_str(line);
             if self.text.len() >= PARAGRAPH {
-                self.ready = self.text.len();
-                self.write_ready()?;
+                self.write_long()?;
             }
         }
         Ok(())
@@ -607,21 +634,58 @@ impl Writer<'_> {
         let rest = self.text.split_off(self.ready);
         let ready = std::mem::replace(&mut self.text, rest);
         self.ready = 0;
-        if self.format == Format::Text {
-            return self.write_yo(&ready);
-        }
-        if blank(&ready) {
-            return Ok(());
-        }
         let document = self.segmenter.segment(&ready);
+        if self.format == Format::Text {
+            return self.write_yo(&document, document.sentence_count(), ready.len());
+        }
+        self.write_sentences(&document, document.sentence_count())?;
+        self.continued = false;
+        Ok(())
+    }
+
+    /// Текст без пустой строки длиннее PARAGRAPH: пишется без последнего предложения - его может
+    /// продолжить следующая строка (перенос по ширине страницы); оно остается в начале текста,
+    /// а следующий кусок продолжает абзац. Одно предложение длиннее PARAGRAPH пишется целиком
+    fn write_long(&mut self) -> io::Result<()> {
+        let text = std::mem::take(&mut self.text);
+        let document = self.segmenter.segment(&text);
+        let (written, keep) = match document.sentence_count() {
+            count @ 0..=1 => (count, text.len()),
+            count => (count - 1, document.sentence(count - 1).span.start),
+        };
+        if self.format == Format::Text {
+            self.write_yo(&document, written, keep)?;
+        } else {
+            self.write_sentences(&document, written)?;
+            self.continued = true;
+        }
+        self.text = text[keep..].to_owned();
+        self.ready = 0;
+        Ok(())
+    }
+
+    /// Первые `count` предложений документа по абзацам: в формате lemmas между абзацами -
+    /// пустая строка, в CoNLL-U абзац начинает `# newpar`
+    fn write_sentences(&mut self, document: &Document, count: usize) -> io::Result<()> {
         for paragraph in 0..document.paragraph_count() {
-            if self.format == Format::Lemmas && self.paragraphs > 0 {
-                writeln!(self.output)?;
+            let sentences = document.paragraph(paragraph).sentences;
+            if sentences.start >= count {
+                break;
             }
-            self.paragraphs += 1;
-            for sentence in document.paragraph(paragraph).sentences {
+            if sentences.is_empty() {
+                continue;
+            }
+            if !std::mem::take(&mut self.continued) {
+                if self.format == Format::Lemmas && self.paragraphs > 0 {
+                    writeln!(self.output)?;
+                }
+                self.paragraphs += 1;
+                self.newpar = true;
+            }
+            let end = document.sentence(sentences.end - 1).tokens.end;
+            for sentence in sentences.start..sentences.end.min(count) {
                 let span = document.sentence(sentence).span;
-                let tokens = sentence_tokens(&document, sentence);
+                let tokens = sentence_tokens(document, sentence, end);
                 self.write_tokens(
                     Some(span.slice(document.text())),
                     tokens.into_iter().peekable(),
@@ -631,14 +695,14 @@ impl Writer<'_> {
         Ok(())
     }
 
-    /// Текст как есть, только «е» токена заменена на «ё», где ее пишет самый вероятный разбор:
-    /// «Все узнаем» - «Всё узнаем», если так выбрала контекстная модель
-    fn write_yo(&mut self, text: &str) -> io::Result<()> {
-        let document = self.segmenter.segment(text);
-        let spans = document.tokens();
-        let mut out = String::with_capacity(text.len());
+    /// Текст документа до `end` как есть, только «е» токенов первых `count` предложений
+    /// заменена на «ё», где ее пишет разбор: с контекстом - выбранный моделью («Все узнаем» -
+    /// «Всё узнаем»), без контекста - все разборы токена («все» остается: «все» или «всё»)
+    fn write_yo(&mut self, document: &Document, count: usize, end: usize) -> io::Result<()> {
+        let (text, spans) = (document.text(), document.tokens());
+        let mut out = String::with_capacity(end);
         let mut at = 0;
-        for sentence in 0..document.sentence_count() {
+        for sentence in 0..count {
             let tokens = document.sentence(sentence).tokens;
             let words: Vec<&str> = tokens
                 .clone()
@@ -650,32 +714,46 @@ impl Writer<'_> {
                     let span = spans[tokens.start + start + offset];
                     out.push_str(&text[at..span.start]);
                     let word = span.slice(text);
-                    match analyses.first() {
-                        Some(analysis) => out.push_str(&with_yo(word, &analysis.word)),
+                    match yo_spelling(&analyses, self.context) {
+                        Some(spelling) => out.push_str(&with_yo(word, spelling)),
                         None => out.push_str(word),
                     }
                     at = span.end;
                 }
             }
         }
-        out.push_str(&text[at..]);
+        out.push_str(&text[at..end]);
         self.output.write_all(out.as_bytes())?;
         self.end_sentence()
     }
 
-    /// Строка входа с ее переводом (LF, CR или CRLF), как в команде `anyseg`; перед чтением,
-    /// которое может ждать ввода (буфер пуст), законченные абзацы пишутся, а вывод сбрасывается:
-    /// команду можно держать открытой и подавать ей текст. После конца входа (`end`) ничего
-    /// не читается: в терминале строку без перевода заканчивает один Ctrl+D
+    /// Строка входа с ее переводом (LF, CR или CRLF), как в команде `anyseg`, или кусок строки
+    /// длиннее `limit` до последнего пробела (без пробелов - до границы символа); вывод - кончилась
+    /// ли строка, `None` - вход кончился. Перед чтением, которое может ждать ввода (буфер пуст),
+    /// законченные абзацы пишутся, а вывод сбрасывается: команду можно держать открытой
+    /// и подавать ей текст. После конца входа (`end`) ничего не читается: в терминале строку
+    /// без перевода заканчивает один Ctrl+D
     fn read_line(
         &mut self,
         reader: &mut BufReader<&mut dyn Read>,
         bytes: &mut Vec<u8>,
         end: &mut bool,
-    ) -> Result<usize, Failure> {
+        limit: usize,
+    ) -> Result<Option<bool>, Failure> {
+        bytes.append(&mut self.carry);
         // CR кончил буфер: LF пары CRLF может начать следующий
         let mut after_cr = false;
         while !*end {
+            if bytes.len() >= limit && !after_cr {
+                let cut = (bytes
+                    .iter()
+                    .rposition(|&byte| byte == b' ' || byte == b'\t'))
+                .map(|at| at + 1)
+                .or_else(|| (1..bytes.len()).rev().find(|&at| bytes[at] & 0xC0 != 0x80))
+                .unwrap_or(bytes.len());
+                self.carry = bytes.split_off(cut);
+                return Ok(Some(false));
+            }
             if reader.buffer().is_empty() {
                 self.write_ready().map_err(Failure::Write)?;
                 self.flush_pending().map_err(Failure::Write)?;
@@ -717,7 +795,7 @@ impl Writer<'_> {
                 break;
             }
         }
-        Ok(bytes.len())
+        Ok((!bytes.is_empty()).then_some(true))
     }
 
     /// Предложение из токенов или CoNLL-U
@@ -725,10 +803,7 @@ impl Writer<'_> {
         if self.format == Format::Conllu && !block.lines.is_empty() {
             return self.write_conllu_lines(block);
         }
-        let tokens = block.words.iter().map(|word| Token {
-            word,
-            space_after: true,
-        });
+        let tokens = block.words.iter().map(|word| Token { word, after: None });
         self.write_tokens(block.text.as_deref(), tokens.peekable())
     }
 
@@ -762,6 +837,12 @@ impl Writer<'_> {
                 // и не несет переводов строки, пробелов по краям и невидимых разделителей
                 collected = tokens.collect();
                 self.sentence += 1;
+                if std::mem::take(&mut self.newdoc) {
+                    writeln!(self.output, "# newdoc")?;
+                }
+                if std::mem::take(&mut self.newpar) {
+                    writeln!(self.output, "# newpar")?;
+                }
                 writeln!(self.output, "# sent_id = {}", self.sentence)?;
                 writeln!(self.output, "# text = {}", sentence_text(&collected))?;
                 Box::new(collected.iter().copied())
@@ -819,17 +900,13 @@ impl Writer<'_> {
             }
             Format::Conllu => {
                 let (pos, feats, _) = first(self.dictionary, analyses);
-                let misc = if token.space_after {
-                    "_"
-                } else {
-                    "SpaceAfter=No"
-                };
                 writeln!(
                     self.output,
-                    "{}\t{}\t{}\t{pos}\t_\t{feats}\t_\t_\t_\t{misc}",
+                    "{}\t{}\t{}\t{pos}\t_\t{feats}\t_\t_\t_\t{}",
                     index + 1,
-                    token.word,
-                    lemma(analyses, token.word)
+                    nfc(&clean(token.word)),
+                    nfc(&lemma(analyses, token.word)),
+                    misc(token.after)
                 )
             }
             Format::Text => Ok(()),
@@ -937,7 +1014,11 @@ fn foreign_encoding(head: &[u8]) -> Option<usize> {
     if head.starts_with(&[0xFF, 0xFE]) || head.starts_with(&[0xFE, 0xFF]) {
         return Some(1);
     }
-    for (index, line) in head.split(|&byte| byte == b'\n').enumerate() {
+    // Строки - как у `read_line`: CRLF дает лишнюю пустую строку, но ее номер не виден
+    for (index, line) in head
+        .split(|&byte| byte == b'\n' || byte == b'\r')
+        .enumerate()
+    {
         if line.contains(&0) {
             return Some(index + 1);
         }
@@ -960,18 +1041,16 @@ fn next_chunk<'t>(tokens: &mut dyn Iterator<Item = Token<'t>>, chunk: &mut Vec<T
     !chunk.is_empty()
 }
 
-/// Токены предложения документа: пробел после токена - если до следующего токена документа
-/// есть пробельный символ (невидимый разделитель - не пробел) или документ на нем кончается
-fn sentence_tokens(document: &Document, sentence: usize) -> Vec<Token<'_>> {
+/// Токены предложения документа с текстом до следующего токена абзаца, который кончается перед
+/// токеном `end`
+fn sentence_tokens(document: &Document, sentence: usize, end: usize) -> Vec<Token<'_>> {
     let (text, spans) = (document.text(), document.tokens());
     document
         .sentence(sentence)
         .tokens
         .map(|token| Token {
             word: spans[token].slice(text),
-            space_after: spans.get(token + 1).is_none_or(|next| {
-                text[spans[token].end..next.start].contains(char::is_whitespace)
-            }),
+            after: (token + 1 < end).then(|| &text[spans[token].end..spans[token + 1].start]),
         })
         .collect()
 }
@@ -1001,18 +1080,99 @@ fn with_yo<'w>(token: &'w str, word: &str) -> Cow<'w, str> {
     Cow::Owned(out)
 }
 
-/// Текст предложения из токенов: пробел - после токена со `space_after`
+/// Написание токена с «ё»: с контекстом - у выбранного разбора, без контекста - если оно общее
+/// у всех разборов
+fn yo_spelling(analyses: &[Analysis], context: bool) -> Option<&str> {
+    let first = analyses.first()?;
+    (context || analyses.iter().all(|analysis| analysis.word == first.word))
+        .then_some(first.word.as_str())
+}
+
+/// Текст предложения из токенов, как в CoNLL-U anySeg: промежутки в одну строку и без невидимых
+/// разделителей, у токенов без текста - пробел
 fn sentence_text(tokens: &[Token]) -> String {
     let mut text = String::new();
-    let mut space = false;
-    for token in tokens {
-        if space {
-            text.push(' ');
+    for (index, token) in tokens.iter().enumerate() {
+        match index
+            .checked_sub(1)
+            .and_then(|previous| tokens[previous].after)
+        {
+            _ if index == 0 => {}
+            None | Some(" ") => text.push(' '),
+            Some(gap) => text.push_str(&one_line(&spaces(gap))),
         }
-        text.push_str(token.word);
-        space = token.space_after;
+        text.push_str(&nfc(&clean(token.word)));
     }
     text
+}
+
+/// MISC токена, как в CoNLL-U anySeg: `SpaceAfter=No`, если до следующего токена абзаца нет
+/// пробела, и `SpacesAfter`, если там не один пробел
+fn misc(after: Option<&str>) -> Cow<'static, str> {
+    let Some(gap) = after.filter(|&gap| gap != " ") else {
+        return Cow::Borrowed("_");
+    };
+    match spaces(gap).as_str() {
+        "" => Cow::Borrowed("SpaceAfter=No"),
+        " " => Cow::Borrowed("_"),
+        spaces => {
+            let mut escaped = String::from("SpacesAfter=");
+            for character in spaces.chars() {
+                match character {
+                    ' ' => escaped.push_str("\\s"),
+                    '\t' => escaped.push_str("\\t"),
+                    '\r' => escaped.push_str("\\r"),
+                    '\n' => escaped.push_str("\\n"),
+                    _ => escaped.push(character),
+                }
+            }
+            Cow::Owned(escaped)
+        }
+    }
+}
+
+/// Промежуток между токенами, как его хранит CoNLL-U: табуляция, CR и LF как есть, другие
+/// переводы строки - LF, другие пробелы - пробел, невидимые разделители убираются
+fn spaces(gap: &str) -> String {
+    gap.chars()
+        .filter_map(|character| match character {
+            '\u{200b}' | '\u{2060}' | '\u{feff}' | '\u{ad}' | '\u{200c}' | '\u{200d}' => None,
+            '\t' | '\r' | '\n' => Some(character),
+            '\u{b}' | '\u{c}' | '\u{85}' | '\u{2028}' | '\u{2029}' => Some('\n'),
+            _ if character.is_control() => None,
+            _ => Some(' '),
+        })
+        .collect()
+}
+
+/// Текст в одну строку: переводы строки (CRLF - один) - пробелы
+fn one_line(text: &str) -> String {
+    text.replace("\r\n", " ").replace(
+        [
+            '\r', '\n', '\u{b}', '\u{c}', '\u{85}', '\u{2028}', '\u{2029}',
+        ],
+        " ",
+    )
+}
+
+/// Токен в строке CoNLL-U: переводы строки и табуляции - пробелы
+fn clean(word: &str) -> Cow<'_, str> {
+    if word.contains([
+        '\t', '\n', '\r', '\u{b}', '\u{c}', '\u{85}', '\u{2028}', '\u{2029}',
+    ]) {
+        Cow::Owned(one_line(word).replace('\t', " "))
+    } else {
+        Cow::Borrowed(word)
+    }
+}
+
+/// Текст в Unicode NFC, как требует CoNLL-U
+fn nfc(text: &str) -> Cow<'_, str> {
+    if text.is_ascii() || is_nfc(text) {
+        Cow::Borrowed(text)
+    } else {
+        Cow::Owned(text.nfc().collect())
+    }
 }
 
 /// Часть речи, признаки CoNLL-U и вероятность самого вероятного разбора
@@ -1111,7 +1271,7 @@ mod tests {
         let (_, conllu, _) = dict.run(&["-f", "conllu"], "Мама\u{200b}раму!Раму.".as_bytes());
         assert!(
             conllu.starts_with(
-                "# sent_id = 1\n# text = Мамараму!\n1\tМама\tмама\tNOUN\t_\tCase=Nom|Gender=Fem|Number=Sing\t_\t_\t_\tSpaceAfter=No\n"
+                "# newdoc\n# newpar\n# sent_id = 1\n# text = Мамараму!\n1\tМама\tмама\tNOUN\t_\tCase=Nom|Gender=Fem|Number=Sing\t_\t_\t_\tSpaceAfter=No\n"
             ),
             "{conllu}"
         );
@@ -1119,28 +1279,79 @@ mod tests {
             conllu.contains("3\t!\t!\tPUNCT\t_\t_\t_\t_\t_\tSpaceAfter=No\n"),
             "{conllu}"
         );
-        // Текст без пустых строк режется после строки на PARAGRAPH, предложения не теряются
-        let long = "Мама мыла раму.\n".repeat(PARAGRAPH / 10);
-        let (code, lemmas, _) = dict.run(&[], long.as_bytes());
-        assert_eq!(
-            (code, lemmas.matches("мама мыть рама .").count()),
-            (0, PARAGRAPH / 10)
+        // Текст без пустых строк длиннее PARAGRAPH пишется кусками: предложения не теряются
+        // и не делятся, даже если перевод строки - посреди предложения, а новых абзацев нет.
+        // Строка без переводов длиннее PARAGRAPH читается кусками до пробела
+        for long in [
+            "Мама мыла раму.\n".repeat(PARAGRAPH / 10),
+            "Мама мыла\nраму.\n".repeat(PARAGRAPH / 10),
+            "Мама мыла раму. ".repeat(PARAGRAPH / 10),
+        ] {
+            let (code, lemmas, _) = dict.run(&[], long.as_bytes());
+            assert_eq!(code, 0);
+            assert_eq!(lemmas.lines().count(), PARAGRAPH / 10, "{long:?}");
+            assert!(
+                lemmas.lines().all(|line| line == "мама мыть рама ."),
+                "{lemmas}"
+            );
+            let (_, conllu, _) = dict.run(&["-f", "conllu"], long.as_bytes());
+            assert_eq!(conllu.matches("# newpar").count(), 1);
+            assert_eq!(dict.run(&["-f", "text"], long.as_bytes()).1, long);
+        }
+        // Строка без пробелов режется по границе символа
+        let word = "ё".repeat(PARAGRAPH);
+        assert_eq!(dict.run(&["-f", "text"], word.as_bytes()).1, word);
+    }
+
+    #[test]
+    fn writes_conllu_like_anyseg() {
+        let dict = TestDictionary::new();
+        // Файл начинает `# newdoc`, абзац - `# newpar`; промежуток не из одного пробела - SpacesAfter,
+        // формы и текст - в NFC
+        let text = "Мама мыла раму. Мама\nмыла раму.\n\nЕ\u{308}ж.";
+        let (_, conllu, _) = dict.run(&["-f", "conllu"], text.as_bytes());
+        let comments: Vec<&str> = conllu
+            .lines()
+            .filter(|line| line.starts_with("# new"))
+            .collect();
+        assert_eq!(comments, ["# newdoc", "# newpar", "# newpar"]);
+        assert!(
+            conllu.contains("# text = Мама мыла раму.\n1\tМама\tмама\tNOUN\t_\tCase=Nom|Gender=Fem|Number=Sing\t_\t_\t_\tSpacesAfter=\\n\n"),
+            "{conllu}"
         );
+        assert!(conllu.contains("# text = Ёж.\n1\tЁж\tёж\t"), "{conllu}");
+        // Между предложениями абзаца - тоже SpaceAfter, в конце абзаца - нет
+        assert!(
+            conllu.contains("4\t.\t.\tPUNCT\t_\t_\t_\t_\t_\t_\n\n# sent_id = 2"),
+            "{conllu}"
+        );
+        // У токенов без текста - ни комментариев абзацев, ни SpaceAfter
+        let (_, tokens, _) = dict.run(&["-f", "conllu", "-i", "tokens"], "Мама\nраму\n".as_bytes());
+        assert!(
+            tokens.starts_with("# sent_id = 1\n# text = Мама раму\n"),
+            "{tokens}"
+        );
+        // Проверка кодировки начала файла делит строки и по CR: неверный байт - во второй строке
+        let (code, out, error) = dict.run(&[], b"\xd0\x9c\xd0\xb0\xd0\xbc\xd0\xb0.\r\xff\r");
+        assert_eq!((code, out.as_str()), (1, "мама .\n\u{fffd}\n"));
+        assert!(error.contains("строка 2: не UTF-8"), "{error}");
     }
 
     #[test]
     fn restores_yo_in_text() {
         let dict = TestDictionary::new();
         // Текст как есть, «е» - «ё» в регистре токена, где ее пишет разбор
-        let text = "\n Еж, ЕЖ  и еж.\r\n\nМама \u{301}еж\u{301}.\n";
+        let text = "\u{feff}\n Еж, ЕЖ  и еж.\r\n\nМама \u{301}еж\u{301}.\n";
         assert_eq!(
             dict.run(&["-f", "text"], text.as_bytes()),
             (
                 0,
-                "\n Ёж, ЁЖ  и ёж.\r\n\nМама \u{301}еж\u{301}.\n".into(),
+                "\u{feff}\n Ёж, ЁЖ  и ёж.\r\n\nМама \u{301}еж\u{301}.\n".into(),
                 String::new()
             )
         );
+        // Без контекста «ё» ставится, только если ее пишут все разборы токена
+        assert_eq!(dict.run(&["-f", "text"], "Все еж.".as_bytes()).1, "Все ёж.");
         assert_eq!(with_yo("Еж", "ёж"), "Ёж");
         assert_eq!(with_yo("еж", "ежи"), "еж");
         assert_eq!(with_yo("мама", "ёжа"), "мама");
@@ -1253,6 +1464,12 @@ mod tests {
                         "NOUN",
                         "ёж",
                         vec![("", "Case=Nom|Gender=Masc|Number=Sing".into())],
+                    ),
+                    ("DET", "вс", vec![("е", "Case=Nom|Number=Plur".into())]),
+                    (
+                        "PRON",
+                        "вс",
+                        vec![("ё", "Case=Nom|Gender=Neut|Number=Sing".into())],
                     ),
                 ],
                 &[],
@@ -1392,7 +1609,7 @@ mod tests {
         let (_, conllu, _) = dict.run(&["-f", "conllu"], "Мама мыла раму.".as_bytes());
         assert_eq!(
             conllu,
-            "# sent_id = 1\n# text = Мама мыла раму.\n\
+            "# newdoc\n# newpar\n# sent_id = 1\n# text = Мама мыла раму.\n\
              1\tМама\tмама\tNOUN\t_\tCase=Nom|Gender=Fem|Number=Sing\t_\t_\t_\t_\n\
              2\tмыла\tмыть\tVERB\t_\tGender=Fem|Number=Sing|Tense=Past\t_\t_\t_\t_\n\
              3\tраму\tрама\tNOUN\t_\tCase=Acc|Gender=Fem|Number=Sing\t_\t_\t_\tSpaceAfter=No\n\
@@ -1401,7 +1618,7 @@ mod tests {
         // Текст CoNLL-U - из токенов: без CR, пробелов по краям и невидимых разделителей
         let (_, conllu, _) = dict.run(&["-f", "conllu"], "Мама\rраму \u{200b}!  \t\n".as_bytes());
         assert!(
-            conllu.starts_with("# sent_id = 1\n# text = Мама раму !\n1\tМама"),
+            conllu.starts_with("# newdoc\n# newpar\n# sent_id = 1\n# text = Мама раму !\n1\tМама"),
             "{conllu}"
         );
         let (_, jsonl, _) = dict.run(&["-f", "jsonl"], "\"Раму\"".as_bytes());

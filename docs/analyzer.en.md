@@ -185,18 +185,20 @@ Exceptions:
 { .metric-meta }
 
 ``` {.python .signature}
-annotate(document)
+annotate(document, *, context=True)
 ```
 
-Analyzes a document of the segmenter [anySeg](https://github.com/SergeyShk/anySeg) in one call: the columns `lemma`, `upos` and `feats` of its words get the most probable analysis in the context of the sentence, as with [`analyze_sentence`](#analyze_sentence), replacing the earlier values. anySeg finds the tokens and the sentences following the conventions of Universal Dependencies on which the context model is trained. A word without analyses gets its lowercased form as the lemma and the part of speech `X`. The annotated document is written in CoNLL-U by its method `to_conllu`. anySeg is a separate package (`pip install anyseg`); any other object with the methods `column("form")` and `set_columns` and the sentences `sentences` whose words `words` have a number `index` fits too.
+Analyzes a document of the segmenter [anySeg](https://github.com/SergeyShk/anySeg) in one call: the columns `lemma`, `upos` and `feats` of its words get the most probable analysis in the context of the sentence, as with [`analyze_sentence`](#analyze_sentence), or without context, as with [`analyze`](#analyze), replacing the earlier values. anySeg finds the tokens and the sentences following the conventions of Universal Dependencies on which the context model is trained. A word without analyses gets its lowercased form as the lemma and the part of speech `X`. The annotated document is written in CoNLL-U by its method `to_conllu`. anySeg is a separate package (`pip install anyseg`); any other object with the methods `column("form")` and `set_columns` and the sentences `sentences` whose words `words` have a number `index` fits too.
 
 | Parameter | Type | Default | Description |
 | :-------- | :--- | :------ | :---------- |
 | `document` | `anyseg.Document` | - | A document: `Segmenter("ru").segment(text)` |
+| `context` | `bool` | `True` | Choose the analysis by the neighbouring words; `False` - by the dictionary frequencies, several times faster and without the context model |
 
 Exceptions:
 
-- `ValueError` - the dictionary has no context model or the sentences of the document do not run in order over all its words.
+- `ValueError` - the context model is needed and the dictionary has none, or the sentences of the document do not run in order over all its words.
+- `TypeError` - the forms of the document are not strings or the number of a word is not an integer.
 
 === "Code"
 
@@ -295,7 +297,7 @@ The package dictionary is built from the [OpenCorpora](https://opencorpora.org) 
 
 ## Threads and processes { #parallel }
 
-One analyzer can be used from several threads: `analyze_many` and `lemmatize` release the GIL and process lists in parallel, and on the free-threaded Python 3.14t `analyze`, `is_known`, `inflect` and `agree` run in parallel too. A shared analyzer is not slower than a separate one per thread, so there is no need for an analyzer per thread. Without the GIL threads are limited by deleting the analysis objects: `forms` hardly speeds up in threads and `analyze_many` on long lists speeds up weakly, so such lists are better analyzed in chunks of a thousand or two words. The analyzer and analyses are pickled, so they work with `multiprocessing` and joblib: processes share the dictionary mapped into memory, however many analyses they receive (each process builds the copy with [own words](#words) itself). A pickle keeps the dictionary path: unpickling takes the analyzer with the same path whose analyses are in the thread, otherwise loads the dictionary from the path or, if the file is gone, takes the dictionary loaded from it in the process. An analysis pickled with another version of the dictionary is found by its spelling, lemma and tag; if the dictionary has no such analysis, it is restored as saved, but without other forms, and if the dictionary has no such tag either, the analysis of the word with the same lemma and part of speech and the most matching features is taken (the gender of «Нидерландов», the future tense of «будет» from 0.3.0). Python 3.14 subinterpreters (`InterpreterPoolExecutor`) are not supported: use threads or processes. Passing analyses between processes costs more than the analysis itself, so in processes it is better to get lemmas and analysis fields, and analyses in threads.
+One analyzer can be used from several threads: `analyze_many`, `lemmatize`, `analyze_sentence` and `annotate` release the GIL and process lists and documents in parallel, and on the free-threaded Python 3.14t `analyze`, `is_known`, `inflect` and `agree` run in parallel too. A shared analyzer is not slower than a separate one per thread, so there is no need for an analyzer per thread. Without the GIL threads are limited by deleting the analysis objects: `forms` hardly speeds up in threads and `analyze_many` on long lists speeds up weakly, so such lists are better analyzed in chunks of a thousand or two words. The analyzer and analyses are pickled, so they work with `multiprocessing` and joblib: processes share the dictionary mapped into memory, however many analyses they receive (each process builds the copy with [own words](#words) itself). A pickle keeps the dictionary path: unpickling takes the analyzer with the same path whose analyses are in the thread, otherwise loads the dictionary from the path or, if the file is gone, takes the dictionary loaded from it in the process. An analysis pickled with another version of the dictionary is found by its spelling, lemma and tag; if the dictionary has no such analysis, it is restored as saved, but without other forms, and if the dictionary has no such tag either, the analysis of the word with the same lemma and part of speech and the most matching features is taken (the gender of «Нидерландов», the future tense of «будет» from 0.3.0). Python 3.14 subinterpreters (`InterpreterPoolExecutor`) are not supported: use threads or processes. Passing analyses between processes costs more than the analysis itself, so in processes it is better to get lemmas and analysis fields, and analyses in threads. An anySeg document is not pickled: threads annotate documents, while a process splits the text into sentences and annotates it inside the task, which returns `to_conllu()` or the columns.
 
 === "Code"
 

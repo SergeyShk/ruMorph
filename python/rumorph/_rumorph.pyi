@@ -1,9 +1,9 @@
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from decimal import Decimal
 from fractions import Fraction
 from os import PathLike
 from pathlib import Path
-from typing import Any, Literal, SupportsIndex, final
+from typing import Literal, Protocol, SupportsIndex, final
 
 __version__: str
 
@@ -31,6 +31,27 @@ class Analysis:
     def inflect(self, **feats: str) -> str: ...
     def agree(self, number: SupportsIndex | float | Decimal | Fraction) -> str: ...
 
+class _Word(Protocol):
+    @property
+    def index(self) -> int: ...
+
+class _Sentence(Protocol):
+    @property
+    def words(self) -> Iterable[_Word]: ...
+
+class _Document(Protocol):
+    # Документ anyseg.Document или объект с тем же интерфейсом
+    def column(self, name: Literal["form"], /) -> Iterable[str]: ...
+    @property
+    def sentences(self) -> Iterable[_Sentence]: ...
+    def set_columns(
+        self,
+        *,
+        lemma: Sequence[str | None],
+        upos: Sequence[str | None],
+        feats: Sequence[str | None],
+    ) -> object: ...
+
 @final
 class Analyzer:
     def __init__(
@@ -43,6 +64,6 @@ class Analyzer:
     def analyze(self, word: str) -> list[Analysis]: ...
     def analyze_many(self, words: Iterable[str]) -> list[list[Analysis]]: ...
     def analyze_sentence(self, words: Iterable[str]) -> list[list[Analysis]]: ...
-    def annotate(self, document: Any) -> None: ...
+    def annotate(self, document: _Document, *, context: bool = True) -> None: ...
     def lemmatize(self, words: Iterable[str]) -> list[str]: ...
     def is_known(self, word: str) -> bool: ...

@@ -33,7 +33,7 @@ In Windows PowerShell 5.1 the `>` redirection and a pipeline (`Get-Content text.
 
 ## Input { #input }
 
-- `text` - text: a blank line ends a paragraph. Tokens and sentences are found by the segmenter [anySeg](https://github.com/SergeyShk/anySeg) following the conventions of Universal Dependencies on which the context model is trained: hyphenated words by the UD guidelines («кто-то», «Ростова-на-Дону» is five tokens), numbers, dates and times («3,14», «12.10.2026», «12:30»), abbreviations and initials with their period («т. е.», «А. С.»), addresses, mentions and emoji; stress marks and soft hyphens stay in the token. A sentence may run across a line break: anySeg tells a line break inside a sentence from one of the author. A text without blank lines is split into pieces of about 2 MB after a line.
+- `text` - text: a blank line ends a paragraph. Tokens and sentences are found by the segmenter [anySeg](https://github.com/SergeyShk/anySeg) following the conventions of Universal Dependencies on which the context model is trained: hyphenated words by the UD guidelines («кто-то», «Ростова-на-Дону» is five tokens), numbers, dates and times («3,14», «12.10.2026», «12:30»), abbreviations and initials with their period («т. е.», «А. С.»), addresses, mentions and emoji; stress marks and soft hyphens stay in the token. A sentence may run across a line break: anySeg tells a line break inside a sentence from one of the author. A text without blank lines is analyzed in pieces of about 512 KB that end at a sentence boundary, and a line longer than a piece is split at a space: memory does not grow with the length of the input.
 - `tokens` - one token per line, an empty line separates sentences; spaces around the token and everything after a tab are ignored, so a table with the token in the first column works too. Analyze a list of separate words with `--no-context`: otherwise the model takes neighbouring words for a sentence.
 - `conllu` - [CoNLL-U](https://universaldependencies.org/format.html): the LEMMA, UPOS and FEATS columns are filled, while the other columns, comments, multiword tokens and empty nodes stay as they are.
 
@@ -56,13 +56,15 @@ Lemmas separated by spaces, a line per sentence; paragraphs are separated by a b
 
 ### conllu
 
-CoNLL-U: the number, token, lemma, part of speech and features, `SpaceAfter=No` on a token not followed by a space in the text, and the `sent_id` and `text` comments. The `text` is built from the tokens, as CoNLL-U requires: one space between tokens, no spaces at the ends and no invisible characters; for the `tokens` input it is the tokens separated by spaces.
+CoNLL-U as anySeg writes it: the number, token, lemma, part of speech and features, the `sent_id` and `text` comments. For the `text` input a file starts with the `newdoc` comment and a paragraph with `newpar`; MISC has `SpaceAfter=No` on a token not followed by a space in its paragraph and `SpacesAfter` when the space is not a single one (`SpacesAfter=\n` is a line break). The `text` comment is built from the tokens and the spaces between them on one line, without invisible characters; for the `tokens` input it is the tokens separated by spaces. Tokens, lemmas and the text are in Unicode NFC, as CoNLL-U requires.
 
 ``` bash
 echo "Мы стали друзьями в ковиде." | rumorph -f conllu
 ```
 
 ```
+# newdoc
+# newpar
 # sent_id = 1
 # text = Мы стали друзьями в ковиде.
 1	Мы	мы	PRON	_	Case=Nom|Number=Plur|Person=1|PronType=Prs	_	_	_	_
@@ -83,7 +85,7 @@ echo "Мы стали друзьями." | rumorph -f tsv
 
 ```
 Мы	мы	PRON	Case=Nom|Number=Plur|Person=1|PronType=Prs	1
-стали	стать	VERB	Aspect=Perf|Mood=Ind|Number=Plur|Tense=Past|VerbForm=Fin|Voice=Act	0.9995066255501905
+стали	стать	VERB	Aspect=Perf|Mood=Ind|Number=Plur|Tense=Past|VerbForm=Fin|Voice=Act	0.9997926079645355
 друзьями	друг	NOUN	Animacy=Anim|Case=Ins|Gender=Masc|Number=Plur	1
 .	.	PUNCT	_	1
 ```
@@ -106,9 +108,9 @@ echo "Мы стали" | rumorph -f jsonl
     ]},
     {"word": "стали", "analyses": [
       {"lemma": "стать", "pos": "VERB", "feats": {"Aspect": "Perf", "Mood": "Ind", "Number": "Plur", "Tense": "Past", "VerbForm": "Fin", "Voice": "Act"},
-       "labels": ["intr"], "prob": 0.9990479553121936, "source": "dictionary"},
-      {"lemma": "сталь", "pos": "NOUN", "feats": {"Animacy": "Inan", "Case": "Nom", "Gender": "Fem", "Number": "Plur"},
-       "labels": [], "prob": 0.0006122046393944599, "source": "dictionary"}
+       "labels": ["intr"], "prob": 0.9997641726802856, "source": "dictionary"},
+      {"lemma": "сталь", "pos": "NOUN", "feats": {"Animacy": "Inan", "Case": "Acc", "Gender": "Fem", "Number": "Plur"},
+       "labels": [], "prob": 0.0001246478260593029, "source": "dictionary"}
     ]}
   ]
 }
@@ -116,7 +118,7 @@ echo "Мы стали" | rumorph -f jsonl
 
 ### text
 
-The source text as is - with its line breaks, spaces and punctuation - where only «е» in a token is replaced with «ё» where the chosen analysis writes it, in the case of the token. This way a text without «ё» gets it by context: «все» becomes «всё» or stays «все», «узнаем» becomes «узнаём» or stays «узнаем». A token with a stress mark or a soft hyphen is not changed. The format is for the input `text` only.
+The source text as is - with its line breaks, spaces and punctuation - where only «е» in a token is replaced with «ё» where the chosen analysis writes it, in the case of the token. This way a text without «ё» gets it by context: «все» becomes «всё» or stays «все», «узнаем» becomes «узнаём» or stays «узнаем». Without context (`--no-context`) «ё» is put only where all the analyses of the token write it: «все» and «звезды» stay as they are. A token with a stress mark or a soft hyphen is not changed, and a BOM at the start of a file stays. The format is for the input `text` only.
 
 ``` bash
 echo "Осел стоит у елки, а еще ее ждет еж." | rumorph -f text

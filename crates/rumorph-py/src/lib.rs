@@ -1235,18 +1235,21 @@ impl Analyzer {
     /// Разбор документа сегментатора anySeg
     ///
     /// Описание:
-    ///     Заполняет столбцы lemma, upos и feats слов документа самым вероятным разбором
-    ///     в контексте предложения, как analyze_sentence; слово без разборов получает лемму
-    ///     в нижнем регистре и часть речи X, прежние значения столбцов заменяются. Документ -
-    ///     anyseg.Document или объект с теми же column("form"), sentences (у предложения -
-    ///     words, у слова - index) и set_columns. Разбор идет без GIL
+    ///     Заполняет столбцы lemma, upos и feats слов документа самым вероятным разбором:
+    ///     в контексте предложения, как analyze_sentence, или без контекста, как analyze;
+    ///     слово без разборов получает лемму в нижнем регистре и часть речи X, прежние значения
+    ///     столбцов заменяются. Документ - anyseg.Document или объект с теми же column("form"),
+    ///     sentences (у предложения - words, у слова - index) и set_columns. Разбор идет без GIL
     ///
     /// Аргументы:
     ///     document (anyseg.Document): Документ
+    ///     context (bool): Выбирать разбор по соседним словам; False - по частотам словаря,
+    ///         в разы быстрее и без контекстной модели
     ///
     /// Исключения:
-    ///     ValueError: Если в словаре нет контекстной модели или предложения документа не идут
-    ///         подряд по всем его словам
+    ///     ValueError: Если нужна контекстная модель, а ее в словаре нет, или предложения
+    ///         документа не идут подряд по всем его словам
+    ///     TypeError: Если формы документа не строки или номер слова не целое число
     ///
     /// Пример использования:
     ///     >>> from anyseg import Segmenter
@@ -1255,24 +1258,37 @@ impl Analyzer {
     ///     >>> Analyzer().annotate(document)
     ///     >>> [(word.lemma, word.upos) for word in document.words]
     ///     [('мы', 'PRON'), ('стать', 'VERB'), ('друг', 'NOUN'), ('.', 'PUNCT')]
-    fn annotate(&self, py: Python<'_>, document: &Bound<'_, PyAny>) -> PyResult<()> {
-        let forms: Vec<String> = document
-            .call_method1(intern!(py, "column"), ("form",))?
-            .extract()?;
+    #[pyo3(signature = (document, *, context = true))]
+    fn annotate(&self, py: Python<'_>, document: &Bound<'_, PyAny>, context: bool) -> PyResult<()> {
+        let dictionary = &self.shared.dictionary;
+        // Модель проверяется до разбора, и у пустого документа тоже
+        if context {
+            dictionary
+                .analyze_sentence::<&str>(&[])
+                .map_err(|err| PyValueError::new_err(err.to_string()))?;
+        }
+        let forms = collect_words(&document.call_method1(intern!(py, "column"), ("form",))?)?;
         // Столбцы собираются по порядку предложений: они идут подряд и покрывают все слова
         let unordered =
             || PyValueError::new_err("предложения документа не идут подряд по всем его словам");
         let (mut ranges, mut next) = (Vec::new(), 0);
         for sentence in document.getattr(intern!(py, "sentences"))?.try_iter()? {
             let words = sentence?.getattr(intern!(py, "words"))?;
-            let count = words.len()?;
-            let start: usize = match count {
-                0 => next,
-                _ => words
-                    .get_item(0)?
-                    .getattr(intern!(py, "index"))?
-                    .extract()?,
-            };
+            let words = words
+                .try_iter()
+                .map_err(|_| type_error("Слова предложения должны быть набором", &words))?;
+            let (mut start, mut count) = (next, 0);
+            for word in words {
+                if count == 0 {
+                    let index = word?.getattr(intern!(py, "index"))?;
+                    start = index
+                        .extract::<isize>()
+                        .map_err(|_| type_error("Номер слова должен быть целым числом", &index))?
+                        .try_into()
+                        .map_err(|_| unordered())?;
+                }
+                count += 1;
+            }
             if start != next || start + count > forms.len() {
                 return Err(unordered());
             }
@@ -1282,19 +1298,12 @@ impl Analyzer {
         if next != forms.len() {
             return Err(unordered());
         }
-        let dictionary = &self.shared.dictionary;
         let (mut lemmas, mut parts, mut feats) = (Vec::new(), Vec::new(), Vec::new());
-        // Пустой документ тоже проверяет, есть ли в словаре модель
-        if ranges.is_empty() {
-            dictionary
-                .analyze_sentence::<&str>(&[])
-                .map_err(|err| PyValueError::new_err(err.to_string()))?;
-        }
         for range in ranges {
             // Куски по SENTENCE_CHUNK слов, как в analyze_sentence: между ними срабатывает Ctrl+C
             for chunk in forms[range].chunks(rumorph::SENTENCE_CHUNK) {
                 let fields = py
-                    .detach(|| dictionary.sentence_fields(chunk))
+                    .detach(|| dictionary.sentence_fields(chunk, context))
                     .map_err(|err| PyValueError::new_err(err.to_string()))?;
                 for (lemma, pos, features) in fields {
                     lemmas.push(lemma);
