@@ -51,12 +51,24 @@ pub fn blend(dictionary: &Dictionary, counts: &Counts) -> Vec<(String, Vec<(Entr
     let rates = capitalized_rates(counts);
     let mut lists = Vec::new();
     for (key, pairs) in counts {
-        // Сокращение с точкой («др.») - доли разборов словарного сокращения без точки
+        // Сокращение с точкой («др.») - доли разборов словарного сокращения без точки по строчным
+        // разметкам: заглавная буква с точкой («Л.») - инициал, его разбирает правило инициалов
         let (word, dotted) = match key.strip_suffix('.') {
             Some(base) if !base.is_empty() => (base.to_owned(), true),
             _ => (key.clone(), false),
         };
         let word = &word;
+        let lowercase: Vec<(String, String, u32, u32)>;
+        let pairs = if dotted {
+            lowercase = (pairs.iter())
+                .map(|(pos, lemma, count, capitalized)| {
+                    (pos.clone(), lemma.clone(), count - capitalized, 0)
+                })
+                .collect();
+            &lowercase
+        } else {
+            pairs
+        };
         let mut spellings: Vec<String> = dictionary
             .candidate_analyses(word)
             .into_iter()
@@ -339,9 +351,11 @@ mod tests {
 
     #[test]
     fn dotted_counts_for_abbreviations() {
-        let counts = read("п.\tADJ\tп\t9\t0\nп\tNOUN\tп\t9\t0\nс.\tNOUN\tс\t9\t0\n").unwrap();
-        // Доли «п» - по счетчикам «п.»: все его разборы сокращения; счетчики голого «п» не учитываются,
-        // а у «с» есть разбор не сокращения
+        let counts =
+            read("п.\tADJ\tп\t9\t0\nп.\tNOUN\tп\t50\t50\nп\tNOUN\tп\t9\t0\nс.\tNOUN\tс\t9\t0\n")
+                .unwrap();
+        // Доли «п» - по строчным разметкам «п.»: все его разборы сокращения; разметки «П.» с заглавной
+        // (инициал) и голого «п» не учитываются, а у «с» есть разбор не сокращения
         let lists = blend(&dictionary(), &counts);
         assert_eq!(lists.len(), 1);
         let (word, list) = &lists[0];
