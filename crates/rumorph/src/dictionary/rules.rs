@@ -579,17 +579,13 @@ impl Dictionary {
         Some(analyses)
     }
 
-    /// Разборы словаря слова `base` - сокращения, доли - среди них. Сокращение - признак Abbr=Yes,
-    /// помета Abbr у склоняемой аббревиатуры или граммема Abbr тега OpenCorpora: у наречия
-    /// («напр» - «например») перевод в UD ее не сохраняет
+    /// Разборы словаря слова `base` - сокращения (признак Abbr=Yes или помета Abbr у склоняемой
+    /// аббревиатуры), доли - среди них
     fn abbreviations(&self, base: &str) -> Option<Vec<Analysis>> {
         let abbreviated = |analysis: &Analysis| {
-            let ud = self.ud.get(analysis.ud);
-            ud.is_some_and(|tag| tag.feat("Abbr") == Some("Yes") || tag.has_label("Abbr"))
-                || analysis.tag.is_some_and(|tag| {
-                    (self.abbreviation_grammemes.get(usize::from(tag)))
-                        .is_some_and(|&bits| bits != 0)
-                })
+            self.ud
+                .get(analysis.ud)
+                .is_some_and(|tag| tag.feat("Abbr") == Some("Yes") || tag.has_label("Abbr"))
         };
         let mut analyses: Vec<Analysis> = self
             .merge(self.candidates(base))

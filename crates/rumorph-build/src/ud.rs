@@ -46,6 +46,7 @@ const SCONJ: &[&str] = &[
 /// Служебные слова, часть речи которых в UD не совпадает с частью речи OpenCorpora
 const POS_EXCEPTIONS: &[(&str, &str, &str)] = &[
     ("ADJF", "данный", "ADJ"),
+    ("ADJF", "н", "DET"),
     ("ADJF", "один", "NUM"),
     ("ADVB", "вдоль", "ADP"),
     ("ADVB", "вне", "ADP"),
@@ -171,6 +172,8 @@ type Feature = (&'static str, &'static str);
 /// Признаки слова из `POS_EXCEPTIONS`, с которыми его разбор совпадает с разбором другой части речи
 /// OpenCorpora и сливается с ним: «несколько» (ADVB) - как числительное в винительном падеже
 const EXCEPTION_FEATS: &[(&str, &str, &[Feature])] = &[
+    // «н.» в «до н. э.» - «наш», как в трибанках
+    ("ADJF", "н", &[("Poss", "Yes"), ("PronType", "Prs")]),
     ("ADVB", "несколько", &[("Animacy", "Inan"), ("Case", "Acc")]),
     (
         "ADVB",
@@ -682,8 +685,11 @@ pub fn convert(tag: &str, lemma: &str) -> Ud {
             .copied()
             .filter(|_| oc == "NPRO")
             .map(|case| if case == "Acc" { "Gen" } else { case });
+        // Сокращение остается сокращением: «т» в лексеме союза «так», «напр» - «например»
+        let abbreviation = feats.get("Abbr").copied();
         feats.clear();
         feats.extend(case.map(|case| ("Case", case)));
+        feats.extend(abbreviation.map(|value| ("Abbr", value)));
     }
     if exception
         && let Some(&(_, _, extra)) = EXCEPTION_FEATS
@@ -1334,6 +1340,19 @@ mod tests {
         );
         assert_eq!(summary("ADVB", "больше").1, "Degree=Cmp|PronType=Tot");
         assert!(has_pos_exception("CONJ", "значит"));
+        // Сокращение в лексеме служебного слова остается сокращением, «н» («до н. э.») - «наш»
+        assert_eq!(
+            summary("CONJ,Abbr", "так").1,
+            "Abbr=Yes|Degree=Pos|PronType=Dem"
+        );
+        assert_eq!(
+            summary("ADJF,Fixd,Abbr masc,sing,gent", "н"),
+            (
+                "DET".into(),
+                "Abbr=Yes|Case=Gen|Gender=Masc|Number=Sing|Poss=Yes|PronType=Prs".into(),
+                vec!["Fixd".into()]
+            )
+        );
         assert!(!has_pos_exception("CONJ", "кстати"));
         assert_eq!(summary("CONJ", "однако").1, "Degree=Pos");
         assert_eq!(
