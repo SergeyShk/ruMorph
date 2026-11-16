@@ -110,7 +110,7 @@ echo "Мы стали" | rumorph -f jsonl
       {"lemma": "стать", "pos": "VERB", "feats": {"Aspect": "Perf", "Mood": "Ind", "Number": "Plur", "Tense": "Past", "VerbForm": "Fin", "Voice": "Act"},
        "labels": ["intr"], "prob": 0.9999926608435705, "source": "dictionary"},
       {"lemma": "сталь", "pos": "NOUN", "feats": {"Animacy": "Inan", "Case": "Nom", "Gender": "Fem", "Number": "Plur"},
-       "labels": [], "prob": 7.18831672107627e-06, "source": "dictionary"}
+       "labels": [], "prob": 0.00000718831672107627, "source": "dictionary"}
     ]}
   ]
 }
