@@ -53,25 +53,25 @@ from importlib import metadata
 from pathlib import Path
 from typing import NamedTuple
 
-# Набор, файл, коммит релиза UD 2.18 и SHA-256
+# Набор, файл, коммит релиза UD 2.19 и SHA-256
 DATASETS = {
     "SynTagRus": (
         "UD_Russian-SynTagRus",
         "ru_syntagrus-ud-test.conllu",
-        "c5266a6f6f4aaa94f4dfa9b6cc863b94a5358afa",
-        "97f473474d1aa8c007572cd122f90030bc7dc1707579d56b0b354c19b64af258",
+        "26a8054a4ec7262af0d962534ee69e3c47218419",
+        "ba12a7acbeeeb849bd58187268ba652a429ab076b89af0d2d05c3cb2265708e3",
     ),
     "Taiga": (
         "UD_Russian-Taiga",
         "ru_taiga-ud-test.conllu",
-        "d1e48cd29c1f19b6aad1aec361d9f724db764f66",
-        "14183d7f002557e9e26b85e212dc54fe3f7929a7d72491615c50b9b3145e6278",
+        "25ec1a29bedcb51b8ca48f31b26f2cd8818739db",
+        "1f31210b17369074d526d1ccae6d41c0f1c34ddb4868dba4c52b74bb153bd48e",
     ),
     "GSD": (
         "UD_Russian-GSD",
         "ru_gsd-ud-test.conllu",
-        "9acc9d677327043bd416fcc89e4b3407c620d885",
-        "f26e022329162a1c6306f76644d06f770f1572501755421165387137fe63138d",
+        "486a9c07204286d630944a905bdf854a6f471f20",
+        "f0154fdc5a057de719bee82ae753bce2aba9ec99873d2aff4ae6c55310374c13",
     ),
 }
 # Файлы моделей и программ: адрес и SHA-256
