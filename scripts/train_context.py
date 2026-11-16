@@ -47,7 +47,7 @@ from torch import nn
 import conventions
 from conventions import GSD, TAIGA, harmonize
 from export_opencorpora import CORPUS as OPENCORPORA, corpus_revisions, download
-from export_ud import RELEASE
+from export_ud import RELEASE, SOURCES as UD_SOURCES
 
 try:
     from rumorph import Analyzer
@@ -56,26 +56,18 @@ except ImportError:
         "нужна сборка ruMorph из репозитория: uv run --with-editable . scripts/train_context.py ..."
     ) from None
 
-# Трибанк, коммит релиза и файлы с SHA-256: обучающие части - как в export_ud.py
+# Проверочные части с SHA-256; трибанки, коммиты релиза и обучающие части - из export_ud.py
+DEV_FILES = {
+    "UD_Russian-Taiga": {
+        "ru_taiga-ud-dev.conllu": "b7200a90860ea0b1ef61cafa77e24ad195bf7ac91b1402e8aa48673124a67603",
+    },
+    "UD_Russian-GSD": {
+        "ru_gsd-ud-dev.conllu": "c83c6910d30e285adc3981693b03b360059367f18377fe0b95734a12b0a4f904",
+    },
+}
 SOURCES = {
-    "UD_Russian-Taiga": (
-        "d1e48cd29c1f19b6aad1aec361d9f724db764f66",
-        {
-            "ru_taiga-ud-train-a.conllu": "d12f8d99e1370fad142fdbd5aea387715249bc34bf5494c5d6dd63c795dfa85e",
-            "ru_taiga-ud-train-b.conllu": "82c0b23692ff0ebcdb7e53d40d74396b75dc92a076e4c0a014c1f32e10cb14ac",
-            "ru_taiga-ud-train-c.conllu": "9a6301fd797395b2b7c5fbc25880f445248ba04571e4cc691e38a2fd3130e738",
-            "ru_taiga-ud-train-d.conllu": "6bc5c4ce2e7389f6956373c8e565ba63a3501206988dbf6b64dcb1305be79021",
-            "ru_taiga-ud-train-e.conllu": "07bab379f51eafb3aedc46fd77a1a96a01d3d8931186387a373d8a6c2689b02d",
-            "ru_taiga-ud-dev.conllu": "91e8be6f74afd91623500d73954c5595db51a2eb3c7b0e02e38fb3b2508b1b6f",
-        },
-    ),
-    "UD_Russian-GSD": (
-        "9acc9d677327043bd416fcc89e4b3407c620d885",
-        {
-            "ru_gsd-ud-train.conllu": "0ae33a4bbda12697e2eb0a32af4971bda73af5852c8521744a974a316c02bab5",
-            "ru_gsd-ud-dev.conllu": "e3e3d4e8d1d7544e531b2b81ae64257efacc97f93276ce6d2ce52fd1de052fa2",
-        },
-    ),
+    treebank: (commit, {**files, **DEV_FILES[treebank]})
+    for treebank, (commit, files) in UD_SOURCES.items()
 }
 # Теги OpenCorpora без части речи (числа, знаки, латиница, незнакомые слова): верен любой разбор
 UNTAGGED = {"PNCT", "NUMB", "LATN", "ROMN", "SYMB", "UNKN", "TIME", "DATE"}
