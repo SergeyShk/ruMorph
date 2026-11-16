@@ -135,9 +135,14 @@ def test_unknown_word(morph, word):
     assert not morph.is_known(word)
 
 
-@pytest.mark.parametrize("word", ["", " ", "кот кот", "\x00", "кот\u200b"])
+@pytest.mark.parametrize("word", ["", " ", "Кот кот", "\x00", "\u200b\n"])
 def test_not_a_token(morph, word):
-    assert morph.analyze(word) == []
+    # Пустая строка, строка без видимых символов и токен с пробелом - запасной X со словом как есть
+    analyses = morph.analyze(word)
+    assert [(a.word, a.lemma, a.pos, a.source) for a in analyses] == [
+        (word, word.lower(), "X", "rule")
+    ]
+    assert morph.analyze_sentence([word, "кот"])[0] == analyses
 
 
 @pytest.mark.parametrize(
@@ -158,11 +163,16 @@ def test_not_a_token(morph, word):
         ("Рoccия", "Россия"),
         ("eгo", "его"),
         ("в\u2060ceх", "всех"),
+        ("кот\u200b", "кот"),
+        ("ко\x7fт", "кот"),
+        ("\x00кот", "кот"),
+        ("кот\u200d", "кот"),
+        ("\u202aкот\u202c", "кот"),
     ],
 )
 def test_normalized_input(morph, word, normal):
     # Разложенные «й» и «ё» (NFD), неразрывный дефис, знаки ударения (и в составленных «ѐ», «ѝ»),
-    # мягкий перенос, соединители слов и латинские буквы-двойники - как обычное написание
+    # латинские буквы-двойники - как обычное написание; управляющие и невидимые символы убираются
     assert morph.analyze(word) == morph.analyze(normal)
     assert morph.is_known(word)
 
@@ -789,7 +799,7 @@ def test_own_words_like_dictionary_words():
         (
             {"вайбкодер ": "геймер"},
             ValueError,
-            "Свое слово «вайбкодер » с пробелом, управляющим или невидимым символом не найдется в тексте",
+            "Свое слово «вайбкодер » с пробелом не найдется в тексте",
         ),
         ({"а": "мама"}, ValueError, "«а» не изменяется по образцу «мама»"),
         ({"кошка": "мышь"}, ValueError, "«кошка» не изменяется по образцу «мышь»"),

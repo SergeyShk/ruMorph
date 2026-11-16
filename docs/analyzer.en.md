@@ -10,7 +10,7 @@ Exceptions:
 
 - `FileNotFoundError` - the dictionary file does not exist;
 - `OSError` - the dictionary file cannot be read: no access, the path points to a directory;
-- `ValueError` - the file is not a ruMorph dictionary or is damaged, or an [own word](#words) has no sample in the dictionary, its sample is ambiguous, the word does not inflect like it or contains a space, a control or an invisible character;
+- `ValueError` - the file is not a ruMorph dictionary or is damaged, or an [own word](#words) has no sample in the dictionary, its sample is ambiguous, the word does not inflect like it, is empty or contains a space;
 - `TypeError` - a path that is neither a string nor `PathLike`, or own words that are not a mapping of strings.
 
 === "Code"
@@ -70,7 +70,7 @@ Own words are kept in a copy of the dictionary, about 3.5 KB per word (35 MB for
 analyze(word)
 ```
 
-Analyses of the word form in descending order of probability; the probabilities sum to 1. Case does not matter for the lookup, and the letter «е» may stand for «ё»: `analyze("ЕЖ")` returns the analyses of the word form «ёж». The probabilities take the case into account: a lowercase word gets proper nouns last («шаров» - «шар»), and a capitalized word gets them a larger share («Шаров» - a surname). A token that is not in the dictionary - a number, a symbol, a Latin word, an abbreviation - is analyzed [by rules](analysis.md#rules), and the analyses of an unknown Cyrillic word are [guessed](analysis.md#guess) from its ending and parts. A token without spaces and invisible characters gets at least one analysis: if nothing fits, `X` without features.
+Analyses of the word form in descending order of probability; the probabilities sum to 1. Case does not matter for the lookup, and the letter «е» may stand for «ё»: `analyze("ЕЖ")` returns the analyses of the word form «ёж». The probabilities take the case into account: a lowercase word gets proper nouns last («шаров» - «шар»), and a capitalized word gets them a larger share («Шаров» - a surname). A token that is not in the dictionary - a number, a symbol, a Latin word, an abbreviation - is analyzed [by rules](analysis.md#rules), and the analyses of an unknown Cyrillic word are [guessed](analysis.md#guess) from its ending and parts. The list of analyses is never empty: if nothing fits - including an empty string and a string of spaces or invisible characters - the token gets `X` without features and its lowercased form as the lemma.
 
 | Parameter | Type | Default | Description |
 | :-------- | :--- | :------ | :---------- |
@@ -188,7 +188,7 @@ Exceptions:
 annotate(document, *, context=True)
 ```
 
-Analyzes a document of the segmenter [anySeg](https://github.com/SergeyShk/anySeg) in one call: the columns `lemma`, `upos` and `feats` of its words get the most probable analysis in the context of the sentence, as with [`analyze_sentence`](#analyze_sentence), or without context, as with [`analyze`](#analyze), replacing the earlier values. anySeg finds the tokens and the sentences following the conventions of Universal Dependencies on which the context model is trained. A word without analyses gets its lowercased form as the lemma and the part of speech `X`. The annotated document is written in CoNLL-U by its method `to_conllu`. anySeg is a separate package (`pip install anyseg`); any other object with the methods `column("form")` and `set_columns` and the sentences `sentences` whose words `words` have a number `index` fits too.
+Analyzes a document of the segmenter [anySeg](https://github.com/SergeyShk/anySeg) in one call: the columns `lemma`, `upos` and `feats` of its words get the most probable analysis in the context of the sentence, as with [`analyze_sentence`](#analyze_sentence), or without context, as with [`analyze`](#analyze), replacing the earlier values. anySeg finds the tokens and the sentences following the conventions of Universal Dependencies on which the context model is trained. The annotated document is written in CoNLL-U by its method `to_conllu`. anySeg is a separate package (`pip install anyseg`); any other object with the methods `column("form")` and `set_columns` and the sentences `sentences` whose words `words` have a number `index` fits too.
 
 | Parameter | Type | Default | Description |
 | :-------- | :--- | :------ | :---------- |
@@ -232,7 +232,7 @@ Exceptions:
 lemmatize(words)
 ```
 
-Lemmas of the most probable analyses of the word forms; a token without analyses is returned in lowercase.
+Lemmas of the most probable analyses of the word forms.
 
 | Parameter | Type | Default | Description |
 | :-------- | :--- | :------ | :---------- |

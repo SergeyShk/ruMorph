@@ -138,10 +138,6 @@ class Component:
             else:
                 analyses = self.analyzer.analyze_many(words)
             for token, candidates in zip(tokens, analyses, strict=True):
-                if not candidates:
-                    # Невидимые символы: как токен без разбора в команде rumorph
-                    token.pos_, token.lemma_ = "X", token.text.lower()
-                    continue
                 best = candidates[0]
                 token.pos_ = best.pos
                 # Строкой: из словаря признаков spaCy 3.8 копит память на каждом токене

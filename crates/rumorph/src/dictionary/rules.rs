@@ -304,13 +304,9 @@ impl Dictionary {
     }
 
     /// Запасной разбор токена, который не разобрали ни словарь, ни правила, ни угадывание
-    /// («км/ч», «100%-ный»): `X` без признаков, лемма - токен в нижнем регистре. Токен с пробелом,
-    /// управляющим или невидимым символом разборов не получает
+    /// («км/ч», «100%-ный», «New York», пустая строка или пробел): `X` без признаков, лемма -
+    /// токен в нижнем регистре
     pub(super) fn fallback(&self, word: &str) -> Vec<Analysis> {
-        let chars: Vec<char> = word.chars().collect();
-        if !token(&chars) {
-            return Vec::new();
-        }
         self.shares(word, &[(&word.to_lowercase(), self.rule_tags.other, 1.0)])
     }
 
@@ -525,14 +521,21 @@ const LONG_CAPS: usize = 7;
 /// Разделители диапазона чисел: дефис и тире
 const RANGE: [char; 3] = ['-', '–', '—'];
 
-/// Токен, который может получить разбор: непустой, без пробелов, управляющих и невидимых
-/// символов и не из одних соединителей эмодзи
+/// Токен, который разбирают правила: непустой, без пробелов, управляющих и невидимых символов
+/// и не из одних соединителей эмодзи
 pub(super) fn token(chars: &[char]) -> bool {
     !chars.is_empty()
         && !chars
             .iter()
             .any(|&c| c.is_whitespace() || c.is_control() || invisible(c))
         && !chars.iter().all(|&c| joiner(c))
+}
+
+/// Строка без видимых символов: из пробелов, управляющих и невидимых символов или пустая
+pub(super) fn blank(chars: &[char]) -> bool {
+    chars
+        .iter()
+        .all(|&c| c.is_whitespace() || c.is_control() || invisible(c) || joiner(c))
 }
 
 pub(super) fn cyrillic(c: char) -> bool {
@@ -556,7 +559,7 @@ fn symbol(c: char) -> bool {
 
 /// Символ форматирования (категория Unicode Cf): мягкий перенос, нулевые пробелы и соединители,
 /// метки направления текста, BOM; кроме ZWJ и тегов, которые бывают внутри эмодзи
-fn invisible(c: char) -> bool {
+pub(super) fn invisible(c: char) -> bool {
     matches!(
         c,
         '\u{00AD}'
@@ -581,6 +584,11 @@ fn invisible(c: char) -> bool {
             | '\u{1D173}'..='\u{1D17A}'
             | '\u{E0001}'
     )
+}
+
+/// Символы форматирования (Cf) составного эмодзи: соединитель ZWJ и теги флагов регионов
+pub(super) fn emoji_format(c: char) -> bool {
+    matches!(c, '\u{200D}' | '\u{E0020}'..='\u{E007F}')
 }
 
 /// Невидимая часть составного эмодзи: соединитель, селекторы вариантов и теги флагов регионов
@@ -864,11 +872,12 @@ mod tests {
         );
         assert_eq!(parts_of_speech(&dict, "%"), ["SYM"]);
         assert_eq!(parts_of_speech(&dict, "«"), ["PUNCT"]);
-        // Не подошло ни одно правило - запасной X; токен с пробелом разборов не получает
+        // Не подошло ни одно правило - запасной X, и у токена с пробелом тоже
         assert!(rules(&dict, "км/ч").is_empty());
         let fallback = dict.fallback("км/ч").remove(0);
         assert_eq!((fallback.lemma.as_str(), fallback.prob), ("км/ч", 1.0));
-        assert!(dict.fallback("км ч").is_empty());
+        assert!(rules(&dict, "км ч").is_empty());
+        assert_eq!(dict.fallback("Км ч")[0].lemma, "км ч");
     }
 
     #[test]
