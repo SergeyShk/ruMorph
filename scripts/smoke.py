@@ -10,6 +10,8 @@ import shutil
 import subprocess
 import sys
 import sysconfig
+import tempfile
+import zlib
 from pathlib import Path
 
 import rumorph
@@ -28,8 +30,29 @@ assert morph.lemmatize(["Мы", "стали", "друзьями", "в", "ков�
     "ковид",
 ]
 assert pickle.loads(pickle.dumps(analysis)) == analysis
-# Обход автоматов verify перехватывает панику: нужен panic = "unwind" в сборке колеса
 assert Analyzer(verify=True).analyze("стол") == morph.analyze("стол")
+# Испорченный корень автомата словоформ (секция 11) роняет обход паникой: verify дает ValueError,
+# только если колесо собрано с panic = "unwind"
+data = morph.path.read_bytes()
+at, sections = 16, []
+while at < len(data):
+    size = int.from_bytes(data[at : at + 8], "little")
+    sections.append((at + 8, size))
+    at = (at + 8 + size + 7) // 8 * 8
+start, size = sections[10]
+root = start + int.from_bytes(data[start + size - 12 : start + size - 4], "little")
+with tempfile.TemporaryDirectory() as directory:
+    for flip in (1, 2, 4, 8, 16, 32, 64, 128):
+        damaged = bytearray(data)
+        damaged[root] ^= flip
+        damaged[12:16] = zlib.crc32(damaged[16:]).to_bytes(4, "little")
+        path = Path(directory) / f"root-{flip}.dict"
+        path.write_bytes(damaged)
+        try:
+            Analyzer(path, verify=True)
+        except ValueError:
+            continue
+        raise AssertionError(f"испорченный словарь принят: бит {flip} корня")
 assert "site-packages" in rumorph.__file__, rumorph.__file__
 # В Python без GIL импорт модуля не должен включать GIL обратно
 if sysconfig.get_config_var("Py_GIL_DISABLED"):
