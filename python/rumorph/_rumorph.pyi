@@ -3,7 +3,7 @@ from decimal import Decimal
 from fractions import Fraction
 from os import PathLike
 from pathlib import Path
-from typing import Literal, Protocol, SupportsIndex, final
+from typing import Any, Literal, Protocol, SupportsIndex, final
 
 __version__: str
 
@@ -58,9 +58,13 @@ class Analyzer:
         self,
         path: str | PathLike[str] | None = None,
         words: Mapping[str, str | tuple[str, str]] | None = None,
+        *,
+        verify: bool = False,
     ) -> None: ...
     @property
     def path(self) -> Path: ...
+    @property
+    def dictionary_info(self) -> dict[str, Any]: ...
     def analyze(self, word: str) -> list[Analysis]: ...
     def analyze_many(self, words: Iterable[str]) -> list[list[Analysis]]: ...
     def analyze_sentence(self, words: Iterable[str]) -> list[list[Analysis]]: ...

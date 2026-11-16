@@ -20,7 +20,7 @@ echo "Мы стали друзьями в ковиде." | rumorph
 | :----- | :------ | :---------- |
 | `-f`, `--format` | `lemmas` | [Output format](#formats): `lemmas`, `conllu`, `tsv`, `jsonl`, `text` |
 | `-i`, `--input` | `text` | [Input](#input): `text`, `tokens`, `conllu` |
-| `-d`, `--dictionary` | the package dictionary | A ruMorph dictionary file |
+| `-d`, `--dictionary` | the package dictionary | A ruMorph dictionary file; a given dictionary is verified as a whole before the analysis, as with `Analyzer(path, verify=True)` |
 | `-w`, `--words` | | A file of [own words](analyzer.md#words): a word and its sample separated by a tab on each line, plus the part of speech if the sample has several; spaces around fields are ignored, empty lines and lines starting with `#` are skipped. The option can be repeated |
 | `-o`, `--output` | the standard output | The result file; `-` is the standard output |
 | `--no-context` | | Analyze each word without its neighbours: analyses by dictionary frequencies, as with [`analyze`](analyzer.md#analyze), several times faster |

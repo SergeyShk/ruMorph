@@ -36,7 +36,8 @@ rumorph - морфологический анализ русского текс�
                            находит сегментатор anySeg (по умолчанию)
                            tokens - токен в строке, пустая строка разделяет предложения
                            conllu - CoNLL-U: заполняются LEMMA, UPOS и FEATS
-  -d, --dictionary ФАЙЛ  файл словаря ruMorph (по умолчанию - словарь пакета)
+  -d, --dictionary ФАЙЛ  файл словаря ruMorph (по умолчанию - словарь пакета); заданный словарь
+                         проверяется целиком перед разбором
   -w, --words ФАЙЛ       свои слова: в строке слово и образец (словарное слово в той же форме)
                          через табуляцию, а если у образца несколько частей речи - и часть речи
   -o, --output ФАЙЛ      записать результат в файл
@@ -231,7 +232,8 @@ fn execute(
         }
     };
     let dictionary_path = dictionary.as_deref().or(default);
-    let dictionary = match load(dictionary_path).and_then(|loaded| add_words(loaded, &words)) {
+    let loaded = load(dictionary_path, dictionary.is_some());
+    let dictionary = match loaded.and_then(|loaded| add_words(loaded, &words)) {
         Ok(dictionary) => dictionary,
         Err(message) => {
             report(message);
@@ -353,13 +355,26 @@ fn write_error(err: &io::Error, report: &mut impl FnMut(String)) -> u8 {
     1
 }
 
-/// Словарь из файла `path`; без пути - словарь крейта `rumorph-dict-ru`
-fn load(path: Option<&Path>) -> Result<Dictionary, String> {
+/// Словарь из файла `path`, проверенный `Dictionary::verify`, если `verify`; без пути - словарь
+/// крейта `rumorph-dict-ru`
+fn load(path: Option<&Path>, verify: bool) -> Result<Dictionary, String> {
     match path {
-        Some(path) => Dictionary::open(path).map_err(|err| match err {
-            crate::Error::Io(err) => format!("{}: {}", path.display(), describe(&err)),
-            err => format!("{}: {err}", path.display()),
-        }),
+        Some(path) => Dictionary::open(path)
+            .and_then(|dictionary| {
+                if verify {
+                    // Паника испорченного автомата - ошибка словаря: ее сообщение не печатается
+                    let hook = std::panic::take_hook();
+                    std::panic::set_hook(Box::new(|_| {}));
+                    let verified = dictionary.verify();
+                    std::panic::set_hook(hook);
+                    verified?;
+                }
+                Ok(dictionary)
+            })
+            .map_err(|err| match err {
+                crate::Error::Io(err) => format!("{}: {}", path.display(), describe(&err)),
+                err => format!("{}: {err}", path.display()),
+            }),
         #[cfg(feature = "bundled")]
         None => Dictionary::bundled().map_err(|err| err.to_string()),
         #[cfg(not(feature = "bundled"))]
@@ -1709,6 +1724,28 @@ mod tests {
             error,
             "rumorph: -: строка 1: в строке CoNLL-U 2 столбцов вместо 10\n"
         );
+    }
+
+    #[test]
+    fn verifies_given_dictionary() {
+        // Число ключей в конце автомата словоформ меньше настоящего: словарь загружается,
+        // а проверка его отвергает
+        let dict = TestDictionary::new();
+        let clean = std::fs::read(&dict.0).unwrap();
+        let at = crate::format::layout(&clean).unwrap().words.end - 20;
+        let keys = u64::from_le_bytes(clean[at..at + 8].try_into().unwrap());
+        let mut damaged = clean.clone();
+        damaged[at..at + 8].copy_from_slice(&(keys - 1).to_le_bytes());
+        let damaged = crate::format::tests::with_checksum(damaged);
+        assert!(Dictionary::from_bytes(&damaged).is_ok());
+        let path = dict.0.with_extension("damaged.dict");
+        std::fs::write(&path, damaged).unwrap();
+        let (code, _, error) = dict.run(&["-d", path.to_str().unwrap()], "раму".as_bytes());
+        std::fs::remove_file(&path).unwrap();
+        assert_eq!(code, 1);
+        assert!(error.ends_with("автомат словоформ поврежден\n"), "{error}");
+        // Словарь по умолчанию не проверяется: он из пакета
+        assert_eq!(dict.run(&[], "раму".as_bytes()).0, 0);
     }
 
     #[test]

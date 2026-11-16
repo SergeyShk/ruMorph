@@ -33,13 +33,39 @@ def morph():
 
 def test_default_dictionary(morph):
     assert morph.path == Path(rumorph.__file__).parent / "data" / "ru.dict"
-    meta = json.loads(morph._meta())
-    assert meta["source"] == "opencorpora.org"
-    assert meta["opencorpora_revision"] == "417258"
-    assert meta["corpus_revision"] == "4580223"
-    assert meta["wiktionary"]["dump"] == "2026-10-01"
-    assert meta["wiktionary"]["file"].endswith("ru-wiktionary-20261001.jsonl.xz")
-    assert meta["context"]["release"] == "r2.18"
+    info = morph.dictionary_info
+    assert info["source"] == "opencorpora.org"
+    assert info["opencorpora_revision"] == "417258"
+    assert info["corpus_revision"] == "4580223"
+    assert info["wiktionary"]["dump"] == "2026-10-01"
+    assert info["wiktionary"]["file"].endswith("ru-wiktionary-20261001.jsonl.xz")
+    assert info["context"]["release"] == "r2.18"
+    data = Path(morph.path).read_bytes()
+    assert info["checksum"] == int.from_bytes(data[12:16], "little")
+    assert info["word_forms"] > 3_000_000
+    # Каждое обращение - новый словарь
+    info["source"] = "?"
+    assert morph.dictionary_info["source"] == "opencorpora.org"
+
+
+def test_verify(morph, tmp_path):
+    assert Analyzer(verify=True).analyze("стол") == morph.analyze("стол")
+    # Модель, испорченная под пересчитанной суммой: загрузка ее принимает, проверка - нет
+    data = bytearray(Path(morph.path).read_bytes())
+    data[data.index(b"RUMCTX\0\0")] = ord("X")
+    data[12:16] = zlib.crc32(data[16:]).to_bytes(4, "little")
+    path = tmp_path / "damaged.dict"
+    path.write_bytes(bytes(data))
+    assert Analyzer(path).analyze("стол") == morph.analyze("стол")
+    with pytest.raises(ValueError, match=r"damaged\.dict"):
+        Analyzer(path, verify=True)
+    # Отвергнутый словарь не держит файл открытым: его можно удалить и в Windows
+    path.unlink()
+    # Анализатор с проверкой восстанавливается из pickle тоже с проверкой
+    verified = Analyzer(morph.path, verify=True)
+    _, args = verified.__reduce__()
+    assert args[-1] is True
+    assert pickle.loads(pickle.dumps(verified)).analyze("стол") == morph.analyze("стол")
 
 
 def test_path_argument(morph):

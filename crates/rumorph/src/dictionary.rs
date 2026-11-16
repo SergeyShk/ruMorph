@@ -467,6 +467,35 @@ impl Dictionary {
         &self.meta
     }
 
+    /// Проверка словаря из ненадежного источника: обходит каждый узел автоматов так, как его
+    /// читает поиск, и читает контекстную модель. Загрузка проверяет контрольную сумму и строение
+    /// таблиц, а подобранный автомат с верной суммой загружается и роняет разбор паникой. Занимает
+    /// десятки миллисекунд. Паника обхода становится ошибкой, поэтому нужен `panic = "unwind"`
+    /// (по умолчанию); обработчик паники может напечатать ее сообщение
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Format`], если автомат поврежден; [`Error::Context`], если повреждена модель
+    pub fn verify(&self) -> Result<(), Error> {
+        for (name, map) in [("словоформ", &self.words), ("окончаний", &self.guesses)]
+        {
+            let walked =
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| walk(map.as_fst())));
+            if !matches!(walked, Ok(true)) {
+                return Err(Error::Format(format!("автомат {name} поврежден")));
+            }
+        }
+        if !self.layout.context.is_empty() {
+            self.context()?;
+        }
+        Ok(())
+    }
+
+    /// Контрольная сумма файла словаря: словари с одной суммой - один словарь
+    pub fn checksum(&self) -> u32 {
+        self.layout.checksum
+    }
+
     /// Тег OpenCorpora с номером `Analysis::tag`
     pub fn tag(&self, number: u16) -> Option<&str> {
         self.tags.get(usize::from(number))
@@ -1977,6 +2006,73 @@ impl Dictionary {
     }
 }
 
+/// Обход автомата, как его читает поиск: каждый узел, каждый переход и поиск отсутствующего входа;
+/// `false`, если переход ведет вперед или не находится, а наибольший выход или число ключей
+/// не сходятся с заголовком. Испорченный узел может уронить обход паникой - ее ловит `verify`
+fn walk(fst: &fst::raw::Fst<Slice>) -> bool {
+    // Байты входов узла с большим числом переходов fst индексирует
+    const INDEXED: usize = 32;
+    let mut seen = vec![0u64; fst.as_bytes().len() / 64 + 1];
+    let mut nodes = Vec::new();
+    let mut stack = vec![fst.root().addr()];
+    while let Some(addr) = stack.pop() {
+        let Some(word) = seen.get_mut(addr / 64) else {
+            return false;
+        };
+        if *word & (1 << (addr % 64)) != 0 {
+            continue;
+        }
+        *word |= 1 << (addr % 64);
+        nodes.push(addr);
+        let node = fst.node(addr);
+        let mut inputs = [false; 256];
+        for i in 0..node.len() {
+            let transition = node.transition(i);
+            inputs[usize::from(transition.inp)] = true;
+            if transition.addr >= addr || node.find_input(transition.inp) != Some(i) {
+                return false;
+            }
+            stack.push(transition.addr);
+        }
+        // Результат поиска сохраняется: поиск, который выбросит оптимизатор, не уронит обход
+        if node.len() > INDEXED {
+            for byte in 0..=u8::MAX {
+                std::hint::black_box(node.find_input(byte));
+            }
+        } else if let Some(absent) = (0..=u8::MAX).find(|&byte| !inputs[usize::from(byte)]) {
+            std::hint::black_box(node.find_input(absent));
+        }
+    }
+    // Наибольший выход от узла до конца ключа и число ключей после него - от узлов, записанных
+    // первыми: число ключей в конце автомата fst не проверяет
+    nodes.sort_unstable();
+    let mut largest = vec![0u64; nodes.len()];
+    let mut keys = vec![0u64; nodes.len()];
+    for (index, &addr) in nodes.iter().enumerate() {
+        let node = fst.node(addr);
+        let (mut most, mut count) = match node.is_final() {
+            true => (node.final_output().value(), 1u64),
+            false => (0, 0),
+        };
+        for transition in node.transitions() {
+            let Ok(next) = nodes.binary_search(&transition.addr) else {
+                return false;
+            };
+            match transition.out.value().checked_add(largest[next]) {
+                Some(total) => most = most.max(total),
+                None => return false,
+            }
+            match count.checked_add(keys[next]) {
+                Some(total) => count = total,
+                None => return false,
+            }
+        }
+        largest[index] = most;
+        keys[index] = count;
+    }
+    (nodes.binary_search(&fst.root().addr())).is_ok_and(|root| keys[root] == fst.len() as u64)
+}
+
 /// Обход списков вида «длина, элементы по `width` чисел»; длина - биты `mask` первого числа
 fn walk_lists(
     lists: &[u32],
@@ -3346,6 +3442,54 @@ pub(super) mod tests {
             .err()
             .unwrap();
         assert!(err.to_string().contains("65 536 тегов"), "{err}");
+    }
+
+    #[test]
+    fn verified_automata_never_panic() {
+        // Испорченный автомат с пересчитанной суммой загружается: `verify` отвергает каждый,
+        // на котором разбор паникует
+        let (mut rejected, mut caught) = (0, 0);
+        for clean in [dictionary_bytes(), guessing_bytes()] {
+            let layout = format::layout(&clean).unwrap();
+            assert!(Dictionary::from_bytes(&clean).unwrap().verify().is_ok());
+            let exercised = |dict: &Dictionary| {
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| exercise(dict))).is_ok()
+            };
+            for at in layout.words.clone().chain(layout.guesses.clone()) {
+                for flip in [0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0xFF] {
+                    let mut damaged = clean.clone();
+                    damaged[at] ^= flip;
+                    let Ok(dict) = Dictionary::from_bytes(&format::tests::with_checksum(damaged))
+                    else {
+                        continue;
+                    };
+                    if dict.verify().is_err() {
+                        rejected += 1;
+                        caught += usize::from(!exercised(&dict));
+                        continue;
+                    }
+                    assert!(exercised(&dict), "байт {at} ^ {flip:#04x}");
+                }
+            }
+        }
+        assert!(caught > 0 && rejected >= caught, "{rejected} {caught}");
+    }
+
+    #[test]
+    fn number_of_keys_is_verified() {
+        // Конец автомата: число ключей, адрес корня и контрольная сумма fst
+        let clean = dictionary_bytes();
+        let at = format::layout(&clean).unwrap().words.end - 20;
+        let keys = u64::from_le_bytes(clean[at..at + 8].try_into().unwrap());
+        let with_keys = |keys: u64| {
+            let mut data = clean.clone();
+            data[at..at + 8].copy_from_slice(&keys.to_le_bytes());
+            Dictionary::from_bytes(&format::tests::with_checksum(data))
+        };
+        assert!(with_keys(keys).unwrap().verify().is_ok());
+        if let Ok(fewer) = with_keys(keys - 1) {
+            assert!(fewer.verify().is_err());
+        }
     }
 
     /// Все, что можно спросить у словаря: поврежденный, но загруженный словарь не паникует

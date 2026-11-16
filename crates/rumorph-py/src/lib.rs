@@ -555,6 +555,8 @@ struct Shared {
     /// из pickle в задачах пула не собирают свои слова заново, а файл освобождается вместе
     /// со словарем
     copies: Mutex<WordCopies>,
+    /// Словарь проверен `Dictionary::verify`: проверка - один раз на словарь
+    verified: AtomicBool,
 }
 
 /// Копии словаря со своими словами и последняя собранная
@@ -572,6 +574,7 @@ impl Shared {
             ud,
             path: path.to_owned(),
             copies: Mutex::default(),
+            verified: AtomicBool::new(false),
         }
     }
 }
@@ -876,11 +879,12 @@ fn package_version() -> String {
 /// есть в потоке (pickle разборов не создает анализатор на каждый разбор), иначе новый со словарем
 /// файла, а если файла уже нет - со словарем, загруженным из него в процессе
 #[pyfunction]
-#[pyo3(signature = (path, words=None))]
+#[pyo3(signature = (path, words=None, verify=false))]
 fn _analyzer(
     py: Python<'_>,
     path: Option<PathBuf>,
     words: Option<String>,
+    verify: bool,
 ) -> PyResult<Py<Analyzer>> {
     let explicit = path.is_some();
     let path = Analyzer::resolve(py, path)?;
@@ -903,9 +907,12 @@ fn _analyzer(
         .ok()
         .flatten();
     if let Some(analyzer) = found {
+        if verify {
+            analyzer.get().check(py)?;
+        }
         return Ok(analyzer);
     }
-    let base = match Analyzer::load(py, path.clone(), explicit) {
+    let mut base = match Analyzer::load(py, path.clone(), explicit) {
         Ok(analyzer) => analyzer,
         // Тип ошибки - OSError, а значение по errno - FileNotFoundError
         Err(err) if err.value(py).is_instance_of::<PyFileNotFoundError>() => {
@@ -916,12 +923,17 @@ fn _analyzer(
                     path,
                     explicit,
                     words: Arc::default(),
+                    verify: false,
                 },
                 None => return Err(err),
             }
         }
         Err(err) => return Err(err),
     };
+    if verify {
+        base.check(py)?;
+        base.verify = true;
+    }
     if words.is_empty() {
         Py::new(py, base)
     } else {
@@ -945,14 +957,18 @@ fn _analyzer(
 ///         изменяется как словарное слово-образец в той же форме (обычно в начальной). Если
 ///         у образца лексемы разных частей речи, образец - пара «слово, часть речи UD».
 ///         Образцом может быть и свое слово, стоящее раньше
+///     verify (bool): Проверить словарь целиком - для файла из ненадежного источника: загрузка
+///         проверяет контрольную сумму и строение таблиц, а проверка еще обходит автоматы
+///         и читает контекстную модель (десятки миллисекунд, один раз на словарь)
 ///
 /// Исключения:
 ///     FileNotFoundError: Если файла словаря нет
 ///     OSError: Если файл словаря не читается
 ///     TypeError: Если путь не строка и не os.PathLike или свои слова - не словарь строк
-///     ValueError: Если файл не является словарем ruMorph или поврежден, образца нет в словаре,
-///         у него лексемы разных частей речи без указания части речи, слово не изменяется
-///         по образцу, слово пустое или в нем пробел
+///     ValueError: Если файл не является словарем ruMorph или поврежден (с verify - и если
+///         поврежден автомат или модель), образца нет в словаре, у него лексемы разных частей
+///         речи без указания части речи, слово не изменяется по образцу, слово пустое или в нем
+///         пробел
 ///
 /// Пример использования:
 ///     >>> from rumorph import Analyzer
@@ -972,6 +988,8 @@ struct Analyzer {
     /// Путь задан явно: иначе pickle не сохраняет путь, и в другом окружении берется словарь его пакета
     explicit: bool,
     words: Arc<OwnWords>,
+    /// Анализатор создан с проверкой словаря: pickle восстанавливает его тоже с проверкой
+    verify: bool,
 }
 
 /// Свое слово: слово, образец и часть речи образца, если она задана
@@ -1052,11 +1070,12 @@ thread_local! {
 #[pymethods]
 impl Analyzer {
     #[new]
-    #[pyo3(signature = (path=None, words=None))]
+    #[pyo3(signature = (path=None, words=None, *, verify=false))]
     fn new(
         py: Python<'_>,
         path: Option<&Bound<'_, PyAny>>,
         words: Option<&Bound<'_, PyAny>>,
+        verify: bool,
     ) -> PyResult<Self> {
         let path = match path {
             Some(path) if !path.is_none() => Some(path.extract::<PathBuf>().map_err(|_| {
@@ -1068,7 +1087,7 @@ impl Analyzer {
             Some(words) if !words.is_none() => own_words(words)?,
             _ => Vec::new(),
         };
-        Self::open(py, path, words)
+        Self::open(py, path, words, verify)
     }
 
     fn __copy__(slf: Bound<'_, Self>) -> Bound<'_, Self> {
@@ -1082,10 +1101,11 @@ impl Analyzer {
     fn __reduce__<'py>(
         &self,
         py: Python<'py>,
-    ) -> Reduced<'py, (Option<PathBuf>, Option<Py<PyString>>)> {
+    ) -> Reduced<'py, (Option<PathBuf>, Option<Py<PyString>>, bool)> {
         let restore = py.import("rumorph._rumorph")?.getattr("_analyzer")?;
         let words = self.words.object.as_ref().map(|words| words.clone_ref(py));
-        Ok((restore, (self.explicit.then(|| self.path.clone()), words)))
+        let path = self.explicit.then(|| self.path.clone());
+        Ok((restore, (path, words, self.verify)))
     }
 
     /// Путь к файлу словаря
@@ -1391,9 +1411,38 @@ impl Analyzer {
         Ok(self.shared.dictionary.is_known(&text(word)?))
     }
 
-    /// Описание источника словаря в JSON (для проверки словаря в тестах)
-    fn _meta(&self) -> &str {
-        self.shared.dictionary.meta()
+    /// Описание словаря
+    ///
+    /// Описание:
+    ///     Источники словаря, как их записал сборщик: source и ревизии словаря и корпуса
+    ///     OpenCorpora (opencorpora_revision, corpus_revision), лексемы Викисловаря (wiktionary),
+    ///     релиз UD и трибанки частот (frequencies) и обучения контекстной модели (context),
+    ///     лицензия словаря (license); всегда - число словоформ (word_forms) и контрольная сумма
+    ///     файла (checksum). У словаря, собранного не сборщиком ruMorph, есть только последние два.
+    ///     Каждое обращение возвращает новый словарь
+    ///
+    /// Вывод:
+    ///     dict: Описание словаря
+    ///
+    /// Пример использования:
+    ///     >>> from rumorph import Analyzer
+    ///     >>> info = Analyzer().dictionary_info
+    ///     >>> info["source"], info["license"], info["frequencies"]["treebanks"]
+    ///     ('opencorpora.org', 'CC BY-SA 4.0', ['UD_Russian-Taiga', 'UD_Russian-GSD'])
+    #[getter]
+    fn dictionary_info<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let dictionary = &self.shared.dictionary;
+        // Описание - JSON сборщика: у другого словаря его может не быть
+        let meta = py
+            .import(intern!(py, "json"))?
+            .call_method1(intern!(py, "loads"), (dictionary.meta(),));
+        let info = match meta.map(|meta| meta.cast_into::<PyDict>()) {
+            Ok(Ok(meta)) => meta,
+            _ => PyDict::new(py),
+        };
+        info.set_item("word_forms", dictionary.word_count())?;
+        info.set_item("checksum", dictionary.checksum())?;
+        Ok(info)
     }
 
     /// Части речи и признаки всех тегов UD словаря (для обучения контекстной модели)
@@ -1420,10 +1469,19 @@ impl Analyzer {
 
 impl Analyzer {
     /// Анализатор со словарем файла `path` (по умолчанию - словарем из пакета)
-    fn open(py: Python<'_>, path: Option<PathBuf>, words: Vec<OwnWord>) -> PyResult<Self> {
+    fn open(
+        py: Python<'_>,
+        path: Option<PathBuf>,
+        words: Vec<OwnWord>,
+        verify: bool,
+    ) -> PyResult<Self> {
         let explicit = path.is_some();
         let path = Self::resolve(py, path)?;
-        let base = Self::load(py, path, explicit)?;
+        let mut base = Self::load(py, path, explicit)?;
+        if verify {
+            base.check(py)?;
+            base.verify = true;
+        }
         if words.is_empty() {
             Ok(base)
         } else {
@@ -1453,7 +1511,27 @@ impl Analyzer {
             path,
             explicit,
             words: Arc::default(),
+            verify: false,
         })
+    }
+
+    /// Проверка словаря файла (`Dictionary::verify`) - один раз на словарь
+    fn check(&self, py: Python<'_>) -> PyResult<()> {
+        if self.base.verified.load(Ordering::Acquire) {
+            return Ok(());
+        }
+        if let Err(err) = py.detach(|| self.base.dictionary.verify()) {
+            // Отвергнутый словарь не остается последним загруженным: иначе файл держится
+            // открытым и без анализаторов. Ссылка освобождается с GIL, как прежний словарь
+            let rejected = py.detach(|| {
+                DICTIONARIES
+                    .with(|loaded| loaded.last.take_if(|last| Arc::ptr_eq(last, &self.base)))
+            });
+            drop(rejected);
+            return Err(load_error(&self.path, err));
+        }
+        self.base.verified.store(true, Ordering::Release);
+        Ok(())
     }
 
     /// Анализатор `base` со своими словами в записи `OwnWords::text`: копия его словаря со своими

@@ -149,6 +149,8 @@ pub(crate) struct Layout {
     pub guess_records: Range<usize>,
     /// Пусто у словаря без модели и у форматов 5 и 6
     pub context: Range<usize>,
+    /// Контрольная сумма из заголовка
+    pub checksum: u32,
 }
 
 impl Layout {
@@ -237,7 +239,7 @@ pub(crate) fn layout(data: &[u8]) -> Result<Layout, Error> {
         }
         Ok(start..end)
     };
-    let layout = Layout {
+    let mut layout = Layout {
         meta: section(1)?,
         tags: section(1)?,
         ud_strings: section(1)?,
@@ -259,6 +261,7 @@ pub(crate) fn layout(data: &[u8]) -> Result<Layout, Error> {
         } else {
             0..0
         },
+        checksum: 0,
     };
     if at != data.len() {
         return Err(extra_data());
@@ -270,6 +273,7 @@ pub(crate) fn layout(data: &[u8]) -> Result<Layout, Error> {
             "контрольная сумма не совпадает: файл поврежден".into(),
         ));
     }
+    layout.checksum = checksum;
     Ok(layout)
 }
 
