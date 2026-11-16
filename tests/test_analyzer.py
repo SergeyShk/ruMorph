@@ -59,6 +59,8 @@ def test_verify(morph, tmp_path):
     assert Analyzer(path).analyze("стол") == morph.analyze("стол")
     with pytest.raises(ValueError, match=r"damaged\.dict"):
         Analyzer(path, verify=True)
+    # Отвергнутый словарь не держит файл открытым: его можно удалить и в Windows
+    path.unlink()
     # Анализатор с проверкой восстанавливается из pickle тоже с проверкой
     verified = Analyzer(morph.path, verify=True)
     _, args = verified.__reduce__()

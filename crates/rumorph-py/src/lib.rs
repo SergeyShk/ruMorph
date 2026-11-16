@@ -1517,11 +1517,20 @@ impl Analyzer {
 
     /// Проверка словаря файла (`Dictionary::verify`) - один раз на словарь
     fn check(&self, py: Python<'_>) -> PyResult<()> {
-        if !self.base.verified.load(Ordering::Acquire) {
-            (py.detach(|| self.base.dictionary.verify()))
-                .map_err(|err| load_error(&self.path, err))?;
-            self.base.verified.store(true, Ordering::Release);
+        if self.base.verified.load(Ordering::Acquire) {
+            return Ok(());
         }
+        if let Err(err) = py.detach(|| self.base.dictionary.verify()) {
+            // Отвергнутый словарь не остается последним загруженным: иначе файл держится
+            // открытым и без анализаторов. Ссылка освобождается с GIL, как прежний словарь
+            let rejected = py.detach(|| {
+                DICTIONARIES
+                    .with(|loaded| loaded.last.take_if(|last| Arc::ptr_eq(last, &self.base)))
+            });
+            drop(rejected);
+            return Err(load_error(&self.path, err));
+        }
+        self.base.verified.store(true, Ordering::Release);
         Ok(())
     }
 
