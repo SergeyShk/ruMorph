@@ -3,8 +3,6 @@
 //! UD и соглашениям SynTagRus, доли неоднозначных разборов - по частотам в обучающих частях трибанков
 //! UD Taiga и GSD
 
-use std::collections::HashMap;
-
 use super::{Analysis, Dictionary, Source, UdTags};
 
 /// Символы вне символьных блоков Unicode, которые в UD - `SYM`, а не `PUNCT`
@@ -605,14 +603,6 @@ impl Dictionary {
             analysis.source = Source::Rule;
             analysis.entry = None;
         }
-        // Первой - лексема с наибольшей суммой долей: доля несклоняемого прилагательного делится
-        // на все его формы («кв.» - чаще «квадратный», чем «квартира»)
-        let lexeme = |analysis: &Analysis| (analysis.lemma.clone(), self.pos(analysis.ud));
-        let mut totals: HashMap<(String, &str), f64> = HashMap::new();
-        for analysis in &analyses {
-            *totals.entry(lexeme(analysis)).or_default() += analysis.prob;
-        }
-        analyses.sort_by(|a, b| totals[&lexeme(b)].total_cmp(&totals[&lexeme(a)]));
         Some(analyses)
     }
 
