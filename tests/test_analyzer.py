@@ -13,6 +13,7 @@ import zlib
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from types import SimpleNamespace
+from typing import get_type_hints
 
 import anyseg
 import pytest
@@ -48,6 +49,19 @@ def test_default_dictionary(morph):
     assert morph.dictionary_info["source"] == "opencorpora.org"
 
 
+def test_dictionary_info_type(morph):
+    # Ключи описания словаря и вложенных описаний - из типа DictionaryInfo
+    def keys(kind):
+        return kind.__required_keys__ | kind.__optional_keys__
+
+    info = morph.dictionary_info
+    assert set(info) == keys(rumorph.DictionaryInfo)
+    hints = get_type_hints(rumorph.DictionaryInfo)
+    for name in ("wiktionary", "frequencies", "context"):
+        assert set(info[name]) == keys(hints[name])
+    assert set(info["context"]["corpus"]) == keys(get_type_hints(hints["context"])["corpus"])
+
+
 def test_verify(morph, tmp_path):
     assert Analyzer(verify=True).analyze("стол") == morph.analyze("стол")
     # Модель, испорченная под пересчитанной суммой: загрузка ее принимает, проверка - нет
@@ -66,6 +80,33 @@ def test_verify(morph, tmp_path):
     _, args = verified.__reduce__()
     assert args[-1] is True
     assert pickle.loads(pickle.dumps(verified)).analyze("стол") == morph.analyze("стол")
+
+
+def automaton_root(data):
+    # Секции словаря - длина u64 и данные до границы 8 байт; автомат словоформ - одиннадцатая,
+    # адрес корня автомата fst - перед контрольной суммой в его конце
+    at, sections = 16, []
+    while at < len(data):
+        size = int.from_bytes(data[at : at + 8], "little")
+        sections.append((at + 8, size))
+        at = (at + 8 + size + 7) // 8 * 8
+    start, size = sections[10]
+    return start + int.from_bytes(data[start + size - 12 : start + size - 4], "little")
+
+
+def test_verify_is_quiet(morph, tmp_path, capfd):
+    # Испорченный корень автомата роняет обход паникой: verify дает ValueError без сообщения паники
+    data = Path(morph.path).read_bytes()
+    root = automaton_root(data)
+    for flip in (1, 2, 4, 8, 16, 32, 64, 128):
+        damaged = bytearray(data)
+        damaged[root] ^= flip
+        damaged[12:16] = zlib.crc32(damaged[16:]).to_bytes(4, "little")
+        path = tmp_path / f"root-{flip}.dict"
+        path.write_bytes(bytes(damaged))
+        with pytest.raises(ValueError, match="автомат словоформ поврежден"):
+            Analyzer(path, verify=True)
+    assert capfd.readouterr().err == ""
 
 
 def test_path_argument(morph):
@@ -356,6 +397,10 @@ def test_analyze_sentence_input(morph):
     plain = morph.analyze_sentence(["Мост", "сделан", "из", "стали"])
     marked = morph.analyze_sentence(["Мо\u0301ст", "сде\u00adлан", "из", "cтали"])
     assert first(marked) == first(plain)
+    # Токен без видимых символов (метка направления текста) модель не видит: он X, соседи - как без него
+    marks = morph.analyze_sentence(["Мост", "сделан", "из", "\u200e", "стали", "\u2066"])
+    assert first(marks[:3] + marks[4:5]) == first(plain)
+    assert [a[0].pos for a in (marks[3], marks[5])] == ["X", "X"]
     # Длинное предложение - частями по 256 слов
     words = ["Мы", "стали", "друзьями"] * 100
     chunks = morph.analyze_sentence(words[:256]) + morph.analyze_sentence(words[256:])
@@ -1184,6 +1229,11 @@ def test_relative_path_pickles(morph, tmp_path, monkeypatch):
         (
             lambda morph: Analyzer(123),
             "Путь к словарю должен быть строкой или os.PathLike, а не int",
+        ),
+        (lambda morph: Analyzer(verify=1), "Параметр verify должен быть bool, а не int"),
+        (
+            lambda morph: morph.annotate(anyseg.Segmenter("ru").segment("Мы"), context="да"),
+            "Параметр context должен быть bool, а не str",
         ),
     ],
 )

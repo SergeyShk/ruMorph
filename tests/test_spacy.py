@@ -82,12 +82,13 @@ def test_long_marked_sentence_chunks():
 
 def test_spaces_and_invisible_tokens(nlp):
     # Токен из невидимых разделителей - пробел: модель его не видит
-    tokens = list(nlp("Мы\n\nстали ⁠ друзьями"))
+    tokens = list(nlp("Мы\n\nстали ⁠ друзьями \u200e навсегда"))
     assert [(token.pos_, token.lemma_) for token in tokens[1::2]] == [
         ("SPACE", "\n\n"),
         ("SPACE", "\u2060"),
+        ("SPACE", "\u200e"),
     ]
-    analyses = rumorph.Analyzer().analyze_sentence(["Мы", "стали", "друзьями"])
+    analyses = rumorph.Analyzer().analyze_sentence(["Мы", "стали", "друзьями", "навсегда"])
     assert annotation(tokens[::2]) == [(a[0].lemma, a[0].pos, a[0].feats) for a in analyses]
     # Невидимый символ внутри токена убирается, как в analyze
     doc = nlp("Мы ста\u200bли друзьями")

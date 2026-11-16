@@ -1,5 +1,5 @@
-"""Проверка установленного пакета перед публикацией: разбор, словоизменение, согласование, pickle
-и команда rumorph
+"""Проверка установленного пакета перед публикацией: разбор, словоизменение, согласование, pickle,
+проверка словаря и команда rumorph
 
 Запуск: `python scripts/smoke.py [версия]`; из каталога `scripts` пакет берется установленный,
 а не исходники из репозитория.
@@ -28,6 +28,8 @@ assert morph.lemmatize(["Мы", "стали", "друзьями", "в", "ков�
     "ковид",
 ]
 assert pickle.loads(pickle.dumps(analysis)) == analysis
+# Обход автоматов verify перехватывает панику: нужен panic = "unwind" в сборке колеса
+assert Analyzer(verify=True).analyze("стол") == morph.analyze("стол")
 assert "site-packages" in rumorph.__file__, rumorph.__file__
 # В Python без GIL импорт модуля не должен включать GIL обратно
 if sysconfig.get_config_var("Py_GIL_DISABLED"):

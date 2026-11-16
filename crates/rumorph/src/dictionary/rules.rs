@@ -657,10 +657,9 @@ pub(super) fn token(chars: &[char]) -> bool {
 }
 
 /// Строка без видимых символов: из пробелов, управляющих и невидимых символов или пустая
-pub(super) fn blank(chars: &[char]) -> bool {
-    chars
-        .iter()
-        .all(|&c| c.is_whitespace() || c.is_control() || invisible(c) || joiner(c))
+pub(super) fn blank(word: &str) -> bool {
+    word.chars()
+        .all(|c| c.is_whitespace() || c.is_control() || invisible(c) || joiner(c))
 }
 
 pub(super) fn cyrillic(c: char) -> bool {

@@ -244,8 +244,10 @@ jobs:
           path: dist
           if-no-files-found: error
 
+  # Одно задание на ОС с циклом по интерпретаторам: раннеров macOS arm64 часто не хватает,
+  # а проверка одного интерпретатора идет секунды
   smoke:
-    name: smoke (${{ matrix.os }}, ${{ matrix.python-version }})
+    name: smoke (${{ matrix.os }})
     needs: wheels
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
@@ -253,7 +255,6 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, macos-15-intel, windows-latest, windows-11-arm]
-        python-version: ["3.11", "3.14", "3.14t", "3.15", "3.15t"]
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -268,11 +269,14 @@ jobs:
         with:
           version: "0.13.4"
           enable-cache: false
-          python-version: ${{ matrix.python-version }}
       - name: Smoke test
-        run: >-
-          uv run --isolated --no-project --no-index --no-build --find-links dist --with rumorph
-          python scripts/smoke.py ${{ github.event_name == 'push' && github.ref_name || '' }}
+        run: |
+          for python in 3.11 3.14 3.14t 3.15 3.15t; do
+            echo "::group::Python $python"
+            uv run --isolated --no-project --no-index --no-build --find-links dist --with rumorph \
+              --python "$python" python scripts/smoke.py ${{ github.event_name == 'push' && github.ref_name || '' }}
+            echo "::endgroup::"
+          done
         shell: bash
 
   # Крейты собираются из пакетов при каждом прогоне, а публикуются только версии без .devN

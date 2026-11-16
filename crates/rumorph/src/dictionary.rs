@@ -1,9 +1,11 @@
 use std::borrow::Cow;
+use std::cell::Cell;
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::ops::Range;
+use std::panic::AssertUnwindSafe;
 use std::path::Path;
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Once, OnceLock};
 
 use fst::Map;
 
@@ -471,7 +473,8 @@ impl Dictionary {
     /// читает поиск, и читает контекстную модель. Загрузка проверяет контрольную сумму и строение
     /// таблиц, а подобранный автомат с верной суммой загружается и роняет разбор паникой. Занимает
     /// десятки миллисекунд. Паника обхода становится ошибкой, поэтому нужен `panic = "unwind"`
-    /// (по умолчанию); обработчик паники может напечатать ее сообщение
+    /// (по умолчанию); ее сообщение не печатается: при первом вызове обработчик паники процесса
+    /// оборачивается так, что молчит в потоке, пока тот проверяет словарь
     ///
     /// # Errors
     ///
@@ -479,8 +482,7 @@ impl Dictionary {
     pub fn verify(&self) -> Result<(), Error> {
         for (name, map) in [("словоформ", &self.words), ("окончаний", &self.guesses)]
         {
-            let walked =
-                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| walk(map.as_fst())));
+            let walked = quietly(|| walk(map.as_fst()));
             if !matches!(walked, Ok(true)) {
                 return Err(Error::Format(format!("автомат {name} поврежден")));
             }
@@ -528,9 +530,9 @@ impl Dictionary {
 
     /// Разборы слов предложения по убыванию вероятности в контексте: те же разборы, что
     /// у `analyze`, упорядочивает контекстная модель словаря, вероятность - ее оценка. Слова -
-    /// токены одного предложения по порядку; предложение из одного слова разбирается, как
-    /// `analyze`, а длиннее `SENTENCE_CHUNK` слов - частями по `SENTENCE_CHUNK`. Ошибка - если
-    /// в словаре нет контекстной модели
+    /// токены одного предложения по порядку; токен без видимых символов модель пропускает,
+    /// предложение из одного слова разбирается, как `analyze`, а длиннее `SENTENCE_CHUNK` слов -
+    /// частями по `SENTENCE_CHUNK`. Ошибка - если в словаре нет контекстной модели
     ///
     /// ```
     /// # #[cfg(feature = "bundled")] {
@@ -548,24 +550,38 @@ impl Dictionary {
         let context = self.context()?;
         let mut sentence = Vec::with_capacity(words.len());
         for chunk in words.chunks(SENTENCE_CHUNK) {
-            let analyses: Vec<Vec<Analysis>> = chunk
+            let mut analyses: Vec<Vec<Analysis>> = chunk
                 .iter()
                 .map(|word| self.analyze(word.as_ref()))
                 .collect();
+            // Токен без видимых символов (метка направления текста) модель не видит: он не слово
+            let seen: Vec<usize> = (0..chunk.len())
+                .filter(|&index| !rules::blank(chunk[index].as_ref()))
+                .collect();
             // Без соседних слов модель выбирает хуже частот словаря: слово остается как у `analyze`
-            if chunk.len() < 2 {
+            if seen.len() < 2 {
                 sentence.extend(analyses);
                 continue;
             }
             // Модель видит слово так же, как `analyze`: без ударений, мягких переносов и двойников
-            let normal: Vec<Cow<str>> = chunk
+            let normal: Vec<Cow<str>> = seen
                 .iter()
-                .map(|word| {
-                    normalized_input(word.as_ref()).map_or(Cow::Borrowed(word.as_ref()), Cow::Owned)
+                .map(|&index| {
+                    let word = chunk[index].as_ref();
+                    normalized_input(word).map_or(Cow::Borrowed(word), Cow::Owned)
                 })
                 .collect();
             let normal: Vec<&str> = normal.iter().map(AsRef::as_ref).collect();
-            sentence.extend(context.rank(&normal, analyses));
+            let ranked = context.rank(
+                &normal,
+                seen.iter()
+                    .map(|&index| std::mem::take(&mut analyses[index]))
+                    .collect(),
+            );
+            for (index, list) in seen.into_iter().zip(ranked) {
+                analyses[index] = list;
+            }
+            sentence.extend(analyses);
         }
         Ok(sentence)
     }
@@ -1695,19 +1711,21 @@ fn normalized_input(word: &str) -> Option<String> {
 /// или видимых символов не останется: такую строку разбирает запасное правило
 fn visible(word: &str) -> Option<String> {
     let alphanumeric = word.chars().any(char::is_alphanumeric);
-    let hidden = |c: char| {
-        (c.is_control() && !c.is_whitespace())
-            || rules::invisible(c)
-            || (alphanumeric && rules::emoji_format(c))
-    };
-    if !word.chars().any(hidden) {
+    if !word.chars().any(|c| hidden(c, alphanumeric)) {
         return None;
     }
-    let visible: String = word.chars().filter(|&c| !hidden(c)).collect();
+    let visible: String = word.chars().filter(|&c| !hidden(c, alphanumeric)).collect();
     visible
         .chars()
         .any(|c| !c.is_whitespace())
         .then_some(visible)
+}
+
+/// Символ, который `visible` убирает из слова; `alphanumeric` - в слове есть буква или цифра
+pub(crate) fn hidden(c: char, alphanumeric: bool) -> bool {
+    (c.is_control() && !c.is_whitespace())
+        || rules::invisible(c)
+        || (alphanumeric && rules::emoji_format(c))
 }
 
 /// Буквы-двойники другой письменности в отрезке букв - письменностью отрезка: ее задают буквы
@@ -2004,6 +2022,29 @@ impl Dictionary {
             items.chunks(2).all(|pair| entry(pair[0]))
         })
     }
+}
+
+thread_local! {
+    /// Поток проверяет словарь: обработчик паники из `quietly` молчит
+    static VERIFYING: Cell<bool> = const { Cell::new(false) };
+}
+
+/// `f` с перехватом паники без сообщения: обработчик паники процесса оборачивается один раз
+/// и молчит только в потоке, который сейчас проверяет словарь
+fn quietly<T>(f: impl FnOnce() -> T) -> std::thread::Result<T> {
+    static WRAPPED: Once = Once::new();
+    WRAPPED.call_once(|| {
+        let previous = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            if !VERIFYING.get() {
+                previous(info);
+            }
+        }));
+    });
+    VERIFYING.set(true);
+    let result = std::panic::catch_unwind(AssertUnwindSafe(f));
+    VERIFYING.set(false);
+    result
 }
 
 /// Обход автомата, как его читает поиск: каждый узел, каждый переход и поиск отсутствующего входа;

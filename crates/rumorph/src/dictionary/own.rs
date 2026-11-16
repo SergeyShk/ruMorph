@@ -131,10 +131,10 @@ impl Dictionary {
                 .to_lowercase()
         };
         let (word, like) = (normal(word), normal(sample.word));
-        let chars: Vec<char> = word.chars().collect();
-        if blank(&chars) {
+        if blank(&word) {
             return Err(Error::Word("Свое слово пустое".into()));
         }
+        let chars: Vec<char> = word.chars().collect();
         // Невидимые символы в слове с видимыми `normal` убрал: остается пробел
         if !token(&chars) {
             return Err(Error::Word(format!(

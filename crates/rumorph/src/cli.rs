@@ -362,12 +362,7 @@ fn load(path: Option<&Path>, verify: bool) -> Result<Dictionary, String> {
         Some(path) => Dictionary::open(path)
             .and_then(|dictionary| {
                 if verify {
-                    // Паника испорченного автомата - ошибка словаря: ее сообщение не печатается
-                    let hook = std::panic::take_hook();
-                    std::panic::set_hook(Box::new(|_| {}));
-                    let verified = dictionary.verify();
-                    std::panic::set_hook(hook);
-                    verified?;
+                    dictionary.verify()?;
                 }
                 Ok(dictionary)
             })
@@ -1094,20 +1089,33 @@ fn blank(line: &str) -> bool {
         .all(|c| c.is_whitespace() || matches!(c, '\u{200b}' | '\u{2060}' | '\u{feff}'))
 }
 
-/// Токен с «ё» на местах, где ее пишет слово разбора: регистр токена сохраняется; токен,
-/// который не совпадает со словом с точностью до регистра и «ё», остается как есть
+/// Токен с «ё» на местах, где ее пишет слово разбора: регистр токена и невидимые символы,
+/// которые разбор убрал (мягкий перенос), сохраняются; токен, который не совпадает со словом
+/// с точностью до регистра и «ё», остается как есть
 fn with_yo<'w>(token: &'w str, word: &str) -> Cow<'w, str> {
-    if !word.contains('ё') || token.chars().count() != word.chars().count() {
+    if !word.contains('ё') {
         return Cow::Borrowed(token);
     }
+    let alphanumeric = token.chars().any(char::is_alphanumeric);
+    let mut targets = word.chars();
     let mut out = String::with_capacity(token.len() + 2);
-    for (ch, target) in token.chars().zip(word.chars()) {
+    for ch in token.chars() {
+        if crate::dictionary::hidden(ch, alphanumeric) {
+            out.push(ch);
+            continue;
+        }
+        let Some(target) = targets.next() else {
+            return Cow::Borrowed(token);
+        };
         let lower = ch.to_lowercase().next().unwrap_or(ch);
         match (lower, target) {
             ('е', 'ё') => out.push(if ch.is_uppercase() { 'Ё' } else { 'ё' }),
             _ if lower == target || (lower, target) == ('ё', 'е') => out.push(ch),
             _ => return Cow::Borrowed(token),
         }
+    }
+    if targets.next().is_some() {
+        return Cow::Borrowed(token);
     }
     Cow::Owned(out)
 }
@@ -1407,6 +1415,9 @@ mod tests {
         assert_eq!(with_yo("Еж", "ёж"), "Ёж");
         assert_eq!(with_yo("еж", "ежи"), "еж");
         assert_eq!(with_yo("мама", "ёжа"), "мама");
+        // Мягкий перенос разбор убрал, а в тексте он остается
+        assert_eq!(with_yo("Звез\u{AD}ды", "звёзды"), "Звёз\u{AD}ды");
+        assert_eq!(with_yo("ле\u{AD}д", "лёдя"), "ле\u{AD}д");
         // Формат text - только для входа text
         let (code, _, error) = dict.run(&["-f", "text", "-i", "tokens"], b"");
         assert_eq!(code, 2);
