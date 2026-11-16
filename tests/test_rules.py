@@ -156,10 +156,17 @@ def test_abbreviation_with_dot(morph):
     analyses = morph.analyze("т.")
     assert analyses[0].lemma == "так"
     assert math.isclose(sum(a.prob for a in analyses), 1.0)
-    assert all(a.feats["Abbr"] == "Yes" for a in analyses if a.lemma != "так")
+    assert all(a.feats["Abbr"] == "Yes" for a in analyses)
+    assert [a.lemma for a in analyses].count("так") == 1
     # Лемма - полное слово, если это одно слово; незнакомое сокращение - X с леммой без точки
     assert {a.lemma for a in morph.analyze("англ.")} == {"английский"}
-    assert {(a.lemma, a.pos) for a in morph.analyze("напр.")} == {("например", "ADV")}
+    assert {(a.lemma, a.pos, a.feats["Abbr"]) for a in morph.analyze("напр.")} == {
+        ("например", "ADV", "Yes")
+    }
+    # Доли - по разметкам сокращений с точкой в трибанках
+    lemmas = morph.lemmatize(["и", "др.", "и", "т.", "п.", "до", "н.", "э."])
+    assert lemmas == ["и", "другой", "и", "так", "подобный", "до", "наш", "эра"]
+    assert {a.pos for a in morph.analyze("н.") if a.lemma == "наш"} == {"DET"}
     assert [(a.word, a.lemma, a.pos) for a in morph.analyze("Вайб.")] == [("Вайб.", "вайб", "X")]
     assert [a.lemma for a in morph.analyze("т.е.")] == ["т.е."]
 

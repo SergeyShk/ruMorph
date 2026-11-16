@@ -50,7 +50,25 @@ fn normal(text: &str) -> String {
 pub fn blend(dictionary: &Dictionary, counts: &Counts) -> Vec<(String, Vec<(Entry, u32)>)> {
     let rates = capitalized_rates(counts);
     let mut lists = Vec::new();
-    for (word, pairs) in counts {
+    for (key, pairs) in counts {
+        // Сокращение с точкой («др.») - доли разборов словарного сокращения без точки по строчным
+        // разметкам: заглавная буква с точкой («Л.») - инициал, его разбирает правило инициалов
+        let (word, dotted) = match key.strip_suffix('.') {
+            Some(base) if !base.is_empty() => (base.to_owned(), true),
+            _ => (key.clone(), false),
+        };
+        let word = &word;
+        let lowercase: Vec<(String, String, u32, u32)>;
+        let pairs = if dotted {
+            lowercase = (pairs.iter())
+                .map(|(pos, lemma, count, capitalized)| {
+                    (pos.clone(), lemma.clone(), count - capitalized, 0)
+                })
+                .collect();
+            &lowercase
+        } else {
+            pairs
+        };
         let mut spellings: Vec<String> = dictionary
             .candidate_analyses(word)
             .into_iter()
@@ -60,7 +78,7 @@ pub fn blend(dictionary: &Dictionary, counts: &Counts) -> Vec<(String, Vec<(Entr
         spellings.sort();
         spellings.dedup();
         for spelling in std::iter::once(word).chain(&spellings) {
-            if let Some(list) = shares(dictionary, spelling, pairs, &rates) {
+            if let Some(list) = shares(dictionary, spelling, pairs, &rates, dotted) {
                 lists.push((spelling.clone(), list));
             }
         }
@@ -88,24 +106,30 @@ fn capitalized_rates(counts: &Counts) -> (HashMap<&str, f64>, f64) {
 }
 
 /// Доли форм таблиц словоформы `word` по счетчикам `pairs` и долям слов с заглавной `rates`;
-/// `None`, если счетчики разборы не различают
+/// счетчики `dotted` - токена `word` с точкой. `None`, если счетчики разборы не различают
 fn shares(
     dictionary: &Dictionary,
     word: &str,
     pairs: &[(String, String, u32, u32)],
     rates: &(HashMap<&str, f64>, f64),
+    dotted: bool,
 ) -> Option<Vec<(Entry, u32)>> {
     let analyses = dictionary.candidate_analyses(word);
     if analyses.is_empty() || analyses.iter().any(|analysis| analysis.entry.is_none()) {
         return None;
     }
-    // Счетчики голого сокращения не говорят о сокращении с точкой: «т» в корпусе - буква, «т.» - «так»
+    // Счетчики голого сокращения не говорят о сокращении с точкой: «т» в корпусе - буква, «т.» - «так».
+    // Счетчики токена с точкой - доли слова, все разборы которого сокращения: у «с.» есть и предлог «с»
     let abbreviation = |analysis: &Analysis| {
         dictionary
             .ud_tag(analysis.ud)
             .is_some_and(|tag| tag.feat("Abbr").is_some() || tag.has_label("Abbr"))
     };
-    if analyses.iter().any(abbreviation) {
+    let abbreviated = match dotted {
+        true => analyses.iter().all(abbreviation),
+        false => !analyses.iter().any(abbreviation),
+    };
+    if !abbreviated {
         return None;
     }
     let keys: Vec<(String, String)> = analyses
@@ -258,7 +282,8 @@ mod tests {
 
     use super::*;
 
-    /// «стали» - форма «стать» и «сталь», «т» - сокращение; без частот словаря
+    /// «стали» - форма «стать» и «сталь», «т» и «п» - сокращения, у «с» - сокращение и другой
+    /// разбор; без частот словаря
     fn dictionary() -> Dictionary {
         let tags = ["INFN", "VERB", "NOUN", "NOUN Abbr"]
             .map(String::from)
@@ -288,6 +313,19 @@ mod tests {
             .add_word("стали", &[entry(verb, 1), entry(steel, 1)])
             .unwrap();
         builder.add_word("т", &[entry(abbreviated, 0)]).unwrap();
+        let adjective = builder.add_ud_tag("ADJ", "Abbr=Yes", &[]).unwrap();
+        let adjectival = builder
+            .add_table(abbreviation_paradigm, &[(0, adjective)])
+            .unwrap();
+        let plain = builder
+            .add_table(abbreviation_paradigm, &[(0, noun)])
+            .unwrap();
+        builder
+            .add_word("п", &[entry(abbreviated, 0), entry(adjectival, 0)])
+            .unwrap();
+        builder
+            .add_word("с", &[entry(abbreviated, 0), entry(plain, 0)])
+            .unwrap();
         Dictionary::from_bytes(&builder.build().unwrap()).unwrap()
     }
 
@@ -309,6 +347,23 @@ mod tests {
         assert_eq!(shares, [233_333, 766_667]);
         assert!(read("стали\tVERB\tстать\t9").is_err());
         assert!(read("стали\tVERB\tстать\t1\t2").is_err());
+    }
+
+    #[test]
+    fn dotted_counts_for_abbreviations() {
+        let counts =
+            read("п.\tADJ\tп\t9\t0\nп.\tNOUN\tп\t50\t50\nп\tNOUN\tп\t9\t0\nс.\tNOUN\tс\t9\t0\n")
+                .unwrap();
+        // Доли «п» - по строчным разметкам «п.»: все его разборы сокращения; разметки «П.» с заглавной
+        // (инициал) и голого «п» не учитываются, а у «с» есть разбор не сокращения
+        let lists = blend(&dictionary(), &counts);
+        assert_eq!(lists.len(), 1);
+        let (word, list) = &lists[0];
+        assert_eq!(word, "п");
+        // Равные доли словаря и 9 разметок прилагательного: (9 + 2,5) / 14 и 2,5 / 14
+        let mut shares: Vec<u32> = list.iter().map(|&(_, millionths)| millionths).collect();
+        shares.sort_unstable();
+        assert_eq!(shares, [178_571, 821_429]);
     }
 
     /// «земли» и «воли» - нарицательные и имена собственные, без частот словаря; «земля» - из

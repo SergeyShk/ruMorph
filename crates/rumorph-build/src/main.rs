@@ -16,32 +16,6 @@ use std::time::Instant;
 
 use rumorph::{Builder, Dictionary, Entry, GuessIndex};
 
-/// Вводные слова, у которых в OpenCorpora есть наречие или частица и вводный союз того же
-/// написания, а вводных употреблений наречия в обучающих частях UD Taiga и GSD больше половины
-const PARENTHETICAL_ADVERBS: &[&str] = &[
-    "безусловно",
-    "бесспорно",
-    "вероятно",
-    "видимо",
-    "возможно",
-    "естественно",
-    "конечно",
-    "кстати",
-    "наверно",
-    "наверное",
-    "наконец",
-    "наоборот",
-    "напротив",
-    "несомненно",
-    "очевидно",
-    "по-вашему",
-    "по-моему",
-    "по-твоему",
-    "пожалуй",
-    "похоже",
-    "правда",
-];
-
 fn main() -> ExitCode {
     let args: Vec<PathBuf> = std::env::args_os().skip(1).map(PathBuf::from).collect();
     // Без весов собирается словарь без контекстной модели: на нем она и учится
@@ -250,18 +224,15 @@ fn build(
             let grammemes = grammemes(entry);
             grammemes[0] == "CONJ" && grammemes.contains(&"Prnt")
         };
-        // Вводный союз - наречие с пометой Prnt - заменяет наречие и частицу из `PARENTHETICAL_ADVERBS`:
-        // при слиянии одинаковых разборов помета досталась бы более вероятному
+        // Наречие и частица из `ud::PARENTHETICAL_ADVERBS` («кстати») получают помету Prnt
+        // (`ud::convert`): вводный союз того же написания при них лишний
         let adverb = |entry: &(u16, u16, String)| matches!(grammemes(entry)[0], "ADVB" | "PRCL");
-        let replaces = PARENTHETICAL_ADVERBS.binary_search(&word).is_ok();
-        if replaces && entries.iter().any(conjunction) {
-            entries.retain(|entry| !adverb(entry));
-        }
+        let marked =
+            ud::PARENTHETICAL_ADVERBS.binary_search(&word).is_ok() && entries.iter().any(adverb);
         // Вводный союз при другом разборе словоформы в SynTagRus не бывает CCONJ («скажем»)
         let parenthetical = |entry: &(u16, u16, String)| {
             conjunction(entry)
-                && !replaces
-                && !ud::has_pos_exception("CONJ", &spell(entry.0, &entry.2, 0))
+                && (marked || !ud::has_pos_exception("CONJ", &spell(entry.0, &entry.2, 0)))
         };
         if entries.iter().any(|entry| !parenthetical(entry)) {
             entries.retain(|entry| !parenthetical(entry));
@@ -1150,10 +1121,5 @@ mod tests {
         let cells = [(0, 10), (1, 11), (1, 12), (0, 13)];
         assert_eq!(female_plurals(&tags, &cells), [(3, 1)]);
         assert!(female_plurals(&tags[..1], &cells[..1]).is_empty());
-    }
-
-    #[test]
-    fn parenthetical_adverbs_are_sorted() {
-        assert!(PARENTHETICAL_ADVERBS.is_sorted());
     }
 }

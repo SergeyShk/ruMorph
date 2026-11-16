@@ -43,9 +43,36 @@ const SCONJ: &[&str] = &[
     "чтобы",
 ];
 
+/// Наречия и частицы, у которых в OpenCorpora есть вводный союз того же написания, а вводных
+/// употреблений в обучающих частях UD Taiga и GSD больше половины: им ставится помета Prnt
+pub const PARENTHETICAL_ADVERBS: &[&str] = &[
+    "безусловно",
+    "бесспорно",
+    "вероятно",
+    "видимо",
+    "возможно",
+    "естественно",
+    "конечно",
+    "кстати",
+    "наверно",
+    "наверное",
+    "наконец",
+    "наоборот",
+    "напротив",
+    "несомненно",
+    "очевидно",
+    "по-вашему",
+    "по-моему",
+    "по-твоему",
+    "пожалуй",
+    "похоже",
+    "правда",
+];
+
 /// Служебные слова, часть речи которых в UD не совпадает с частью речи OpenCorpora
 const POS_EXCEPTIONS: &[(&str, &str, &str)] = &[
     ("ADJF", "данный", "ADJ"),
+    ("ADJF", "н", "DET"),
     ("ADJF", "один", "NUM"),
     ("ADVB", "вдоль", "ADP"),
     ("ADVB", "вне", "ADP"),
@@ -171,6 +198,8 @@ type Feature = (&'static str, &'static str);
 /// Признаки слова из `POS_EXCEPTIONS`, с которыми его разбор совпадает с разбором другой части речи
 /// OpenCorpora и сливается с ним: «несколько» (ADVB) - как числительное в винительном падеже
 const EXCEPTION_FEATS: &[(&str, &str, &[Feature])] = &[
+    // «н.» в «до н. э.» - «наш», как в трибанках
+    ("ADJF", "н", &[("Poss", "Yes"), ("PronType", "Prs")]),
     ("ADVB", "несколько", &[("Animacy", "Inan"), ("Case", "Acc")]),
     (
         "ADVB",
@@ -682,8 +711,11 @@ pub fn convert(tag: &str, lemma: &str) -> Ud {
             .copied()
             .filter(|_| oc == "NPRO")
             .map(|case| if case == "Acc" { "Gen" } else { case });
+        // Сокращение остается сокращением: «т» в лексеме союза «так», «напр» - «например»
+        let abbreviation = feats.get("Abbr").copied();
         feats.clear();
         feats.extend(case.map(|case| ("Case", case)));
+        feats.extend(abbreviation.map(|value| ("Abbr", value)));
     }
     if exception
         && let Some(&(_, _, extra)) = EXCEPTION_FEATS
@@ -829,6 +861,9 @@ pub fn convert(tag: &str, lemma: &str) -> Ud {
         .map(|g| g.to_string())
         .chain(extra_labels)
         .collect();
+    if matches!(oc, "ADVB" | "PRCL") && PARENTHETICAL_ADVERBS.binary_search(&lemma).is_ok() {
+        labels.push("Prnt".into());
+    }
     labels.sort();
     labels.dedup();
     Ud { pos, feats, labels }
@@ -1083,6 +1118,7 @@ pub fn counting_form(tag: &str, lemma: &str, word: &str) -> bool {
 /// глаголов, иначе пустая строка; разборы с одним тегом и классом леммы переводятся одинаково
 pub fn lemma_class(lemma: &str) -> &str {
     let listed = SCONJ.contains(&lemma)
+        || PARENTHETICAL_ADVERBS.binary_search(&lemma).is_ok()
         || GENDER_EXCEPTIONS.iter().any(|&(word, _)| word == lemma)
         || POS_EXCEPTIONS.iter().any(|&(_, word, _)| word == lemma)
         || ADVERB_DEGREES.iter().any(|&(word, _)| word == lemma)
@@ -1334,6 +1370,19 @@ mod tests {
         );
         assert_eq!(summary("ADVB", "больше").1, "Degree=Cmp|PronType=Tot");
         assert!(has_pos_exception("CONJ", "значит"));
+        // Сокращение в лексеме служебного слова остается сокращением, «н» («до н. э.») - «наш»
+        assert_eq!(
+            summary("CONJ,Abbr", "так").1,
+            "Abbr=Yes|Degree=Pos|PronType=Dem"
+        );
+        assert_eq!(
+            summary("ADJF,Fixd,Abbr masc,sing,gent", "н"),
+            (
+                "DET".into(),
+                "Abbr=Yes|Case=Gen|Gender=Masc|Number=Sing|Poss=Yes|PronType=Prs".into(),
+                vec!["Fixd".into()]
+            )
+        );
         assert!(!has_pos_exception("CONJ", "кстати"));
         assert_eq!(summary("CONJ", "однако").1, "Degree=Pos");
         assert_eq!(
@@ -1709,6 +1758,17 @@ mod tests {
         assert!(unknown_grammemes("NOUN,anim,masc,Sgtm sing,nomn").is_empty());
         assert!(unknown_grammemes("VERB,impf,tran plur,pres,indc").is_empty());
         assert_eq!(unknown_grammemes("ABCD,Xyzw sing,nomn"), ["ABCD", "Xyzw"]);
+    }
+
+    #[test]
+    fn parenthetical_adverbs() {
+        assert!(PARENTHETICAL_ADVERBS.is_sorted());
+        assert_eq!(summary("ADVB", "кстати").2, ["Prnt"]);
+        assert_eq!(summary("ADVB,Prdx", "бесспорно").2, ["Prdx", "Prnt"]);
+        assert_eq!(summary("PRCL", "правда").2, ["Prnt"]);
+        assert!(summary("ADVB", "вообще").2.is_empty());
+        // Сборщик переводит теги по классу леммы: у вводного наречия класс - сама лемма
+        assert_eq!(lemma_class("кстати"), "кстати");
     }
 
     #[test]
