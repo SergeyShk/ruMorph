@@ -156,8 +156,32 @@ def test_abbreviation_with_dot(morph):
     analyses = morph.analyze("т.")
     assert analyses[0].lemma == "так"
     assert math.isclose(sum(a.prob for a in analyses), 1.0)
-    assert all(a.feats["Abbr"] == "Yes" for a in analyses)
-    assert [a.pos for a in morph.analyze("вайб.")] == ["X"]
+    assert all(a.feats["Abbr"] == "Yes" for a in analyses if a.lemma != "так")
+    # Лемма - полное слово, если это одно слово; незнакомое сокращение - X с леммой без точки
+    assert {a.lemma for a in morph.analyze("англ.")} == {"английский"}
+    assert {(a.lemma, a.pos) for a in morph.analyze("напр.")} == {("например", "ADV")}
+    assert [(a.word, a.lemma, a.pos) for a in morph.analyze("Вайб.")] == [("Вайб.", "вайб", "X")]
+    assert [a.lemma for a in morph.analyze("т.е.")] == ["т.е."]
+
+
+@pytest.mark.parametrize(
+    ("word", "lemma", "pos"),
+    [
+        ("тов.", "товарищ", "NOUN"),
+        ("тт.", "товарищ", "NOUN"),
+        ("ген.", "генерал", "NOUN"),
+        ("коп.", "копейка", "NOUN"),
+        ("франц.", "французский", "ADJ"),
+        ("оч.", "очень", "ADV"),
+    ],
+)
+def test_missing_abbreviations(morph, word, lemma, pos):
+    # Частое сокращение, которого нет в словаре, разбирается как похожее словарное
+    analyses = morph.analyze(word)
+    assert {(a.word, a.lemma, a.pos, a.feats["Abbr"], a.source) for a in analyses} == {
+        (word, lemma, pos, "Yes", "rule")
+    }
+    assert math.isclose(sum(a.prob for a in analyses), 1.0)
 
 
 def test_abbreviation_lemmas(morph):
@@ -166,6 +190,12 @@ def test_abbreviation_lemmas(morph):
         lemmas.setdefault(a.pos, set()).add(a.lemma)
     assert lemmas["NOUN"] == {"тонна", "том"}
     assert lemmas["ADJ"] == {"т"}
+    # Род формы сокращения-прилагательного не выбирает лемму существительного
+    assert {(a.pos, a.lemma) for a in morph.analyze("п.")} == {
+        ("ADJ", "подобный"),
+        ("NOUN", "п"),
+        ("NOUN", "пункт"),
+    }
     # «л» - название места остается сокращением
     assert {(a.pos, a.lemma) for a in morph.analyze("л") if a.pos in {"NOUN", "PROPN"}} == {
         ("NOUN", "литр"),

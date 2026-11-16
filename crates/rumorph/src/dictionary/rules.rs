@@ -46,21 +46,39 @@ const NUMERAL_FEATS: &[(&str, &str, &str, &str, f64)] = &[
     ("Acc", "", "Plur", "Anim", 1.0),
 ];
 
-/// Полные леммы сокращений-существительных, как в SynTagRus: сокращение, граммема рода или
-/// одушевленности его тега OpenCorpora и лемма, по алфавиту. В OpenCorpora лемма сокращения -
-/// оно само
+/// Полные леммы сокращений, как требует руководство UD (полное написание, если это одно слово):
+/// сокращение, граммема его тега OpenCorpora (часть речи ADJF, род или одушевленность) и лемма,
+/// по сокращению. В OpenCorpora лемма сокращения - оно само
 const ABBREVIATION_LEMMAS: &[(&str, &str, &str)] = &[
+    ("англ", "ADJF", "английский"),
+    ("араб", "ADJF", "арабский"),
     ("в", "masc", "век"),
     ("вв", "masc", "век"),
     ("г", "anim", "господин"),
     ("г", "inan", "год"),
     ("гг", "masc", "год"),
+    ("гл", "femn", "глава"),
+    ("гор", "masc", "город"),
+    ("гос", "ADJF", "государственный"),
+    ("гр", "masc", "грамм"),
+    ("греч", "ADJF", "греческий"),
     ("гц", "masc", "герц"),
     ("долл", "masc", "доллар"),
+    ("др", "ADJF", "другой"),
+    ("ед", "femn", "единица"),
+    ("изд", "neut", "издание"),
+    ("исп", "ADJF", "испанский"),
+    ("итал", "ADJF", "итальянский"),
+    ("кв", "ADJF", "квадратный"),
+    ("кв", "femn", "квартира"),
     ("квт", "masc", "киловатт"),
     ("кг", "masc", "килограмм"),
+    ("кит", "ADJF", "китайский"),
     ("км", "masc", "километр"),
+    ("кн", "femn", "книга"),
+    ("куб", "ADJF", "кубический"),
     ("л", "masc", "литр"),
+    ("лат", "ADJF", "латинский"),
     ("м", "masc", "метр"),
     ("мг", "masc", "миллиграмм"),
     ("мин", "femn", "минута"),
@@ -68,12 +86,28 @@ const ABBREVIATION_LEMMAS: &[(&str, &str, &str)] = &[
     ("млн", "masc", "миллион"),
     ("млрд", "masc", "миллиард"),
     ("мм", "masc", "миллиметр"),
+    ("н", "ADJF", "наш"),
+    ("нем", "ADJF", "немецкий"),
     ("нм", "masc", "нанометр"),
+    ("обл", "femn", "область"),
+    ("п", "ADJF", "подобный"),
     ("п", "masc", "пункт"),
+    ("польск", "ADJF", "польский"),
+    ("пр", "ADJF", "прочий"),
     ("прим", "neut", "примечание"),
     ("проф", "anim", "профессор"),
     ("проц", "masc", "процент"),
+    ("проч", "ADJF", "прочий"),
+    ("р", "femn", "река"),
+    ("р", "masc", "рубль"),
+    ("ред", "anim", "редактор"),
+    ("ред", "femn", "редакция"),
     ("руб", "masc", "рубль"),
+    ("рус", "ADJF", "русский"),
+    ("русск", "ADJF", "русский"),
+    ("с", "femn", "страница"),
+    ("с", "neut", "село"),
+    ("св", "ADJF", "святой"),
     ("сек", "femn", "секунда"),
     ("см", "masc", "сантиметр"),
     ("ст", "femn", "статья"),
@@ -81,31 +115,60 @@ const ABBREVIATION_LEMMAS: &[(&str, &str, &str)] = &[
     ("стр", "neut", "строение"),
     ("т", "femn", "тонна"),
     ("т", "masc", "том"),
-    ("тов", "anim", "товарищ"),
     ("трлн", "masc", "триллион"),
     ("тыс", "femn", "тысяча"),
     ("ул", "femn", "улица"),
+    ("фин", "ADJF", "финский"),
+    ("фр", "ADJF", "французский"),
     ("ч", "femn", "часть"),
     ("ч", "masc", "час"),
     ("чел", "anim", "человек"),
+    ("швед", "ADJF", "шведский"),
     ("шт", "femn", "штука"),
     ("э", "femn", "эра"),
+    ("экз", "masc", "экземпляр"),
+    ("яп", "ADJF", "японский"),
 ];
 
 /// Граммемы из `ABBREVIATION_LEMMAS`: номер бита в `abbreviation_grammemes`
-const ABBREVIATION_GRAMMEMES: [&str; 5] = ["masc", "femn", "neut", "anim", "inan"];
+const ABBREVIATION_GRAMMEMES: [&str; 6] = ["masc", "femn", "neut", "anim", "inan", "ADJF"];
 
-/// Биты граммем `ABBREVIATION_GRAMMEMES` тега OpenCorpora существительного-сокращения и старший
-/// бит; у других тегов - 0
+/// Биты граммем `ABBREVIATION_GRAMMEMES` тега OpenCorpora сокращения и старший бит; у других
+/// тегов - 0. У существительного - род и одушевленность, у прилагательного - только ADJF: его
+/// род - признак формы
 pub(super) fn abbreviation_grammemes(tag: &str) -> u8 {
     let grammemes = || tag.split([',', ' ']);
-    if !tag.starts_with("NOUN,") || !grammemes().any(|grammeme| grammeme == "Abbr") {
+    if !grammemes().any(|grammeme| grammeme == "Abbr") {
         return 0;
     }
+    let pos = grammemes().next().unwrap_or_default();
     (ABBREVIATION_GRAMMEMES.iter().enumerate())
-        .filter(|&(_, name)| grammemes().any(|grammeme| grammeme == *name))
+        .filter(|&(_, &name)| match pos {
+            "NOUN" => grammemes().any(|grammeme| grammeme == name),
+            "ADJF" => name == "ADJF",
+            _ => false,
+        })
         .fold(1 << 7, |bits, (bit, _)| bits | 1 << bit)
 }
+
+/// Частые сокращения с точкой, которых нет в словаре: сокращение, сокращение словаря с теми же
+/// разборами и полная лемма; по сокращению
+const MISSING_ABBREVIATIONS: &[(&str, &str, &str)] = &[
+    ("акад", "проф", "академик"),
+    ("болг", "англ", "болгарский"),
+    ("ген", "проф", "генерал"),
+    ("ил", "обл", "иллюстрация"),
+    ("коп", "обл", "копейка"),
+    ("корр", "проф", "корреспондент"),
+    ("мед", "англ", "медицинский"),
+    ("оч", "букв", "очень"),
+    ("собр", "изд", "собрание"),
+    ("соч", "изд", "сочинение"),
+    ("тов", "проф", "товарищ"),
+    ("тт", "проф", "товарищ"),
+    ("укр", "англ", "украинский"),
+    ("франц", "англ", "французский"),
+];
 
 /// Падежные окончания количественных числительных из цифр: «5-ти», «2-х», «3-мя», «4-м»
 const CARDINAL_ENDINGS: &[&str] = &[
@@ -483,18 +546,50 @@ impl Dictionary {
             .map_or(0.0, |&(.., count)| count)
     }
 
-    /// Сокращение с точкой («т.», «им.») - разборы словарного сокращения без точки
+    /// Сокращение с точкой кириллицей: разборы словарного сокращения без точки («т.», «им.»),
+    /// у частого сокращения, которого нет в словаре («франц.»), - разборы сокращения с теми же
+    /// признаками и полная лемма, у остальных - `X` с леммой без точки в нижнем регистре
     fn abbreviation(&self, word: &str) -> Option<Vec<Analysis>> {
         let lower = word.to_lowercase();
         let base = lower.strip_suffix('.')?;
         if base.is_empty() || !base.chars().all(cyrillic) {
             return None;
         }
-        // Сокращение - признак Abbr=Yes или помета Abbr у склоняемой аббревиатуры
+        let missing = MISSING_ABBREVIATIONS
+            .binary_search_by_key(&base, |&(short, _, _)| short)
+            .ok()
+            .map(|index| MISSING_ABBREVIATIONS[index]);
+        let found = match missing {
+            Some((_, sample, lemma)) => self.abbreviations(sample).map(|mut analyses| {
+                for analysis in &mut analyses {
+                    lemma.clone_into(&mut analysis.lemma);
+                }
+                analyses
+            }),
+            None => self.abbreviations(base),
+        };
+        let Some(mut analyses) = found else {
+            return Some(self.shares(word, &[(base, self.rule_tags.other, 1.0)]));
+        };
+        for analysis in &mut analyses {
+            analysis.word = word.to_owned();
+            analysis.source = Source::Rule;
+            analysis.entry = None;
+        }
+        Some(analyses)
+    }
+
+    /// Разборы словаря слова `base` - сокращения, доли - среди них. Сокращение - признак Abbr=Yes,
+    /// помета Abbr у склоняемой аббревиатуры или граммема Abbr тега OpenCorpora: у наречия
+    /// («напр» - «например») перевод в UD ее не сохраняет
+    fn abbreviations(&self, base: &str) -> Option<Vec<Analysis>> {
         let abbreviated = |analysis: &Analysis| {
-            self.ud
-                .get(analysis.ud)
-                .is_some_and(|tag| tag.feat("Abbr") == Some("Yes") || tag.has_label("Abbr"))
+            let ud = self.ud.get(analysis.ud);
+            ud.is_some_and(|tag| tag.feat("Abbr") == Some("Yes") || tag.has_label("Abbr"))
+                || analysis.tag.is_some_and(|tag| {
+                    (self.abbreviation_grammemes.get(usize::from(tag)))
+                        .is_some_and(|&bits| bits != 0)
+                })
         };
         let mut analyses: Vec<Analysis> = self
             .merge(self.candidates(base))
@@ -506,10 +601,7 @@ impl Dictionary {
             return None;
         }
         for analysis in &mut analyses {
-            analysis.word = word.to_owned();
             analysis.prob /= total;
-            analysis.source = Source::Rule;
-            analysis.entry = None;
         }
         Some(analyses)
     }
@@ -713,8 +805,13 @@ mod tests {
             abbreviation_grammemes("NOUN,inan,masc,Fixd,Abbr sing,nomn"),
             0b1001_0001
         );
-        assert_eq!(abbreviation_grammemes("ADJF,Fixd,Abbr masc,sing,nomn"), 0);
+        assert_eq!(
+            abbreviation_grammemes("ADJF,Fixd,Abbr masc,sing,nomn"),
+            0b1010_0000
+        );
+        assert_eq!(abbreviation_grammemes("ADVB,Abbr"), 0b1000_0000);
         assert_eq!(abbreviation_grammemes("NOUN,inan,masc sing,nomn"), 0);
+        assert!(MISSING_ABBREVIATIONS.is_sorted_by_key(|&(short, _, _)| short));
     }
 
     #[test]
@@ -872,6 +969,9 @@ mod tests {
         );
         assert_eq!(parts_of_speech(&dict, "%"), ["SYM"]);
         assert_eq!(parts_of_speech(&dict, "«"), ["PUNCT"]);
+        // Незнакомое сокращение с точкой - X с леммой без точки
+        assert_eq!(rules(&dict, "Франц."), [analysis("франц", "X", "")]);
+        assert_eq!(rules(&dict, "т.е."), []);
         // Не подошло ни одно правило - запасной X, и у токена с пробелом тоже
         assert!(rules(&dict, "км/ч").is_empty());
         let fallback = dict.fallback("км/ч").remove(0);

@@ -52,7 +52,7 @@ If a word's part of speech depends on context, it has both analyses: «есть�
 
 Features: case, number, gender, animacy, person, tense, aspect, mood, voice, verb form, degree, the short form (`Variant=Short`), the type of a proper name (`NameType`), abbreviation (`Abbr`), possessiveness (`Poss`), the type of a numeral (`NumType`) and how it is written (`NumForm`), the type of a pronoun or pronominal adverb (`PronType`: «там» - `Dem`, «где» - `Rel`, «никогда» - `Neg`), reflexivity (`Reflex`), indeclinability (`InflClass=Ind`), negation (`Polarity=Neg`).
 
-Lemmas follow SynTagRus too: feminine surnames and patronymics keep the feminine lemma («Ивановой» - «иванова»), superlatives stay superlative («важнейшей» - «важнейший»), «денег» - «деньги», abbreviated nouns get the full word as the lemma («млн» - «миллион», «г.» - «год»). Nouns that have only the plural get the gender of their declension, as in SynTagRus: «выборы» is masculine, «сутки» feminine, «ворота» neuter; indeclinable ones («СМИ») and those declined as adjectives («данные») have no gender. When several OpenCorpora analyses coincide in UD (the conjunction and the adverb «так»), they are merged into one with the sum of their probabilities.
+Lemmas follow SynTagRus too: feminine surnames and patronymics keep the feminine lemma («Ивановой» - «иванова»), superlatives stay superlative («важнейшей» - «важнейший»), «денег» - «деньги», abbreviations get the full word as the lemma when it is a single word, as the UD guidelines require («млн» - «миллион», «г.» - «год», «англ.» - «английский», «др.» - «другой»), while an abbreviation of several words stays («т.е.»). Nouns that have only the plural get the gender of their declension, as in SynTagRus: «выборы» is masculine, «сутки» feminine, «ворота» neuter; indeclinable ones («СМИ») and those declined as adjectives («данные») have no gender. When several OpenCorpora analyses coincide in UD (the conjunction and the adverb «так»), they are merged into one with the sum of their probabilities.
 
 The `labels` are the [OpenCorpora](https://opencorpora.org/dict.php?act=gram) grammemes that have no UD feature: style (`Infr`, `Slng`, `Arch`), qualitative adjective (`Qual`), parenthetical word (`Prnt`), transitivity (`tran`, `intr`), whether the speaker is included in an imperative (`incl` - «пойдемте», `excl` - «иди»), the second locative (`loc2` - «в лесу») and others.
 
@@ -68,7 +68,7 @@ Numbers, punctuation, Latin words and abbreviations are analyzed by rules, their
 | Roman numerals and ranges: «XX», «XIX-го», «II-III» | an ordinal `ADJ` with `NumForm=Roman` |
 | Latin words: «iPhone» | `X` with `Foreign=Yes` |
 | initials: «А.», «А» | `PROPN` with `Abbr=Yes`: a given name, a patronymic or a surname |
-| abbreviations with a dot: «т.», «им.» | the analyses of the dictionary abbreviation without the dot |
+| abbreviations with a dot: «т.», «им.», «франц.», «тов.» | the analyses of the dictionary abbreviation without the dot; for a frequent abbreviation missing from the dictionary, the analyses of a similar abbreviation with the full lemma; an unknown one («вин.») - `X` with the lemma without the dot |
 | capitalized abbreviations: «НКО» | `PROPN` or `NOUN` with `Abbr=Yes`; a long word in capitals («ЧАТБОТАМИ») is also guessed as an ordinary word |
 | adverbs «по-бурятски», «по-молодому» | `ADV` with `Degree=Pos` |
 | other tokens: «км/ч», «100%-ный» | `X` without features, the lemma is the token in lowercase |
