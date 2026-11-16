@@ -986,6 +986,24 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn verify_reads_the_model() {
+        // Модель, испорченная под верной суммой: загрузка ее принимает, `verify` - нет
+        let data = dictionary_bytes_with(&table(), &[], Some(weights(&[("F=Case=Acc", 2.0)])));
+        assert!(Dictionary::from_bytes(&data).unwrap().verify().is_ok());
+        let mut damaged = data.clone();
+        let at = (damaged.windows(MAGIC.len()))
+            .position(|window| window == MAGIC)
+            .unwrap();
+        damaged[at] = b'X';
+        let dictionary =
+            Dictionary::from_bytes(&crate::format::tests::with_checksum(damaged)).unwrap();
+        assert!(matches!(dictionary.verify(), Err(Error::Context(_))));
+        // Словарь без модели проверяется без нее
+        let plain = Dictionary::from_bytes(&dictionary_bytes_of(&table(), &[])).unwrap();
+        assert!(plain.verify().is_ok());
+    }
+
+    #[test]
     fn dictionary_without_model() {
         let dictionary = Dictionary::from_bytes(&dictionary_bytes_of(&table(), &[])).unwrap();
         let err = dictionary.analyze_sentence(&["стол"]).unwrap_err();

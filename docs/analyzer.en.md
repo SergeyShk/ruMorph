@@ -1,7 +1,7 @@
 # Analyzer
 
 ``` {.python .signature}
-Analyzer(path=None, words=None)
+Analyzer(path=None, words=None, *, verify=False)
 ```
 
 Morphological analyzer: for a word form it finds all [analyses](analysis.md) in the OpenCorpora dictionary and the words of Wiktionary - the initial form, the part of speech and the [Universal Dependencies](https://universaldependencies.org/) features - and orders them by probability. The dictionary is loaded when the first analyzer is created: analyzers with the same dictionary file in a process share it, so a new analyzer is created instantly. The last loaded dictionary stays in the process even without analyzers, so process pool tasks and an analyzer created for a single call do not load the dictionary again.
@@ -10,7 +10,7 @@ Exceptions:
 
 - `FileNotFoundError` - the dictionary file does not exist;
 - `OSError` - the dictionary file cannot be read: no access, the path points to a directory;
-- `ValueError` - the file is not a ruMorph dictionary or is damaged, or an [own word](#words) has no sample in the dictionary, its sample is ambiguous, the word does not inflect like it, is empty or contains a space;
+- `ValueError` - the file is not a ruMorph dictionary or is damaged (with `verify=True`, also if an automaton or the model is damaged), or an [own word](#words) has no sample in the dictionary, its sample is ambiguous, the word does not inflect like it, is empty or contains a space;
 - `TypeError` - a path that is neither a string nor `PathLike`, or own words that are not a mapping of strings.
 
 === "Code"
@@ -34,8 +34,9 @@ Exceptions:
 | :-------- | :--- | :------ | :---------- |
 | `path` | `str` / `PathLike` | `None` | Path to the dictionary file; by default, the dictionary from the package |
 | `words` | `Mapping[str, str \| tuple[str, str]]` | `None` | [Own words](#words) and their samples |
+| `verify` | `bool` | `False` | Verify the whole dictionary: walk the automata and read the context model - for a file of an untrusted source |
 
-The object keeps the dictionary path in `path` of type `Path`, read-only. The dictionary file is mapped into memory: processes with the same file share its memory, so every further process with an analyzer takes about 1.5 MB. While an analyzer exists, the file must not be overwritten in place, but it can be replaced with a new file; on Windows an open file can be neither replaced nor deleted. The last loaded dictionary stays open even after the analyzers are deleted - until a dictionary from another file is loaded or the process exits: to release the file of your own dictionary, for example before deleting it on Windows, delete its analyzers and analyses and create an analyzer with the package dictionary: `Analyzer()`. A dictionary is trusted data, like code: loading rejects a damaged file but not every deliberately crafted one, so dictionaries from untrusted sources should not be loaded.
+The object keeps the dictionary path in `path` of type `Path`, read-only. The dictionary file is mapped into memory: processes with the same file share its memory, so every further process with an analyzer takes about 1.5 MB. While an analyzer exists, the file must not be overwritten in place, but it can be replaced with a new file; on Windows an open file can be neither replaced nor deleted. The last loaded dictionary stays open even after the analyzers are deleted - until a dictionary from another file is loaded or the process exits: to release the file of your own dictionary, for example before deleting it on Windows, delete its analyzers and analyses and create an analyzer with the package dictionary: `Analyzer()`. Loading checks the checksum and the structure of the tables of the dictionary but not every node of the automata: a deliberately crafted file with the right checksum loads and may crash the analysis. Load a dictionary of an untrusted source with `verify=True`: the check takes tens of milliseconds and is done once per dictionary; an analyzer from pickle verifies the dictionary the same way.
 
 ## Own words { #words }
 
@@ -294,6 +295,8 @@ Exceptions:
 ## Dictionary { #dictionary }
 
 The package dictionary is built from the [OpenCorpora](https://opencorpora.org) dictionary and the words of [Wiktionary](https://ru.wiktionary.org) missing from it - nouns, proper names and adjectives («зумер», «джун»): about 3.8 million word forms in all. The probabilities of analyses come from the OpenCorpora corpus and are refined by the annotation of the Universal Dependencies treebanks [UD_Russian-Taiga](https://github.com/UniversalDependencies/UD_Russian-Taiga) and [UD_Russian-GSD](https://github.com/UniversalDependencies/UD_Russian-GSD): this way «ничего» is more often a pronoun than an adverb. Word forms missing from every corpus get equally probable analyses. The dictionary is distributed under the [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) license.
+
+The sources of the dictionary are described by the `dictionary_info` property - a new `dict` on every access: `source`, the revisions of the OpenCorpora dictionary and corpus (`opencorpora_revision`, `corpus_revision`), the lexemes of Wiktionary (`wiktionary`), the UD release and treebanks of the frequencies (`frequencies`) and of the training of the context model (`context`), the license (`license`), the number of word forms (`word_forms`) and the checksum of the file (`checksum`). A dictionary built by another tool has only the last two keys.
 
 ## Threads and processes { #parallel }
 
