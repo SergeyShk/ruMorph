@@ -75,6 +75,10 @@ const PREFIXES: &[&str] = &[
 /// Части речи последней части слова через дефис: служебные слова и буквы - не части сложного слова
 const HYPHENATED_CLASSES: &[&str] = &["NOUN", "PROPN", "ADJ", "VERB", "ADV", "NUM", "INTJ", "X"];
 
+/// Неизменяемые приложения: слово через дефис с ними изменяется по первой части
+/// («программы-минимум»)
+const APPOSITIONS: &[&str] = &["люкс", "максимум", "минимум"];
+
 /// Части речи, которые образуются с приставками
 const OPEN_CLASSES: &[&str] = &["NOUN", "ADJ", "VERB", "ADV"];
 
@@ -202,6 +206,9 @@ impl Dictionary {
             return Vec::new();
         }
         let left_analyses = self.candidates(left);
+        if let Some(analyses) = self.apposition(word, &left_analyses, right) {
+            return analyses;
+        }
         let analyses = self
             .analyze(right)
             .into_iter()
@@ -241,6 +248,33 @@ impl Dictionary {
             })
             .collect();
         normalized(self.merge(analyses))
+    }
+
+    /// Неизменяемое приложение из `APPOSITIONS` после изменяемого существительного
+    /// («программы-минимум», «номера-люкс»): разборы существительного первой части не в начальной
+    /// форме, лемма - из лемм частей, форм нет
+    fn apposition(&self, word: &str, left: &[Analysis], right: &str) -> Option<Vec<Analysis>> {
+        let right_lower = right.to_lowercase();
+        if !APPOSITIONS.contains(&right_lower.as_str()) {
+            return None;
+        }
+        let heads: Vec<&Analysis> = (left.iter())
+            .filter(|analysis| self.pos(analysis.ud) == "NOUN")
+            .collect();
+        if heads.is_empty() || heads.iter().any(|head| head.lemma == head.word) {
+            return None;
+        }
+        let analyses = heads
+            .into_iter()
+            .map(|head| Analysis {
+                word: word.to_owned(),
+                lemma: format!("{}-{right_lower}", head.lemma),
+                source: Source::Guess,
+                entry: None,
+                ..head.clone()
+            })
+            .collect();
+        Some(normalized(self.merge(analyses)))
     }
 
     /// Первая часть слова через дефис изменяется вместе с последней: та же часть речи, падеж
