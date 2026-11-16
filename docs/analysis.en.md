@@ -1,6 +1,6 @@
 # Word analysis
 
-An analysis is an `Analysis` object returned by the `analyze` and `analyze_many` methods of the [analyzer](analyzer.md): the lemma, the part of speech and the [Universal Dependencies](https://universaldependencies.org/) features, the probability and the source of the analysis. Analyses are immutable; they can be compared (the probability takes no part in the comparison, so an analysis equals its form from `forms()`; the exception is an analysis merged from lexemes with different labels, like «конечно» with and without the `Prnt` label: its form may carry the labels of the other lexeme), put into sets and pickled. The forms of a word are given by the `forms`, `inflect` and `agree` methods - see [Inflection](inflection.md).
+An analysis is an `Analysis` object returned by the `analyze` and `analyze_many` methods of the [analyzer](analyzer.md): the lemma, the part of speech and the [Universal Dependencies](https://universaldependencies.org/) features, the probability and the source of the analysis. Analyses are immutable; they can be compared (the probability takes no part in the comparison, so an analysis equals its form from `forms()`; the exception is an analysis merged from lexemes with different labels, like «однако» with and without the `Prnt` label: its form may carry the labels of the other lexeme), put into sets and pickled. The forms of a word are given by the `forms`, `inflect` and `agree` methods - see [Inflection](inflection.md).
 
 === "Code"
 
@@ -54,7 +54,7 @@ Features: case, number, gender, animacy, person, tense, aspect, mood, voice, ver
 
 Lemmas follow SynTagRus too: feminine surnames and patronymics keep the feminine lemma («Ивановой» - «иванова»), superlatives stay superlative («важнейшей» - «важнейший»), «денег» - «деньги», abbreviations get the full word as the lemma when it is a single word, as the UD guidelines require («млн» - «миллион», «г.» - «год», «англ.» - «английский», «др.» - «другой»), while an abbreviation of several words stays («т.е.»). Nouns that have only the plural get the gender of their declension, as in SynTagRus: «выборы» is masculine, «сутки» feminine, «ворота» neuter; indeclinable ones («СМИ») and those declined as adjectives («данные») have no gender. When several OpenCorpora analyses coincide in UD (the conjunction and the adverb «так»), they are merged into one with the sum of their probabilities.
 
-The `labels` are the [OpenCorpora](https://opencorpora.org/dict.php?act=gram) grammemes that have no UD feature: style (`Infr`, `Slng`, `Arch`), qualitative adjective (`Qual`), parenthetical word (`Prnt`), transitivity (`tran`, `intr`), whether the speaker is included in an imperative (`incl` - «пойдемте», `excl` - «иди»), the second locative (`loc2` - «в лесу») and others.
+The `labels` are the [OpenCorpora](https://opencorpora.org/dict.php?act=gram) grammemes that have no UD feature: style (`Infr`, `Slng`, `Arch`), qualitative adjective (`Qual`), parenthetical word (`Prnt` - on adverbs that are usually parenthetical: «конечно», «кстати», «видимо»; the verb «кажется» and the adverb «вообще» do not get it), transitivity (`tran`, `intr`), whether the speaker is included in an imperative (`incl` - «пойдемте», `excl` - «иди»), the second locative (`loc2` - «в лесу») and others.
 
 ## Tokens outside the dictionary { #rules }
 

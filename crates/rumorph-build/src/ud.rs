@@ -43,6 +43,32 @@ const SCONJ: &[&str] = &[
     "чтобы",
 ];
 
+/// Наречия и частицы, у которых в OpenCorpora есть вводный союз того же написания, а вводных
+/// употреблений в обучающих частях UD Taiga и GSD больше половины: им ставится помета Prnt
+pub const PARENTHETICAL_ADVERBS: &[&str] = &[
+    "безусловно",
+    "бесспорно",
+    "вероятно",
+    "видимо",
+    "возможно",
+    "естественно",
+    "конечно",
+    "кстати",
+    "наверно",
+    "наверное",
+    "наконец",
+    "наоборот",
+    "напротив",
+    "несомненно",
+    "очевидно",
+    "по-вашему",
+    "по-моему",
+    "по-твоему",
+    "пожалуй",
+    "похоже",
+    "правда",
+];
+
 /// Служебные слова, часть речи которых в UD не совпадает с частью речи OpenCorpora
 const POS_EXCEPTIONS: &[(&str, &str, &str)] = &[
     ("ADJF", "данный", "ADJ"),
@@ -835,6 +861,9 @@ pub fn convert(tag: &str, lemma: &str) -> Ud {
         .map(|g| g.to_string())
         .chain(extra_labels)
         .collect();
+    if matches!(oc, "ADVB" | "PRCL") && PARENTHETICAL_ADVERBS.binary_search(&lemma).is_ok() {
+        labels.push("Prnt".into());
+    }
     labels.sort();
     labels.dedup();
     Ud { pos, feats, labels }
@@ -1089,6 +1118,7 @@ pub fn counting_form(tag: &str, lemma: &str, word: &str) -> bool {
 /// глаголов, иначе пустая строка; разборы с одним тегом и классом леммы переводятся одинаково
 pub fn lemma_class(lemma: &str) -> &str {
     let listed = SCONJ.contains(&lemma)
+        || PARENTHETICAL_ADVERBS.binary_search(&lemma).is_ok()
         || GENDER_EXCEPTIONS.iter().any(|&(word, _)| word == lemma)
         || POS_EXCEPTIONS.iter().any(|&(_, word, _)| word == lemma)
         || ADVERB_DEGREES.iter().any(|&(word, _)| word == lemma)
@@ -1728,6 +1758,17 @@ mod tests {
         assert!(unknown_grammemes("NOUN,anim,masc,Sgtm sing,nomn").is_empty());
         assert!(unknown_grammemes("VERB,impf,tran plur,pres,indc").is_empty());
         assert_eq!(unknown_grammemes("ABCD,Xyzw sing,nomn"), ["ABCD", "Xyzw"]);
+    }
+
+    #[test]
+    fn parenthetical_adverbs() {
+        assert!(PARENTHETICAL_ADVERBS.is_sorted());
+        assert_eq!(summary("ADVB", "кстати").2, ["Prnt"]);
+        assert_eq!(summary("ADVB,Prdx", "бесспорно").2, ["Prdx", "Prnt"]);
+        assert_eq!(summary("PRCL", "правда").2, ["Prnt"]);
+        assert!(summary("ADVB", "вообще").2.is_empty());
+        // Сборщик переводит теги по классу леммы: у вводного наречия класс - сама лемма
+        assert_eq!(lemma_class("кстати"), "кстати");
     }
 
     #[test]

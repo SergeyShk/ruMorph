@@ -220,12 +220,19 @@ fn build(
                 .split([',', ' '])
                 .collect()
         };
-        // Вводный союз при другом разборе словоформы в SynTagRus не бывает CCONJ («кстати», «скажем»)
-        let parenthetical = |entry: &(u16, u16, String)| {
+        let conjunction = |entry: &(u16, u16, String)| {
             let grammemes = grammemes(entry);
-            grammemes[0] == "CONJ"
-                && grammemes.contains(&"Prnt")
-                && !ud::has_pos_exception("CONJ", &spell(entry.0, &entry.2, 0))
+            grammemes[0] == "CONJ" && grammemes.contains(&"Prnt")
+        };
+        // Наречие и частица из `ud::PARENTHETICAL_ADVERBS` («кстати») получают помету Prnt
+        // (`ud::convert`): вводный союз того же написания при них лишний
+        let adverb = |entry: &(u16, u16, String)| matches!(grammemes(entry)[0], "ADVB" | "PRCL");
+        let marked =
+            ud::PARENTHETICAL_ADVERBS.binary_search(&word).is_ok() && entries.iter().any(adverb);
+        // Вводный союз при другом разборе словоформы в SynTagRus не бывает CCONJ («скажем»)
+        let parenthetical = |entry: &(u16, u16, String)| {
+            conjunction(entry)
+                && (marked || !ud::has_pos_exception("CONJ", &spell(entry.0, &entry.2, 0)))
         };
         if entries.iter().any(|entry| !parenthetical(entry)) {
             entries.retain(|entry| !parenthetical(entry));
