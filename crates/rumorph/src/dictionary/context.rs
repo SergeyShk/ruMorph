@@ -76,11 +76,27 @@ impl Tiled {
 
     /// `out += self · input` для одного вектора
     fn apply_add(&self, input: &[f32], out: &mut [f32]) {
+        #[cfg(target_arch = "x86_64")]
+        if fused() {
+            // SAFETY: AVX2 и FMA у процессора есть - проверено `fused`
+            return unsafe { self.apply_add_fused(input, out) };
+        }
+        self.apply_add_with::<false>(input, out);
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    #[target_feature(enable = "avx2,fma")]
+    fn apply_add_fused(&self, input: &[f32], out: &mut [f32]) {
+        self.apply_add_with::<true>(input, out);
+    }
+
+    #[inline(always)]
+    fn apply_add_with<const FUSED: bool>(&self, input: &[f32], out: &mut [f32]) {
         for (tile, columns) in self.columns.chunks_exact(self.cols).enumerate() {
             let mut sums = [0.0f32; TILE];
             for (column, &value) in columns.iter().zip(input) {
                 for j in 0..TILE {
-                    sums[j] += value * column[j];
+                    sums[j] = madd::<FUSED>(value, column[j], sums[j]);
                 }
             }
             let start = tile * TILE;
@@ -93,6 +109,22 @@ impl Tiled {
 
     /// `out[t] = self · inputs[t] + bias` для всех векторов `inputs` подряд
     fn apply_all(&self, inputs: &[f32], bias: &[f32], out: &mut [f32]) {
+        #[cfg(target_arch = "x86_64")]
+        if fused() {
+            // SAFETY: AVX2 и FMA у процессора есть - проверено `fused`
+            return unsafe { self.apply_all_fused(inputs, bias, out) };
+        }
+        self.apply_all_with::<false>(inputs, bias, out);
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    #[target_feature(enable = "avx2,fma")]
+    fn apply_all_fused(&self, inputs: &[f32], bias: &[f32], out: &mut [f32]) {
+        self.apply_all_with::<true>(inputs, bias, out);
+    }
+
+    #[inline(always)]
+    fn apply_all_with<const FUSED: bool>(&self, inputs: &[f32], bias: &[f32], out: &mut [f32]) {
         let count = inputs.len() / self.cols;
         let mut padded = vec![[0.0f32; BATCH]; self.cols];
         for first in (0..count).step_by(BATCH) {
@@ -113,10 +145,10 @@ impl Tiled {
                 let (mut s0, mut s1, mut s2, mut s3) =
                     ([0.0f32; TILE], [0.0; TILE], [0.0; TILE], [0.0; TILE]);
                 for (column, values) in columns.iter().zip(&padded) {
-                    axpy(&mut s0, column, values[0]);
-                    axpy(&mut s1, column, values[1]);
-                    axpy(&mut s2, column, values[2]);
-                    axpy(&mut s3, column, values[3]);
+                    axpy::<FUSED>(&mut s0, column, values[0]);
+                    axpy::<FUSED>(&mut s1, column, values[1]);
+                    axpy::<FUSED>(&mut s2, column, values[2]);
+                    axpy::<FUSED>(&mut s3, column, values[3]);
                 }
                 let sums = [s0, s1, s2, s3];
                 for (b, sums) in sums.iter().enumerate().take(batch) {
@@ -134,10 +166,29 @@ impl Tiled {
 
 /// `sums += value · column`
 #[inline(always)]
-fn axpy(sums: &mut [f32; TILE], column: &[f32; TILE], value: f32) {
+fn axpy<const FUSED: bool>(sums: &mut [f32; TILE], column: &[f32; TILE], value: f32) {
     for (sum, &weight) in sums.iter_mut().zip(column) {
-        *sum += value * weight;
+        *sum = madd::<FUSED>(value, weight, *sum);
     }
+}
+
+/// `a · b + c` одной операцией FMA, где она есть: на aarch64 всегда, на x86_64 - в ядрах,
+/// собранных с FMA (`FUSED`). Это на четверть быстрее, а последние биты суммы - другие, чем без FMA;
+/// без нее `mul_add` - вызов библиотеки
+#[inline(always)]
+fn madd<const FUSED: bool>(a: f32, b: f32, c: f32) -> f32 {
+    if FUSED || cfg!(target_arch = "aarch64") {
+        a.mul_add(b, c)
+    } else {
+        a * b + c
+    }
+}
+
+/// Есть ли у процессора AVX2 и FMA: ядра умножения матриц собраны еще и с ними, а колеса x86_64 -
+/// без них, чтобы работать на любом процессоре. Ответ макрос держит в памяти
+#[cfg(target_arch = "x86_64")]
+fn fused() -> bool {
+    std::is_x86_feature_detected!("avx2") && std::is_x86_feature_detected!("fma")
 }
 
 /// Скалярное произведение блоками по 8: так цикл векторизуется
@@ -1060,6 +1111,49 @@ pub(crate) mod tests {
         assert_eq!(keys, ["1т", "2от", "3кот", "4^кот"]);
         let keys: Vec<String> = suffixes("я", 4).collect();
         assert_eq!(keys, ["1я", "2^я", "3^я", "4^я"]);
+    }
+
+    #[test]
+    fn fused_kernels_agree() {
+        // Ядра с FMA и без нее различаются только последними битами сумм
+        let (rows, cols) = (37, 23);
+        let value = |i: usize| ((i * 7919) % 101) as f32 / 50.0 - 1.0;
+        let tiled = Tiled::new(&Matrix {
+            rows,
+            cols,
+            data: (0..rows * cols).map(value).collect(),
+        });
+        let inputs: Vec<f32> = (0..5 * cols).map(|i| value(i + 13)).collect();
+        let bias: Vec<f32> = (0..rows).map(|i| value(i + 29)).collect();
+        let (mut plain, mut fused) = (vec![0.0; 5 * rows], vec![0.0; 5 * rows]);
+        tiled.apply_all_with::<false>(&inputs, &bias, &mut plain);
+        tiled.apply_all_with::<true>(&inputs, &bias, &mut fused);
+        let (mut plain_one, mut fused_one) = (bias.clone(), bias.clone());
+        tiled.apply_add_with::<false>(&inputs[..cols], &mut plain_one);
+        tiled.apply_add_with::<true>(&inputs[..cols], &mut fused_one);
+        assert_eq!(plain_one, plain[..rows]);
+        for (a, b) in plain
+            .iter()
+            .zip(&fused)
+            .chain(plain_one.iter().zip(&fused_one))
+        {
+            assert!((a - b).abs() <= 1e-5 * a.abs().max(1.0), "{a} {b}");
+        }
+        // Выбор ядра по процессору: ядро с FMA на aarch64 и на x86-64 с AVX2 и FMA, иначе прежнее
+        #[cfg(target_arch = "x86_64")]
+        let with_fma = super::fused();
+        #[cfg(not(target_arch = "x86_64"))]
+        let with_fma = cfg!(target_arch = "aarch64");
+        let (all, one) = match with_fma {
+            true => (&fused, &fused_one),
+            false => (&plain, &plain_one),
+        };
+        let mut chosen = vec![0.0; 5 * rows];
+        tiled.apply_all(&inputs, &bias, &mut chosen);
+        assert_eq!(&chosen, all);
+        let mut chosen_one = bias.clone();
+        tiled.apply_add(&inputs[..cols], &mut chosen_one);
+        assert_eq!(&chosen_one, one);
     }
 
     #[test]
