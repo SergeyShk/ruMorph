@@ -743,6 +743,15 @@ def test_parenthetical_label(morph, word, parenthetical):
     assert ("Prnt" in labels) == parenthetical
 
 
+def test_parenthetical_adverb_keeps_lexeme(morph):
+    # Вводное наречие остается своей лексемой: сравнительная степень и помета Prdx на месте
+    assert ("вероятно", "Cmp") in {
+        (a.lemma, a.feats.get("Degree")) for a in morph.analyze("вероятнее")
+    }
+    adverb = next(a for a in morph.analyze("бесспорно") if a.pos == "ADV")
+    assert {"Prdx", "Prnt"} <= adverb.labels
+
+
 def test_merged_analyses(morph):
     analyses = morph.analyze("так")
     keys = [(a.word, a.lemma, a.pos, dict(a.feats)) for a in analyses]
