@@ -724,6 +724,25 @@ def test_clusivity_label(morph):
     assert "excl" in morph.analyze("иди")[0].labels
 
 
+@pytest.mark.parametrize(
+    ("word", "parenthetical"),
+    [
+        ("кстати", True),
+        ("наверно", True),
+        ("видимо", True),
+        ("правда", True),
+        ("значит", True),
+        ("вообще", False),
+        ("случайно", False),
+        ("кажется", False),
+    ],
+)
+def test_parenthetical_label(morph, word, parenthetical):
+    # Prnt - у наречия, которое обычно вводное; глагол и обычное наречие его не получают
+    labels = {label for a in morph.analyze(word) if a.pos == "ADV" for label in a.labels}
+    assert ("Prnt" in labels) == parenthetical
+
+
 def test_merged_analyses(morph):
     analyses = morph.analyze("так")
     keys = [(a.word, a.lemma, a.pos, dict(a.feats)) for a in analyses]
