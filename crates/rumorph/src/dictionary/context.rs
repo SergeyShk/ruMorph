@@ -1143,7 +1143,7 @@ pub(crate) mod tests {
         #[cfg(target_arch = "x86_64")]
         let with_fma = super::fused();
         #[cfg(not(target_arch = "x86_64"))]
-        let with_fma = true;
+        let with_fma = cfg!(target_arch = "aarch64");
         let (all, one) = match with_fma {
             true => (&fused, &fused_one),
             false => (&plain, &plain_one),
