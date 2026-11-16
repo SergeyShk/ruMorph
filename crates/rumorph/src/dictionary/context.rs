@@ -1139,10 +1139,21 @@ pub(crate) mod tests {
         {
             assert!((a - b).abs() <= 1e-5 * a.abs().max(1.0), "{a} {b}");
         }
-        // Выбор ядра по процессору дает то же, что ядро с FMA или без нее
+        // Выбор ядра по процессору: ядро с FMA на aarch64 и на x86-64 с AVX2 и FMA, иначе прежнее
+        #[cfg(target_arch = "x86_64")]
+        let with_fma = super::fused();
+        #[cfg(not(target_arch = "x86_64"))]
+        let with_fma = true;
+        let (all, one) = match with_fma {
+            true => (&fused, &fused_one),
+            false => (&plain, &plain_one),
+        };
         let mut chosen = vec![0.0; 5 * rows];
         tiled.apply_all(&inputs, &bias, &mut chosen);
-        assert!(chosen == plain || chosen == fused);
+        assert_eq!(&chosen, all);
+        let mut chosen_one = bias.clone();
+        tiled.apply_add(&inputs[..cols], &mut chosen_one);
+        assert_eq!(&chosen_one, one);
     }
 
     #[test]
