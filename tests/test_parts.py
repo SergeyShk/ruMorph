@@ -192,6 +192,8 @@ def test_pickled_parts(morph):
         ("думал-думал", "думать-думать", "VERB"),
         # Первая часть в начальной форме не меняет лемму
         ("фитнес-тренера", "фитнес-тренер", "NOUN"),
+        # Последняя часть - не неизменяемое приложение: разбор по ней («ёж» - лишь омоним «еже»)
+        ("еже-муха", "еже-муха", "NOUN"),
         # Протяжка и заикание
         ("Что-о", "что", "SCONJ"),
         ("Н-нет", "нет", "VERB"),
@@ -200,6 +202,32 @@ def test_pickled_parts(morph):
 def test_hyphenated_lemmas(morph, word, lemma, pos):
     analysis = morph.analyze(word)[0]
     assert (analysis.lemma, analysis.pos, analysis.word) == (lemma, pos, word)
+
+
+@pytest.mark.parametrize(
+    ("word", "lemma", "case", "number"),
+    [
+        ("программы-минимум", "программа-минимум", "Gen", "Sing"),
+        ("программу-максимум", "программа-максимум", "Acc", "Sing"),
+        ("номера-люкс", "номер-люкс", "Gen", "Sing"),
+        # Перед «минимум» и «максимум» первая часть - вершина и в начальной форме
+        ("программа-минимум", "программа-минимум", "Nom", "Sing"),
+    ],
+)
+def test_apposition(morph, word, lemma, case, number):
+    # Неизменяемое приложение: падеж, число, род и лемма - по первой части
+    analysis = morph.analyze(word)[0]
+    feats = (analysis.lemma, analysis.feats["Case"], analysis.feats["Number"])
+    assert feats == (lemma, case, number)
+    assert analysis.forms() == [analysis]
+    head = morph.analyze(word.split("-")[0])[0]
+    assert analysis.feats["Gender"] == head.feats["Gender"]
+
+
+@pytest.mark.parametrize("word", ["полу-люкс", "гранд-люкс", "эконом-люкс"])
+def test_not_apposition(morph, word):
+    # Слитное написание в словаре («полулюкс») и определение перед «люкс» - разбор по последней части
+    assert morph.analyze(word)[0].lemma == word
 
 
 def test_both_parts_inflected_have_no_forms(morph):
