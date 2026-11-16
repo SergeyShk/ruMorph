@@ -69,6 +69,10 @@ pub const PARENTHETICAL_ADVERBS: &[&str] = &[
     "правда",
 ];
 
+/// Наречия, сравнительная степень которых («вернее», «точнее», «короче») в обучающих частях
+/// UD Taiga и GSD чаще вводная: она получает помету Prnt
+const PARENTHETICAL_COMPARATIVES: &[&str] = &["верно", "коротко", "точно"];
+
 /// Служебные слова, часть речи которых в UD не совпадает с частью речи OpenCorpora
 const POS_EXCEPTIONS: &[(&str, &str, &str)] = &[
     ("ADJF", "данный", "ADJ"),
@@ -591,6 +595,8 @@ fn pos(oc: &str, grammemes: &[&str], lemma: &str) -> (&'static str, bool) {
         "PREP" => "ADP",
         // Вводные слова, у которых нет другого разбора («в-четвёртых»), - наречия, как в SynTagRus
         "CONJ" if has(grammemes, "Prnt") => "ADV",
+        // «т» в «т. е.», «т. п.» - местоимение «то», как во всех трех трибанках
+        "CONJ" if lemma == "то" && has(grammemes, "Abbr") => "PRON",
         "CONJ" if SCONJ.contains(&lemma) => "SCONJ",
         "CONJ" => "CCONJ",
         "PRCL" => "PART",
@@ -832,6 +838,9 @@ pub fn convert(tag: &str, lemma: &str) -> Ud {
     if let Some(kind) = pronoun_type(pos, lemma) {
         feats.insert("PronType", kind);
     }
+    if oc == "CONJ" && pos == "PRON" {
+        feats.insert("PronType", "Dem");
+    }
     if pos == "DET" && g("Fixd") && POSSESSIVE.contains(&lemma) {
         // «его», «её», «их» в SynTagRus - Poss=Yes|PronType=Prs без падежа, рода и числа
         for name in ["Animacy", "Case", "Gender", "Number"] {
@@ -861,7 +870,10 @@ pub fn convert(tag: &str, lemma: &str) -> Ud {
         .map(|g| g.to_string())
         .chain(extra_labels)
         .collect();
-    if matches!(oc, "ADVB" | "PRCL") && PARENTHETICAL_ADVERBS.binary_search(&lemma).is_ok() {
+    let comparative = oc == "COMP" && !g("Cmp2") && PARENTHETICAL_COMPARATIVES.contains(&lemma);
+    if comparative
+        || matches!(oc, "ADVB" | "PRCL") && PARENTHETICAL_ADVERBS.binary_search(&lemma).is_ok()
+    {
         labels.push("Prnt".into());
     }
     labels.sort();
@@ -1119,6 +1131,7 @@ pub fn counting_form(tag: &str, lemma: &str, word: &str) -> bool {
 pub fn lemma_class(lemma: &str) -> &str {
     let listed = SCONJ.contains(&lemma)
         || PARENTHETICAL_ADVERBS.binary_search(&lemma).is_ok()
+        || PARENTHETICAL_COMPARATIVES.contains(&lemma)
         || GENDER_EXCEPTIONS.iter().any(|&(word, _)| word == lemma)
         || POS_EXCEPTIONS.iter().any(|&(_, word, _)| word == lemma)
         || ADVERB_DEGREES.iter().any(|&(word, _)| word == lemma)
@@ -1360,6 +1373,11 @@ mod tests {
         assert_eq!(summary("CONJ", "что").0, "SCONJ");
         assert_eq!(summary("CONJ", "и").0, "CCONJ");
         assert_eq!(summary("CONJ,Prnt", "однако").0, "ADV");
+        // «т» в «т. е.» - местоимение «то»
+        assert_eq!(
+            summary("CONJ,Abbr", "то"),
+            ("PRON".into(), "Abbr=Yes|PronType=Dem".into(), vec![])
+        );
         assert_eq!(
             summary("CONJ,Prnt", "в-четвёртых"),
             ("ADV".into(), "Degree=Pos".into(), vec!["Prnt".into()])
@@ -1767,6 +1785,9 @@ mod tests {
         assert_eq!(summary("ADVB,Prdx", "бесспорно").2, ["Prdx", "Prnt"]);
         assert_eq!(summary("PRCL", "правда").2, ["Prnt"]);
         assert!(summary("ADVB", "вообще").2.is_empty());
+        // Сравнительная степень «вернее», но не «поверней»
+        assert_eq!(summary("COMP,Qual", "верно").2, ["Prnt", "Qual"]);
+        assert_eq!(summary("COMP,Qual,Cmp2", "верно").2, ["Cmp2", "Qual"]);
         // Сборщик переводит теги по классу леммы: у вводного наречия класс - сама лемма
         assert_eq!(lemma_class("кстати"), "кстати");
     }
