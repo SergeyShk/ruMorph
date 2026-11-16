@@ -6,7 +6,7 @@ The `rumorph` component plugs ruMorph into a [spaCy](https://spacy.io/) pipeline
 pip install "rumorph[spacy]"
 ```
 
-The component registers with spaCy when the package is installed and is added by name, there is no need to import rumorph. spaCy has no prebuilt wheels for Python 3.14t without the GIL.
+The component registers with spaCy when the package is installed and is added by name, there is no need to import rumorph. spaCy has no prebuilt wheels for Python without the GIL (3.14t, 3.15t).
 
 === "Code"
 
