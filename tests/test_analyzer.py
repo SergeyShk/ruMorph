@@ -39,7 +39,7 @@ def test_default_dictionary(morph):
     assert info["corpus_revision"] == "4580223"
     assert info["wiktionary"]["dump"] == "2026-10-01"
     assert info["wiktionary"]["file"].endswith("ru-wiktionary-20261001.jsonl.xz")
-    assert info["context"]["release"] == "r2.18"
+    assert info["context"]["release"] == info["frequencies"]["release"] == "r2.19"
     data = Path(morph.path).read_bytes()
     assert info["checksum"] == int.from_bytes(data[12:16], "little")
     assert info["word_forms"] > 3_000_000

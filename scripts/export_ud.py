@@ -22,24 +22,24 @@ from pathlib import Path
 from conventions import harmonize, sentences
 from export_opencorpora import download
 
-RELEASE = "r2.18"
+RELEASE = "r2.19"
 LICENSE = "CC BY-SA 4.0"
 # Трибанк, коммит релиза и файлы с SHA-256
 SOURCES = {
     "UD_Russian-Taiga": (
-        "d1e48cd29c1f19b6aad1aec361d9f724db764f66",
+        "25ec1a29bedcb51b8ca48f31b26f2cd8818739db",
         {
-            "ru_taiga-ud-train-a.conllu": "d12f8d99e1370fad142fdbd5aea387715249bc34bf5494c5d6dd63c795dfa85e",
-            "ru_taiga-ud-train-b.conllu": "82c0b23692ff0ebcdb7e53d40d74396b75dc92a076e4c0a014c1f32e10cb14ac",
-            "ru_taiga-ud-train-c.conllu": "9a6301fd797395b2b7c5fbc25880f445248ba04571e4cc691e38a2fd3130e738",
-            "ru_taiga-ud-train-d.conllu": "6bc5c4ce2e7389f6956373c8e565ba63a3501206988dbf6b64dcb1305be79021",
-            "ru_taiga-ud-train-e.conllu": "07bab379f51eafb3aedc46fd77a1a96a01d3d8931186387a373d8a6c2689b02d",
+            "ru_taiga-ud-train-a.conllu": "48205ec38c2d6c530415dc27f1277e37db296b8ed37b0acfbed7586ce7d0351f",
+            "ru_taiga-ud-train-b.conllu": "e207b0518bbcb12f6325e99a726a5a46c2c98876c2dc4b0f0cf8d72791e06078",
+            "ru_taiga-ud-train-c.conllu": "3858143d8b5330cca78c1a73031f89cb8e6b9181d521c60d36195f9eee113146",
+            "ru_taiga-ud-train-d.conllu": "24f520ec5e374ff8ef5660ba83c37ee658c35e953c83a825f296225e88bb04a7",
+            "ru_taiga-ud-train-e.conllu": "56f197a7c36f481ade530001d035e498819a628923d2b4a1f594aab274ccb311",
         },
     ),
     "UD_Russian-GSD": (
-        "9acc9d677327043bd416fcc89e4b3407c620d885",
+        "486a9c07204286d630944a905bdf854a6f471f20",
         {
-            "ru_gsd-ud-train.conllu": "0ae33a4bbda12697e2eb0a32af4971bda73af5852c8521744a974a316c02bab5",
+            "ru_gsd-ud-train.conllu": "f434e52cdc24a154df0de850b86ea0fc829d51f11d33211fa09753d3e3a35584",
         },
     ),
 }
