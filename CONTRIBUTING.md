@@ -41,7 +41,7 @@ make docs-build  # mkdocs build --strict, если менялась докуме
 
 Лицензии крейтов Rust, собранных в модуль, лежат в `THIRD-PARTY-NOTICES.txt` и попадают в колеса; после изменения `Cargo.lock` файл пишется заново командой `uv run python scripts/notices.py`, иначе тест `test_third_party_notices` упадет.
 
-То же самое выполняет CI на Python 3.11-3.14 и 3.14t без GIL (Linux), на Windows и macOS для одной версии Python, а также проверяет сборку на минимальной версии Rust 1.88. Повышая минимальную версию Rust, меняйте ее в `rust-version` в `Cargo.toml`, в задаче `msrv` в `ci.yml` и в документации.
+То же самое выполняет CI на Python 3.11-3.15 и 3.14t, 3.15t без GIL (Linux), на Windows и macOS для одной версии Python, а также проверяет сборку на минимальной версии Rust 1.88. Повышая минимальную версию Rust, меняйте ее в `rust-version` в `Cargo.toml`, в задаче `msrv` в `ci.yml` и в документации.
 
 ## Что ожидается в пул-реквесте
 
