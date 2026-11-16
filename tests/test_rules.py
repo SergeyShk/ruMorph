@@ -185,10 +185,11 @@ def test_capitalized_abbreviation(morph):
 
 
 @pytest.mark.parametrize(
-    "word", [" ", "\n", "\u00a0", "\u200b", "\ufeff", "\x00", "\u200d", "а б", "\u00ad"]
+    "word", ["", " ", "\n", "\u00a0", "\u200b", "\ufeff", "\x00", "\u200d", "а б", "\u00ad"]
 )
 def test_not_tokens(morph, word):
-    assert morph.analyze(word) == []
+    # Правила не разбирают пустую строку, пробелы и невидимые символы: запасной X
+    assert [(a.word, a.lemma, a.pos) for a in morph.analyze(word)] == [(word, word, "X")]
 
 
 def test_rule_analyses_without_lexeme(morph):

@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::hash::{BuildHasherDefault, Hasher};
 
-use super::rules::token;
+use super::rules::{blank, token};
 use super::{Analysis, Dictionary, Entry, Source, normalized_input};
 use crate::Error;
 use crate::alphabet::Key;
@@ -86,7 +86,7 @@ impl Dictionary {
     ///
     /// `Error::Word`, если образца нет в словаре, у него лексемы разных частей речи, а часть речи
     /// не задана, слово не изменяется по образцу (у образца другое окончание или у слова нет
-    /// основы) или в слове пробел, управляющий или невидимый символ
+    /// основы), слово пустое или в нем пробел
     pub fn with_words<'a, S: Into<Sample<'a>>>(
         mut self,
         words: impl IntoIterator<Item = (&'a str, S)>,
@@ -131,13 +131,14 @@ impl Dictionary {
                 .to_lowercase()
         };
         let (word, like) = (normal(word), normal(sample.word));
-        if word.trim().is_empty() {
+        let chars: Vec<char> = word.chars().collect();
+        if blank(&chars) {
             return Err(Error::Word("Свое слово пустое".into()));
         }
-        if !token(&word.chars().collect::<Vec<_>>()) {
+        // Невидимые символы в слове с видимыми `normal` убрал: остается пробел
+        if !token(&chars) {
             return Err(Error::Word(format!(
-                "Свое слово «{}» с пробелом, управляющим или невидимым символом не найдется \
-                 в тексте",
+                "Свое слово «{}» с пробелом не найдется в тексте",
                 word.escape_debug()
             )));
         }

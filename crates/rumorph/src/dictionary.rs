@@ -542,8 +542,7 @@ impl Dictionary {
     }
 
     /// Поля CoNLL-U самого вероятного разбора каждого слова предложения: лемма, часть речи
-    /// и признаки (без признаков - `None`); слово без разборов - в нижнем регистре с частью
-    /// речи X. С контекстом (`context`) разбор выбирает модель кусками по `SENTENCE_CHUNK`
+    /// и признаки (без признаков - `None`). С контекстом (`context`) разбор выбирает модель кусками по `SENTENCE_CHUNK`
     /// слов, без него - частоты словаря. Ошибка - если нужна модель, а ее в словаре нет
     #[doc(hidden)]
     pub fn sentence_fields<S: AsRef<str>>(
@@ -624,9 +623,10 @@ impl Dictionary {
     /// сливаются в один с суммой вероятностей и пометами более вероятного. Токен, которого нет
     /// в словаре, разбирается по правилам (`Source::Rule`), а незнакомое слово кириллицей
     /// угадывается (`Source::Guess`): слово через дефис - по последней части, слово с известной
-    /// приставкой - по слову без нее, остальное - по окончанию. Токен, который не разобрался,
-    /// получает запасной разбор `X`; пустой список - только у токена с пробелом, управляющим
-    /// или невидимым символом
+    /// приставкой - по слову без нее, остальное - по окончанию. Управляющие символы, кроме
+    /// пробельных, и символы форматирования Unicode (мягкий перенос, нулевой пробел, BOM)
+    /// убираются. Токен, который не разобрался, - и пустая строка, и строка без видимых
+    /// символов - получает запасной разбор `X`: список разборов не бывает пустым
     pub fn analyze(&self, word: &str) -> Vec<Analysis> {
         if let Some(normal) = normalized_input(word) {
             return self.analyze(&normal);
@@ -1641,19 +1641,44 @@ struct Preferences {
     counting: Option<u16>,
 }
 
-/// Слово в обычной записи: знаки и буквы-двойники (`normalized_marks`, `unified_script`)
-/// приведены к обычным. `None`, если менять нечего
+/// Слово в обычной записи: без невидимых символов (`visible`), знаки и буквы-двойники
+/// (`normalized_marks`, `unified_script`) приведены к обычным. `None`, если менять нечего
 fn normalized_input(word: &str) -> Option<String> {
-    // Слово из ASCII или из кириллицы с цифрами и знаками ASCII: менять нечего
-    if word.is_ascii()
+    // Слово из видимых символов ASCII или из кириллицы с цифрами и знаками ASCII: менять нечего
+    if word.bytes().all(|byte| matches!(byte, b' '..=b'~'))
         || word
             .chars()
-            .all(|c| rules::cyrillic(c) || (c.is_ascii() && !c.is_ascii_alphabetic()))
+            .all(|c| rules::cyrillic(c) || matches!(c, ' '..='@' | '['..='`' | '{'..='~'))
     {
         return None;
     }
+    let visible = visible(word);
+    let word = visible.as_deref().unwrap_or(word);
     let unified = unified_script(word);
-    normalized_marks(unified.as_deref().unwrap_or(word)).or(unified)
+    normalized_marks(unified.as_deref().unwrap_or(word))
+        .or(unified)
+        .or(visible)
+}
+
+/// Слово без невидимых символов: управляющих, кроме пробельных, и символов форматирования
+/// Unicode (Cf - мягкий перенос, нулевой пробел, BOM, метки направления текста); соединитель
+/// и теги эмодзи убираются только из слова с буквой или цифрой. `None`, если убирать нечего
+/// или видимых символов не останется: такую строку разбирает запасное правило
+fn visible(word: &str) -> Option<String> {
+    let alphanumeric = word.chars().any(char::is_alphanumeric);
+    let hidden = |c: char| {
+        (c.is_control() && !c.is_whitespace())
+            || rules::invisible(c)
+            || (alphanumeric && rules::emoji_format(c))
+    };
+    if !word.chars().any(hidden) {
+        return None;
+    }
+    let visible: String = word.chars().filter(|&c| !hidden(c)).collect();
+    visible
+        .chars()
+        .any(|c| !c.is_whitespace())
+        .then_some(visible)
 }
 
 /// Буквы-двойники другой письменности в отрезке букв - письменностью отрезка: ее задают буквы
@@ -1672,14 +1697,9 @@ fn unified_script(word: &str) -> Option<String> {
     let mut at = 0;
     while at < chars.len() {
         let start = at;
-        // Комбинирующие знаки, мягкий перенос и соединители слов - внутри отрезка: их убирают
-        // после приведения, и половинки слова приводятся вместе
+        // Комбинирующие знаки - внутри отрезка: их убирают после приведения
         while at < chars.len()
-            && (chars[at].is_alphabetic()
-                || matches!(
-                    chars[at],
-                    '\u{300}'..='\u{36F}' | '\u{AD}' | '\u{2060}' | '\u{FEFF}'
-                ))
+            && (chars[at].is_alphabetic() || matches!(chars[at], '\u{300}'..='\u{36F}'))
         {
             at += 1;
         }
@@ -1746,15 +1766,13 @@ fn twin(c: char, from: &str, to: &str) -> Option<char> {
     to.chars().nth(index)
 }
 
-/// Слово в составленной записи, с обычным дефисом и без знаков ударения, мягких переносов
-/// и соединителей слов: «и» со знаком краткой и «е» с диерезисом (разложенный Unicode, NFD) -
-/// «й» и «ё», неразрывный дефис и дефис U+2010 - «-», «ѐ» и «ѝ» (знак ударения в составленной
-/// букве) - «е» и «и»; знак ударения после кириллической буквы, мягкий перенос и соединители
-/// слов U+2060 и U+FEFF убираются. `None`, если менять нечего
+/// Слово в составленной записи, с обычным дефисом и без знаков ударения: «и» со знаком краткой
+/// и «е» с диерезисом (разложенный Unicode, NFD) - «й» и «ё», неразрывный дефис и дефис U+2010 -
+/// «-», «ѐ» и «ѝ» (знак ударения в составленной букве) - «е» и «и»; знак ударения после
+/// кириллической буквы убирается. `None`, если менять нечего
 fn normalized_marks(word: &str) -> Option<String> {
-    const MARKS: [char; 13] = [
-        '\u{306}', '\u{308}', '\u{2010}', '\u{2011}', '\u{300}', '\u{301}', '\u{AD}', '\u{2060}',
-        '\u{FEFF}', 'ѐ', 'ѝ', 'Ѐ', 'Ѝ',
+    const MARKS: [char; 10] = [
+        '\u{306}', '\u{308}', '\u{2010}', '\u{2011}', '\u{300}', '\u{301}', 'ѐ', 'ѝ', 'Ѐ', 'Ѝ',
     ];
     if !word.contains(MARKS) {
         return None;
@@ -1776,7 +1794,6 @@ fn normalized_marks(word: &str) -> Option<String> {
                 normal.push(letter);
             }
             (None, '\u{2010}' | '\u{2011}') => normal.push('-'),
-            (None, '\u{AD}' | '\u{2060}' | '\u{FEFF}') => {}
             (None, 'ѐ') => normal.push('е'),
             (None, 'ѝ') => normal.push('и'),
             (None, 'Ѐ') => normal.push('Е'),
@@ -2422,12 +2439,24 @@ pub(super) mod tests {
             );
             assert!(dict.is_known(word), "{word}");
         }
-        for word in [" бот", "бот\n", "бо т", "бо\u{200B}т"] {
+        for word in [" бот", "бот\n", "бо т"] {
             let Err(Error::Word(message)) = lexicon().with_words([(word, "кот")]) else {
                 panic!("{word:?}");
             };
-            assert!(message.contains("не найдется в тексте"), "{message}");
+            assert!(
+                message.contains("с пробелом не найдется в тексте"),
+                "{message}"
+            );
         }
+        for word in ["", "\u{200B}", " \u{ad}"] {
+            let Err(Error::Word(message)) = lexicon().with_words([(word, "кот")]) else {
+                panic!("{word:?}");
+            };
+            assert_eq!(message, "Свое слово пустое");
+        }
+        // Невидимый символ в своем слове убирается, как в запросе
+        let dict = lexicon().with_words([("бо\u{200B}т", "кот")]).unwrap();
+        assert_eq!(dict.analyze("бо\u{ad}тами")[0].lemma, "бот");
     }
 
     #[test]
@@ -3089,7 +3118,31 @@ pub(super) mod tests {
     fn unknown_words() {
         let dict = dictionary();
         assert_eq!(dict.analyze("вайб"), dict.fallback("вайб"));
-        assert!(dict.analyze("").is_empty());
+        // Строка без видимых символов - запасной X со словом как есть
+        for word in [
+            "",
+            " ",
+            "\t",
+            "\u{ad}",
+            "\u{200B}",
+            "\u{feff}",
+            "\u{200D}",
+            " \u{200B}\n",
+        ] {
+            let analyses = dict.analyze(word);
+            assert_eq!(analyses, dict.fallback(word), "{word:?}");
+            assert_eq!(analyses[0].word, word);
+        }
+        // Управляющие символы и символы форматирования убираются, как мягкий перенос
+        for word in [
+            "ежа\u{7f}",
+            "е\u{0}жа",
+            "\u{200B}ежа",
+            "е\u{200D}жа",
+            "ежа\u{200E}",
+        ] {
+            assert_eq!(dict.analyze(word), dict.analyze("ежа"), "{word:?}");
+        }
         assert_eq!(dict.analyze("ежаа"), dict.fallback("ежаа"));
         assert!(!dict.is_known("вайб"));
         assert!(dict.is_known("Еж"));
@@ -3450,7 +3503,7 @@ pub(super) mod tests {
     }
 
     #[test]
-    fn normalizes_stress_and_soft_hyphens() {
+    fn normalizes_marks_and_invisible_characters() {
         assert_eq!(normalized_input("Москва\u{301}"), Some("Москва".into()));
         assert_eq!(normalized_input("за\u{300}мок"), Some("замок".into()));
         assert_eq!(normalized_input("при\u{ad}вет"), Some("привет".into()));
@@ -3474,6 +3527,26 @@ pub(super) mod tests {
         // Мягкий перенос и соединитель слов не делят отрезок
         assert_eq!(normalized_input("в\u{2060}ceх"), Some("всех".into()));
         assert_eq!(normalized_input("дoм\u{ad}a"), Some("дома".into()));
+        // Управляющие символы, кроме пробельных, и символы форматирования убираются; соединитель
+        // эмодзи - только в слове с буквой или цифрой
+        assert_eq!(normalized_input("это\u{7f}"), Some("это".into()));
+        assert_eq!(normalized_input("ab\u{0}c"), Some("abc".into()));
+        assert_eq!(normalized_input("\u{9f}2026"), Some("2026".into()));
+        assert_eq!(normalized_input("это\u{200D}"), Some("это".into()));
+        assert_eq!(normalized_input("!\u{200B}"), Some("!".into()));
+        assert_eq!(
+            normalized_input("\u{202B}مرحبا\u{202C}"),
+            Some("مرحبا".into())
+        );
+        for word in [
+            "\u{1F468}\u{200D}\u{1F4BB}",
+            "при\nвет",
+            "\u{200B}",
+            "\u{ad} ",
+            "",
+        ] {
+            assert_eq!(normalized_input(word), None, "{word:?}");
+        }
         assert_eq!(normalized_input("p\u{450}"), Some("ре".into()));
         for word in ["ТНК-BP", "T-клетки", "Газета.ru", "Юрiю", "iPhone", "стали"]
         {

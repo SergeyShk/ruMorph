@@ -89,9 +89,13 @@ def test_spaces_and_invisible_tokens(nlp):
     ]
     analyses = rumorph.Analyzer().analyze_sentence(["Мы", "стали", "друзьями"])
     assert annotation(tokens[::2]) == [(a[0].lemma, a[0].pos, a[0].feats) for a in analyses]
-    # Разделитель внутри токена - токен без разбора
-    joined = nlp("Мы\u200bстали")
-    assert [(token.pos_, token.lemma_) for token in joined] == [("X", "мы\u200bстали")]
+    # Невидимый символ внутри токена убирается, как в analyze
+    doc = nlp("Мы ста\u200bли друзьями")
+    assert [(token.pos_, token.lemma_) for token in doc] == [
+        ("PRON", "мы"),
+        ("VERB", "стать"),
+        ("NOUN", "друг"),
+    ]
 
 
 def test_without_context():
