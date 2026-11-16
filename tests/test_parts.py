@@ -210,17 +210,24 @@ def test_hyphenated_lemmas(morph, word, lemma, pos):
         ("программы-минимум", "программа-минимум", "Gen", "Sing"),
         ("программу-максимум", "программа-максимум", "Acc", "Sing"),
         ("номера-люкс", "номер-люкс", "Gen", "Sing"),
+        # Перед «минимум» и «максимум» первая часть - вершина и в начальной форме
+        ("программа-минимум", "программа-минимум", "Nom", "Sing"),
     ],
 )
 def test_apposition(morph, word, lemma, case, number):
-    # Неизменяемое приложение: падеж, число и лемма - по первой части
+    # Неизменяемое приложение: падеж, число, род и лемма - по первой части
     analysis = morph.analyze(word)[0]
-    assert (analysis.lemma, analysis.feats["Case"], analysis.feats["Number"]) == (
-        lemma,
-        case,
-        number,
-    )
+    feats = (analysis.lemma, analysis.feats["Case"], analysis.feats["Number"])
+    assert feats == (lemma, case, number)
     assert analysis.forms() == [analysis]
+    head = morph.analyze(word.split("-")[0])[0]
+    assert analysis.feats["Gender"] == head.feats["Gender"]
+
+
+@pytest.mark.parametrize("word", ["полу-люкс", "гранд-люкс", "эконом-люкс"])
+def test_not_apposition(morph, word):
+    # Слитное написание в словаре («полулюкс») и определение перед «люкс» - разбор по последней части
+    assert morph.analyze(word)[0].lemma == word
 
 
 def test_both_parts_inflected_have_no_forms(morph):

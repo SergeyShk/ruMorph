@@ -75,9 +75,10 @@ const PREFIXES: &[&str] = &[
 /// Части речи последней части слова через дефис: служебные слова и буквы - не части сложного слова
 const HYPHENATED_CLASSES: &[&str] = &["NOUN", "PROPN", "ADJ", "VERB", "ADV", "NUM", "INTJ", "X"];
 
-/// Неизменяемые приложения: слово через дефис с ними изменяется по первой части
-/// («программы-минимум»)
-const APPOSITIONS: &[&str] = &["люкс", "максимум", "минимум"];
+/// Неизменяемые приложения: слово через дефис с ними разбирается по первой части («программы-минимум»);
+/// `true` - и когда первая часть в начальной форме: перед «люкс» это обычно не вершина, а определение
+/// («гранд-люкс», «эконом-люкс»)
+const APPOSITIONS: &[(&str, bool)] = &[("люкс", false), ("максимум", true), ("минимум", true)];
 
 /// Части речи, которые образуются с приставками
 const OPEN_CLASSES: &[&str] = &["NOUN", "ADJ", "VERB", "ADV"];
@@ -250,18 +251,21 @@ impl Dictionary {
         normalized(self.merge(analyses))
     }
 
-    /// Неизменяемое приложение из `APPOSITIONS` после изменяемого существительного
-    /// («программы-минимум», «номера-люкс»): разборы существительного первой части не в начальной
-    /// форме, лемма - из лемм частей, форм нет
+    /// Неизменяемое приложение из `APPOSITIONS` после существительного («программы-минимум»,
+    /// «номера-люкс»): разборы существительного первой части, лемма - из лемм частей, форм нет.
+    /// Слово, которое в словаре пишется слитно («полу-люкс» - «полулюкс»), не приложение
     fn apposition(&self, word: &str, left: &[Analysis], right: &str) -> Option<Vec<Analysis>> {
         let right_lower = right.to_lowercase();
-        if !APPOSITIONS.contains(&right_lower.as_str()) {
-            return None;
-        }
+        let &(_, initial_head) = APPOSITIONS
+            .iter()
+            .find(|&&(apposition, _)| apposition == right_lower)?;
         let heads: Vec<&Analysis> = (left.iter())
             .filter(|analysis| self.pos(analysis.ud) == "NOUN")
             .collect();
-        if heads.is_empty() || heads.iter().any(|head| head.lemma == head.word) {
+        if heads.is_empty()
+            || (!initial_head && heads.iter().any(|head| head.lemma == head.word))
+            || self.is_known(&word.replace('-', ""))
+        {
             return None;
         }
         let analyses = heads
