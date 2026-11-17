@@ -956,7 +956,7 @@
 <p>Компонент <code>rumorph</code> подключает ruMorph к конвейеру <a href="https://spacy.io/">spaCy</a>: размечает токены документа частью речи (<code>pos_</code>), признаками <a href="https://universaldependencies.org/">Universal Dependencies</a> (<code>morph</code>) и леммой (<code>lemma_</code>) по <a href="../analyzer/#analyze_sentence">разбору с контекстом</a>. В конвейере он заменяет теггер, морфологизатор и лемматизатор.</p>
 <div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"rumorph[spacy]"</span>
 </code></pre></div>
-<p>Компонент регистрируется в spaCy при установке пакета и подключается по имени, импортировать rumorph не нужно. Для Python 3.14t без GIL у spaCy нет готовых колес.</p>
+<p>Компонент регистрируется в spaCy при установке пакета и подключается по имени, импортировать rumorph не нужно. Для Python без GIL (3.14t, 3.15t) у spaCy нет готовых колес.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Код</label><label for="__tabbed_1_2">Результат</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
@@ -1014,14 +1014,14 @@
 <tr>
 <td style="text-align: left;">ru_core_news_sm с rumorph</td>
 <td style="text-align: left;"><strong>93,7</strong></td>
-<td style="text-align: left;"><strong>90,3</strong></td>
-<td style="text-align: left;"><strong>81,7</strong></td>
+<td style="text-align: left;"><strong>90,4</strong></td>
+<td style="text-align: left;"><strong>81,6</strong></td>
 <td style="text-align: left;"><strong>16 574</strong></td>
 </tr>
 </tbody>
 </table>
 <h2 id="sentences">Предложения<a class="headerlink" href="#sentences" title="Permanent link">&para;</a></h2>
-<p>Контекстная модель разбирает предложение целиком. Предложения компонент берет из разметки документа - парсера, <code>senter</code> или <code>sentencizer</code>, а если ее нет, делит документ после знаков конца предложения («.», «!», «?», «…»); предложение длиннее 256 токенов разбирается частями, как в <a href="../cli/">команде rumorph</a>. Пробельные токены и токены из одних невидимых разделителей (BOM, U+200B, U+2060, мягкий перенос) получают часть речи <code>SPACE</code>, как в моделях spaCy, а лемма у них - сам токен: модель их не видит. Токен без разбора ruMorph (невидимый символ внутри слова) - <code>X</code> и лемму в нижнем регистре, как в команде rumorph.</p>
+<p>Контекстная модель разбирает предложение целиком. Предложения компонент берет из разметки документа - парсера, <code>senter</code> или <code>sentencizer</code>, а если ее нет, делит документ после знаков конца предложения («.», «!», «?», «…»); предложение длиннее 256 токенов разбирается частями, как в <a href="../cli/">команде rumorph</a>. Пробельные токены и токены из одних невидимых символов (BOM, U+200B, U+2060, мягкий перенос, метки направления текста) получают часть речи <code>SPACE</code>, как в моделях spaCy, а лемма у них - сам токен: модель их не видит. Невидимый символ внутри слова убирается, как в <a href="../analyzer/#analyze"><code>analyze</code></a>.</p>
 <p>Токены и начала предложений по соглашениям Universal Dependencies, на которых обучена контекстная модель, дает сегментатор <a href="https://github.com/SergeyShk/anySeg">anySeg</a> (<code>pip install "anyseg[spacy]"</code>): токенизатор <code>anyseg.Tokenizer.v1</code> и компонент <code>anyseg_sentencizer</code> ставятся перед <code>rumorph</code>. На тексте тестовых частей трибанков границы токенов anySeg совпадают с эталоном у 99,0-99,6 % слов против 97,6-98,7 % у токенизатора spaCy, а часть речи и лемма компонента верны у доли слов на 0,7-1,4 п. п. выше.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="3:2"><input checked="checked" id="__tabbed_3_1" name="__tabbed_3" type="radio" /><input id="__tabbed_3_2" name="__tabbed_3" type="radio" /><div class="tabbed-labels"><label for="__tabbed_3_1">Код</label><label for="__tabbed_3_2">Результат</label></div>
 <div class="tabbed-content">
