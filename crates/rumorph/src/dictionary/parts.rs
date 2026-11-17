@@ -291,7 +291,9 @@ impl Dictionary {
         } else {
             &["VerbForm", "Tense", "Person", "Gender", "Number"]
         };
+        // Сокращение изменяется только полной леммой: «П-образный» - не «подобный-образный»
         first.lemma != first.word
+            && self.feat(first.ud, "Abbr").is_none()
             && self.pos(first.ud) == self.pos(last.ud)
             && matches!(self.pos(first.ud), "NOUN" | "PROPN" | "ADJ" | "VERB")
             && names

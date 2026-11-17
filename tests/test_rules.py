@@ -148,13 +148,22 @@ def test_initials(morph):
     # Заглавная буква без точки - тоже инициал
     initial = morph.analyze("Х")[0]
     assert (initial.lemma, initial.feats["NameType"]) == ("х", "Giv")
+    # Общеизвестное сокращение имени из нескольких букв
+    name = morph.analyze("Дж.")[0]
+    assert (name.lemma, name.pos, name.feats["NameType"], name.feats["Abbr"]) == (
+        "дж",
+        "PROPN",
+        "Giv",
+        "Yes",
+    )
 
 
 def test_abbreviation_with_dot(morph):
     assert {(a.word, a.lemma, a.pos) for a in morph.analyze("им.")} == {("им.", "имя", "NOUN")}
     assert {(a.word, a.lemma) for a in morph.analyze("Им.")} == {("Им.", "имя")}
+    # «т.» - местоимение «то» в «т. е.», «т. п.» и наречие «так» в «т. д.»
     analyses = morph.analyze("т.")
-    assert analyses[0].lemma == "так"
+    assert [(a.lemma, a.pos) for a in analyses][:2] == [("то", "PRON"), ("так", "ADV")]
     assert math.isclose(sum(a.prob for a in analyses), 1.0)
     assert all(a.feats["Abbr"] == "Yes" for a in analyses)
     assert [a.lemma for a in analyses].count("так") == 1
@@ -165,7 +174,10 @@ def test_abbreviation_with_dot(morph):
     }
     # Доли - по разметкам сокращений с точкой в трибанках
     lemmas = morph.lemmatize(["и", "др.", "и", "т.", "п.", "до", "н.", "э."])
-    assert lemmas == ["и", "другой", "и", "так", "подобный", "до", "наш", "эра"]
+    assert lemmas == ["и", "другой", "и", "то", "подобный", "до", "наш", "эра"]
+    # «с.» - страница, «с» в «м/с» - секунда
+    assert {a.lemma for a in morph.analyze("с.")} == {"страница", "село"}
+    assert {a.lemma for a in morph.analyze("с") if a.pos == "NOUN"} == {"секунда", "село"}
     assert {a.pos for a in morph.analyze("н.") if a.lemma == "наш"} == {"DET"}
     assert [(a.word, a.lemma, a.pos) for a in morph.analyze("Вайб.")] == [("Вайб.", "вайб", "X")]
     assert [a.lemma for a in morph.analyze("т.е.")] == ["т.е."]
@@ -180,6 +192,9 @@ def test_abbreviation_with_dot(morph):
         ("коп.", "копейка", "NOUN"),
         ("франц.", "французский", "ADJ"),
         ("оч.", "очень", "ADV"),
+        # Без точки: anySeg отделяет ее у сокращений, которых не знает
+        ("оч", "очень", "ADV"),
+        ("Тов", "товарищ", "NOUN"),
     ],
 )
 def test_missing_abbreviations(morph, word, lemma, pos):
@@ -189,6 +204,11 @@ def test_missing_abbreviations(morph, word, lemma, pos):
         (word, lemma, pos, "Yes", "rule")
     }
     assert math.isclose(sum(a.prob for a in analyses), 1.0)
+
+
+def test_missing_abbreviation_in_caps(morph):
+    # Слово капсом без точки - аббревиатура, а не сокращение «тт.»
+    assert "товарищ" not in {a.lemma for a in morph.analyze("ТТ")}
 
 
 def test_abbreviation_lemmas(morph):

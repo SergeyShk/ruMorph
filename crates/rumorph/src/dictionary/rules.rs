@@ -105,7 +105,7 @@ const ABBREVIATION_LEMMAS: &[(&str, &str, &str)] = &[
     ("руб", "masc", "рубль"),
     ("рус", "ADJF", "русский"),
     ("русск", "ADJF", "русский"),
-    ("с", "femn", "страница"),
+    ("с", "femn", "секунда"),
     ("с", "neut", "село"),
     ("св", "ADJF", "святой"),
     ("сек", "femn", "секунда"),
@@ -129,6 +129,13 @@ const ABBREVIATION_LEMMAS: &[(&str, &str, &str)] = &[
     ("экз", "masc", "экземпляр"),
     ("яп", "ADJF", "японский"),
 ];
+
+/// Сокращения, у которых с точкой другая полная лемма: сокращение, лемма из `ABBREVIATION_LEMMAS`
+/// и лемма с точкой («5 м/с» - секунда, «с. 5» - страница)
+const DOTTED_LEMMAS: [(&str, &str, &str); 1] = [("с", "секунда", "страница")];
+
+/// Общеизвестные сокращения имен из нескольких букв - разборы как у инициала («Дж. Буш»)
+const NAME_ABBREVIATIONS: [&str; 5] = ["Вл.", "Вс.", "Вяч.", "Дж.", "Дм."];
 
 /// Граммемы из `ABBREVIATION_LEMMAS`: номер бита в `abbreviation_grammemes`
 const ABBREVIATION_GRAMMEMES: [&str; 6] = ["masc", "femn", "neut", "anim", "inan", "ADJF"];
@@ -313,18 +320,20 @@ impl Dictionary {
             return self.shares(word, &[(&lower, tags.foreign, 1.0)]);
         }
         // Инициал - заглавная буква с точкой или без нее («А.», «А»)
-        if let [letter, '.'] | [letter] = chars[..]
-            && cyrillic(letter)
-            && letter.is_uppercase()
-            && !"ЪЫЬ".contains(letter)
-        {
-            let lemma = letter.to_lowercase().to_string();
+        let initial = match chars[..] {
+            [letter, '.'] | [letter] => {
+                cyrillic(letter) && letter.is_uppercase() && !"ЪЫЬ".contains(letter)
+            }
+            _ => NAME_ABBREVIATIONS.contains(&word),
+        };
+        if initial {
+            let lemma = lower.trim_end_matches('.');
             return self.shares(
                 word,
                 &[
-                    (&lemma, tags.given, 6781.0),
-                    (&lemma, tags.patronymic, 4706.0),
-                    (&lemma, tags.surname, 9.0),
+                    (lemma, tags.given, 6781.0),
+                    (lemma, tags.patronymic, 4706.0),
+                    (lemma, tags.surname, 9.0),
                 ],
             );
         }
@@ -548,17 +557,29 @@ impl Dictionary {
 
     /// Сокращение с точкой кириллицей: разборы словарного сокращения без точки («т.», «им.»),
     /// у частого сокращения, которого нет в словаре («франц.»), - разборы сокращения с теми же
-    /// признаками и полная лемма, у остальных - `X` с леммой без точки в нижнем регистре
+    /// признаками и полная лемма, у остальных - `X` с леммой без точки в нижнем регистре.
+    /// Частое сокращение, которого нет в словаре, разбирается так же и без точки («оч»)
     fn abbreviation(&self, word: &str) -> Option<Vec<Analysis>> {
         let lower = word.to_lowercase();
-        let base = lower.strip_suffix('.')?;
+        let find = |base: &str| {
+            MISSING_ABBREVIATIONS
+                .binary_search_by_key(&base, |&(short, _, _)| short)
+                .ok()
+                .map(|index| MISSING_ABBREVIATIONS[index])
+        };
+        // Слово капсом без точки («ТТ») - аббревиатура
+        let base = match lower.strip_suffix('.') {
+            Some(base) => base,
+            None if !word.chars().skip(1).any(char::is_uppercase) && find(&lower).is_some() => {
+                &lower
+            }
+            None => return None,
+        };
+        let with_dot = base.len() < lower.len();
         if base.is_empty() || !base.chars().all(cyrillic) {
             return None;
         }
-        let missing = MISSING_ABBREVIATIONS
-            .binary_search_by_key(&base, |&(short, _, _)| short)
-            .ok()
-            .map(|index| MISSING_ABBREVIATIONS[index]);
+        let missing = find(base);
         let found = match missing {
             Some((_, sample, lemma)) => self.abbreviations(sample).map(|mut analyses| {
                 for analysis in &mut analyses {
@@ -572,6 +593,12 @@ impl Dictionary {
             return Some(self.shares(word, &[(base, self.rule_tags.other, 1.0)]));
         };
         for analysis in &mut analyses {
+            if let Some(&(_, _, dotted)) = DOTTED_LEMMAS
+                .iter()
+                .find(|&&(short, lemma, _)| with_dot && short == base && lemma == analysis.lemma)
+            {
+                dotted.clone_into(&mut analysis.lemma);
+            }
             analysis.word = word.to_owned();
             analysis.source = Source::Rule;
             analysis.entry = None;
@@ -954,6 +981,7 @@ mod tests {
             initials,
             ["Giv", "Pat", "Sur"].map(|name| ("х".to_owned(), format!("Abbr=Yes|NameType={name}")))
         );
+        assert_eq!(rules(&dict, "Дж.")[0].0, "дж");
         assert_eq!(
             rules(&dict, "им."),
             [analysis("им", "NOUN", "Abbr=Yes|Case=Gen|Number=Sing")]

@@ -67,8 +67,8 @@ Numbers, punctuation, Latin words and abbreviations are analyzed by rules, their
 | numbers and ranges with an ending: «2005-го», «10-15-го», «5-ти» | an ordinal `ADJ` with the case and forms of «1-го», or a cardinal `NUM` |
 | Roman numerals and ranges: «XX», «XIX-го», «II-III» | an ordinal `ADJ` with `NumForm=Roman` |
 | Latin words: «iPhone» | `X` with `Foreign=Yes` |
-| initials: «А.», «А» | `PROPN` with `Abbr=Yes`: a given name, a patronymic or a surname |
-| abbreviations with a dot: «т.», «им.», «франц.», «тов.» | the analyses of the dictionary abbreviation without the dot; for a frequent abbreviation missing from the dictionary, the analyses of a similar abbreviation with the full lemma; an unknown one («вин.») - `X` with the lemma without the dot |
+| initials: «А.», «А», «Дж.» | `PROPN` with `Abbr=Yes`: a given name, a patronymic or a surname |
+| abbreviations with a dot: «т.», «им.», «франц.», «тов.» | the analyses of the dictionary abbreviation without the dot; for a frequent abbreviation missing from the dictionary, the analyses of a similar abbreviation with the full lemma, also without the dot («оч»); an unknown one («вин.») - `X` with the lemma without the dot |
 | capitalized abbreviations: «НКО» | `PROPN` or `NOUN` with `Abbr=Yes`; a long word in capitals («ЧАТБОТАМИ») is also guessed as an ordinary word |
 | adverbs «по-бурятски», «по-молодому» | `ADV` with `Degree=Pos` |
 | other tokens: «км/ч», «100%-ный» | `X` without features, the lemma is the token in lowercase |
