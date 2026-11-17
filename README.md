@@ -317,11 +317,11 @@ ruMorph работает с тем же словарем OpenCorpora, что pym
 
 | Система | SynTagRus | Taiga | GSD | Токенов в секунду |
 | :------ | :-------- | :---- | :-- | :---------------- |
-| ruMorph | **94,1** | **90,8** | **92,1** | **619 682** |
+| ruMorph | **94,1** | **90,9** | **92,2** | **619 682** |
 | pymorphy3 | 84,8 | 82,9 | 84,3 | 24 226 |
 | mystem | 81,9 | 79,4 | 79,9 | 81 863 |
 
-С контекстом (`analyze_sentence`) ruMorph по части речи, лемме и признакам вместе точнее всех теггеров на Taiga и GSD (90,4 и 81,7 % слов против 85,6 и 80,4 % у Stanza), а на SynTagRus идет вровень со Stanza (93,7 и 93,5 %), хотя Stanza обучена на SynTagRus. При этом он разбирает 139 тыс. токенов в секунду против 3 032 у Stanza. На короткий текст вместе с загрузкой ruMorph отвечает за 6 мс против 0,2-2 с у теггеров, процессы делят словарь, и каждый следующий добавляет 1,5 МБ. Замер - Apple M3 Pro, Python 3.11.
+С контекстом (`analyze_sentence`) ruMorph по части речи, лемме и признакам вместе точнее всех теггеров на Taiga и GSD (90,4 и 81,6 % слов против 85,6 и 80,4 % у Stanza), а на SynTagRus идет вровень со Stanza (93,7 и 93,5 %), хотя Stanza обучена на SynTagRus. При этом он разбирает 139 тыс. токенов в секунду против 3 032 у Stanza. На короткий текст вместе с загрузкой ruMorph отвечает за 6 мс против 0,2-2 с у теггеров, процессы делят словарь, и каждый следующий добавляет 1,5 МБ. Замер - Apple M3 Pro, Python 3.11.
 
 Подробнее - в [документации](https://sergeyshk.github.io/ruMorph/performance/): теггеры с контекстом, график скорости от объема текста, операции в сравнении с pymorphy3, память и как это измерено.
 
@@ -376,7 +376,7 @@ uv run pre-commit install
 
 ## Лицензия
 
-Код распространяется под лицензией [MIT](https://github.com/SergeyShk/ruMorph/blob/master/LICENSE.txt). Словарь в пакете собран из словаря [OpenCorpora](https://opencorpora.org) с частотами и контекстной моделью по трибанкам [UD_Russian-Taiga](https://github.com/UniversalDependencies/UD_Russian-Taiga) и [UD_Russian-GSD](https://github.com/UniversalDependencies/UD_Russian-GSD) и корпусу OpenCorpora и распространяется по лицензии CC BY-SA 4.0 ([LICENSE-DICTIONARY.txt](https://github.com/SergeyShk/ruMorph/blob/master/LICENSE-DICTIONARY.txt)).
+Код распространяется под лицензией [MIT](https://github.com/SergeyShk/ruMorph/blob/master/LICENSE.txt). Словарь в пакете собран из словаря [OpenCorpora](https://opencorpora.org) и слов [Викисловаря](https://ru.wiktionary.org) с частотами и контекстной моделью по трибанкам [UD_Russian-Taiga](https://github.com/UniversalDependencies/UD_Russian-Taiga) и [UD_Russian-GSD](https://github.com/UniversalDependencies/UD_Russian-GSD) и корпусу OpenCorpora и распространяется по лицензии CC BY-SA 4.0 ([LICENSE-DICTIONARY.txt](https://github.com/SergeyShk/ruMorph/blob/master/LICENSE-DICTIONARY.txt)).
 
 ## Цитирование
 

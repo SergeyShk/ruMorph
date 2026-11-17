@@ -4,7 +4,7 @@
 rumorph [options] [file ...]
 ```
 
-The command analyzes text from files or the standard input and writes lemmas, parts of speech and [Universal Dependencies](https://universaldependencies.org/) features in one of five formats. It is installed with the package (`pip install rumorph`) and also runs as `python -m rumorph`; without Python, `cargo install rumorph --features cli` installs it. The Rust core does the analysis and the output in one thread: about 100 thousand tokens per second with [context](analyzer.md#analyze_sentence) and about a million without it (`--no-context`).
+The command analyzes text from files or the standard input and writes lemmas, parts of speech and [Universal Dependencies](https://universaldependencies.org/) features in one of five formats. It is installed with the package (`pip install rumorph`) and also runs as `python -m rumorph`; without Python, `cargo install rumorph --features cli` installs it. The Rust core does the analysis and the output in one thread: about 130 thousand tokens per second with [context](analyzer.md#analyze_sentence) and about a million without it (`--no-context`).
 
 ``` bash
 echo "Мы стали друзьями в ковиде." | rumorph

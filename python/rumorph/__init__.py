@@ -5,7 +5,32 @@
 # URL: <https://github.com/SergeyShk/ruMorph>
 
 from ._rumorph import Analysis, Analyzer, FormNotFoundError, __version__
-from ._types import DictionaryInfo
+
+# Тип описания словаря нужен только для аннотаций: модуль typing не грузится при импорте пакета
+TYPE_CHECKING = False
+if TYPE_CHECKING:
+    from ._types import DictionaryInfo
+else:
+    # Тайпчекеры этой функции не видят: опечатки в именах пакета они находят
+    def __getattr__(name: str) -> object:
+        """
+        Тип DictionaryInfo по первому обращению
+
+        Аргументы:
+            name (str): Имя атрибута пакета
+
+        Вывод:
+            object: Тип DictionaryInfo
+
+        Исключения:
+            AttributeError: Атрибута нет
+        """
+        if name == "DictionaryInfo":
+            from ._types import DictionaryInfo
+
+            return DictionaryInfo
+        raise AttributeError(f"module 'rumorph' has no attribute {name!r}")
+
 
 __description__ = """Быстрый морфологический анализатор русского языка на Rust с API для Python.
 Требует версию Python 3.11 и выше"""

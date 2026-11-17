@@ -4,7 +4,7 @@
 rumorph [параметры] [файл ...]
 ```
 
-Команда разбирает текст из файлов или стандартного ввода и пишет леммы, части речи и признаки [Universal Dependencies](https://universaldependencies.org/) в одном из пяти форматов. Она ставится вместе с пакетом (`pip install rumorph`) и запускается и как `python -m rumorph`; без Python ее ставит `cargo install rumorph --features cli`. Разбор и вывод выполняет ядро на Rust в одном потоке: около 100 тыс. токенов в секунду с [контекстом](analyzer.md#analyze_sentence) и около миллиона без него (`--no-context`).
+Команда разбирает текст из файлов или стандартного ввода и пишет леммы, части речи и признаки [Universal Dependencies](https://universaldependencies.org/) в одном из пяти форматов. Она ставится вместе с пакетом (`pip install rumorph`) и запускается и как `python -m rumorph`; без Python ее ставит `cargo install rumorph --features cli`. Разбор и вывод выполняет ядро на Rust в одном потоке: около 130 тыс. токенов в секунду с [контекстом](analyzer.md#analyze_sentence) и около миллиона без него (`--no-context`).
 
 ``` bash
 echo "Мы стали друзьями в ковиде." | rumorph

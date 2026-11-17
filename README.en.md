@@ -317,11 +317,11 @@ The share of words whose first analysis has the right part of speech and lemma, 
 
 | System | SynTagRus | Taiga | GSD | Tokens per second |
 | :----- | :-------- | :---- | :-- | :---------------- |
-| ruMorph | **94.1** | **90.8** | **92.1** | **619,682** |
+| ruMorph | **94.1** | **90.9** | **92.2** | **619,682** |
 | pymorphy3 | 84.8 | 82.9 | 84.3 | 24,226 |
 | mystem | 81.9 | 79.4 | 79.9 | 81,863 |
 
-In context (`analyze_sentence`) ruMorph is more accurate than all the taggers in the part of speech, lemma and features together on Taiga and GSD (90.4 and 81.7 % of words against 85.6 and 80.4 % for Stanza), and on SynTagRus it is level with Stanza (93.7 and 93.5 %), although Stanza is trained on SynTagRus. Meanwhile it handles 139 thousand tokens per second against 3,032 for Stanza. ruMorph answers a short text together with loading in 6 ms against 0.2-2 s for the taggers, processes share the dictionary, and every further one adds 1.5 MB. Measured on Apple M3 Pro, Python 3.11.
+In context (`analyze_sentence`) ruMorph is more accurate than all the taggers in the part of speech, lemma and features together on Taiga and GSD (90.4 and 81.6 % of words against 85.6 and 80.4 % for Stanza), and on SynTagRus it is level with Stanza (93.7 and 93.5 %), although Stanza is trained on SynTagRus. Meanwhile it handles 139 thousand tokens per second against 3,032 for Stanza. ruMorph answers a short text together with loading in 6 ms against 0.2-2 s for the taggers, processes share the dictionary, and every further one adds 1.5 MB. Measured on Apple M3 Pro, Python 3.11.
 
 See the [documentation](https://sergeyshk.github.io/ruMorph/en/performance/) for context taggers, the chart of speed by text size, operations compared with pymorphy3, memory and how it was measured.
 
@@ -376,7 +376,7 @@ Bug reports, ideas and pull requests are welcome - the [issues](https://github.c
 
 ## License
 
-The code is distributed under the [MIT](https://github.com/SergeyShk/ruMorph/blob/master/LICENSE.txt) license. The dictionary in the package is built from the [OpenCorpora](https://opencorpora.org) dictionary with frequencies and a context model from the [UD_Russian-Taiga](https://github.com/UniversalDependencies/UD_Russian-Taiga) and [UD_Russian-GSD](https://github.com/UniversalDependencies/UD_Russian-GSD) treebanks and the OpenCorpora corpus and is distributed under the CC BY-SA 4.0 license ([LICENSE-DICTIONARY.txt](https://github.com/SergeyShk/ruMorph/blob/master/LICENSE-DICTIONARY.txt)).
+The code is distributed under the [MIT](https://github.com/SergeyShk/ruMorph/blob/master/LICENSE.txt) license. The dictionary in the package is built from the [OpenCorpora](https://opencorpora.org) dictionary and words of [Wiktionary](https://ru.wiktionary.org) with frequencies and a context model from the [UD_Russian-Taiga](https://github.com/UniversalDependencies/UD_Russian-Taiga) and [UD_Russian-GSD](https://github.com/UniversalDependencies/UD_Russian-GSD) treebanks and the OpenCorpora corpus and is distributed under the CC BY-SA 4.0 license ([LICENSE-DICTIONARY.txt](https://github.com/SergeyShk/ruMorph/blob/master/LICENSE-DICTIONARY.txt)).
 
 ## Citation
 
