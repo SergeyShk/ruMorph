@@ -50,7 +50,7 @@ The share of words with the right part of speech, lemma and UD features on the t
 | Pipeline | SynTagRus | Taiga | GSD | Speed |
 | :------- | :-------- | :---- | :-- | :---- |
 | ru_core_news_sm | 82.0 | 75.5 | 74.8 | 8,554 |
-| ru_core_news_sm with rumorph | **93.7** | **90.3** | **81.7** | **16,574** |
+| ru_core_news_sm with rumorph | **93.7** | **90.4** | **81.6** | **16,574** |
 
 ## Sentences { #sentences }
 

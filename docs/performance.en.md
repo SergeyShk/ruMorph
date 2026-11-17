@@ -12,7 +12,7 @@ The share of words whose first analysis has the right part of speech and lemma, 
 
 | System | SynTagRus | Taiga | GSD |
 | :----- | :-------- | :---- | :-- |
-| ruMorph | **94.1** (98.5) | **90.8** (95.9) | **92.1** (95.6) |
+| ruMorph | **94.1** (98.5) | **90.9** (95.9) | **92.2** (95.7) |
 | pymorphy3 | 84.8 (90.6) | 82.9 (88.9) | 84.3 (87.9) |
 | mystem | 81.9 (86.4) | 79.4 (83.8) | 79.9 (83.9) |
 
@@ -35,7 +35,7 @@ Taggers see the sentence and choose one analysis; ruMorph here is the analysis i
 
     | System | Part of speech | Lemma | Features |
     | :----- | :------------- | :---- | :------- |
-    | ruMorph in context | **94.8** | **97.0** | **93.8** |
+    | ruMorph in context | **94.9** | **96.9** | **93.7** |
     | Stanza | 94.5 | 94.9 | 90.3 |
     | spaCy ru_core_news_sm | 89.8 | 87.9 | 83.3 |
     | Slovnet (Natasha) | 88.2 | - | 81.1 |
@@ -60,7 +60,7 @@ The default Stanza model is trained on SynTagRus, so its test part is Stanza's o
         | System | Lemma | Part of speech | Case | Number | Features | All together |
         | :----- | :---- | :------------- | :--- | :----- | :------- | :----------- |
         | ruMorph | 96.8 | 95.3 | 88.0 | 96.4 | 84.0 | 82.2 |
-        | ruMorph in context | 98.1 | 97.3 | 97.9 | 98.8 | 95.4 | 93.7 |
+        | ruMorph in context | 98.1 | 97.3 | 97.8 | 98.8 | 95.4 | 93.7 |
         | pymorphy3 | 94.1 | 87.0 | 87.0 | 94.8 | - | - |
         | mystem | 90.9 | 88.2 | 76.9 | 92.7 | - | - |
         | spaCy ru_core_news_sm | 90.7 | 94.1 | 95.6 | 97.3 | 87.9 | 82.0 |
@@ -71,8 +71,8 @@ The default Stanza model is trained on SynTagRus, so its test part is Stanza's o
 
         | System | Lemma | Part of speech | Case | Number | Features | All together |
         | :----- | :---- | :------------- | :--- | :----- | :------- | :----------- |
-        | ruMorph | 95.8 | 92.3 | 86.8 | 95.5 | 82.0 | 78.1 |
-        | ruMorph in context | 97.0 | 94.8 | 97.0 | 98.1 | 93.8 | 90.4 |
+        | ruMorph | 95.8 | 92.3 | 86.8 | 95.5 | 82.1 | 78.2 |
+        | ruMorph in context | 96.9 | 94.9 | 97.1 | 98.1 | 93.7 | 90.4 |
         | pymorphy3 | 92.7 | 85.3 | 85.7 | 93.8 | - | - |
         | mystem | 90.5 | 85.2 | 77.0 | 91.7 | - | - |
         | spaCy ru_core_news_sm | 87.9 | 89.8 | 91.7 | 94.0 | 83.3 | 75.5 |
@@ -84,7 +84,7 @@ The default Stanza model is trained on SynTagRus, so its test part is Stanza's o
         | System | Lemma | Part of speech | Case | Number | Features | All together |
         | :----- | :---- | :------------- | :--- | :----- | :------- | :----------- |
         | ruMorph | 96.4 | 93.9 | 80.8 | 93.2 | 73.0 | 71.4 |
-        | ruMorph in context | 97.5 | 95.5 | 90.4 | 94.8 | 83.4 | 81.7 |
+        | ruMorph in context | 97.5 | 95.5 | 90.3 | 94.8 | 83.4 | 81.6 |
         | pymorphy3 | 94.5 | 86.1 | 79.7 | 92.3 | - | - |
         | mystem | 91.2 | 85.5 | 66.3 | 88.1 | - | - |
         | spaCy ru_core_news_sm | 92.0 | 94.0 | 89.5 | 94.7 | 80.7 | 74.8 |
