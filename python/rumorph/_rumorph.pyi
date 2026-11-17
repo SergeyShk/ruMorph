@@ -3,7 +3,9 @@ from decimal import Decimal
 from fractions import Fraction
 from os import PathLike
 from pathlib import Path
-from typing import Any, Literal, Protocol, SupportsIndex, final
+from typing import Literal, Protocol, SupportsIndex, final
+
+from ._types import DictionaryInfo
 
 __version__: str
 
@@ -64,7 +66,7 @@ class Analyzer:
     @property
     def path(self) -> Path: ...
     @property
-    def dictionary_info(self) -> dict[str, Any]: ...
+    def dictionary_info(self) -> DictionaryInfo: ...
     def analyze(self, word: str) -> list[Analysis]: ...
     def analyze_many(self, words: Iterable[str]) -> list[list[Analysis]]: ...
     def analyze_sentence(self, words: Iterable[str]) -> list[list[Analysis]]: ...

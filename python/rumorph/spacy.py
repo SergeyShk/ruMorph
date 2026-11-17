@@ -51,9 +51,6 @@ DEFAULT: dict[str, Any] = {"dictionary": None, "words": None, "key": ""}
 Pattern = str | tuple[str, str] | list[str]
 # Анализаторов с разными настройками в процессе - не больше стольких: свои слова занимают память
 CACHE_SIZE = 8
-# Невидимые разделители, как в anySeg: токен из них и пробелов (BOM, U+200B между словами у токенизатора
-# anySeg) - пробел, модель его не видит
-SEPARATORS = frozenset("\u00ad\u200b\u200c\u200d\u2060\ufeff")
 
 _analyzers: OrderedDict[str, Analyzer] = OrderedDict()
 _analyzers_lock = threading.Lock()
@@ -157,7 +154,8 @@ class Component:
 
 def space(token: Token) -> bool:
     """
-    Токен - пробел: из пробельных, управляющих символов и невидимых разделителей
+    Токен - пробел: из пробельных, управляющих и невидимых символов (BOM, U+200B, метки
+    направления текста); модель его не видит
 
     Аргументы:
         token (Token): Токен
@@ -166,7 +164,7 @@ def space(token: Token) -> bool:
         bool: Пробел ли токен
     """
     return token.is_space or all(
-        character.isspace() or character in SEPARATORS or unicodedata.category(character) == "Cc"
+        character.isspace() or unicodedata.category(character) in ("Cc", "Cf")
         for character in token.text
     )
 

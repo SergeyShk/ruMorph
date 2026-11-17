@@ -1070,13 +1070,17 @@ thread_local! {
 #[pymethods]
 impl Analyzer {
     #[new]
-    #[pyo3(signature = (path=None, words=None, *, verify=false))]
+    #[pyo3(
+        signature = (path=None, words=None, *, verify=None),
+        text_signature = "(path=None, words=None, *, verify=False)"
+    )]
     fn new(
         py: Python<'_>,
         path: Option<&Bound<'_, PyAny>>,
         words: Option<&Bound<'_, PyAny>>,
-        verify: bool,
+        verify: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<Self> {
+        let verify = flag("verify", verify, false)?;
         let path = match path {
             Some(path) if !path.is_none() => Some(path.extract::<PathBuf>().map_err(|_| {
                 type_error("Путь к словарю должен быть строкой или os.PathLike", path)
@@ -1277,8 +1281,17 @@ impl Analyzer {
     ///     >>> Analyzer().annotate(document)
     ///     >>> [(word.lemma, word.upos) for word in document.words]
     ///     [('мы', 'PRON'), ('стать', 'VERB'), ('друг', 'NOUN'), ('.', 'PUNCT')]
-    #[pyo3(signature = (document, *, context = true))]
-    fn annotate(&self, py: Python<'_>, document: &Bound<'_, PyAny>, context: bool) -> PyResult<()> {
+    #[pyo3(
+        signature = (document, *, context = None),
+        text_signature = "($self, document, *, context=True)"
+    )]
+    fn annotate(
+        &self,
+        py: Python<'_>,
+        document: &Bound<'_, PyAny>,
+        context: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<()> {
+        let context = flag("context", context, true)?;
         let dictionary = &self.shared.dictionary;
         // Модель проверяется до разбора, и у пустого документа тоже
         if context {
@@ -1836,6 +1849,16 @@ fn sample_strings<'py>(
     let like = pair.get_item(0).ok()?.cast_into::<PyString>().ok()?;
     let pos = pair.get_item(1).ok()?.cast_into::<PyString>().ok()?;
     Some((like, Some(pos)))
+}
+
+/// Флаг `name` - bool, без значения - `default`; иначе TypeError по-русски
+fn flag(name: &str, value: Option<&Bound<'_, PyAny>>, default: bool) -> PyResult<bool> {
+    match value {
+        Some(value) if !value.is_none() => value
+            .extract()
+            .map_err(|_| type_error(&format!("Параметр {name} должен быть bool"), value)),
+        _ => Ok(default),
+    }
 }
 
 /// TypeError с типом полученного значения: «Слово должно быть строкой, а не int»

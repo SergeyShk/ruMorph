@@ -118,7 +118,7 @@ echo "Мы стали" | rumorph -f jsonl
 
 ### text
 
-The source text as is - with its line breaks, spaces and punctuation - where only «е» in a token is replaced with «ё» where the chosen analysis writes it, in the case of the token. This way a text without «ё» gets it by context: «все» becomes «всё» or stays «все», «узнаем» becomes «узнаём» or stays «узнаем». Without context (`--no-context`) «ё» is put only where all the analyses of the token write it: «все» and «звезды» stay as they are. A token with a stress mark or a soft hyphen is not changed, and a BOM at the start of a file stays. The format is for the input `text` only.
+The source text as is - with its line breaks, spaces and punctuation - where only «е» in a token is replaced with «ё» where the chosen analysis writes it, in the case of the token. This way a text without «ё» gets it by context: «все» becomes «всё» or stays «все», «узнаем» becomes «узнаём» or stays «узнаем». Without context (`--no-context`) «ё» is put only where all the analyses of the token write it: «все» and «звезды» stay as they are. A token with a stress mark is not changed, a soft hyphen stays in its place, and so does a BOM at the start of a file. The format is for the input `text` only.
 
 ``` bash
 echo "Осел стоит у елки, а еще ее ждет еж." | rumorph -f text
