@@ -19,13 +19,21 @@ make dictionary             # собрать словарь из словаря 
 uv run pre-commit install   # хуки: линтеры на коммите, тесты на пуше
 ```
 
-Модуль на Rust собирается при установке пакета в окружение; `uv run` пересобирает его сам, когда меняются файлы `crates/` или `Cargo.toml`. Словарь `python/rumorph/data/ru.dict` в git не хранится: `make dictionary` скачивает словарь и корпус OpenCorpora (снимки Wayback Machine, копия - датасет [SergeyShk/rumorph-opencorpora](https://huggingface.co/datasets/SergeyShk/rumorph-opencorpora)) и снимок Викисловаря (датасет [SergeyShk/rumorph-wiktionary](https://huggingface.co/datasets/SergeyShk/rumorph-wiktionary) на Hugging Face, делает его `scripts/wiktionary_snapshot.py`) и выгружает их скриптом `scripts/export_opencorpora.py` (слова Викисловаря переводит в лексемы OpenCorpora `scripts/wiktionary.py`), скачивает обучающие части трибанков UD_Russian-Taiga и UD_Russian-GSD закрепленного релиза скриптом `scripts/export_ud.py` (счетчики разметки словоформ для частот разборов) и собирает словарь сборщиком `rumorph-build`, вшивая в него веса контекстной модели `data/ru-context.bin`; `make test` и `make build` делают это сами. Полный список команд - `make help`.
+Модуль на Rust собирается при установке пакета в окружение; `uv run` пересобирает его сам, когда меняются файлы `crates/` или `Cargo.toml`. Словарь `python/rumorph/data/ru.dict` в git не хранится: `make dictionary` скачивает словарь и корпус OpenCorpora (снимки Wayback Machine, копия - датасет [SergeyShk/rumorph-opencorpora](https://huggingface.co/datasets/SergeyShk/rumorph-opencorpora)) и снимок Викисловаря (датасет [SergeyShk/rumorph-wiktionary](https://huggingface.co/datasets/SergeyShk/rumorph-wiktionary) на Hugging Face, делает его `scripts/wiktionary_snapshot.py`) и выгружает их скриптом `scripts/export_opencorpora.py` (слова Викисловаря переводит в лексемы OpenCorpora `scripts/wiktionary.py`), скачивает обучающие части трибанков UD_Russian-Taiga и UD_Russian-GSD закрепленного релиза скриптом `scripts/export_ud.py` (счетчики разметки словоформ для частот разборов) и собирает словарь сборщиком `rumorph-build`, вшивая в него веса контекстной модели `data/ru-context.bin` и модели класса парадигмы `data/ru-paradigms.bin`; `make test` и `make build` делают это сами. Полный список команд - `make help`.
 
-Веса контекстной модели хранятся в git. Переобучать модель нужно, когда меняются теги UD словаря (сборщик тогда откажется вшивать старые веса) или соглашения разметки: `scripts/conventions.py` переписывает разметку Taiga и GSD в соглашениях ruMorph и для счетчиков, и для обучения. Модель учится на кандидатах словаря без весов, после обучения словарь собирается с ней; обучение скачивает обучающие и проверочные части трибанков и корпус OpenCorpora с проверкой SHA-256, теги корпуса переводит `rumorph-build tags` (нужен cargo). Выгрузки `target/opencorpora` и `target/ud` делает `make dictionary`:
+Веса моделей хранятся в git. Контекстную модель переобучать нужно, когда меняются теги UD словаря (сборщик тогда откажется вшивать старые веса) или соглашения разметки: `scripts/conventions.py` переписывает разметку Taiga и GSD в соглашениях ruMorph и для счетчиков, и для обучения. Модель учится на кандидатах словаря без весов, после обучения словарь собирается с ней; обучение скачивает обучающие и проверочные части трибанков и корпус OpenCorpora с проверкой SHA-256, теги корпуса переводит `rumorph-build tags` (нужен cargo). Выгрузки `target/opencorpora` и `target/ud` делает `make dictionary`:
 
 ```bash
 cargo run --release --locked -p rumorph-build -- target/opencorpora target/ud python/rumorph/data/ru.dict
 uv run --with-editable . scripts/train_context.py --dictionary python/rumorph/data/ru.dict --data target/context --output data/ru-context.bin
+make dictionary
+```
+
+Модель класса парадигмы выбирает разборы незнакомых слов среди форм из списков окончаний и учится на самом словаре: на его словах, как если бы их в словаре не было. Переобучать ее стоит, когда меняются лексемы словаря или списки окончаний; словарь для обучения собирается с контекстной моделью, но без весов модели класса парадигмы:
+
+```bash
+cargo run --release --locked -p rumorph-build -- target/opencorpora target/ud python/rumorph/data/ru.dict data/ru-context.bin
+uv run --with-editable . scripts/train_paradigms.py --dictionary python/rumorph/data/ru.dict --export target/opencorpora --output data/ru-paradigms.bin
 make dictionary
 ```
 
@@ -61,8 +69,8 @@ make docs-build  # mkdocs build --strict, если менялась докуме
 - `crates/rumorph-build/` - сборка словаря из выгрузки OpenCorpora, перевод тегов OpenCorpora в UD (`ud.rs`) и частоты разборов по счетчикам трибанков UD (`frequencies.rs`).
 - `crates/rumorph-py/` - модуль Python `rumorph._rumorph` на PyO3.
 - `python/rumorph/` - пакет Python поверх модуля; `data/ru.dict` - собранный словарь.
-- `scripts/` - выгрузка словаря и корпуса OpenCorpora (`export_opencorpora.py`), снимок и перевод слов Викисловаря (`wiktionary_snapshot.py`, `wiktionary.py`), выгрузка счетчиков трибанков UD (`export_ud.py`, соглашения разметки - `conventions.py`), обучение контекстной модели (`train_context.py`, зависимости закреплены в `train_context.py.lock`), проверка установленного пакета перед публикацией и сравнение с другими анализаторами (`compare.py`, зависимости закреплены в `compare.py.lock`), лицензии крейтов модуля (`notices.py`).
-- `data/` - веса контекстной модели (`ru-context.bin`), которые сборщик вшивает в словарь.
+- `scripts/` - выгрузка словаря и корпуса OpenCorpora (`export_opencorpora.py`), снимок и перевод слов Викисловаря (`wiktionary_snapshot.py`, `wiktionary.py`), выгрузка счетчиков трибанков UD (`export_ud.py`, соглашения разметки - `conventions.py`), обучение контекстной модели и модели класса парадигмы (`train_context.py`, `train_paradigms.py`, зависимости закреплены в их lock-файлах), проверка установленного пакета перед публикацией и сравнение с другими анализаторами (`compare.py`, зависимости закреплены в `compare.py.lock`), лицензии крейтов модуля (`notices.py`).
+- `data/` - веса контекстной модели (`ru-context.bin`) и модели класса парадигмы (`ru-paradigms.bin`), которые сборщик вшивает в словарь.
 - `tests/` - тесты пакета Python; `tests/test_docs.py` - два языка документации.
 - `docs/` - документация MkDocs (Material), `mkdocs.yml` - навигация и перевод ее на английский.
 - `.github/workflows/` - CI (`ci.yml`), публикация (`publish.yml`: словарь собирается один раз и входит в колеса для Linux, macOS и Windows и в исходники), документация (`docs.yml`: сайт публикуется по тегу релиза).
