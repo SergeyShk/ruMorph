@@ -515,9 +515,14 @@ fn _analysis(py: Python<'_>, analyzer: Py<Analyzer>, state: AnalysisState) -> Py
     };
     let found = entry
         .and_then(|(table, form)| {
-            dictionary.analysis(&word, rumorph::Entry { table, form }, source)
+            let mut analysis =
+                dictionary.analysis(&word, rumorph::Entry { table, form }, source)?;
+            // У формы таблицы помета Prnt есть, а в предложении ее могло снять правило запятых
+            if !like(&analysis) {
+                analysis.ud = dictionary.without_parenthetical_tag(analysis.ud)?;
+            }
+            like(&analysis).then_some(analysis)
         })
-        .filter(like)
         .or_else(|| {
             let analyses = dictionary.analyze(&word);
             let ud = || {
@@ -1220,9 +1225,10 @@ impl Analyzer {
     /// Описание:
     ///     Те же разборы, что у analyze, упорядочивает контекстная модель: первый - разбор,
     ///     который модель выбрала по соседним словам, вероятность - ее оценка в этом
-    ///     предложении. Слова - токены одного предложения по порядку; слово без соседей
-    ///     разбирается, как в analyze, а предложение длиннее 256 слов - частями по 256.
-    ///     Разбор идет без GIL
+    ///     предложении. У слов, которые часто не вводные («однако», «наконец»), помета Prnt
+    ///     остается, только если рядом запятая или тире. Слова - токены одного предложения
+    ///     по порядку; слово без соседей разбирается, как в analyze, а предложение длиннее
+    ///     256 слов - частями по 256. Разбор идет без GIL
     ///
     /// Аргументы:
     ///     words (Iterable[str]): Токены предложения

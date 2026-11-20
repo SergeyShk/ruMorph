@@ -824,6 +824,39 @@ def test_parenthetical_label(morph, word, parenthetical):
     assert ("Prnt" in labels) == parenthetical
 
 
+@pytest.mark.parametrize(
+    ("words", "at", "parenthetical"),
+    [
+        (["промолвил", "он", "наконец", "."], 2, False),
+        (["Наконец", ",", "мы", "приехали"], 0, True),
+        (["Однако", "мы", "не", "стали"], 0, False),
+        (["Однако", ",", "это", "так"], 0, True),
+        (["Он", "—", "правда", "—", "пришел"], 2, True),
+        # Тире реплики в начале предложения не обособляет
+        (["—", "Однако", "мы", "не", "стали", "."], 1, False),
+        # Токен без видимых символов между словом и запятой не считается, слово - как у analyze
+        (["Наконец", "\u200e", ",", "мы", "пришли"], 0, True),
+        (["Одна\u0301ко", "мы", "не", "стали"], 0, False),
+        # Слово, которое почти всегда вводное, сохраняет помету и без запятых
+        (["например", "кот"], 0, True),
+    ],
+)
+def test_parenthetical_by_commas(morph, words, at, parenthetical):
+    # У слов, которые часто не вводные, в предложении Prnt - только рядом с запятой или тире
+    assert ("Prnt" in morph.analyze_sentence(words)[at][0].labels) == parenthetical
+    # Без предложения - как в словаре
+    assert "Prnt" in morph.analyze(words[at])[0].labels
+
+
+def test_parenthetical_by_commas_pickle(morph):
+    # Разбор, у которого правило сняло помету, после pickle сохраняет формы лексемы
+    analysis = morph.analyze_sentence(["он", "вернее", "пришел"])[1][0]
+    restored = pickle.loads(pickle.dumps(analysis))
+    assert restored == analysis
+    assert "Prnt" not in restored.labels
+    assert restored.inflect(Degree="Pos") == "верно"
+
+
 def test_parenthetical_adverb_keeps_lexeme(morph):
     # Вводное наречие остается своей лексемой: сравнительная степень и помета Prdx на месте
     assert ("вероятно", "Cmp") in {
