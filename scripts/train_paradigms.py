@@ -190,7 +190,8 @@ class Model(nn.Module):
         self.lstm = nn.LSTM(args.dchar, args.hidden, batch_first=True)
         self.hidden = nn.Linear(args.hidden, args.dim)
         width = args.dim + 1
-        self.key = nn.Embedding(n_keys, width)
+        # Строка 0 ключей - дополнение коротких тегов: она всегда нулевая, как в ядре
+        self.key = nn.Embedding(n_keys, width, padding_idx=0)
         self.lemma_suffix = nn.Embedding(n_suffixes, width)
         self.form_suffix = nn.Embedding(n_suffixes, width)
         self.length = nn.Embedding(MAX_ENDING, width)

@@ -18,22 +18,26 @@ use rumorph::{Builder, Dictionary, Entry, GuessIndex};
 
 fn main() -> ExitCode {
     let args: Vec<PathBuf> = std::env::args_os().skip(1).map(PathBuf::from).collect();
-    // Без весов собирается словарь без моделей: на нем они и учатся
+    // Модель класса парадигмы учится на словаре без моделей, контекстная - на словаре с моделью
+    // класса парадигмы и без контекстной: вместо ее весов - «-»
+    fn weights(path: &Path) -> Option<&Path> {
+        (path.as_os_str() != "-").then_some(path)
+    }
     let result = match args.as_slice() {
         [mode] if mode.as_os_str() == "tags" => tags(),
         [export, ud, output] => build(export, ud, output, None, None),
-        [export, ud, output, context] => build(export, ud, output, Some(context.as_path()), None),
+        [export, ud, output, context] => build(export, ud, output, weights(context), None),
         [export, ud, output, context, paradigms] => build(
             export,
             ud,
             output,
-            Some(context.as_path()),
+            weights(context),
             Some(paradigms.as_path()),
         ),
         _ => {
             eprintln!(
                 "Использование: rumorph-build <выгрузка OpenCorpora> <выгрузка UD> <файл словаря> \
-                 [веса контекстной модели [веса модели класса парадигмы]]\n       \
+                 [веса контекстной модели или - [веса модели класса парадигмы]]\n       \
                  rumorph-build tags < теги OpenCorpora"
             );
             return ExitCode::from(2);

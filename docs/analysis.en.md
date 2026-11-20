@@ -110,7 +110,7 @@ A guessed analysis has forms, and `forms`, `inflect` and `agree` work with it; t
 === "Result"
 
     ```
-    [('донатер', 'NOUN', 'Dat', 0.68), ('донатер', 'NOUN', 'Dat', 0.23)]
+    [('донатер', 'NOUN', 'Dat', 0.67), ('донатер', 'NOUN', 'Dat', 0.25)]
     ['ноотропил', 'фрустрировать']
     ('мартов', 'PROPN', 'Sur', 'Мартову')
     ('крэш-тест', 'экодом')
