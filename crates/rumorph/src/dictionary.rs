@@ -1236,7 +1236,7 @@ impl Dictionary {
             .iter()
             .any(|&form| lexeme.ud(form) == analysis.ud && lexeme.affixes(form) != own);
         // Оценка формы: общее с разбором, лишнее, общее начало написания
-        type Score = (usize, Reverse<usize>, usize);
+        type Score = (usize, usize, Reverse<usize>, usize);
         let mut best: Option<(u16, Score)> = None;
         for &form in forms {
             let ud = lexeme.ud(form);
@@ -1254,11 +1254,16 @@ impl Dictionary {
                 .zip(codes.values)
                 .filter(|&(wanted, value)| *wanted != 0 && wanted == value)
                 .count()
-                + labels
+                + current
+                    .labels
                     .iter()
                     .filter(|label| codes.labels.contains(label))
                     .count()
                 + usize::from(codes.pos == current.pos);
+            let preferred = prefer
+                .iter()
+                .filter(|label| codes.labels.contains(label))
+                .count();
             let extra = codes
                 .labels
                 .iter()
@@ -1281,7 +1286,7 @@ impl Dictionary {
             } else {
                 0
             };
-            let score = (same, Reverse(extra), common);
+            let score = (same, preferred, Reverse(extra), common);
             if best.is_none_or(|(_, top)| score > top) {
                 best = Some((form, score));
             }
@@ -1339,15 +1344,19 @@ impl Dictionary {
         let affixes = lexeme.affixes(own);
         // Возвратный пассив («строится» - «строить» с Voice=Pass) - лексема из его форм: инфинитив
         // действительного глагола в ней только задает лемму
-        let ud = analysis.ud;
-        let passive =
-            self.feat(ud, "Voice") == Some("Pass") && self.feat(ud, "VerbForm") != Some("Part");
+        let same_lemma = |form: u16| {
+            let lemma_form = lexeme.lemma_form(form);
+            lemma_form == own || lexeme.affixes(lemma_form) == affixes
+        };
+        let pass = |form: u16| self.feat(lexeme.ud(form), "Voice") == Some("Pass");
+        let passive = self.feat(analysis.ud, "Voice") == Some("Pass")
+            && (0..lexeme.cells.len() as u16).any(|form| {
+                same_lemma(form)
+                    && pass(form)
+                    && self.feat(lexeme.ud(form), "VerbForm") == Some("Inf")
+            });
         let forms = (0..lexeme.cells.len() as u16)
-            .filter(|&form| {
-                let lemma_form = lexeme.lemma_form(form);
-                (lemma_form == own || lexeme.affixes(lemma_form) == affixes)
-                    && (!passive || self.feat(lexeme.ud(form), "Voice") == Some("Pass"))
-            })
+            .filter(|&form| same_lemma(form) && (!passive || pass(form)))
             .collect();
         Some((lexeme, forms))
     }

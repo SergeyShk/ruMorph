@@ -122,6 +122,9 @@ def test_second_locative(morph):
     assert forest.inflect(Case="Loc", labels={"loc2"}) == "лесу"
     assert analysis(morph, "город").inflect(Case="Loc", labels=["loc2"]) == "городе"
     assert analysis(morph, "кошка").inflect(Case="Ins", labels=("V-oy",)) == "кошкою"
+    # Помета не перевешивает признаки разбора: число сохраняется
+    assert analysis(morph, "лесах").inflect(Case="Loc", labels={"loc2"}) == "лесах"
+    assert analysis(morph, "кошками").inflect(Case="Ins", labels={"V-oy"}) == "кошками"
     assert (
         forest.inflect(Case="Loc", labels=None) == forest.inflect(Case="Loc", labels=[]) == "лесе"
     )
@@ -136,6 +139,10 @@ def test_passive_lexeme(morph):
     assert {form.feats["Voice"] for form in forms} == {"Pass"}
     assert passive.inflect(VerbForm="Inf") == "строиться"
     assert passive.inflect(Tense="Past", Gender="Fem") == "строилась"
+    # Причастие пассивной лексемы - тоже без действительных форм
+    participle = analysis(morph, "строящийся", Voice="Pass")
+    assert participle.lemma == "строить"
+    assert {form.feats["Voice"] for form in participle.forms()} == {"Pass"}
     # Страдательное причастие - в лексеме действительного глагола
     assert "построил" in [form.word for form in analysis(morph, "построенный").forms()]
 
