@@ -23,7 +23,7 @@
 
     ---
 
-    Parts of speech, features and lemmas by the UD guidelines and the SynTagRus conventions; numbers, punctuation and Latin words by rules, unknown words by their ending
+    Parts of speech, features and lemmas by the UD guidelines and the SynTagRus conventions; numbers, punctuation and Latin words by rules, unknown words by their ending and a model trained on the dictionary
 
     [:octicons-arrow-right-24: Word analysis](analysis.md)
 

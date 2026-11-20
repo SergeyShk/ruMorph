@@ -41,6 +41,8 @@ def test_default_dictionary(morph):
     assert info["wiktionary"]["dump"] == "2026-10-01"
     assert info["wiktionary"]["file"].endswith("ru-wiktionary-20261001.jsonl.xz")
     assert info["context"]["release"] == info["frequencies"]["release"] == "r2.19"
+    assert info["paradigms"]["opencorpora_revision"] == "417258"
+    assert info["paradigms"]["wiktionary_dump"] == "2026-10-01"
     data = Path(morph.path).read_bytes()
     assert info["checksum"] == int.from_bytes(data[12:16], "little")
     assert info["word_forms"] > 3_000_000
@@ -57,7 +59,7 @@ def test_dictionary_info_type(morph):
     info = morph.dictionary_info
     assert set(info) == keys(rumorph.DictionaryInfo)
     hints = get_type_hints(rumorph.DictionaryInfo)
-    for name in ("wiktionary", "frequencies", "context"):
+    for name in ("wiktionary", "frequencies", "context", "paradigms"):
         assert set(info[name]) == keys(hints[name])
     assert set(info["context"]["corpus"]) == keys(get_type_hints(hints["context"])["corpus"])
 

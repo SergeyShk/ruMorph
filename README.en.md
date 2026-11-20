@@ -35,7 +35,7 @@ Analysis and lemmatization are 6-8 times faster than in pymorphy3 with the `pymo
 * **[Sentence analysis](https://sergeyshk.github.io/ruMorph/en/analyzer/#analyze_sentence)** - the context model picks the analysis from the neighbouring words: the part of speech, lemma and features are right for 82-94 % of words against 71-82 % without context; [`annotate`](https://sergeyshk.github.io/ruMorph/en/analyzer/#annotate) annotates a document of the segmenter [anySeg](https://github.com/SergeyShk/anySeg)
 * **[UD parts of speech and features](https://sergeyshk.github.io/ruMorph/en/analysis/#ud)** - parts of speech, features and lemmas by the UD guidelines and the SynTagRus conventions; OpenCorpora labels that have no UD feature
 * **[Tokens outside the dictionary](https://sergeyshk.github.io/ruMorph/en/analysis/#rules)** - numbers, signs, Latin script, initials and abbreviations by rules
-* **[Unknown words](https://sergeyshk.github.io/ruMorph/en/analysis/#guess)** - analyses by the ending, hyphenated words and words with prefixes, forms of guessed words
+* **[Unknown words](https://sergeyshk.github.io/ruMorph/en/analysis/#guess)** - analyses by the ending and a model trained on the dictionary, hyphenated words and words with prefixes, forms of guessed words
 * **[Inflection](https://sergeyshk.github.io/ruMorph/en/inflection/)** - forms of a lexeme, a form by UD features, agreement with a number
 * **[The rumorph command](https://sergeyshk.github.io/ruMorph/en/cli/)** - analysis of files and streams: lemmas, CoNLL-U, TSV, JSON Lines and text with «ё» restored
 * **[Migrating from pymorphy](https://sergeyshk.github.io/ruMorph/en/migration/)** - pymorphy2 and pymorphy3 calls, parts of speech and grammemes and their counterparts
@@ -186,7 +186,7 @@ See the [documentation](https://sergeyshk.github.io/ruMorph/en/analysis/#rules).
 
 <br>
 
-For a word in Cyrillic that is not in the dictionary, the analyzer guesses the analyses by its ending: it takes the forms of dictionary words with the same ending - their part of speech, features and inflection. The `source` of such analyses is `"guess"`.
+For a word in Cyrillic that is not in the dictionary, the analyzer guesses the analyses: it takes the forms of dictionary words with the same endings - their part of speech, features and inflection; for a lowercase word a model trained on the dictionary chooses among them. The `source` of such analyses is `"guess"`.
 
 *   A lowercase word is guessed as a common noun or another common word, a capitalized word mostly as a proper name: a surname, a first name, a place
 *   A hyphenated word is analyzed by its last part: «крэш-тестов» - «крэш-тест», «Мак-Киннона» - «мак-киннон», and a word with a drawl or a stutter by the dictionary word without them: «не-е-ет» - «нет», «с-спасибо» - «спасибо»

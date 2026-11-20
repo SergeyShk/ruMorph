@@ -104,7 +104,7 @@ jobs:
         run: |
           uv run --no-sync python scripts/export_opencorpora.py build/opencorpora
           uv run --no-sync python scripts/export_ud.py build/ud
-          cargo run --release --locked -p rumorph-build -- build/opencorpora build/ud python/rumorph/data/ru.dict data/ru-context.bin
+          cargo run --release --locked -p rumorph-build -- build/opencorpora build/ud python/rumorph/data/ru.dict data/ru-context.bin data/ru-paradigms.bin
           uv run --no-sync python -c "import hashlib; print(hashlib.sha256(open('python/rumorph/data/ru.dict', 'rb').read()).hexdigest())"
       - name: Check dictionary size
         # Словарь едет на crates.io в архиве крейта rumorph-dict-ru, а там предел - 10 МиБ: PR, меняющий

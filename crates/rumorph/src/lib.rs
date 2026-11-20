@@ -38,6 +38,8 @@ pub use anyseg;
 #[cfg(feature = "build")]
 #[cfg_attr(docsrs, doc(cfg(feature = "build")))]
 pub use builder::Builder;
+#[doc(hidden)]
+pub use dictionary::GuessCandidate;
 #[cfg(feature = "build")]
 #[cfg_attr(docsrs, doc(cfg(feature = "build")))]
 pub use dictionary::GuessIndex;

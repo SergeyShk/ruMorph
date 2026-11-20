@@ -91,7 +91,7 @@ The shares of ambiguous analyses come from the frequencies in the UD Taiga and G
 
 ## Unknown words { #guess }
 
-The analyses of a Cyrillic word that is not in the dictionary are guessed by its ending: the analyzer takes the forms of dictionary words with the same ending - their part of speech, features and inflection. Their `source` is `"guess"`. A lowercase word is guessed as a common word, a capitalized word mostly as a proper noun: a surname, a given name, a place, and a word in «-ский» mostly as an adjective. An abbreviation with an ending («МЭРТа») is guessed like a capitalized word. A word in mixed case with capitals inside a lowercase word («прихАдите») or with a suffix after an abbreviation («КВНщиками», «ЗОЖное») is guessed as a lowercase word, and a solid name («ЛайфНьюс») as a capitalized word. A lowercase word of one or two letters is not guessed: «ви» is `X`. A capitalized word that the dictionary knows only as a rare common noun from Wiktionary also gets the guessed analyses of a proper noun: «Сенна» is first of all PROPN, «сенна» is NOUN.
+The analyses of a Cyrillic word that is not in the dictionary are guessed: the analyzer takes the forms of dictionary words with the same endings - their part of speech, features and inflection. For a lowercase word a model that reads the whole word letter by letter and is trained on the dictionary itself chooses among these forms: «ноотропил» is a noun for it, not the past tense of a verb «ноотропить», and «фрустрирующего» is a participle of «фрустрировать». A capitalized word is guessed by the most frequent forms with the same ending. Their `source` is `"guess"`. A lowercase word is guessed as a common word, a capitalized word mostly as a proper noun: a surname, a given name, a place, and a word in «-ский» mostly as an adjective. An abbreviation with an ending («МЭРТа») is guessed like a capitalized word. A word in mixed case with capitals inside a lowercase word («прихАдите») or with a suffix after an abbreviation («КВНщиками», «ЗОЖное») is guessed as a lowercase word, and a solid name («ЛайфНьюс») as a capitalized word. A lowercase word of one or two letters is not guessed: «ви» is `X`. A capitalized word that the dictionary knows only as a rare common noun from Wiktionary also gets the guessed analyses of a proper noun: «Сенна» is first of all PROPN, «сенна» is NOUN.
 
 A hyphenated word is analyzed by its last part: «крэш-тестов» - «крэш-тест», «IT-компании» - «it-компания»; if the last part is a particle («сколь-нибудь»), by the first one. A word with a drawl or a stutter through hyphens («Что-о», «не-е-ет», «Н-ну-у», «с-спасибо») gets the analyses of the dictionary word without them, but no forms. If both parts inflect, the lemma is made of the lemmas of the parts: «стула-трансформера» - «стул-трансформер», and such an analysis has no forms. A word with the invariable apposition «минимум», «максимум» or «люкс» is analyzed by its first part, and such an analysis has no forms: «программы-минимум» is the genitive of «программа-минимум». A word with a known prefix - «эко», «анти», «супер», «микро» and others - is analyzed by the dictionary word without it: «экодомов» - «экодом». These analyses are guessed too.
 
@@ -100,7 +100,8 @@ A guessed analysis has forms, and `forms`, `inflect` and `agree` work with it; t
 === "Code"
 
     ``` python
-    [(a.lemma, a.pos, a.feats["Case"], round(a.prob, 2)) for a in morph.analyze("донатеру")][:2]
+    [(a.lemma, a.pos, a.feats.get("Case"), round(a.prob, 2)) for a in morph.analyze("донатеру")][:2]
+    [morph.analyze(word)[0].lemma for word in ("ноотропил", "фрустрирующего")]
     guess = morph.analyze("Мартова")[0]
     guess.lemma, guess.pos, guess.feats["NameType"], guess.inflect(Case="Dat")
     morph.analyze("крэш-тестов")[0].lemma, morph.analyze("экодомов")[0].lemma
@@ -109,7 +110,8 @@ A guessed analysis has forms, and `forms`, `inflect` and `agree` work with it; t
 === "Result"
 
     ```
-    [('донатер', 'NOUN', 'Dat', 0.72), ('донатер', 'NOUN', 'Dat', 0.22)]
+    [('донатер', 'NOUN', 'Dat', 0.67), ('донатер', 'NOUN', 'Dat', 0.25)]
+    ['ноотропил', 'фрустрировать']
     ('мартов', 'PROPN', 'Sur', 'Мартову')
     ('крэш-тест', 'экодом')
     ```

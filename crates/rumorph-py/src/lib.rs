@@ -1170,7 +1170,7 @@ impl Analyzer {
     /// Пример использования:
     ///     >>> from rumorph import Analyzer
     ///     >>> [len(analyses) for analyses in Analyzer().analyze_many(["мама", "мыла", "раму", "вайбкодер"])]
-    ///     [1, 4, 2, 3]
+    ///     [1, 4, 2, 4]
     fn analyze_many(
         slf: &Bound<'_, Self>,
         words: &Bound<'_, PyAny>,
@@ -1430,8 +1430,9 @@ impl Analyzer {
     ///     Источники словаря, как их записал сборщик: source и ревизии словаря и корпуса
     ///     OpenCorpora (opencorpora_revision, corpus_revision), лексемы Викисловаря (wiktionary),
     ///     релиз UD и трибанки частот (frequencies) и обучения контекстной модели (context),
-    ///     лицензия словаря (license); всегда - число словоформ (word_forms) и контрольная сумма
-    ///     файла (checksum). У словаря, собранного не сборщиком ruMorph, есть только последние два.
+    ///     обучение модели класса парадигмы (paradigms), лицензия словаря (license); всегда -
+    ///     число словоформ (word_forms) и контрольная сумма файла (checksum). У словаря,
+    ///     собранного не сборщиком ruMorph, есть только последние два.
     ///     Каждое обращение возвращает новый словарь
     ///
     /// Вывод:
@@ -1456,6 +1457,34 @@ impl Analyzer {
         info.set_item("word_forms", dictionary.word_count())?;
         info.set_item("checksum", dictionary.checksum())?;
         Ok(info)
+    }
+
+    /// Примеры обучения модели класса парадигмы (для `scripts/train_paradigms.py`): кандидаты
+    /// словарного слова в нижнем регистре среди нарицательных, как если бы его не было в словаре:
+    /// лемма, номер тега UD, суффиксы формы леммы и формы, длина окончания, число словоформ, доля
+    /// в списке окончания, верен ли
+    #[allow(clippy::type_complexity)]
+    fn _guess_examples(
+        &self,
+        word: &str,
+    ) -> Vec<(String, u16, String, String, u8, u32, f32, bool)> {
+        self.shared
+            .dictionary
+            .guess_examples(word)
+            .into_iter()
+            .map(|candidate| {
+                (
+                    candidate.analysis.lemma,
+                    candidate.analysis.ud,
+                    candidate.lemma_suffix,
+                    candidate.form_suffix,
+                    candidate.length,
+                    candidate.count,
+                    candidate.share,
+                    candidate.gold,
+                )
+            })
+            .collect()
     }
 
     /// Части речи и признаки всех тегов UD словаря (для обучения контекстной модели)
