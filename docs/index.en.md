@@ -7,6 +7,12 @@
 !!! note "Early version"
     Before 1.0 the API may change between 0.x versions, changes are described in the release notes.
 
+## How it works
+
+The analyzer finds every word in the dictionary - it holds all the analyses of the word and their frequencies. In a sentence the context model chooses the analysis by the neighbouring words: in the dictionary «стали» is first of all the verb «стать», and in «Мост сделан из стали» it is the noun «сталь» in the genitive. The models are described on the [Models](models.md) page.
+
+![How ruMorph analyzes a sentence: the dictionary analyses of every word and the choice of the context model](img/pipeline.en.svg)
+
 ## Features
 
 <div class="grid cards" markdown>
@@ -42,6 +48,14 @@
     Analysis of files and streams from the command line: lemmas, CoNLL-U, TSV, JSON Lines and text with «ё»
 
     [:octicons-arrow-right-24: The rumorph command](cli.md)
+
+-   :material-graph-outline:{ .lg .middle } __Models__
+
+    ---
+
+    The context model that chooses the analysis by the neighbouring words and the model of the analyses of unknown words: architecture, probabilities, training
+
+    [:octicons-arrow-right-24: Models](models.md)
 
 -   :material-swap-horizontal:{ .lg .middle } __Migrating from pymorphy__
 

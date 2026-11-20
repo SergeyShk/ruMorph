@@ -15,10 +15,12 @@ nav:
     - Разбор словоформы: analysis.md
     - Словоизменение: inflection.md
     - Команда rumorph: cli.md
+    - Модели: models.md
 
 theme:
   name: material
   language: ru
+  favicon: img/favicon.png
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
@@ -78,6 +80,7 @@ plugins:
             Разбор словоформы: Word analysis
             Словоизменение: Inflection
             Команда rumorph: The rumorph command
+            Модели: Models
 
 extra:
   social:
