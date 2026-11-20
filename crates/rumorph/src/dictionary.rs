@@ -1768,10 +1768,49 @@ fn normalized_input(word: &str) -> Option<String> {
     }
     let visible = visible(word);
     let word = visible.as_deref().unwrap_or(word);
+    let decomposed = decomposed_stress(word);
+    let word = decomposed.as_deref().unwrap_or(word);
     let unified = unified_script(word);
     normalized_marks(unified.as_deref().unwrap_or(word))
         .or(unified)
+        .or(decomposed)
         .or(visible)
+}
+
+/// Латинская гласная-двойник с ударением в слове с кириллицей («сáд», «дóм») - буква и знак
+/// ударения: двойника затем меняет `unified_script`, а знак снимает `normalized_marks`. `None`,
+/// если таких букв нет или в слове нет кириллицы («café»)
+fn decomposed_stress(word: &str) -> Option<String> {
+    const STRESSED: [(char, char, char); 16] = [
+        ('á', 'a', '\u{301}'),
+        ('à', 'a', '\u{300}'),
+        ('é', 'e', '\u{301}'),
+        ('è', 'e', '\u{300}'),
+        ('ó', 'o', '\u{301}'),
+        ('ò', 'o', '\u{300}'),
+        ('ý', 'y', '\u{301}'),
+        ('ỳ', 'y', '\u{300}'),
+        ('Á', 'A', '\u{301}'),
+        ('À', 'A', '\u{300}'),
+        ('É', 'E', '\u{301}'),
+        ('È', 'E', '\u{300}'),
+        ('Ó', 'O', '\u{301}'),
+        ('Ò', 'O', '\u{300}'),
+        ('Ý', 'Y', '\u{301}'),
+        ('Ỳ', 'Y', '\u{300}'),
+    ];
+    let stressed = |c: char| STRESSED.iter().find(|&&(letter, _, _)| letter == c);
+    if !word.chars().any(|c| stressed(c).is_some()) || !word.chars().any(rules::cyrillic) {
+        return None;
+    }
+    let mut normal = String::with_capacity(word.len() + 2);
+    for c in word.chars() {
+        match stressed(c) {
+            Some(&(_, base, mark)) => normal.extend([base, mark]),
+            None => normal.push(c),
+        }
+    }
+    Some(normal)
 }
 
 /// Слово без невидимых символов: управляющих, кроме пробельных, и символов форматирования
@@ -3773,6 +3812,11 @@ pub(super) mod tests {
         assert_eq!(normalized_input("сedar"), Some("cedar".into()));
         assert_eq!(normalized_input("ХIX-го"), Some("XIX-го".into()));
         assert_eq!(normalized_input("cтa\u{301}ли"), Some("стали".into()));
+        // Латинская гласная с ударением в составленной букве (NFC) - кириллической без него
+        assert_eq!(normalized_input("сáд"), Some("сад".into()));
+        assert_eq!(normalized_input("ДÓМ"), Some("ДОМ".into()));
+        assert_eq!(normalized_input("Москвà"), Some("Москва".into()));
+        assert_eq!(normalized_input("café"), None);
         // Письменность задают буквы без двойника, а не большинство
         assert_eq!(normalized_input("eгo"), Some("его".into()));
         assert_eq!(normalized_input("Hoвocти"), Some("Новости".into()));
