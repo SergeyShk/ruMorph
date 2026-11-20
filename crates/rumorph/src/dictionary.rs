@@ -28,6 +28,7 @@ mod own;
 mod parts;
 mod rules;
 mod ud;
+mod weights;
 
 #[cfg(any(test, feature = "build"))]
 pub(crate) use context::Model;
