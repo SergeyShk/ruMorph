@@ -556,8 +556,9 @@ impl Dictionary {
     }
 
     /// Разборы слов предложения по убыванию вероятности в контексте: те же разборы, что
-    /// у `analyze`, упорядочивает контекстная модель словаря, вероятность - ее оценка. Слова -
-    /// токены одного предложения по порядку; токен без видимых символов модель пропускает,
+    /// у `analyze`, упорядочивает контекстная модель словаря, вероятность - ее оценка; у слов
+    /// `rules::COMMA_PARENTHETICALS` помета Prnt остается, только если рядом запятая или тире.
+    /// Слова - токены одного предложения по порядку; токен без видимых символов модель пропускает,
     /// предложение из одного слова разбирается, как `analyze`, а длиннее `SENTENCE_CHUNK` слов -
     /// частями по `SENTENCE_CHUNK`. Ошибка - если в словаре нет контекстной модели
     ///
@@ -605,36 +606,47 @@ impl Dictionary {
                     .map(|&index| std::mem::take(&mut analyses[index]))
                     .collect(),
             );
-            for (index, list) in seen.into_iter().zip(ranked) {
+            for (&index, list) in seen.iter().zip(ranked) {
                 analyses[index] = list;
             }
+            self.parentheticals_by_commas(&normal, &seen, &mut analyses);
             sentence.extend(analyses);
         }
-        self.parentheticals_by_commas(words, &mut sentence);
         Ok(sentence)
     }
 
     /// Помета Prnt у слова из `rules::COMMA_PARENTHETICALS` остается, только если рядом запятая
-    /// или тире: эти слова часто не вводные («промолвил он наконец», «Однако мы не стали»)
-    fn parentheticals_by_commas<S: AsRef<str>>(&self, words: &[S], analyses: &mut [Vec<Analysis>]) {
-        let separator = |at: Option<usize>| {
-            (at.and_then(|at| words.get(at)))
-                .is_some_and(|word| matches!(word.as_ref(), "," | "—" | "–" | "-"))
-        };
-        for (at, list) in analyses.iter_mut().enumerate() {
-            if !rules::comma_parenthetical(words[at].as_ref())
-                || separator(at.checked_sub(1))
-                || separator(Some(at + 1))
+    /// или тире: эти слова часто не вводные («промолвил он наконец», «Однако мы не стали»).
+    /// Слова - видимые токены куска с номерами `seen`, как их видит модель
+    fn parentheticals_by_commas(
+        &self,
+        words: &[&str],
+        seen: &[usize],
+        analyses: &mut [Vec<Analysis>],
+    ) {
+        let separator = |at: usize| matches!(words.get(at), Some(&("," | "—" | "–" | "-")));
+        for (at, &index) in seen.iter().enumerate() {
+            // Тире первым токеном - знак реплики, а не обособления
+            if !rules::comma_parenthetical(words[at])
+                || (at > 1 && separator(at - 1))
+                || separator(at + 1)
             {
                 continue;
             }
             let plain = self.without_parenthetical();
-            for analysis in list {
+            for analysis in &mut analyses[index] {
                 if let Some(&ud) = plain.get(&analysis.ud) {
                     analysis.ud = ud;
                 }
             }
         }
+    }
+
+    /// Тег без пометы Prnt по номеру тега с ней (`None` - у тега ее нет): так правило запятых
+    /// `analyze_sentence` меняет тег разбора
+    #[doc(hidden)]
+    pub fn without_parenthetical_tag(&self, ud: u16) -> Option<u16> {
+        self.without_parenthetical().get(&ud).copied()
     }
 
     /// Тег без пометы Prnt по номеру тега с ней: строится при первом разборе предложения

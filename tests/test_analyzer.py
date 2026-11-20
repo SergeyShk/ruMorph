@@ -825,24 +825,36 @@ def test_parenthetical_label(morph, word, parenthetical):
 
 
 @pytest.mark.parametrize(
-    ("words", "parenthetical"),
+    ("words", "at", "parenthetical"),
     [
-        (["промолвил", "он", "наконец", "."], False),
-        (["Наконец", ",", "мы", "приехали"], True),
-        (["Однако", "мы", "не", "стали"], False),
-        (["Однако", ",", "это", "так"], True),
-        (["Он", "—", "правда", "—", "пришел"], True),
+        (["промолвил", "он", "наконец", "."], 2, False),
+        (["Наконец", ",", "мы", "приехали"], 0, True),
+        (["Однако", "мы", "не", "стали"], 0, False),
+        (["Однако", ",", "это", "так"], 0, True),
+        (["Он", "—", "правда", "—", "пришел"], 2, True),
+        # Тире реплики в начале предложения не обособляет
+        (["—", "Однако", "мы", "не", "стали", "."], 1, False),
+        # Токен без видимых символов между словом и запятой не считается, слово - как у analyze
+        (["Наконец", "\u200e", ",", "мы", "пришли"], 0, True),
+        (["Одна\u0301ко", "мы", "не", "стали"], 0, False),
         # Слово, которое почти всегда вводное, сохраняет помету и без запятых
-        (["например", "кот"], True),
+        (["например", "кот"], 0, True),
     ],
 )
-def test_parenthetical_by_commas(morph, words, parenthetical):
+def test_parenthetical_by_commas(morph, words, at, parenthetical):
     # У слов, которые часто не вводные, в предложении Prnt - только рядом с запятой или тире
-    word = next(w for w in words if w.lower() in {"наконец", "однако", "правда", "например"})
-    at = words.index(word)
     assert ("Prnt" in morph.analyze_sentence(words)[at][0].labels) == parenthetical
     # Без предложения - как в словаре
-    assert "Prnt" in morph.analyze(word)[0].labels
+    assert "Prnt" in morph.analyze(words[at])[0].labels
+
+
+def test_parenthetical_by_commas_pickle(morph):
+    # Разбор, у которого правило сняло помету, после pickle сохраняет формы лексемы
+    analysis = morph.analyze_sentence(["он", "вернее", "пришел"])[1][0]
+    restored = pickle.loads(pickle.dumps(analysis))
+    assert restored == analysis
+    assert "Prnt" not in restored.labels
+    assert restored.inflect(Degree="Pos") == "верно"
 
 
 def test_parenthetical_adverb_keeps_lexeme(morph):
