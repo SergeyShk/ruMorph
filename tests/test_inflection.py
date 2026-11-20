@@ -118,6 +118,26 @@ def test_second_locative(morph):
         ("лесу", {"loc2"}),
     ]
     assert analysis(morph, "лесу", Case="Loc").inflect(Number="Plur") == "лесах"
+    # Помета желательна: без второго предложного - обычный предложный
+    assert forest.inflect(Case="Loc", labels={"loc2"}) == "лесу"
+    assert analysis(morph, "город").inflect(Case="Loc", labels=["loc2"]) == "городе"
+    assert analysis(morph, "кошка").inflect(Case="Ins", labels=("V-oy",)) == "кошкою"
+    assert (
+        forest.inflect(Case="Loc", labels=None) == forest.inflect(Case="Loc", labels=[]) == "лесе"
+    )
+
+
+def test_passive_lexeme(morph):
+    # Лексема возвратного пассива - его формы: инфинитив действительного глагола только лемма
+    passive = analysis(morph, "строится", Voice="Pass")
+    assert passive.lemma == "строить"
+    forms = passive.forms()
+    assert forms[0].word == "строиться"
+    assert {form.feats["Voice"] for form in forms} == {"Pass"}
+    assert passive.inflect(VerbForm="Inf") == "строиться"
+    assert passive.inflect(Tense="Past", Gender="Fem") == "строилась"
+    # Страдательное причастие - в лексеме действительного глагола
+    assert "построил" in [form.word for form in analysis(morph, "построенный").forms()]
 
 
 def test_inflect_errors(morph):
@@ -133,6 +153,14 @@ def test_inflect_errors(morph):
         cat.inflect(Case="Genitive")
     with pytest.raises(TypeError, match="Значение признака Case должно быть строкой, а не int"):
         cat.inflect(Case=1)
+    with pytest.raises(TypeError, match="Пометы должны быть набором строк, а не строкой"):
+        cat.inflect(Case="Ins", labels="V-oy")
+    with pytest.raises(TypeError, match="Пометы должны быть набором строк, а не int"):
+        cat.inflect(Case="Ins", labels=1)
+    with pytest.raises(TypeError, match="Помета должна быть строкой, а не int"):
+        cat.inflect(Case="Ins", labels=[1])
+    with pytest.raises(ValueError, match="Неизвестная помета: loc3; есть Abbr"):
+        cat.inflect(Case="Loc", labels={"loc3"})
 
 
 @pytest.mark.parametrize(
