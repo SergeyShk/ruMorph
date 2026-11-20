@@ -79,8 +79,7 @@ jobs:
       - name: Cache Rust
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - name: Install dependencies
-        # У spaCy нет колес для Python без GIL: там тесты компонента пропускаются
-        run: uv sync --locked --no-default-groups --group test ${{ !endsWith(matrix.python-version, 't') && '--group spacy' || '' }}
+        run: uv sync --locked --no-default-groups --group test
       - name: Cache OpenCorpora
         # Снимки словаря и корпуса OpenCorpora (Wayback Machine, копия на Hugging Face) и Викисловаря:
         # скачиваются один раз на версию скрипта
@@ -116,7 +115,7 @@ jobs:
           echo "ru.dict compressed: $size bytes"
           [ "$size" -lt 10420224 ] || { echo "The compressed dictionary does not fit the crates.io limit of 10 MiB"; exit 1; }
       - name: Run tests
-        run: uv run --no-sync pytest --cov rumorph ${{ endsWith(matrix.python-version, 't') && '--cov-fail-under=0' || '' }}
+        run: uv run --no-sync pytest --cov rumorph
       - name: Run Rust tests
         run: cargo test -p rumorph -p rumorph-build -p rumorph-dict-ru --all-features --locked
 
