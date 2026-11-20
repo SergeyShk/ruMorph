@@ -189,6 +189,8 @@ pub struct Dictionary {
     context: Arc<OnceLock<Result<context::Context, String>>>,
     /// Модель класса парадигмы секции словаря: читается при первом угадывании, копии ее делят
     paradigms: Arc<OnceLock<Result<paradigm::Paradigms, String>>>,
+    /// Тег без пометы Prnt по номеру тега с ней (`without_parenthetical`)
+    without_prnt: Arc<OnceLock<HashMap<u16, u16>>>,
     features: BTreeMap<String, BTreeSet<String>>,
     /// Пометы тегов UD словаря
     labels: BTreeSet<String>,
@@ -380,6 +382,7 @@ impl Dictionary {
             own_words: own::OwnWords::default(),
             context: Arc::new(OnceLock::new()),
             paradigms: Arc::new(OnceLock::new()),
+            without_prnt: Arc::new(OnceLock::new()),
             meta,
             alphabet,
             layout,
@@ -607,7 +610,66 @@ impl Dictionary {
             }
             sentence.extend(analyses);
         }
+        self.parentheticals_by_commas(words, &mut sentence);
         Ok(sentence)
+    }
+
+    /// Помета Prnt у слова из `rules::COMMA_PARENTHETICALS` остается, только если рядом запятая
+    /// или тире: эти слова часто не вводные («промолвил он наконец», «Однако мы не стали»)
+    fn parentheticals_by_commas<S: AsRef<str>>(&self, words: &[S], analyses: &mut [Vec<Analysis>]) {
+        let separator = |at: Option<usize>| {
+            (at.and_then(|at| words.get(at)))
+                .is_some_and(|word| matches!(word.as_ref(), "," | "—" | "–" | "-"))
+        };
+        for (at, list) in analyses.iter_mut().enumerate() {
+            if !rules::comma_parenthetical(words[at].as_ref())
+                || separator(at.checked_sub(1))
+                || separator(Some(at + 1))
+            {
+                continue;
+            }
+            let plain = self.without_parenthetical();
+            for analysis in list {
+                if let Some(&ud) = plain.get(&analysis.ud) {
+                    analysis.ud = ud;
+                }
+            }
+        }
+    }
+
+    /// Тег без пометы Prnt по номеру тега с ней: строится при первом разборе предложения
+    fn without_parenthetical(&self) -> &HashMap<u16, u16> {
+        if let Some(plain) = self.without_prnt.get() {
+            return plain;
+        }
+        // Строится вне ячейки, как контекстная модель: из-за fork
+        let mut plain = HashMap::new();
+        if let Some(prnt) = self.ud.string_number("Prnt") {
+            let count = self.ud.len() as u16;
+            let mut tags: HashMap<(u16, &[u16], Vec<u16>), u16> = HashMap::new();
+            for number in 0..count {
+                if let Some((pos, feats, labels)) = self.ud.numbers(number) {
+                    tags.entry((pos, feats, labels.to_vec())).or_insert(number);
+                }
+            }
+            for number in 0..count {
+                let Some((pos, feats, labels)) = self.ud.numbers(number) else {
+                    continue;
+                };
+                if !labels.contains(&prnt) {
+                    continue;
+                }
+                let rest: Vec<u16> = labels
+                    .iter()
+                    .copied()
+                    .filter(|&label| label != prnt)
+                    .collect();
+                if let Some(&without) = tags.get(&(pos, feats, rest)) {
+                    plain.insert(number, without);
+                }
+            }
+        }
+        self.without_prnt.get_or_init(move || plain)
     }
 
     /// Поля CoNLL-U самого вероятного разбора каждого слова предложения: лемма, часть речи

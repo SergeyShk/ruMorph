@@ -824,6 +824,27 @@ def test_parenthetical_label(morph, word, parenthetical):
     assert ("Prnt" in labels) == parenthetical
 
 
+@pytest.mark.parametrize(
+    ("words", "parenthetical"),
+    [
+        (["промолвил", "он", "наконец", "."], False),
+        (["Наконец", ",", "мы", "приехали"], True),
+        (["Однако", "мы", "не", "стали"], False),
+        (["Однако", ",", "это", "так"], True),
+        (["Он", "—", "правда", "—", "пришел"], True),
+        # Слово, которое почти всегда вводное, сохраняет помету и без запятых
+        (["например", "кот"], True),
+    ],
+)
+def test_parenthetical_by_commas(morph, words, parenthetical):
+    # У слов, которые часто не вводные, в предложении Prnt - только рядом с запятой или тире
+    word = next(w for w in words if w.lower() in {"наконец", "однако", "правда", "например"})
+    at = words.index(word)
+    assert ("Prnt" in morph.analyze_sentence(words)[at][0].labels) == parenthetical
+    # Без предложения - как в словаре
+    assert "Prnt" in morph.analyze(word)[0].labels
+
+
 def test_parenthetical_adverb_keeps_lexeme(morph):
     # Вводное наречие остается своей лексемой: сравнительная степень и помета Prdx на месте
     assert ("вероятно", "Cmp") in {
