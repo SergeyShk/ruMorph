@@ -190,6 +190,8 @@ pub struct Dictionary {
     /// Модель класса парадигмы секции словаря: читается при первом угадывании, копии ее делят
     paradigms: Arc<OnceLock<Result<paradigm::Paradigms, String>>>,
     features: BTreeMap<String, BTreeSet<String>>,
+    /// Пометы тегов UD словаря
+    labels: BTreeSet<String>,
     alphabet: Alphabet,
     prefixes: Strings,
     suffixes: Strings,
@@ -370,6 +372,7 @@ impl Dictionary {
             ud_core: Vec::new(),
             ud_values: Vec::new(),
             features: BTreeMap::new(),
+            labels: BTreeSet::new(),
             preferences: Preferences::default(),
             combined_numeral: None,
             proper_nouns: Vec::new(),
@@ -422,6 +425,9 @@ impl Dictionary {
                 .or_default()
                 .insert(string(value).to_owned());
         }
+        self.labels = (self.ud.iter())
+            .flat_map(|tag| tag.labels().map(str::to_owned))
+            .collect();
         // Коды занимают features.len() чисел на пару «часть речи, признаки»: число признаков
         // ограничено, чтобы файл не задавал гигабайты
         if self.features.len() > MAX_FEATURES {
@@ -534,6 +540,11 @@ impl Dictionary {
     /// Признаки UD, которые встречаются в словаре, и их значения
     pub fn features(&self) -> &BTreeMap<String, BTreeSet<String>> {
         &self.features
+    }
+
+    /// Пометы тегов словаря: «loc2», «V-oy», «Prnt» и другие (`UdTag::labels`)
+    pub fn labels(&self) -> &BTreeSet<String> {
+        &self.labels
     }
 
     /// Число словоформ в словаре
@@ -990,14 +1001,27 @@ impl Dictionary {
     /// Форма лексемы с признаками `feats`; из подходящих - ближайшая к разбору по части речи,
     /// остальным признакам и пометам, при равенстве - первая в парадигме
     pub fn inflect(&self, analysis: &Analysis, feats: &[(&str, &str)]) -> Option<Analysis> {
+        self.inflect_with_labels(analysis, feats, &[])
+    }
+
+    /// Форма лексемы с признаками `feats`, как у `inflect`, и желательными пометами `labels`:
+    /// из форм, которые сохраняют остальные признаки разбора, берется форма с ними, если такая
+    /// есть. «лес» с `Case=Loc` и пометой «loc2» - «лесу», «город» - «городе»: второго
+    /// предложного у него нет. Неизвестные словарю пометы не учитываются
+    pub fn inflect_with_labels(
+        &self,
+        analysis: &Analysis,
+        feats: &[(&str, &str)],
+        labels: &[&str],
+    ) -> Option<Analysis> {
         if let Some((base, particle)) = self.without_particle(analysis) {
             return self
-                .inflect(&base, feats)
+                .inflect_with_labels(&base, feats, labels)
                 .map(|form| with_particle(form, &particle));
         }
         if let Some(lower) = self.lowercased(analysis) {
             return self
-                .inflect(&lower, feats)
+                .inflect_with_labels(&lower, feats, labels)
                 .map(|form| capitalized_like(&analysis.word, form));
         }
         if analysis.entry.is_none() {
@@ -1011,7 +1035,10 @@ impl Dictionary {
             });
         }
         let (lexeme, forms) = self.lexeme_forms(analysis)?;
-        let form = self.closest(analysis, &lexeme, &forms, feats, &[])?;
+        let prefer: Vec<u16> = (labels.iter())
+            .filter_map(|label| self.ud.string_number(label))
+            .collect();
+        let form = self.closest(analysis, &lexeme, &forms, feats, &prefer)?;
         Some(self.form(analysis, &lexeme, form))
     }
 
@@ -1157,7 +1184,7 @@ impl Dictionary {
     }
 
     /// Форма из `forms` с признаками `feats`, ближайшая к разбору: больше общих с ним части речи,
-    /// признаков и помет, а также желательных помет `prefer`, затем меньше лишних помет и того,
+    /// признаков и помет, затем больше желательных помет `prefer`, затем меньше лишних помет и того,
     /// чего не просили, - краткой формы, одушевленности, инклюзива («кошкой», а не «кошкою»;
     /// «новый», а не «нового»; «сделай», а не «сделаем»), затем ближе по написанию к разбору,
     /// если у его формы есть вариант написания («листьев», а не «листов»), затем раньше
@@ -1209,7 +1236,7 @@ impl Dictionary {
             .iter()
             .any(|&form| lexeme.ud(form) == analysis.ud && lexeme.affixes(form) != own);
         // Оценка формы: общее с разбором, лишнее, общее начало написания
-        type Score = (usize, Reverse<usize>, usize);
+        type Score = (usize, usize, Reverse<usize>, usize);
         let mut best: Option<(u16, Score)> = None;
         for &form in forms {
             let ud = lexeme.ud(form);
@@ -1227,11 +1254,16 @@ impl Dictionary {
                 .zip(codes.values)
                 .filter(|&(wanted, value)| *wanted != 0 && wanted == value)
                 .count()
-                + labels
+                + current
+                    .labels
                     .iter()
                     .filter(|label| codes.labels.contains(label))
                     .count()
                 + usize::from(codes.pos == current.pos);
+            let preferred = prefer
+                .iter()
+                .filter(|label| codes.labels.contains(label))
+                .count();
             let extra = codes
                 .labels
                 .iter()
@@ -1254,7 +1286,7 @@ impl Dictionary {
             } else {
                 0
             };
-            let score = (same, Reverse(extra), common);
+            let score = (same, preferred, Reverse(extra), common);
             if best.is_none_or(|(_, top)| score > top) {
                 best = Some((form, score));
             }
@@ -1310,11 +1342,21 @@ impl Dictionary {
         // Лемма формы та же, если ее форма леммы пишется так же: префиксы и суффиксы словаря
         // не повторяются, поэтому написания сравниваются по их номерам
         let affixes = lexeme.affixes(own);
+        // Возвратный пассив («строится» - «строить» с Voice=Pass) - лексема из его форм: инфинитив
+        // действительного глагола в ней только задает лемму
+        let same_lemma = |form: u16| {
+            let lemma_form = lexeme.lemma_form(form);
+            lemma_form == own || lexeme.affixes(lemma_form) == affixes
+        };
+        let pass = |form: u16| self.feat(lexeme.ud(form), "Voice") == Some("Pass");
+        let passive = self.feat(analysis.ud, "Voice") == Some("Pass")
+            && (0..lexeme.cells.len() as u16).any(|form| {
+                same_lemma(form)
+                    && pass(form)
+                    && self.feat(lexeme.ud(form), "VerbForm") == Some("Inf")
+            });
         let forms = (0..lexeme.cells.len() as u16)
-            .filter(|&form| {
-                let lemma_form = lexeme.lemma_form(form);
-                lemma_form == own || lexeme.affixes(lemma_form) == affixes
-            })
+            .filter(|&form| same_lemma(form) && (!passive || pass(form)))
             .collect();
         Some((lexeme, forms))
     }

@@ -17,7 +17,7 @@ The word forms are spelled as in the dictionary: lowercase and with «ё» where
 forms()
 ```
 
-The forms of the lexeme in dictionary order - analyses like those of `analyze`, with probability 1. Form variants differ in labels: «кошкою» has `V-oy`, the second locative «в лесу» has `loc2` (its `Case=Loc` feature is the same as in «о лесе»): «лес» with `inflect(Case="Loc")` gives «лесе», and «лесу» is chosen from `forms()` by the `loc2` label.
+The forms of the lexeme in dictionary order - analyses like those of `analyze`, with probability 1. Form variants differ in labels: «кошкою» has `V-oy`, the second locative «в лесу» has `loc2` (its `Case=Loc` feature is the same as in «о лесе»): «лес» with `inflect(Case="Loc")` gives «лесе», and with `inflect(Case="Loc", labels={"loc2"})` - «лесу».
 
 === "Code"
 
@@ -60,20 +60,21 @@ The forms of the lexeme in dictionary order - analyses like those of `analyze`, 
 { .metric-meta }
 
 ``` {.python .signature}
-inflect(**feats)
+inflect(*, labels=None, **feats)
 ```
 
-The form of the lexeme with the given UD features. Features that are not given are kept where possible: «кошка» in the genitive is «кошки», not «кошек». The short form, the animate accusative («нового») and the inclusive imperative («сделаем») are chosen only when asked for: `Variant="Short"`, `Animacy="Anim"`, `Person="1"`. The future of «быть» is `Tense=Fut`: «быть» with `Tense="Fut", Person="1", Number="Sing"` is «буду».
+The form of the lexeme with the given UD features. Features that are not given are kept where possible: «кошка» in the genitive is «кошки», not «кошек». The short form, the animate accusative («нового») and the inclusive imperative («сделаем») are chosen only when asked for: `Variant="Short"`, `Animacy="Anim"`, `Person="1"`. The future of «быть» is `Tense=Fut`: «быть» with `Tense="Fut", Person="1", Number="Sing"` is «буду». The `labels` are preferred: among the forms that keep the other features of the analysis the one with them is chosen if there is one - «лес» with `Case="Loc", labels={"loc2"}` gives «лесу», «город» gives «городе», and the plural «леса» gives «лесах». A reflexive passive («строится» with the lemma «строить», `Voice=Pass`) has only passive forms: «строиться», «строилась».
 
 | Parameter | Type | Default | Description |
 | :-------- | :--- | :------ | :---------- |
+| `labels` | `Iterable[str] \| None` | `None` | Preferred labels: `loc2` - the second locative, `V-oy` - the «-ою» ending and others from `Analysis.labels` |
 | `**feats` | `str` | - | UD features and their values: `Case="Gen"`, `Number="Plur"` |
 
 Exceptions:
 
 - `FormNotFoundError` - the lexeme has no form with these features;
-- `ValueError` - the feature or the value is not in the dictionary (a typo like `Case="Genitive"`), the message lists the valid ones;
-- `TypeError` - a feature value that is not a string.
+- `ValueError` - the feature, the value or the label is not in the dictionary (a typo like `Case="Genitive"`), the message lists the valid ones;
+- `TypeError` - a feature value or a label that is not a string, or labels given as one string instead of a collection.
 
 === "Code"
 
@@ -83,6 +84,7 @@ Exceptions:
     verb.inflect(Gender="Fem"), verb.inflect(VerbForm="Inf")
     verb.inflect(Tense="Pres", Person="3", Number="Plur")
     morph.analyze("новый")[0].inflect(Degree="Cmp")
+    morph.analyze("лес")[0].inflect(Case="Loc", labels={"loc2"})
     ```
 
 === "Result"
@@ -92,6 +94,7 @@ Exceptions:
     ('читала', 'читать')
     'читают'
     'новее'
+    'лесу'
     ```
 
 </div>

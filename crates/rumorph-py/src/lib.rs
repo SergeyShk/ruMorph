@@ -226,9 +226,13 @@ impl Analysis {
     ///
     /// Описание:
     ///     Ищет среди форм лексемы форму с заданными признаками UD; остальные признаки
-    ///     по возможности сохраняются: «кошка» в родительном падеже - «кошки», а не «кошек»
+    ///     по возможности сохраняются: «кошка» в родительном падеже - «кошки», а не «кошек».
+    ///     Пометы labels желательны: из форм, которые сохраняют остальные признаки разбора,
+    ///     берется форма с ними, если такая есть
     ///
     /// Аргументы:
+    ///     labels (Iterable[str] | None): Желательные пометы: «loc2» - второй предложный падеж
+    ///         («в лесу»), «V-oy» - окончание «-ою» и другие из Analysis.labels
     ///     **feats (str): Признаки UD и их значения: Case="Gen", Number="Plur"
     ///
     /// Вывод:
@@ -236,17 +240,29 @@ impl Analysis {
     ///
     /// Исключения:
     ///     FormNotFoundError: Если у лексемы нет формы с такими признаками
-    ///     ValueError: Если такого признака или значения нет в словаре
-    ///     TypeError: Если значение признака не строка
+    ///     ValueError: Если такого признака, значения или пометы нет в словаре
+    ///     TypeError: Если значение признака или помета не строка или пометы - строка, а не набор
     ///
     /// Пример использования:
     ///     >>> from rumorph import Analyzer
-    ///     >>> cat = Analyzer().analyze("кошка")[0]
+    ///     >>> morph = Analyzer()
+    ///     >>> cat = morph.analyze("кошка")[0]
     ///     >>> cat.inflect(Case="Gen"), cat.inflect(Case="Gen", Number="Plur")
     ///     ('кошки', 'кошек')
-    #[pyo3(signature = (**feats))]
-    fn inflect(&self, feats: Option<&Bound<'_, PyDict>>) -> PyResult<String> {
+    ///     >>> morph.analyze("лес")[0].inflect(Case="Loc", labels={"loc2"})
+    ///     'лесу'
+    #[pyo3(signature = (*, labels=None, **feats))]
+    fn inflect(
+        &self,
+        labels: Option<&Bound<'_, PyAny>>,
+        feats: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<String> {
         let dictionary = &self.handle.analyzer.get().shared.dictionary;
+        let labels = match labels {
+            Some(labels) if !labels.is_none() => collect_labels(labels, dictionary)?,
+            _ => Vec::new(),
+        };
+        let labels: Vec<&str> = labels.iter().map(String::as_str).collect();
         let mut requested: Vec<(String, String)> = Vec::new();
         for (name, value) in feats.into_iter().flatten() {
             let name: String = name.extract()?;
@@ -277,7 +293,7 @@ impl Analysis {
             .map(|(name, value)| (name.as_str(), value.as_str()))
             .collect();
         dictionary
-            .inflect(&self.inner, &pairs)
+            .inflect_with_labels(&self.inner, &pairs, &labels)
             .map(|form| form.word)
             .ok_or_else(|| {
                 let feats: Vec<String> = requested
@@ -1785,6 +1801,44 @@ fn collect_words(words: &Bound<'_, PyAny>) -> PyResult<Vec<String>> {
                 )));
             };
             lossy(word)
+        })
+        .collect()
+}
+
+/// Желательные пометы `inflect`: набор строк, каждая - помета словаря
+fn collect_labels(
+    labels: &Bound<'_, PyAny>,
+    dictionary: &rumorph::Dictionary,
+) -> PyResult<Vec<String>> {
+    if labels.is_instance_of::<PyString>() {
+        return Err(PyTypeError::new_err(
+            "Пометы должны быть набором строк, а не строкой: передайте {\"loc2\"}",
+        ));
+    }
+    let iterator = labels.try_iter().map_err(|err| {
+        if err.is_instance_of::<PyTypeError>(labels.py()) {
+            type_error("Пометы должны быть набором строк", labels)
+        } else {
+            err
+        }
+    })?;
+    iterator
+        .map(|label| {
+            let label = label?;
+            let Ok(label) = label.cast::<PyString>() else {
+                return Err(PyTypeError::new_err(format!(
+                    "Помета должна быть строкой, а не {}",
+                    label.get_type().name()?
+                )));
+            };
+            let label = label.to_str()?.to_owned();
+            if !dictionary.labels().contains(&label) {
+                return Err(PyValueError::new_err(format!(
+                    "Неизвестная помета: {label}; есть {}",
+                    join(dictionary.labels())
+                )));
+            }
+            Ok(label)
         })
         .collect()
 }
