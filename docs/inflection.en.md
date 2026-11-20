@@ -63,7 +63,7 @@ The forms of the lexeme in dictionary order - analyses like those of `analyze`, 
 inflect(*, labels=None, **feats)
 ```
 
-The form of the lexeme with the given UD features. Features that are not given are kept where possible: «кошка» in the genitive is «кошки», not «кошек». The short form, the animate accusative («нового») and the inclusive imperative («сделаем») are chosen only when asked for: `Variant="Short"`, `Animacy="Anim"`, `Person="1"`. The future of «быть» is `Tense=Fut`: «быть» with `Tense="Fut", Person="1", Number="Sing"` is «буду». The `labels` are preferred: among the fitting forms the one with them is chosen if there is one - «лес» with `Case="Loc", labels={"loc2"}` gives «лесу», «город» gives «городе». A reflexive passive («строится» with the lemma «строить», `Voice=Pass`) has only passive forms: «строиться», «строилась».
+The form of the lexeme with the given UD features. Features that are not given are kept where possible: «кошка» in the genitive is «кошки», not «кошек». The short form, the animate accusative («нового») and the inclusive imperative («сделаем») are chosen only when asked for: `Variant="Short"`, `Animacy="Anim"`, `Person="1"`. The future of «быть» is `Tense=Fut`: «быть» with `Tense="Fut", Person="1", Number="Sing"` is «буду». The `labels` are preferred: among the forms that keep the other features of the analysis the one with them is chosen if there is one - «лес» with `Case="Loc", labels={"loc2"}` gives «лесу», «город» gives «городе», and the plural «леса» gives «лесах». A reflexive passive («строится» with the lemma «строить», `Voice=Pass`) has only passive forms: «строиться», «строилась».
 
 | Parameter | Type | Default | Description |
 | :-------- | :--- | :------ | :---------- |
