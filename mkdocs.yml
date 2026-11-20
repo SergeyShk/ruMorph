@@ -15,7 +15,6 @@ nav:
     - Разбор словоформы: analysis.md
     - Словоизменение: inflection.md
     - Команда rumorph: cli.md
-    - spaCy: spacy.md
 
 theme:
   name: material

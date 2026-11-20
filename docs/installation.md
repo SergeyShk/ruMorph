@@ -6,8 +6,6 @@
 pip install rumorph
 ```
 
-Компонент для [spaCy](spacy.md) ставится вместе со spaCy: `pip install "rumorph[spacy]"`; для Python без GIL (3.14t, 3.15t) у spaCy нет готовых колес.
-
 ## Готовые колеса
 
 На PyPI публикуются колеса для Linux (x86_64 и aarch64; manylinux и musllinux - для Alpine), macOS (Intel и Apple Silicon) и Windows (x64 и arm64). Одно колесо подходит для всех версий Python начиная с 3.11, для Python 3.14t и 3.15t без GIL - отдельные колеса; Rust для установки не нужен. Словарь входит в пакет, отдельно его устанавливать не нужно. Python 3.13t без GIL не поддерживается.
