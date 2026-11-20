@@ -30,6 +30,7 @@ pub struct Builder {
     probabilities: BTreeMap<String, (bool, Vec<(u32, u32)>)>,
     guesses: BTreeMap<(GuessIndex, String), Vec<(u32, u32)>>,
     context: Vec<u8>,
+    paradigm_model: Vec<u8>,
 }
 
 impl Builder {
@@ -57,6 +58,7 @@ impl Builder {
             probabilities: BTreeMap::new(),
             guesses: BTreeMap::new(),
             context: Vec::new(),
+            paradigm_model: Vec::new(),
         }
     }
 
@@ -77,6 +79,21 @@ impl Builder {
     pub fn context(&mut self, weights: Vec<u8>) -> Result<&mut Self, Error> {
         crate::dictionary::Model::parse(&weights)?;
         self.context = weights;
+        Ok(self)
+    }
+
+    /// Источники обучения модели класса парадигмы из файла весов - строка JSON, если она записана
+    #[cfg(feature = "build")]
+    #[doc(hidden)]
+    pub fn paradigm_sources(weights: &[u8]) -> Result<Option<String>, Error> {
+        crate::dictionary::paradigm_sources(weights)
+    }
+
+    /// Веса модели класса парадигмы - файл `scripts/train_paradigms.py`: она выбирает разборы
+    /// незнакомых слов среди форм из списков окончаний; проверяются при добавлении
+    pub fn paradigm_model(&mut self, weights: Vec<u8>) -> Result<&mut Self, Error> {
+        crate::dictionary::ParadigmModel::parse(&weights)?;
+        self.paradigm_model = weights;
         Ok(self)
     }
 
@@ -460,6 +477,7 @@ impl Builder {
             guesses: guesses.into_inner().map_err(build_error)?,
             guess_records,
             context: self.context.clone(),
+            paradigm_model: self.paradigm_model.clone(),
         }))
     }
 

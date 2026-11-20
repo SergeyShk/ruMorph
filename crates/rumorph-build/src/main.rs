@@ -1,6 +1,6 @@
 //! Сборка словаря ruMorph из выгрузки словаря и корпуса OpenCorpora
-//! (`scripts/export_opencorpora.py`), счетчиков UD (`scripts/export_ud.py`) и весов контекстной
-//! модели (`scripts/train_context.py`)
+//! (`scripts/export_opencorpora.py`), счетчиков UD (`scripts/export_ud.py`), весов контекстной
+//! модели (`scripts/train_context.py`) и модели класса парадигмы (`scripts/train_paradigms.py`)
 
 mod frequencies;
 mod lexemes;
@@ -18,15 +18,23 @@ use rumorph::{Builder, Dictionary, Entry, GuessIndex};
 
 fn main() -> ExitCode {
     let args: Vec<PathBuf> = std::env::args_os().skip(1).map(PathBuf::from).collect();
-    // Без весов собирается словарь без контекстной модели: на нем она и учится
+    // Без весов собирается словарь без моделей: на нем они и учатся
     let result = match args.as_slice() {
         [mode] if mode.as_os_str() == "tags" => tags(),
-        [export, ud, output] => build(export, ud, output, None),
-        [export, ud, output, context] => build(export, ud, output, Some(context.as_path())),
+        [export, ud, output] => build(export, ud, output, None, None),
+        [export, ud, output, context] => build(export, ud, output, Some(context.as_path()), None),
+        [export, ud, output, context, paradigms] => build(
+            export,
+            ud,
+            output,
+            Some(context.as_path()),
+            Some(paradigms.as_path()),
+        ),
         _ => {
             eprintln!(
                 "Использование: rumorph-build <выгрузка OpenCorpora> <выгрузка UD> <файл словаря> \
-                 [веса контекстной модели]\n       rumorph-build tags < теги OpenCorpora"
+                 [веса контекстной модели [веса модели класса парадигмы]]\n       \
+                 rumorph-build tags < теги OpenCorpora"
             );
             return ExitCode::from(2);
         }
@@ -89,6 +97,7 @@ fn build(
     ud: &Path,
     output: &Path,
     context: Option<&Path>,
+    paradigms: Option<&Path>,
 ) -> Result<(), Box<dyn Error>> {
     let started = Instant::now();
     // Веса проверяются до сборки, а не после нее
@@ -97,6 +106,15 @@ fn build(
             let weights = fs::read(path).map_err(|err| format!("{}: {err}", path.display()))?;
             rumorph::Builder::new(Vec::new(), Vec::new(), Vec::new())
                 .context(weights.clone())
+                .map_err(|err| format!("{}: {err}", path.display()))?;
+            Ok::<_, Box<dyn Error>>(weights)
+        })
+        .transpose()?;
+    let paradigm_weights = paradigms
+        .map(|path| {
+            let weights = fs::read(path).map_err(|err| format!("{}: {err}", path.display()))?;
+            rumorph::Builder::new(Vec::new(), Vec::new(), Vec::new())
+                .paradigm_model(weights.clone())
                 .map_err(|err| format!("{}: {err}", path.display()))?;
             Ok::<_, Box<dyn Error>>(weights)
         })
@@ -143,6 +161,13 @@ fn build(
             .transpose()?;
         if let Some(sources) = sources.flatten() {
             fields.insert("context".into(), json("sources", sources)?);
+        }
+        let sources = paradigm_weights
+            .as_deref()
+            .map(Builder::paradigm_sources)
+            .transpose()?;
+        if let Some(sources) = sources.flatten() {
+            fields.insert("paradigms".into(), json("sources", sources)?);
         }
     }
     builder.meta(meta.to_string());
@@ -943,7 +968,7 @@ fn build(
     // Окончание, которое встретилось меньше трех раз, - скорее примета одного слова, чем образец
     let lists: HashMap<(GuessIndex, String), Vec<(Entry, u32)>> = guesses
         .into_iter()
-        .filter(|(_, counts)| counts.values().sum::<u32>() >= lexemes::MIN_ENDING_COUNT)
+        .filter(|(_, counts)| counts.values().sum::<u32>() >= GuessIndex::MIN_COUNT)
         .map(|(key, counts)| {
             let mut forms: Vec<(Entry, u32)> = counts.into_iter().collect();
             forms
@@ -990,6 +1015,9 @@ fn build(
     }
     if let Some(weights) = weights {
         builder.context(weights)?;
+    }
+    if let Some(weights) = paradigm_weights {
+        builder.paradigm_model(weights)?;
     }
 
     let data = builder.build()?;

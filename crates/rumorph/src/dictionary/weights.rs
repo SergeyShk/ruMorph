@@ -464,36 +464,56 @@ pub(super) fn bilstm(layer: &[Lstm; 2], input: &[f32], n: usize, d: usize) -> Ve
     });
     let mut states = [(); 2].map(|()| (vec![0.0f32; hidden], vec![0.0f32; hidden]));
     let mut gates = [(); 2].map(|()| vec![0.0f32; 4 * hidden]);
-    for step in 0..n {
+    for at in 0..n {
         for direction in 0..2 {
-            let t = if direction == 0 { step } else { n - 1 - step };
+            let t = if direction == 0 { at } else { n - 1 - at };
             let (h, c) = &mut states[direction];
             let gates = &mut gates[direction];
             gates.copy_from_slice(&gates_input[direction][t * 4 * hidden..(t + 1) * 4 * hidden]);
             layer[direction].hidden.apply_add(h, gates);
-            // Ворота i, f, g, o; каждый цикл - по массиву, без ветвлений
-            let (sigmoids, rest) = gates.split_at_mut(2 * hidden);
-            let (candidates, outputs) = rest.split_at_mut(hidden);
-            sigmoids
-                .iter_mut()
-                .for_each(|value| *value = sigmoid(*value));
-            candidates
-                .iter_mut()
-                .for_each(|value| *value = tanh(*value));
-            outputs
-                .iter_mut()
-                .for_each(|value| *value = sigmoid(*value));
-            let (inputs, forgets) = sigmoids.split_at(hidden);
-            for i in 0..hidden {
-                c[i] = forgets[i] * c[i] + inputs[i] * candidates[i];
-            }
-            for i in 0..hidden {
-                h[i] = outputs[i] * tanh(c[i]);
-            }
+            step(gates, h, c);
             output[t * d + direction * hidden..t * d + (direction + 1) * hidden].copy_from_slice(h);
         }
     }
     output
+}
+
+/// Слой LSTM одного направления: состояние после последнего из `n` входов
+pub(super) fn lstm(cell: &Lstm, input: &[f32], n: usize) -> Vec<f32> {
+    let hidden = cell.hidden.cols;
+    let mut gates_input = vec![0.0f32; n * 4 * hidden];
+    cell.input.apply_all(input, &cell.bias, &mut gates_input);
+    let (mut h, mut c) = (vec![0.0f32; hidden], vec![0.0f32; hidden]);
+    for gates in gates_input.chunks_exact_mut(4 * hidden) {
+        cell.hidden.apply_add(&h, gates);
+        step(gates, &mut h, &mut c);
+    }
+    h
+}
+
+/// Шаг ячейки LSTM по сумме ворот `gates` (i, f, g, o): новые состояния `h` и `c`. Каждый цикл -
+/// по массиву, без ветвлений
+#[inline(always)]
+fn step(gates: &mut [f32], h: &mut [f32], c: &mut [f32]) {
+    let hidden = h.len();
+    let (sigmoids, rest) = gates.split_at_mut(2 * hidden);
+    let (candidates, outputs) = rest.split_at_mut(hidden);
+    sigmoids
+        .iter_mut()
+        .for_each(|value| *value = sigmoid(*value));
+    candidates
+        .iter_mut()
+        .for_each(|value| *value = tanh(*value));
+    outputs
+        .iter_mut()
+        .for_each(|value| *value = sigmoid(*value));
+    let (inputs, forgets) = sigmoids.split_at(hidden);
+    for i in 0..hidden {
+        c[i] = forgets[i] * c[i] + inputs[i] * candidates[i];
+    }
+    for i in 0..hidden {
+        h[i] = outputs[i] * tanh(c[i]);
+    }
 }
 
 #[cfg(test)]
@@ -557,6 +577,27 @@ pub(crate) mod tests {
             assert!((output[t * 2] - states[t]).abs() < 1e-6);
             assert!((output[t * 2 + 1] - states[2 - t]).abs() < 1e-6);
         }
+    }
+
+    #[test]
+    fn one_direction() {
+        // Однонаправленный слой - то же, что прямое направление BiLSTM, после последнего входа
+        let value = |i: usize| ((i * 7919) % 101) as f32 / 50.0 - 1.0;
+        let matrix = |rows: usize, cols: usize, shift: usize| {
+            Tiled::new(&Matrix {
+                rows,
+                cols,
+                data: (0..rows * cols).map(|i| value(i + shift)).collect(),
+            })
+        };
+        let cell = |shift: usize| Lstm {
+            input: matrix(12, 2, shift),
+            hidden: matrix(12, 3, shift + 7),
+            bias: (0..12).map(|i| value(i + shift + 11)).collect(),
+        };
+        let input: Vec<f32> = (0..10).map(|i| value(i + 5)).collect();
+        let both = bilstm(&[cell(0), cell(3)], &input, 5, 6);
+        assert_eq!(lstm(&cell(0), &input, 5), both[4 * 6..4 * 6 + 3]);
     }
 
     #[test]

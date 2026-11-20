@@ -18,7 +18,7 @@ pub(crate) const ENTRY_KEYS: u32 = 1 << 31;
 /// Бит длины списка разборов (с формата 8): все разборы словоформы - редких лексем
 /// дополнительного словаря (Викисловаря)
 pub(crate) const RARE_WORD: u32 = 1 << 31;
-const VERSION: u32 = 8;
+const VERSION: u32 = 9;
 /// Самый старый читаемый формат: в формате 5 нет списков частот по формам таблиц, в форматах 5
 /// и 6 - секции контекстной модели, до 8 - бита `RARE_WORD`, остальное как в 8
 const OLDEST_VERSION: u32 = 5;
@@ -26,7 +26,11 @@ const HEADER: usize = 16;
 const ALIGN: usize = 8;
 /// Число секций формата: с версии 7 - и секция контекстной модели
 const fn sections(version: u32) -> usize {
-    if version >= 7 { 17 } else { 16 }
+    match version {
+        9.. => 18,
+        7 | 8 => 17,
+        _ => 16,
+    }
 }
 
 /// Содержимое словаря для записи в файл
@@ -70,6 +74,8 @@ pub(crate) struct Sections {
     pub guess_records: Vec<u32>,
     /// Веса контекстной модели (`scripts/train_context.py`); пусто - модели нет
     pub context: Vec<u8>,
+    /// Веса модели класса парадигмы (`scripts/train_paradigms.py`); пусто - модели нет
+    pub paradigm_model: Vec<u8>,
 }
 
 /// Значение ключа в автомате словоформ
@@ -149,6 +155,8 @@ pub(crate) struct Layout {
     pub guess_records: Range<usize>,
     /// Пусто у словаря без модели и у форматов 5 и 6
     pub context: Range<usize>,
+    /// Пусто у словаря без модели и у форматов 5-8
+    pub paradigm_model: Range<usize>,
     /// Контрольная сумма из заголовка
     pub checksum: u32,
 }
@@ -195,6 +203,7 @@ pub(crate) fn write(sections: &Sections) -> Vec<u8> {
     section(&sections.guesses);
     section(&u32_bytes(&sections.guess_records));
     section(&sections.context);
+    section(&sections.paradigm_model);
     let checksum = crc32fast::hash(&out[HEADER..]);
     out[12..HEADER].copy_from_slice(&checksum.to_le_bytes());
     out
@@ -257,6 +266,11 @@ pub(crate) fn layout(data: &[u8]) -> Result<Layout, Error> {
         guesses: section(1)?,
         guess_records: section(4)?,
         context: if sections(version) > 16 {
+            section(1)?
+        } else {
+            0..0
+        },
+        paradigm_model: if sections(version) > 17 {
             section(1)?
         } else {
             0..0
@@ -563,6 +577,7 @@ pub(crate) mod tests {
             guesses: bytes(&layout.guesses).to_vec(),
             guess_records: u32s(&layout.guess_records),
             context: bytes(&layout.context).to_vec(),
+            paradigm_model: bytes(&layout.paradigm_model).to_vec(),
         }
     }
 
@@ -837,13 +852,20 @@ pub(crate) mod tests {
         data[MAGIC.len()..MAGIC.len() + 4].copy_from_slice(&4u32.to_le_bytes());
         let err = layout(&data).err().unwrap();
         assert!(err.to_string().contains("версия формата 4"), "{err}");
-        // Формат 7 - без бита `RARE_WORD`, остальное как в 8; формата 9 еще нет
-        for (version, readable) in [(7u32, true), (9, false)] {
-            let mut data = data.clone();
+        // Формата 10 еще нет
+        let mut future = data.clone();
+        future[MAGIC.len()..MAGIC.len() + 4].copy_from_slice(&10u32.to_le_bytes());
+        assert!(layout(&with_checksum(future)).is_err());
+        // Форматы 7 и 8 - без последней секции, модели класса парадигмы (7 - еще и без бита
+        // `RARE_WORD`, остальное как в 8)
+        data.truncate(data.len() - 8);
+        for version in [7u32, 8] {
             data[MAGIC.len()..MAGIC.len() + 4].copy_from_slice(&version.to_le_bytes());
-            assert_eq!(layout(&with_checksum(data)).is_ok(), readable, "{version}");
+            let data = with_checksum(data.clone());
+            assert!(layout(&data).unwrap().paradigm_model.is_empty());
+            assert_eq!(super::read(data.as_slice()).unwrap().bytes(), data);
         }
-        // Форматы 5 и 6 - без последней секции, контекстной модели
+        // Форматы 5 и 6 - еще и без контекстной модели
         data.truncate(data.len() - 8);
         for version in [5u32, 6] {
             data[MAGIC.len()..MAGIC.len() + 4].copy_from_slice(&version.to_le_bytes());
@@ -854,14 +876,16 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn context_section() {
+    fn model_sections() {
         let sections = Sections {
             context: b"weights".to_vec(),
+            paradigm_model: b"paradigms".to_vec(),
             ..sample()
         };
         let data = write(&sections);
         let layout = layout(&data).unwrap();
         assert_eq!(&data[layout.context], b"weights");
+        assert_eq!(&data[layout.paradigm_model], b"paradigms");
         assert_eq!(super::read(data.as_slice()).unwrap().bytes(), data);
     }
 

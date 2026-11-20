@@ -26,6 +26,16 @@ class ContextInfo(TypedDict, total=False):
     license: str
 
 
+class ParadigmsInfo(TypedDict, total=False):
+    """Обучение модели класса парадигмы: ревизия словаря OpenCorpora и выгрузка Викисловаря, на словах
+    которых она обучена, число слов и лицензия"""
+
+    opencorpora_revision: str
+    wiktionary_dump: str
+    words: int
+    license: str
+
+
 class FrequenciesInfo(TypedDict, total=False):
     """Частоты словаря: трибанки UD, релиз и лицензия"""
 
@@ -53,6 +63,7 @@ class DictionaryInfo(TypedDict, total=False):
     wiktionary: WiktionaryInfo
     frequencies: FrequenciesInfo
     context: ContextInfo
+    paradigms: ParadigmsInfo
     license: str
     word_forms: Required[int]
     checksum: Required[int]

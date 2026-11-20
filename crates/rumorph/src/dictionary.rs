@@ -25,6 +25,7 @@ mod document;
 pub type Fields<'d> = (String, &'d str, Option<String>);
 mod guess;
 mod own;
+mod paradigm;
 mod parts;
 mod rules;
 mod ud;
@@ -34,9 +35,15 @@ mod weights;
 pub(crate) use context::Model;
 #[cfg(feature = "build")]
 pub(crate) use context::sources as context_sources;
+#[doc(hidden)]
+pub use guess::GuessCandidate;
 #[cfg(any(test, feature = "build"))]
 pub use guess::GuessIndex;
 pub use own::Sample;
+#[cfg(any(test, feature = "build"))]
+pub(crate) use paradigm::Model as ParadigmModel;
+#[cfg(any(test, feature = "build"))]
+pub(crate) use paradigm::sources as paradigm_sources;
 use parts::with_particle;
 pub use ud::UdTag;
 use ud::UdTags;
@@ -180,6 +187,8 @@ pub struct Dictionary {
     own_words: own::OwnWords,
     /// Контекстная модель секции словаря: читается при первом разборе предложения, копии ее делят
     context: Arc<OnceLock<Result<context::Context, String>>>,
+    /// Модель класса парадигмы секции словаря: читается при первом угадывании, копии ее делят
+    paradigms: Arc<OnceLock<Result<paradigm::Paradigms, String>>>,
     features: BTreeMap<String, BTreeSet<String>>,
     alphabet: Alphabet,
     prefixes: Strings,
@@ -367,6 +376,7 @@ impl Dictionary {
             abbreviation_grammemes: Vec::new(),
             own_words: own::OwnWords::default(),
             context: Arc::new(OnceLock::new()),
+            paradigms: Arc::new(OnceLock::new()),
             meta,
             alphabet,
             layout,
@@ -479,7 +489,8 @@ impl Dictionary {
     ///
     /// # Errors
     ///
-    /// [`Error::Format`], если автомат поврежден; [`Error::Context`], если повреждена модель
+    /// [`Error::Format`], если автомат или модель класса парадигмы повреждены; [`Error::Context`],
+    /// если повреждена контекстная модель
     pub fn verify(&self) -> Result<(), Error> {
         for (name, map) in [("словоформ", &self.words), ("окончаний", &self.guesses)]
         {
@@ -491,6 +502,7 @@ impl Dictionary {
         if !self.layout.context.is_empty() {
             self.context()?;
         }
+        self.paradigm_model()?;
         Ok(())
     }
 
@@ -650,6 +662,29 @@ impl Dictionary {
         context
             .as_ref()
             .map_err(|message| Error::Context(message.clone()))
+    }
+
+    /// Модель класса парадигмы словаря: читается один раз на словарь и его копии; `None` - модели
+    /// нет (словарь без нее или формата до 9)
+    fn paradigm_model(&self) -> Result<Option<&paradigm::Paradigms>, Error> {
+        if self.layout.paradigm_model.is_empty() {
+            return Ok(None);
+        }
+        // Модель строится вне ячейки, как контекстная: из-за fork
+        let model = match self.paradigms.get() {
+            Some(model) => model,
+            None => {
+                let bytes = &self.storage.bytes()[self.layout.paradigm_model.clone()];
+                let built = paradigm::Model::parse(bytes)
+                    .map(|model| paradigm::Paradigms::new(model, &self.ud, &self.suffixes))
+                    .map_err(|err| err.to_string());
+                self.paradigms.get_or_init(move || built)
+            }
+        };
+        model
+            .as_ref()
+            .map(Some)
+            .map_err(|message| Error::Format(message.clone()))
     }
 
     /// Теги частей речи и признаков словаря, которых не было в словаре обучения контекстной
