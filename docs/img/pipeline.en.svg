@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 444" width="1040" height="444" font-family="PT Sans, Source Sans Pro, Arial, sans-serif" role="img">
+<rect width="1040" height="444" rx="12" fill="white"/>
+<text x="20.0" y="30.0" font-size="15" fill="#1976d2" font-weight="bold" text-anchor="start">1. Sentence</text>
+<text x="20.0" y="62.0" font-size="22" fill="#263238" text-anchor="start">Мост сделан из стали.</text>
+<text x="20.0" y="104.0" font-size="15" fill="#1976d2" font-weight="bold" text-anchor="start">2. The dictionary gives every analysis of every word and its frequency</text>
+<text x="120.0" y="136.0" font-size="19" fill="#263238" font-weight="bold" text-anchor="middle">Мост</text>
+<rect x="28.0" y="150" width="184" height="42" rx="6" fill="white" stroke="#64b5f6" stroke-width="1.5"/>
+<text x="120.0" y="168.0" font-size="15" fill="#263238" text-anchor="middle">мост · 0.79</text>
+<text x="120.0" y="185.0" font-size="12" fill="#78909c" text-anchor="middle">noun, nom., sing.</text>
+<rect x="28.0" y="198" width="184" height="42" rx="6" fill="white" stroke="#64b5f6" stroke-width="1.5"/>
+<text x="120.0" y="216.0" font-size="15" fill="#263238" text-anchor="middle">мост · 0.21</text>
+<text x="120.0" y="233.0" font-size="12" fill="#78909c" text-anchor="middle">noun, acc., sing.</text>
+<text x="320.0" y="136.0" font-size="19" fill="#263238" font-weight="bold" text-anchor="middle">сделан</text>
+<rect x="228.0" y="150" width="184" height="42" rx="6" fill="white" stroke="#64b5f6" stroke-width="1.5"/>
+<text x="320.0" y="168.0" font-size="15" fill="#263238" text-anchor="middle">сделать · 1.00</text>
+<text x="320.0" y="185.0" font-size="12" fill="#78909c" text-anchor="middle">verb, past, sing.</text>
+<text x="520.0" y="136.0" font-size="19" fill="#263238" font-weight="bold" text-anchor="middle">из</text>
+<rect x="428.0" y="150" width="184" height="42" rx="6" fill="white" stroke="#64b5f6" stroke-width="1.5"/>
+<text x="520.0" y="168.0" font-size="15" fill="#263238" text-anchor="middle">из · 1.00</text>
+<text x="520.0" y="185.0" font-size="12" fill="#78909c" text-anchor="middle">prep.</text>
+<rect x="428.0" y="198" width="184" height="42" rx="6" fill="white" stroke="#64b5f6" stroke-width="1.5"/>
+<text x="520.0" y="216.0" font-size="15" fill="#263238" text-anchor="middle">иза · &lt;0.01</text>
+<text x="520.0" y="233.0" font-size="12" fill="#78909c" text-anchor="middle">name, gen., plur.</text>
+<rect x="428.0" y="246" width="184" height="42" rx="6" fill="white" stroke="#64b5f6" stroke-width="1.5"/>
+<text x="520.0" y="264.0" font-size="15" fill="#263238" text-anchor="middle">иза · &lt;0.01</text>
+<text x="520.0" y="281.0" font-size="12" fill="#78909c" text-anchor="middle">name, acc., plur.</text>
+<text x="720.0" y="136.0" font-size="19" fill="#263238" font-weight="bold" text-anchor="middle">стали</text>
+<rect x="628.0" y="150" width="184" height="42" rx="6" fill="white" stroke="#64b5f6" stroke-width="1.5"/>
+<text x="720.0" y="168.0" font-size="15" fill="#263238" text-anchor="middle">стать · 0.99</text>
+<text x="720.0" y="185.0" font-size="12" fill="#78909c" text-anchor="middle">verb, past, plur.</text>
+<rect x="628.0" y="198" width="184" height="42" rx="6" fill="white" stroke="#64b5f6" stroke-width="1.5"/>
+<text x="720.0" y="216.0" font-size="15" fill="#263238" text-anchor="middle">сталь · 0.01</text>
+<text x="720.0" y="233.0" font-size="12" fill="#78909c" text-anchor="middle">noun, gen., sing.</text>
+<rect x="628.0" y="246" width="184" height="42" rx="6" fill="white" stroke="#64b5f6" stroke-width="1.5"/>
+<text x="720.0" y="264.0" font-size="15" fill="#263238" text-anchor="middle">сталь · &lt;0.01</text>
+<text x="720.0" y="281.0" font-size="12" fill="#78909c" text-anchor="middle">noun, nom., plur.</text>
+<text x="720.0" y="300.0" font-size="13" fill="#78909c" text-anchor="middle">+ 3</text>
+<text x="920.0" y="136.0" font-size="19" fill="#263238" font-weight="bold" text-anchor="middle">.</text>
+<rect x="828.0" y="150" width="184" height="42" rx="6" fill="white" stroke="#64b5f6" stroke-width="1.5"/>
+<text x="920.0" y="168.0" font-size="15" fill="#263238" text-anchor="middle">. · 1.00</text>
+<text x="920.0" y="185.0" font-size="12" fill="#78909c" text-anchor="middle">punct.</text>
+<text x="20.0" y="334.0" font-size="15" fill="#1976d2" font-weight="bold" text-anchor="start">3. The context model chooses the analysis by the neighbouring words</text>
+<text x="120.0" y="366.0" font-size="19" fill="#263238" font-weight="bold" text-anchor="middle">Мост</text>
+<rect x="28.0" y="380" width="184" height="42" rx="6" fill="#1976d2"/>
+<text x="120.0" y="398.0" font-size="15" fill="white" font-weight="bold" text-anchor="middle">мост</text>
+<text x="120.0" y="415.0" font-size="12" fill="white" text-anchor="middle">noun, nom., sing.</text>
+<text x="320.0" y="366.0" font-size="19" fill="#263238" font-weight="bold" text-anchor="middle">сделан</text>
+<rect x="228.0" y="380" width="184" height="42" rx="6" fill="#1976d2"/>
+<text x="320.0" y="398.0" font-size="15" fill="white" font-weight="bold" text-anchor="middle">сделать</text>
+<text x="320.0" y="415.0" font-size="12" fill="white" text-anchor="middle">verb, past, sing.</text>
+<text x="520.0" y="366.0" font-size="19" fill="#263238" font-weight="bold" text-anchor="middle">из</text>
+<rect x="428.0" y="380" width="184" height="42" rx="6" fill="#1976d2"/>
+<text x="520.0" y="398.0" font-size="15" fill="white" font-weight="bold" text-anchor="middle">из</text>
+<text x="520.0" y="415.0" font-size="12" fill="white" text-anchor="middle">prep.</text>
+<text x="720.0" y="366.0" font-size="19" fill="#263238" font-weight="bold" text-anchor="middle">стали</text>
+<rect x="628.0" y="380" width="184" height="42" rx="6" fill="#1976d2"/>
+<text x="720.0" y="398.0" font-size="15" fill="white" font-weight="bold" text-anchor="middle">сталь</text>
+<text x="720.0" y="415.0" font-size="12" fill="white" text-anchor="middle">noun, gen., sing.</text>
+<text x="920.0" y="366.0" font-size="19" fill="#263238" font-weight="bold" text-anchor="middle">.</text>
+<rect x="828.0" y="380" width="184" height="42" rx="6" fill="#1976d2"/>
+<text x="920.0" y="398.0" font-size="15" fill="white" font-weight="bold" text-anchor="middle">.</text>
+<text x="920.0" y="415.0" font-size="12" fill="white" text-anchor="middle">punct.</text>
+</svg>
