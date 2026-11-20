@@ -35,7 +35,7 @@ The analyses of an unknown word come from the dictionary by its ending: the form
 
 The model is trained on the dictionary itself: for 1.2 million of its words it chooses among the candidates as if the word were not in the dictionary - `scripts/train_paradigms.py`. On the forms of lexemes missing from the dictionary the lemma and part of speech of the first analysis are right for 89.4 % of the forms against 86.1 % for the choice by the frequency of the ending. A capitalized word - usually a name - is guessed by the frequency of the ending: on names the model made more mistakes.
 
-By its longest ending «-ропил» the word «ноотропил» looks first of all like a verb in the past tense: by the frequency of the ending half of the weight goes to the verb «ноотропить». The model reads the whole word and chooses the noun «ноотропил» (0.71). The numbers are a forward pass of the package model (`scripts/figures.py`), checked against the analysis of the core.
+By its longest ending «-ропил» the word «ноотропил» looks first of all like a verb in the past tense: by the frequency of the ending half of the weight goes to the verb «ноотропить». The model reads the whole word and chooses the noun «ноотропил» (0.72), and the verb does not get into the analyses. The numbers of the model are the probabilities of `analyze`; `scripts/figures.py` checks them against a forward pass of the model over the weights file.
 
 ![Analyses of the unknown word «ноотропил»: by the frequency of the ending and by the model](img/guess.en.svg)
 

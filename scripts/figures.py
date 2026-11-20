@@ -2,16 +2,18 @@
 Картинки документации: как ruMorph разбирает предложение
 
 Описание:
-    Рисует по настоящему разбору словаря и контекстной модели пакета: конвейер «предложение →
-    разборы словаря → выбор по соседним словам» (docs/img/pipeline.svg), устройство
-    контекстной модели с размерами из файла весов (docs/img/model.svg) и вероятности разборов
-    неоднозначного слова «стали» без контекста и в двух предложениях (docs/img/choice.svg);
-    к каждой - английская версия (*.en.svg). Вероятности в контексте считает прямой проход
-    модели на numpy по файлу весов (data/ru-context.bin), сверенный с разбором ядра на Rust.
-    Запуск - в окружении проекта: нужен собранный rumorph, а numpy подключается на время запуска.
+    Рисует по настоящему разбору словаря и моделям пакета: конвейер «предложение → разборы
+    словаря → выбор по соседним словам» (docs/img/pipeline.svg), устройство контекстной модели
+    с размерами из файла весов (docs/img/context.svg), вероятности разборов неоднозначного слова
+    «стали» без контекста и в двух предложениях (docs/img/choice.svg), устройство модели класса
+    парадигмы (docs/img/paradigm.svg) и разборы незнакомого слова по частоте окончания и по
+    модели (docs/img/guess.svg); к каждой - английская версия (*.en.svg). Вероятности считает
+    прямой проход моделей на numpy по файлам весов (data/ru-context.bin, data/ru-paradigms.bin),
+    сверенный с разбором ядра на Rust. Запуск - в окружении проекта: нужен собранный rumorph,
+    а numpy подключается на время запуска.
 
 Пример использования:
-    uv run --with numpy python scripts/figures.py
+    uv run --with numpy==2.3.4 python scripts/figures.py
 """
 
 import json
@@ -32,6 +34,7 @@ WORD = "стали"
 UNKNOWN = "ноотропил"
 # Без модели разборы берутся из стольких первых форм списка самого длинного окончания
 MAX_COUNTED = 10
+MAX_GUESSED, MIN_GUESSED_SHARE = 10, 0.01
 
 
 def read_weights(path: Path, magic: bytes = b"RUMCTX\0\0") -> dict:
@@ -349,7 +352,7 @@ TEXTS = {
             "модель",
             (
                 "Доли разборов с той же леммой и частью речи: по частоте окончания - как без модели",
-                "(самое длинное окончание), модель - прямой проход по файлу весов",
+                "(самое длинное окончание), модель - вероятности analyze",
             ),
         ),
         "choice": (
@@ -415,7 +418,7 @@ TEXTS = {
             "model",
             (
                 "Shares of the analyses with the same lemma and part of speech: by the ending - as",
-                "without the model (the longest ending), model - a forward pass over the weights file",
+                "without the model (the longest ending), model - the probabilities of analyze",
             ),
         ),
         "choice": (
@@ -509,7 +512,8 @@ def describe(analysis: Analysis, lang: str) -> str:
 
 
 def percent(value: float, lang: str) -> str:
-    shown = f"{value:.2f}" if value >= 0.005 else "&lt;0.01"
+    # Разбора нет в выводе пакета - 0, а не «<0,01»
+    shown = "0" if value == 0 else f"{value:.2f}" if value >= 0.005 else "&lt;0.01"
     return shown.replace(".", "," if lang == "ru" else ".")
 
 
@@ -593,7 +597,9 @@ def draw_choice(
     candidates: list[Analysis], columns: list[np.ndarray], chosen: list[int], lang: str
 ) -> None:
     t = TEXTS[lang]["choice"]
-    cell, left, topy = 150, 260, 92
+    # SVG в <img> не видит шрифтов сайта: ширина подписи - с запасом на Arial
+    cell = max(150, *(width(name, 14) + 20 for name in t[1:4]))
+    left, topy = 260, 92
     body = [text(30, 34, t[0], 17, DARK, True, "start")]
     for j, name in enumerate(t[1:4]):
         body.append(text(left + j * cell + cell / 2, topy - 14, name, 14, INK, True))
@@ -719,22 +725,24 @@ def guess_rows(
     longest = max(candidate[4] for candidate in candidates)
     counted = [c for c in candidates if c[4] == longest][:MAX_COUNTED]
     total = sum(c[5] for c in counted)
-    probs = model.probabilities(word, candidates)
     shares: dict[tuple[str, str], list[float]] = {}
     for candidate in counted:
         key = (candidate[0], tags[candidate[1]][0])
         shares.setdefault(key, [0.0, 0.0])[0] += candidate[5] / total
-    for candidate, p in zip(candidates, probs, strict=True):
-        key = (candidate[0], tags[candidate[1]][0])
-        shares.setdefault(key, [0.0, 0.0])[1] += float(p)
-    # Прямой проход на numpy выбирает те же лемму и часть речи, что ядро на Rust
-    core: dict[tuple[str, str], float] = {}
+    # Столбец модели - вывод пакета: после softmax ядро оставляет до MAX_GUESSED форм не слабее
+    # MIN_GUESSED_SHARE лучшей
     for analysis in morph.analyze(word):
-        key = (analysis.lemma, analysis.pos)
-        core[key] = core.get(key, 0.0) + analysis.prob
-    top = max(shares, key=lambda key: shares[key][1])
-    assert top == max(core, key=core.get), (top, core)
-    assert abs(shares[top][1] - core[top]) < 0.05, (shares[top], core[top])
+        shares.setdefault((analysis.lemma, analysis.pos), [0.0, 0.0])[1] += analysis.prob
+    # Прямой проход на numpy с тем же отсечением дает те же вероятности
+    probs = model.probabilities(word, candidates)
+    kept = np.argsort(-probs, kind="stable")[:MAX_GUESSED]
+    kept = kept[probs[kept] >= probs[kept[0]] * MIN_GUESSED_SHARE]
+    numpy: dict[tuple[str, str], float] = {}
+    for at in kept:
+        key = (candidates[at][0], tags[candidates[at][1]][0])
+        numpy[key] = numpy.get(key, 0.0) + float(probs[at] / probs[kept].sum())
+    for key in shares.keys() | numpy.keys():
+        assert abs(shares.get(key, [0.0, 0.0])[1] - numpy.get(key, 0.0)) < 1e-3, key
     rows = sorted(
         (item for item in shares.items() if max(item[1]) >= 0.005), key=lambda item: -max(item[1])
     )[:5]
