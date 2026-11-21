@@ -402,6 +402,7 @@ impl Dictionary {
                         ..analysis
                     }));
                     analyses.sort_by(|a, b| b.prob.total_cmp(&a.prob));
+                    analyses = self.by_lexemes(analyses);
                 }
             }
             return analyses;

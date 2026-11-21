@@ -625,11 +625,18 @@ impl Dictionary {
         analyses: &mut [Vec<Analysis>],
     ) {
         let separator = |at: usize| matches!(words.get(at), Some(&("," | "—" | "–" | "-")));
+        // Дефис перед частицей («наконец-то» делится на три токена) - не тире
+        let particle = |at: usize| {
+            words.get(at) == Some(&"-")
+                && (words.get(at + 1)).is_some_and(|word| {
+                    matches!(word.to_lowercase().as_str(), "то" | "таки" | "ка")
+                })
+        };
         for (at, &index) in seen.iter().enumerate() {
             // Тире первым токеном - знак реплики, а не обособления
             if !rules::comma_parenthetical(words[at])
                 || (at > 1 && separator(at - 1))
-                || separator(at + 1)
+                || (separator(at + 1) && !particle(at + 1))
             {
                 continue;
             }
@@ -684,7 +691,7 @@ impl Dictionary {
         self.without_prnt.get_or_init(move || plain)
     }
 
-    /// Поля CoNLL-U самого вероятного разбора каждого слова предложения: лемма, часть речи
+    /// Поля CoNLL-U первого разбора каждого слова предложения: лемма, часть речи
     /// и признаки (без признаков - `None`). С контекстом (`context`) разбор выбирает модель кусками по `SENTENCE_CHUNK`
     /// слов, без него - частоты словаря. Ошибка - если нужна модель, а ее в словаре нет
     #[doc(hidden)]
@@ -780,8 +787,8 @@ impl Dictionary {
         Ok(self.context()?.gaps(&self.ud))
     }
 
-    /// Разборы словоформы по убыванию вероятности; регистр для поиска не важен, «е» может
-    /// обозначать «ё»
+    /// Разборы словоформы по убыванию вероятности (угаданные - по лексемам: первой идет лексема
+    /// с наибольшей суммой вероятностей); регистр для поиска не важен, «е» может обозначать «ё»
     ///
     /// Регистр меняет доли имен собственных: у строчного слова они идут последними, у слова
     /// с заглавной буквы их доля выше, чем в частотах словаря.
@@ -1840,24 +1847,28 @@ struct Preferences {
 
 /// Слово в обычной записи: без невидимых символов (`visible`), знаки и буквы-двойники
 /// (`normalized_marks`, `unified_script`) приведены к обычным. `None`, если менять нечего
-fn normalized_input(word: &str) -> Option<String> {
+fn normalized_input(input: &str) -> Option<String> {
     // Слово из видимых символов ASCII или из кириллицы с цифрами и знаками ASCII: менять нечего
-    if word.bytes().all(|byte| matches!(byte, b' '..=b'~'))
-        || word
+    if input.bytes().all(|byte| matches!(byte, b' '..=b'~'))
+        || input
             .chars()
             .all(|c| rules::cyrillic(c) || matches!(c, ' '..='@' | '['..='`' | '{'..='~'))
     {
         return None;
     }
-    let visible = visible(word);
-    let word = visible.as_deref().unwrap_or(word);
+    let visible = visible(input);
+    let word = visible.as_deref().unwrap_or(input);
     let decomposed = decomposed_diacritics(word);
+    let split = decomposed.is_some();
     let word = decomposed.as_deref().unwrap_or(word);
     let unified = unified_script(word);
-    normalized_marks(unified.as_deref().unwrap_or(word))
+    let normal = normalized_marks(unified.as_deref().unwrap_or(word))
         .or(unified)
         .or(decomposed)
-        .or(visible)
+        .or(visible)?;
+    // Гласная, разложенная в слове, которое не стало кириллическим («Тhérèse»), собирается обратно
+    let normal = if split { recomposed(&normal) } else { normal };
+    (normal != input).then_some(normal)
 }
 
 /// Латинская гласная-двойник с ударением или «ë» в отрезке букв с кириллицей («сáд», «дóм»,
@@ -1865,26 +1876,6 @@ fn normalized_input(word: &str) -> Option<String> {
 /// с буквой `normalized_marks`. Отрезок без кириллицы не меняется («café», «café-бар»); `None`,
 /// если менять нечего
 fn decomposed_diacritics(word: &str) -> Option<String> {
-    const MARKED: [(char, char, char); 18] = [
-        ('á', 'a', '\u{301}'),
-        ('à', 'a', '\u{300}'),
-        ('é', 'e', '\u{301}'),
-        ('è', 'e', '\u{300}'),
-        ('ó', 'o', '\u{301}'),
-        ('ò', 'o', '\u{300}'),
-        ('ý', 'y', '\u{301}'),
-        ('ỳ', 'y', '\u{300}'),
-        ('ë', 'e', '\u{308}'),
-        ('Á', 'A', '\u{301}'),
-        ('À', 'A', '\u{300}'),
-        ('É', 'E', '\u{301}'),
-        ('È', 'E', '\u{300}'),
-        ('Ó', 'O', '\u{301}'),
-        ('Ò', 'O', '\u{300}'),
-        ('Ý', 'Y', '\u{301}'),
-        ('Ỳ', 'Y', '\u{300}'),
-        ('Ë', 'E', '\u{308}'),
-    ];
     let marked = |c: char| MARKED.iter().find(|&&(letter, _, _)| letter == c);
     if !word.chars().any(|c| marked(c).is_some()) {
         return None;
@@ -1904,6 +1895,48 @@ fn decomposed_diacritics(word: &str) -> Option<String> {
     }
     (normal != word).then_some(normal)
 }
+
+/// Слово с латинскими гласными `MARKED`, снова собранными из буквы и знака
+fn recomposed(word: &str) -> String {
+    let mut normal = String::with_capacity(word.len());
+    let mut chars = word.chars().peekable();
+    while let Some(c) = chars.next() {
+        let next = chars.peek().copied();
+        match MARKED
+            .iter()
+            .find(|&&(_, base, mark)| base == c && Some(mark) == next)
+        {
+            Some(&(letter, _, _)) => {
+                normal.push(letter);
+                chars.next();
+            }
+            None => normal.push(c),
+        }
+    }
+    normal
+}
+
+/// Латинские гласные-двойники с ударением и «ë»: буква, ее основа и знак
+const MARKED: [(char, char, char); 18] = [
+    ('á', 'a', '\u{301}'),
+    ('à', 'a', '\u{300}'),
+    ('é', 'e', '\u{301}'),
+    ('è', 'e', '\u{300}'),
+    ('ó', 'o', '\u{301}'),
+    ('ò', 'o', '\u{300}'),
+    ('ý', 'y', '\u{301}'),
+    ('ỳ', 'y', '\u{300}'),
+    ('ë', 'e', '\u{308}'),
+    ('Á', 'A', '\u{301}'),
+    ('À', 'A', '\u{300}'),
+    ('É', 'E', '\u{301}'),
+    ('È', 'E', '\u{300}'),
+    ('Ó', 'O', '\u{301}'),
+    ('Ò', 'O', '\u{300}'),
+    ('Ý', 'Y', '\u{301}'),
+    ('Ỳ', 'Y', '\u{300}'),
+    ('Ë', 'E', '\u{308}'),
+];
 
 /// Слово без невидимых символов: управляющих, кроме пробельных, и символов форматирования
 /// Unicode (Cf - мягкий перенос, нулевой пробел, BOM, метки направления текста); соединитель

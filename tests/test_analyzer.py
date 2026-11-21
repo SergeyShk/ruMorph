@@ -256,6 +256,9 @@ def test_mixed_scripts(morph):
     assert morph.analyze("сedar") == morph.analyze("cedar")
     assert morph.analyze("сedar")[0].pos == "X"
     assert [a.word for a in morph.analyze("ТНК-BP")] == ["ТНК-BP"]
+    # Гласная с ударением в слове, которое стало латинским, остается составленной (NFC)
+    assert morph.analyze("\u0422h\u00e9r\u00e8se") == morph.analyze("Th\u00e9r\u00e8se")
+    assert morph.analyze("\u0422h\u00e9r\u00e8se")[0].lemma == "th\u00e9r\u00e8se"
 
 
 @pytest.mark.parametrize(
@@ -316,6 +319,20 @@ def test_wiktionary_words(morph, word, lemma, pos):
     first = morph.analyze(word)[0]
     assert (first.lemma, first.pos, first.source) == (lemma, pos, "dictionary")
     assert morph.analyze("зумер")[0].inflect(Number="Plur", Case="Gen") == "зумеров"
+
+
+def test_guess_lexeme_first(morph):
+    # Первой идет угаданная лексема с наибольшей суммой долей, а не самая вероятная форма: три формы
+    # лексемы «манжетик» вместе вероятнее одной формы «манжетика»
+    assert morph.lemmatize(["манжетик", "сукол"]) == ["манжетик", "сукол"]
+    first = morph.analyze("манжетик")[0]
+    assert (first.lemma, first.source) == ("манжетик", "guess")
+    # Так же через дефис, с частицей и капсом
+    words = ["мини-манжетик", "манжетика-то", "АЛРОСОЙ"]
+    assert morph.lemmatize(words) == ["мини-манжетик", "манжетик-то", "алроса"]
+    # Формы лексем с равной суммой не перемешиваются
+    lexemes = [(a.lemma, a.pos) for a in morph.analyze("Аржантана")]
+    assert lexemes == sorted(lexemes, key=lexemes.index)
 
 
 def test_wiktionary_after_opencorpora(morph):
@@ -833,6 +850,8 @@ def test_parenthetical_label(morph, word, parenthetical):
         (["Однако", "мы", "не", "стали"], 0, False),
         (["Однако", ",", "это", "так"], 0, True),
         (["Он", "—", "правда", "—", "пришел"], 2, True),
+        # Дефис частицы («наконец-то» - три токена) не обособляет
+        (["Он", "наконец", "-", "то", "пришел", "."], 1, False),
         # Тире реплики в начале предложения не обособляет
         (["—", "Однако", "мы", "не", "стали", "."], 1, False),
         # Токен без видимых символов между словом и запятой не считается, слово - как у analyze

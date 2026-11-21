@@ -243,7 +243,33 @@ impl Dictionary {
         for analysis in &mut analyses {
             analysis.prob /= total;
         }
-        self.merge(analyses)
+        self.by_lexemes(self.merge(analyses))
+    }
+
+    /// Угаданные разборы по лексемам: первой идет лексема (лемма и часть речи) с наибольшей суммой
+    /// долей, внутри нее - формы, как в `analyses` (по убыванию доли); при равной сумме - лексема,
+    /// форма которой стоит раньше. У «манжетик» три формы лексемы «манжетик» вместе вероятнее
+    /// одной формы «манжетика»
+    pub(super) fn by_lexemes(&self, analyses: Vec<Analysis>) -> Vec<Analysis> {
+        let pos = |analysis: &Analysis| self.ud_tag(analysis.ud).map(|tag| tag.pos());
+        let same = |a: &Analysis, b: &Analysis| a.lemma == b.lemma && pos(a) == pos(b);
+        let (mut mass, mut first) = (vec![0.0; analyses.len()], vec![0; analyses.len()]);
+        for (at, analysis) in analyses.iter().enumerate() {
+            first[at] = (analyses.iter())
+                .position(|other| same(other, analysis))
+                .unwrap_or(at);
+            mass[at] = (analyses.iter())
+                .filter(|other| same(other, analysis))
+                .map(|other| other.prob)
+                .sum();
+        }
+        let mut order: Vec<usize> = (0..analyses.len()).collect();
+        order.sort_by(|&a, &b| mass[b].total_cmp(&mass[a]).then(first[a].cmp(&first[b])));
+        let mut slots: Vec<Option<Analysis>> = analyses.into_iter().map(Some).collect();
+        order
+            .into_iter()
+            .filter_map(|at| slots[at].take())
+            .collect()
     }
 
     /// Разборы незнакомого слова в индексе `index` с весами: нарицательные с `model` - по модели
