@@ -1249,10 +1249,13 @@ def test_own_words_in_threads():
 
     def make(_):
         barrier.wait()
-        return Analyzer(words=words).lemmatize(["вайбкодербба"])
+        return Analyzer(words=words)
 
     with ThreadPoolExecutor(8) as pool:
-        assert list(pool.map(make, range(8))) == [["вайбкодербб"]] * 8
+        analyzers = list(pool.map(make, range(8)))
+    assert [m.lemmatize(["вайбкодербба"]) for m in analyzers] == [["вайбкодербб"]] * 8
+    # Строка своих слов в pickle - общая у анализаторов одной копии
+    assert len({id(m.__reduce__()[1][1]) for m in analyzers}) == 1
 
 
 @pytest.mark.skipif(not hasattr(os, "fork"), reason="нет fork")
