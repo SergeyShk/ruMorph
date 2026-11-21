@@ -993,7 +993,11 @@ def main() -> None:
     sources = {
         "treebanks": sorted(SOURCES),
         "release": RELEASE,
-        "parts": ["train", "dev"],
+        # Проверочные части выбирают эпоху; у Poetry - только обучающая
+        "parts": {
+            treebank: ["train", "dev"] if treebank in DEV_FILES else ["train"]
+            for treebank in sorted(SOURCES)
+        },
         "corpus": {
             "source": "opencorpora.org",
             "revision": next(corpus_revisions(args.data / corpus_file)),

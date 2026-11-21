@@ -17,11 +17,11 @@ class CorpusInfo(TypedDict):
 
 
 class ContextInfo(TypedDict, total=False):
-    """Обучение контекстной модели: трибанки UD, релиз, части, корпус и лицензия"""
+    """Обучение контекстной модели: трибанки UD, релиз, части каждого трибанка, корпус и лицензия"""
 
     treebanks: list[str]
     release: str
-    parts: list[str]
+    parts: dict[str, list[str]]
     corpus: CorpusInfo
     license: str
 
