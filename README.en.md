@@ -297,11 +297,11 @@ The share of words whose first analysis has the right part of speech and lemma, 
 
 | System | SynTagRus | Taiga | GSD | Tokens per second |
 | :----- | :-------- | :---- | :-- | :---------------- |
-| ruMorph | **94.1** | **90.9** | **92.2** | **619,682** |
+| ruMorph | **94.1** | **90.9** | **92.3** | **619,682** |
 | pymorphy3 | 84.8 | 82.9 | 84.3 | 24,226 |
 | mystem | 81.9 | 79.4 | 79.9 | 81,863 |
 
-In context (`analyze_sentence`) ruMorph is more accurate than all the taggers in the part of speech, lemma and features together on Taiga and GSD (90.4 and 81.6 % of words against 85.6 and 80.4 % for Stanza), and on SynTagRus it is level with Stanza (93.7 and 93.5 %), although Stanza is trained on SynTagRus. Meanwhile it handles 139 thousand tokens per second against 3,032 for Stanza. ruMorph answers a short text together with loading in 6 ms against 0.2-2 s for the taggers, processes share the dictionary, and every further one adds 1.5 MB. Measured on Apple M3 Pro, Python 3.11.
+In context (`analyze_sentence`) ruMorph is more accurate than all the taggers in the part of speech, lemma and features together on Taiga and GSD (90.5 and 81.8 % of words against 85.6 and 80.4 % for Stanza), and on SynTagRus it is level with Stanza (93.8 and 93.5 %), although Stanza is trained on SynTagRus. Meanwhile it handles 139 thousand tokens per second against 3,032 for Stanza. ruMorph answers a short text together with loading in 7 ms against 0.2-2 s for the taggers, processes share the dictionary, and every further one adds 2.6 MB. Measured on Apple M3 Pro, Python 3.11.
 
 See the [documentation](https://sergeyshk.github.io/ruMorph/en/performance/) for context taggers, the chart of speed by text size, operations compared with pymorphy3, memory and how it was measured.
 
@@ -343,8 +343,8 @@ Bug reports, ideas and pull requests are welcome - the [issues](https://github.c
 *   **crates/rumorph-dict-ru** - the crate with the dictionary for `rumorph` on crates.io
 *   **crates/rumorph-py** - the Python module `rumorph._rumorph` built with PyO3
 *   **python/rumorph** - the Python package
-*   **scripts** - exporting the OpenCorpora dictionary and corpus, converting the words of Wiktionary, exporting the UD treebank counts, training the context model, checking the installed package before publishing and comparing with other analyzers
-*   **data** - the context model weights that the builder embeds into the dictionary
+*   **scripts** - exporting the OpenCorpora dictionary and corpus, converting the words of Wiktionary, exporting the UD treebank counts, training the context model and the paradigm class model, checking the installed package before publishing and comparing with other analyzers
+*   **data** - the weights of the context model and the paradigm class model that the builder embeds into the dictionary
 *   **docs** - MkDocs documentation in Russian and English
 *   **tests** - tests of the Python package
 

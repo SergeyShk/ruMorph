@@ -1,11 +1,13 @@
 import copy
 import errno
+import faulthandler
 import json
 import math
 import os
 import pickle
 import re
 import shutil
+import signal
 import sys
 import threading
 import time
@@ -1208,9 +1210,33 @@ def test_pickle_with_many_own_words():
     assert pickle.loads(pickle.dumps(analyzer)).analyze("вайбкодербб")[0].source == "dictionary"
 
 
+@pytest.fixture
+def fork_tracebacks():
+    # Обработчик SIGUSR1 ставится до fork: процесс наследует его и выводит стеки, даже если завис
+    # в самом fork (обработчиках after_in_child)
+    faulthandler.register(signal.SIGUSR1, all_threads=True)
+    yield
+    faulthandler.unregister(signal.SIGUSR1)
+
+
+def child_exit_code(pid: int) -> int | None:
+    # Код выхода процесса, созданного fork; если он не вышел за 30 с - стеки его потоков в stderr
+    # (`fork_tracebacks`) и None
+    deadline = time.monotonic() + 30
+    while (done := os.waitpid(pid, os.WNOHANG))[0] == 0 and time.monotonic() < deadline:
+        time.sleep(0.01)
+    if done[0] == pid:
+        return os.waitstatus_to_exitcode(done[1])
+    os.kill(pid, signal.SIGUSR1)
+    time.sleep(1)
+    os.kill(pid, signal.SIGKILL)
+    os.waitpid(pid, 0)
+    return None
+
+
 @pytest.mark.skipif(not hasattr(os, "fork"), reason="нет fork")
 @pytest.mark.filterwarnings("ignore::DeprecationWarning")
-def test_fork_while_loading(morph, tmp_path):
+def test_fork_while_loading(morph, tmp_path, fork_tracebacks):
     # Процесс, созданный fork, пока другой поток загружает словарь, не зависает на анализаторе
     path = tmp_path / "ru.dict"
     shutil.copy(morph.path, path)
@@ -1228,13 +1254,7 @@ def test_fork_while_loading(morph, tmp_path):
             pid = os.fork()
             if pid == 0:
                 os._exit(0 if Analyzer(path).lemmatize(["стали"]) == ["стать"] else 1)
-            deadline = time.monotonic() + 30
-            while (done := os.waitpid(pid, os.WNOHANG))[0] == 0 and time.monotonic() < deadline:
-                time.sleep(0.01)
-            if done[0] == 0:
-                os.kill(pid, 9)
-                os.waitpid(pid, 0)
-            assert done[0] == pid and os.waitstatus_to_exitcode(done[1]) == 0
+            assert child_exit_code(pid) == 0
     finally:
         stop.set()
         thread.join()
@@ -1260,7 +1280,7 @@ def test_own_words_in_threads():
 
 @pytest.mark.skipif(not hasattr(os, "fork"), reason="нет fork")
 @pytest.mark.filterwarnings("ignore::DeprecationWarning")
-def test_fork_while_building_own_words(morph):
+def test_fork_while_building_own_words(morph, fork_tracebacks):
     # Процесс, созданный fork, пока другой поток собирает копию со своими словами, не ждет ее:
     # два набора слов по очереди - копия каждый раз собирается заново
     sets = [
@@ -1290,13 +1310,7 @@ def test_fork_while_building_own_words(morph):
                     for w, x in zip(sets, "аб", strict=True)
                 ]
                 os._exit(0 if lemmas == [["вайбкодерааа"], ["вайбкодербаа"]] else 1)
-            deadline = time.monotonic() + 30
-            while (done := os.waitpid(pid, os.WNOHANG))[0] == 0 and time.monotonic() < deadline:
-                time.sleep(0.01)
-            if done[0] == 0:
-                os.kill(pid, 9)
-                os.waitpid(pid, 0)
-            assert done[0] == pid and os.waitstatus_to_exitcode(done[1]) == 0
+            assert child_exit_code(pid) == 0
     finally:
         stop.set()
         thread.join()
@@ -1304,7 +1318,7 @@ def test_fork_while_building_own_words(morph):
 
 @pytest.mark.skipif(not hasattr(os, "fork"), reason="нет fork")
 @pytest.mark.filterwarnings("ignore::DeprecationWarning")
-def test_fork_while_building_context(morph, tmp_path):
+def test_fork_while_building_context(morph, tmp_path, fork_tracebacks):
     # Процесс, созданный fork, пока другой поток строит контекстную модель, не зависает на ней:
     # два файла словаря по очереди - модель каждый раз строится заново
     paths = [tmp_path / f"{name}.dict" for name in "ab"]
@@ -1327,13 +1341,7 @@ def test_fork_while_building_context(morph, tmp_path):
             if pid == 0:
                 sentences = [Analyzer(path).analyze_sentence(["Я", "читаю"]) for path in paths]
                 os._exit(0 if all(len(sentence) == 2 for sentence in sentences) else 1)
-            deadline = time.monotonic() + 30
-            while (done := os.waitpid(pid, os.WNOHANG))[0] == 0 and time.monotonic() < deadline:
-                time.sleep(0.01)
-            if done[0] == 0:
-                os.kill(pid, 9)
-                os.waitpid(pid, 0)
-            assert done[0] == pid and os.waitstatus_to_exitcode(done[1]) == 0
+            assert child_exit_code(pid) == 0
     finally:
         stop.set()
         thread.join()
