@@ -12,14 +12,18 @@ The dictionary bundled with ruMorph (rumorph/data/ru.dict) is built from:
   https://huggingface.co/datasets/SergeyShk/rumorph-wiktionary), licensed under the Creative
   Commons Attribution-ShareAlike 4.0 International License (CC BY-SA 4.0);
 - counts of word form annotations in the training parts of the Universal Dependencies
-  treebanks, release 2.19 (https://universaldependencies.org), and the weights of the
-  context model trained on their training and development parts, licensed under the
-  Creative Commons Attribution-ShareAlike 4.0 International License (CC BY-SA 4.0):
+  treebanks UD_Russian-Taiga and UD_Russian-GSD, release 2.19
+  (https://universaldependencies.org), and the weights of the context model trained on
+  their training and development parts and the training part of UD_Russian-Poetry,
+  licensed under the Creative Commons Attribution-ShareAlike 4.0 International License
+  (CC BY-SA 4.0):
   - UD_Russian-Taiga (https://github.com/UniversalDependencies/UD_Russian-Taiga)
     by Olga Lyashevskaya, Olga Rudina, Natalia Vlasova and Anna Zhuravleva;
   - UD_Russian-GSD (https://github.com/UniversalDependencies/UD_Russian-GSD),
     annotated and converted by Google, by Ryan McDonald, Vitaly Nikolaev and
-    Olga Lyashevskaya.
+    Olga Lyashevskaya;
+  - UD_Russian-Poetry (https://github.com/UniversalDependencies/UD_Russian-Poetry)
+    by Olga Lyashevskaya, Natalia Vlasova and Dmitri Sitchinava.
 
 The ruMorph dictionary is an adaptation of that data and is distributed under the
 Creative Commons Attribution-ShareAlike 4.0 International License (CC BY-SA 4.0):

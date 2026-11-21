@@ -598,7 +598,7 @@ def draw_choice(
 ) -> None:
     t = TEXTS[lang]["choice"]
     # SVG в <img> не видит шрифтов сайта: ширина подписи - с запасом на Arial
-    cell = max(150, *(width(name, 14) + 20 for name in t[1:4]))
+    cell = max(150, *(round(width(name, 14)) + 20 for name in t[1:4]))
     left, topy = 260, 92
     body = [text(30, 34, t[0], 17, DARK, True, "start")]
     for j, name in enumerate(t[1:4]):

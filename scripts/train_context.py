@@ -9,8 +9,8 @@
 Обучение контекстной модели ruMorph: выбор разбора словоформы по соседним словам
 
 Описание:
-    Скачивает обучающие и проверочные части UD_Russian-Taiga и UD_Russian-GSD (CC BY-SA 4.0)
-    закрепленного релиза UD и корпус OpenCorpora (CC BY-SA 3.0) с проверкой SHA-256, приводит
+    Скачивает обучающие и проверочные части UD_Russian-Taiga и UD_Russian-GSD и обучающую часть
+    UD_Russian-Poetry (CC BY-SA 4.0) закрепленного релиза UD и корпус OpenCorpora (CC BY-SA 3.0) с проверкой SHA-256, приводит
     разметку трибанков к соглашениям ruMorph (`conventions.py`, признаки - по разборам словаря),
     разбирает их токены словарем `--dictionary` и учит модель выбирать среди разборов словаря
     тот, что совпадает с эталоном по части речи, лемме и основным признакам. В корпусе OpenCorpora
@@ -45,7 +45,7 @@ import torch
 from torch import nn
 
 import conventions
-from conventions import GSD, TAIGA, harmonize
+from conventions import GSD, POETRY, TAIGA, harmonize
 from export_opencorpora import CORPUS as OPENCORPORA, corpus_revisions, download
 from export_ud import RELEASE, SOURCES as UD_SOURCES
 
@@ -69,11 +69,21 @@ SOURCES = {
     treebank: (commit, {**files, **DEV_FILES[treebank]})
     for treebank, (commit, files) in UD_SOURCES.items()
 }
+# Поэзия XIX-XXI веков учит модель литературному порядку слов; частоты словаря ее не берут
+SOURCES[POETRY] = (
+    "137976dc150d0b3e137fe5fc1a79dc937967a640",
+    {
+        "ru_poetry-ud-train.conllu": "219afa378b2f0fe34cd999673fc05b4ba1d9015b039cbc1a10f748f1ef05da03"
+    },
+)
 # Теги OpenCorpora без части речи (числа, знаки, латиница, незнакомые слова): верен любой разбор
 UNTAGGED = {"PNCT", "NUMB", "LATN", "ROMN", "SYMB", "UNKN", "TIME", "DATE"}
 # Неизменяемые служебные части речи: их выбор из корпуса OpenCorpora не берется
 FUNCTION = {"ADP", "ADV", "CCONJ", "INTJ", "PART", "SCONJ"}
-TRAIN = [f"ru_taiga-ud-train-{part}.conllu" for part in "abcde"] + ["ru_gsd-ud-train.conllu"]
+TRAIN = [f"ru_taiga-ud-train-{part}.conllu" for part in "abcde"] + [
+    "ru_gsd-ud-train.conllu",
+    "ru_poetry-ud-train.conllu",
+]
 DEV = {"Taiga": ["ru_taiga-ud-dev.conllu"], "GSD": ["ru_gsd-ud-dev.conllu"]}
 CORE = (
     "Case",
@@ -111,7 +121,8 @@ def sentences(paths: list[Path]) -> list[list[tuple[str, str, str, dict[str, str
     """
     result = []
     for path in paths:
-        treebank = GSD if path.name.startswith("ru_gsd") else TAIGA
+        prefix = path.name.split("-")[0]
+        treebank = {"ru_gsd": GSD, "ru_poetry": POETRY}.get(prefix, TAIGA)
         for sentence in conventions.sentences(path):
             harmonize(treebank, sentence)
             result.append([(t.form, t.lemma, t.upos, t.feats) for t in sentence])
@@ -982,7 +993,11 @@ def main() -> None:
     sources = {
         "treebanks": sorted(SOURCES),
         "release": RELEASE,
-        "parts": ["train", "dev"],
+        # Проверочные части выбирают эпоху; у Poetry - только обучающая
+        "parts": {
+            treebank: ["train", "dev"] if treebank in DEV_FILES else ["train"]
+            for treebank in sorted(SOURCES)
+        },
         "corpus": {
             "source": "opencorpora.org",
             "revision": next(corpus_revisions(args.data / corpus_file)),

@@ -21,7 +21,7 @@
 
 ### Обучение { #training }
 
-Модель обучена на обучающих частях трибанков [UD_Russian-Taiga](https://github.com/UniversalDependencies/UD_Russian-Taiga) и [UD_Russian-GSD](https://github.com/UniversalDependencies/UD_Russian-GSD) релиза UD 2.19 и на корпусе [OpenCorpora](https://opencorpora.org/): для каждого слова - выбрать из разборов словаря тот, что совпадает с разметкой. [UD_Russian-SynTagRus](https://github.com/UniversalDependencies/UD_Russian-SynTagRus) распространяется по лицензии CC BY-NC-SA 4.0 и в обучение не входит: на нем модель только проверяется. Обучение воспроизводит `scripts/train_context.py`; модель учится на разборах словаря, поэтому после смены тегов UD словаря ее нужно переобучить - сборщик не вшивает старые веса.
+Модель обучена на обучающих частях трибанков [UD_Russian-Taiga](https://github.com/UniversalDependencies/UD_Russian-Taiga), [UD_Russian-GSD](https://github.com/UniversalDependencies/UD_Russian-GSD) и [UD_Russian-Poetry](https://github.com/UniversalDependencies/UD_Russian-Poetry) (поэзия XIX-XXI веков: литературный порядок слов) релиза UD 2.19 и на корпусе [OpenCorpora](https://opencorpora.org/): для каждого слова - выбрать из разборов словаря тот, что совпадает с разметкой. [UD_Russian-SynTagRus](https://github.com/UniversalDependencies/UD_Russian-SynTagRus) распространяется по лицензии CC BY-NC-SA 4.0 и в обучение не входит: на нем модель только проверяется. Обучение воспроизводит `scripts/train_context.py`; модель учится на разборах словаря, поэтому после смены тегов UD словаря ее нужно переобучить - сборщик не вшивает старые веса.
 
 ## Модель класса парадигмы { #paradigms }
 

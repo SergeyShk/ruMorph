@@ -1,10 +1,10 @@
 """
-Соглашения разметки UD_Russian-Taiga и UD_Russian-GSD, приведенные к соглашениям ruMorph
+Соглашения разметки UD_Russian-Taiga, UD_Russian-GSD и UD_Russian-Poetry, приведенные к соглашениям ruMorph
 
 Описание:
-    ruMorph размечает по руководству UD, а где оно молчит - по соглашениям SynTagRus. Taiga и GSD
-    в части слов размечают иначе: счетчики словаря (`export_ud.py`) и обучение контекстной модели
-    (`train_context.py`) переписывают их разметку по этим правилам. Правила смотрят на словоформу,
+    ruMorph размечает по руководству UD, а где оно молчит - по соглашениям SynTagRus. Taiga, GSD
+    и Poetry в части слов размечают иначе: счетчики словаря (`export_ud.py`) и обучение контекстной
+    модели (`train_context.py`) переписывают их разметку по этим правилам. Правила смотрят на словоформу,
     лемму, часть речи и синтаксическую связь токена; признаки, которые однозначно задает словарь,
     достраивает обучение по разборам словаря.
 """
@@ -14,6 +14,8 @@ from pathlib import Path
 
 TAIGA = "UD_Russian-Taiga"
 GSD = "UD_Russian-GSD"
+# Poetry размечает, как Taiga: «один из» - DET, вводное «значить» - parataxis:discourse
+POETRY = "UD_Russian-Poetry"
 # Предлоги с беглой «о»: лемма - без нее, как у большинства в SynTagRus
 SHORT_PREPOSITIONS = {
     "во": "в",
@@ -106,10 +108,10 @@ def harmonize(treebank: str, sentence: list[Token]) -> None:
     лемме, части речи и связи токена
 
     Аргументы:
-        treebank (str): Трибанк: `TAIGA` или `GSD`; другие не меняются
+        treebank (str): Трибанк: `TAIGA`, `GSD` или `POETRY`; другие не меняются
         sentence (list[Token]): Предложение, меняется на месте
     """
-    if treebank not in (TAIGA, GSD):
+    if treebank not in (TAIGA, GSD, POETRY):
         return
     passive_heads = {t.head for t in sentence if t.deprel == "nsubj:pass"}
     # Слова, у зависимого которых есть предлог «из»: «один из друзей»
@@ -139,9 +141,9 @@ def harmonize(treebank: str, sentence: list[Token]) -> None:
         ):
             token.feats["Voice"] = "Pass"
             token.lemma = lemma[:-2]
-        # «один из» в SynTagRus и GSD - числительное, Taiga размечает DET
+        # «один из» в SynTagRus и GSD - числительное, Taiga и Poetry размечают DET
         partitive = token.id in partitive_heads
-        if treebank == TAIGA and lemma == "один" and token.upos == "DET" and partitive:
+        if treebank in (TAIGA, POETRY) and lemma == "один" and token.upos == "DET" and partitive:
             token.upos = "NUM"
             token.feats.pop("PronType", None)
             token.feats.update({"NumForm": "Word", "NumType": "Card"})
