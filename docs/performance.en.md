@@ -49,7 +49,7 @@ Taggers see the sentence and choose one analysis; ruMorph here is the analysis i
     | spaCy ru_core_news_sm | 94.0 | 92.0 | 80.7 |
     | Slovnet (Natasha) | 93.5 | - | 79.8 |
 
-The default Stanza model is trained on SynTagRus, so its test part is Stanza's own; the ruMorph context model is trained on the training parts of Taiga and GSD and the OpenCorpora corpus, and SynTagRus is new to it; spaCy ru_core_news_sm and Slovnet are trained on Nerus, news annotated automatically. Slovnet gives no lemmas: in Natasha they come from pymorphy2.
+The default Stanza model is trained on SynTagRus, so its test part is Stanza's own; the ruMorph context model is trained on the training parts of Taiga, GSD and Poetry and the OpenCorpora corpus, and SynTagRus is new to it; spaCy ru_core_news_sm and Slovnet are trained on Nerus, news annotated automatically. Slovnet gives no lemmas: in Natasha they come from pymorphy2.
 
 ??? note "All metrics"
 
