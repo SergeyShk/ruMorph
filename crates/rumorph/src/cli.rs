@@ -27,7 +27,7 @@ rumorph - морфологический анализ русского текс�
   -f, --format ФОРМАТ    формат вывода:
                            lemmas - леммы через пробел, строка на предложение, пустая строка
                            между абзацами (по умолчанию)
-                           conllu - CoNLL-U: лемма, часть речи и признаки самого вероятного разбора
+                           conllu - CoNLL-U: лемма, часть речи и признаки первого разбора
                            tsv - токен, лемма, часть речи, признаки и вероятность через табуляцию
                            jsonl - JSON Lines: предложение в строке, все разборы каждого токена
                            text - исходный текст, «е» заменена на «ё», где ее пишет выбранный
@@ -1235,7 +1235,7 @@ fn nfc(text: &str) -> Cow<'_, str> {
     }
 }
 
-/// Часть речи, признаки CoNLL-U и вероятность самого вероятного разбора
+/// Часть речи, признаки CoNLL-U и вероятность первого разбора
 fn first<'d>(dictionary: &'d Dictionary, analyses: &[Analysis]) -> (&'d str, String, f64) {
     let Some(analysis) = analyses.first() else {
         return ("X", "_".into(), 0.0);
@@ -1247,7 +1247,7 @@ fn first<'d>(dictionary: &'d Dictionary, analyses: &[Analysis]) -> (&'d str, Str
     }
 }
 
-/// Лемма самого вероятного разбора; без разборов - токен в нижнем регистре
+/// Лемма первого разбора; без разборов - токен в нижнем регистре
 fn lemma<'a>(analyses: &'a [Analysis], word: &str) -> Cow<'a, str> {
     match analyses.first() {
         Some(analysis) => Cow::Borrowed(&analysis.lemma),

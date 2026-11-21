@@ -189,7 +189,7 @@ analyze_sentence(words)
 annotate(document, *, context=True)
 ```
 
-Разбор документа сегментатора [anySeg](https://github.com/SergeyShk/anySeg) одним вызовом: столбцы `lemma`, `upos` и `feats` его слов получают самый вероятный разбор в контексте предложения, как у [`analyze_sentence`](#analyze_sentence), или без контекста, как у [`analyze`](#analyze), а прежние значения заменяются. Токены и предложения находит anySeg по соглашениям Universal Dependencies, на которых обучена контекстная модель. Размеченный документ записывается в CoNLL-U методом `to_conllu`. anySeg - отдельный пакет (`pip install anyseg`); подойдет и другой объект с методами `column("form")` и `set_columns` и предложениями `sentences`, у которых есть слова `words` с номером `index`.
+Разбор документа сегментатора [anySeg](https://github.com/SergeyShk/anySeg) одним вызовом: столбцы `lemma`, `upos` и `feats` его слов получают первый разбор: в контексте предложения, как у [`analyze_sentence`](#analyze_sentence), или без контекста, как у [`analyze`](#analyze), а прежние значения заменяются. Токены и предложения находит anySeg по соглашениям Universal Dependencies, на которых обучена контекстная модель. Размеченный документ записывается в CoNLL-U методом `to_conllu`. anySeg - отдельный пакет (`pip install anyseg`); подойдет и другой объект с методами `column("form")` и `set_columns` и предложениями `sentences`, у которых есть слова `words` с номером `index`.
 
 | Параметр | Тип | По умолчанию | Описание |
 | :------- | :-- | :----------- | :------- |
@@ -233,7 +233,7 @@ annotate(document, *, context=True)
 lemmatize(words)
 ```
 
-Леммы самых вероятных разборов словоформ.
+Леммы первых разборов словоформ, как у [`analyze`](#analyze).
 
 | Параметр | Тип | По умолчанию | Описание |
 | :------- | :-- | :----------- | :------- |

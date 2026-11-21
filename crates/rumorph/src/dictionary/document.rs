@@ -6,7 +6,7 @@ use crate::{Dictionary, Error};
 
 impl Dictionary {
     /// Заполняет столбцы LEMMA, UPOS и FEATS слов документа anySeg (крейт - `rumorph::anyseg`)
-    /// самым вероятным разбором: с `context` - в контексте предложения, как у
+    /// первым разбором: с `context` - в контексте предложения, как у
     /// [`Dictionary::analyze_sentence`], без него - разбором словоформы по частотам словаря, как
     /// у [`Dictionary::analyze`], в разы быстрее и без контекстной модели; прежние значения
     /// столбцов заменяются
@@ -74,7 +74,7 @@ mod tests {
                 "{text:?}: {result:?}"
             );
         }
-        // Без контекста модель не нужна: разбор - самый вероятный по словарю
+        // Без контекста модель не нужна: разбор - первый разбор `analyze`
         let mut document = segmenter.segment("Все стали.");
         dictionary().annotate(&mut document, false).unwrap();
         let first = &dictionary().analyze("стали")[0];

@@ -189,7 +189,7 @@ Exceptions:
 annotate(document, *, context=True)
 ```
 
-Analyzes a document of the segmenter [anySeg](https://github.com/SergeyShk/anySeg) in one call: the columns `lemma`, `upos` and `feats` of its words get the most probable analysis in the context of the sentence, as with [`analyze_sentence`](#analyze_sentence), or without context, as with [`analyze`](#analyze), replacing the earlier values. anySeg finds the tokens and the sentences following the conventions of Universal Dependencies on which the context model is trained. The annotated document is written in CoNLL-U by its method `to_conllu`. anySeg is a separate package (`pip install anyseg`); any other object with the methods `column("form")` and `set_columns` and the sentences `sentences` whose words `words` have a number `index` fits too.
+Analyzes a document of the segmenter [anySeg](https://github.com/SergeyShk/anySeg) in one call: the columns `lemma`, `upos` and `feats` of its words get the first analysis: in the context of the sentence, as with [`analyze_sentence`](#analyze_sentence), or without context, as with [`analyze`](#analyze), replacing the earlier values. anySeg finds the tokens and the sentences following the conventions of Universal Dependencies on which the context model is trained. The annotated document is written in CoNLL-U by its method `to_conllu`. anySeg is a separate package (`pip install anyseg`); any other object with the methods `column("form")` and `set_columns` and the sentences `sentences` whose words `words` have a number `index` fits too.
 
 | Parameter | Type | Default | Description |
 | :-------- | :--- | :------ | :---------- |
@@ -233,7 +233,7 @@ Exceptions:
 lemmatize(words)
 ```
 
-Lemmas of the most probable analyses of the word forms.
+Lemmas of the first analyses of the word forms, as with [`analyze`](#analyze).
 
 | Parameter | Type | Default | Description |
 | :-------- | :--- | :------ | :---------- |
