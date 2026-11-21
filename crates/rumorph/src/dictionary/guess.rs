@@ -243,7 +243,25 @@ impl Dictionary {
         for analysis in &mut analyses {
             analysis.prob /= total;
         }
-        self.merge(analyses)
+        let analyses = self.merge(analyses);
+        // Первой идет лексема с наибольшей суммой долей: у «манжетик» три формы лексемы «манжетик»
+        // вместе вероятнее одной формы «манжетика»
+        let pos = |analysis: &Analysis| self.ud_tag(analysis.ud).map(|tag| tag.pos());
+        let mass: Vec<f64> = (analyses.iter())
+            .map(|analysis| {
+                (analyses.iter())
+                    .filter(|other| other.lemma == analysis.lemma && pos(other) == pos(analysis))
+                    .map(|other| other.prob)
+                    .sum()
+            })
+            .collect();
+        let mut order: Vec<usize> = (0..analyses.len()).collect();
+        order.sort_by(|&a, &b| mass[b].total_cmp(&mass[a]));
+        let mut slots: Vec<Option<Analysis>> = analyses.into_iter().map(Some).collect();
+        order
+            .into_iter()
+            .filter_map(|at| slots[at].take())
+            .collect()
     }
 
     /// Разборы незнакомого слова в индексе `index` с весами: нарицательные с `model` - по модели
