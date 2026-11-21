@@ -585,6 +585,32 @@ struct Shared {
 struct WordCopies {
     entries: Vec<(Arc<OwnWords>, Weak<Shared>)>,
     last: Option<Arc<Shared>>,
+    /// Хеши строк слов, копии которых собирают потоки процесса `pid`: другие потоки ждут копию,
+    /// а не собирают вторую; отметки родителя в дочернем процессе после fork не действуют
+    building: Vec<(u64, u32)>,
+}
+
+/// Отметка «собирается» у копии, которую собирает этот поток: снимается и при ошибке сборки
+struct Building<'a> {
+    copies: &'a Mutex<WordCopies>,
+    hash: u64,
+}
+
+impl Drop for Building<'_> {
+    fn drop(&mut self) {
+        let mut copies = (self.copies.lock()).unwrap_or_else(PoisonError::into_inner);
+        let mark = (self.hash, std::process::id());
+        if let Some(at) = copies.building.iter().position(|&known| known == mark) {
+            copies.building.remove(at);
+        }
+    }
+}
+
+/// Найденная копия словаря со своими словами или что делать без нее
+enum CopyLookup {
+    Found(Arc<Shared>, Arc<OwnWords>),
+    Wait,
+    Build,
 }
 
 impl Shared {
@@ -1611,22 +1637,50 @@ impl Analyzer {
         // Слова, которые строкой не записываются (строка из pickle записана без потерь), копию
         // по ней не ищут: ошибку о них дает ядро
         let lossless = (words.as_deref()).is_none_or(|words| words.iter().all(OwnWords::fits));
-        let found = lossless.then(|| {
-            let mut copies = copies();
-            copies
-                .entries
-                .retain(|(_, shared)| shared.strong_count() > 0);
-            copies
-                .entries
-                .iter()
-                .filter(|(known, _)| known.text == text)
-                .find_map(|(known, shared)| Some((shared.upgrade()?, Arc::clone(known))))
-        });
-        if let Some((shared, words)) = found.flatten() {
-            return Ok(Analyzer {
-                shared,
-                words,
-                ..base
+        let mut building = None;
+        if lossless {
+            let mut hasher = DefaultHasher::new();
+            text.hash(&mut hasher);
+            let hash = hasher.finish();
+            loop {
+                let lookup = {
+                    let mut copies = copies();
+                    copies
+                        .entries
+                        .retain(|(_, shared)| shared.strong_count() > 0);
+                    let found = (copies.entries.iter())
+                        .filter(|(known, _)| known.text == text)
+                        .find_map(|(known, shared)| Some((shared.upgrade()?, Arc::clone(known))));
+                    let pid = std::process::id();
+                    copies.building.retain(|&(_, owner)| owner == pid);
+                    match found {
+                        Some((shared, words)) => CopyLookup::Found(shared, words),
+                        None if copies.building.iter().any(|&(known, _)| known == hash) => {
+                            CopyLookup::Wait
+                        }
+                        None => {
+                            copies.building.push((hash, pid));
+                            CopyLookup::Build
+                        }
+                    }
+                };
+                match lookup {
+                    CopyLookup::Found(shared, words) => {
+                        return Ok(Analyzer {
+                            shared,
+                            words,
+                            ..base
+                        });
+                    }
+                    CopyLookup::Wait => {
+                        py.detach(|| std::thread::sleep(std::time::Duration::from_millis(1)));
+                    }
+                    CopyLookup::Build => break,
+                }
+            }
+            building = Some(Building {
+                copies: &base.base.copies,
+                hash,
             });
         }
         let words = words.unwrap_or_else(|| OwnWords::parse(&text));
@@ -1662,6 +1716,8 @@ impl Analyzer {
             copies.last.replace(Arc::clone(&shared))
         };
         drop(previous);
+        // Отметка снимается после записи копии: ждущие потоки найдут ее
+        drop(building);
         Ok(Analyzer {
             shared,
             words,
