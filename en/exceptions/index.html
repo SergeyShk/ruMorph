@@ -26,7 +26,7 @@
         
       
       
-      <link rel="icon" href="../../assets/images/favicon.png">
+      <link rel="icon" href="../../img/favicon.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
     
     
@@ -355,13 +355,13 @@
   
   
     <li class="md-tabs__item">
-      <a href="../spacy/" class="md-tabs__link">
+      <a href="../models/" class="md-tabs__link">
         
   
   
     
   
-  spaCy
+  Models
 
       </a>
     </li>
@@ -768,14 +768,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../spacy/" class="md-nav__link">
+      <a href="../models/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    spaCy
+    Models
   
 
     
@@ -845,12 +845,12 @@
 <tr>
 <td style="text-align: left;"><code>ValueError</code></td>
 <td style="text-align: left;">-</td>
-<td style="text-align: left;">The feature or the value is not in the dictionary (<code>inflect</code>); the number is infinite or NaN (<code>agree</code>); the file is not a ruMorph dictionary or is damaged (<a href="../analyzer/"><code>Analyzer</code></a>); an <a href="../analyzer/#words">own word</a> has no sample in the dictionary, its sample is ambiguous, the word does not inflect like it, is empty or contains a space (<code>Analyzer(words=...)</code>); the dictionary has no context model (<a href="../analyzer/#analyze_sentence"><code>analyze_sentence</code></a>, <a href="../analyzer/#annotate"><code>annotate</code></a>); the sentences of a document do not run in order over all its words (<code>annotate</code>)</td>
+<td style="text-align: left;">The feature, the value or the label is not in the dictionary (<code>inflect</code>); the number is infinite or NaN (<code>agree</code>); the file is not a ruMorph dictionary or is damaged (<a href="../analyzer/"><code>Analyzer</code></a>); an <a href="../analyzer/#words">own word</a> has no sample in the dictionary, its sample is ambiguous, the word does not inflect like it, is empty or contains a space (<code>Analyzer(words=...)</code>); the dictionary has no context model (<a href="../analyzer/#analyze_sentence"><code>analyze_sentence</code></a>, <a href="../analyzer/#annotate"><code>annotate</code></a>); the sentences of a document do not run in order over all its words (<code>annotate</code>)</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>TypeError</code></td>
 <td style="text-align: left;">-</td>
-<td style="text-align: left;">An argument of the wrong type: a word or a feature value that is not a string, a number argument that is not a number, a dictionary path that is neither a string nor <code>PathLike</code>, a string instead of a collection of words (<a href="../analyzer/#analyze_many"><code>analyze_many</code></a>, <a href="../analyzer/#lemmatize"><code>lemmatize</code></a>, <a href="../analyzer/#analyze_sentence"><code>analyze_sentence</code></a>), <a href="../analyzer/#words">own words</a> that are not a mapping of strings (<code>Analyzer(words=...)</code>), forms of a document that are not strings or a word number that is not an integer (<a href="../analyzer/#annotate"><code>annotate</code></a>)</td>
+<td style="text-align: left;">An argument of the wrong type: a word or a feature value that is not a string, a number argument that is not a number, a dictionary path that is neither a string nor <code>PathLike</code>, a string instead of a collection of words (<a href="../analyzer/#analyze_many"><code>analyze_many</code></a>, <a href="../analyzer/#lemmatize"><code>lemmatize</code></a>, <a href="../analyzer/#analyze_sentence"><code>analyze_sentence</code></a>) or of labels (<code>inflect</code>), a label that is not a string, <a href="../analyzer/#words">own words</a> that are not a mapping of strings (<code>Analyzer(words=...)</code>), forms of a document that are not strings or a word number that is not an integer (<a href="../analyzer/#annotate"><code>annotate</code></a>)</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>FileNotFoundError</code></td>

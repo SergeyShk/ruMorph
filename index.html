@@ -24,7 +24,7 @@
         
       
       
-      <link rel="icon" href="assets/images/favicon.png">
+      <link rel="icon" href="img/favicon.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
     
     
@@ -353,13 +353,13 @@
   
   
     <li class="md-tabs__item">
-      <a href="spacy/" class="md-tabs__link">
+      <a href="models/" class="md-tabs__link">
         
   
   
     
   
-  spaCy
+  Модели
 
       </a>
     </li>
@@ -536,7 +536,7 @@
   <a href="#_1" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Возможности
+        Как это работает
       
     </span>
   </a>
@@ -547,7 +547,7 @@
   <a href="#_2" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Установка
+        Возможности
       
     </span>
   </a>
@@ -556,6 +556,17 @@
       
         <li class="md-nav__item">
   <a href="#_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Установка
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_4" class="md-nav__link">
     <span class="md-ellipsis">
       
         Быстрый старт
@@ -836,14 +847,14 @@
   
   
     <li class="md-nav__item">
-      <a href="spacy/" class="md-nav__link">
+      <a href="models/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    spaCy
+    Модели
   
 
     
@@ -886,7 +897,7 @@
   <a href="#_1" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Возможности
+        Как это работает
       
     </span>
   </a>
@@ -897,7 +908,7 @@
   <a href="#_2" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Установка
+        Возможности
       
     </span>
   </a>
@@ -906,6 +917,17 @@
       
         <li class="md-nav__item">
   <a href="#_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Установка
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_4" class="md-nav__link">
     <span class="md-ellipsis">
       
         Быстрый старт
@@ -942,7 +964,10 @@
 <p class="admonition-title">Ранняя версия</p>
 <p>До 1.0 API может меняться между версиями 0.x, изменения описываются в заметках к выпускам.</p>
 </div>
-<h2 id="_1">Возможности<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h2>
+<h2 id="_1">Как это работает<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h2>
+<p>Каждое слово анализатор находит в словаре - там все его разборы и их частоты. В предложении разбор выбирает контекстная модель по соседним словам: «стали» в словаре прежде всего глагол «стать», а в «Мост сделан из стали» - существительное «сталь» в родительном падеже. Устройство моделей - на странице <a href="models/">Модели</a>.</p>
+<p><img alt="Как ruMorph разбирает предложение: разборы словаря каждого слова и выбор контекстной модели" src="img/pipeline.svg" /></p>
+<h2 id="_2">Возможности<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h2>
 <div class="grid cards">
 <ul>
 <li>
@@ -954,7 +979,7 @@
 <li>
 <p><span class="twemoji lg middle"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m21.4 11.6-9-9C12 2.2 11.5 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .5.2 1 .6 1.4l9 9c.4.4.9.6 1.4.6s1-.2 1.4-.6l7-7c.4-.4.6-.9.6-1.4s-.2-1-.6-1.4M13 20l-9-9V4h7l9 9M6.5 5C7.3 5 8 5.7 8 6.5S7.3 8 6.5 8 5 7.3 5 6.5 5.7 5 6.5 5m3.6 3.9 1.4-1.4L17 13l-1.4 1.4zm-2.5 2.5L9 10l4 4-1.4 1.4z"/></svg></span> <strong>Universal Dependencies</strong></p>
 <hr />
-<p>Части речи, признаки и леммы по руководству UD и соглашениям SynTagRus; числа, знаки и латиница по правилам, незнакомые слова - по окончанию</p>
+<p>Части речи, признаки и леммы по руководству UD и соглашениям SynTagRus; числа, знаки и латиница по правилам, незнакомые слова - по окончанию и модели, обученной на словаре</p>
 <p><a href="analysis/"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13.22 19.03a.75.75 0 0 1 0-1.06L18.19 13H3.75a.75.75 0 0 1 0-1.5h14.44l-4.97-4.97a.749.749 0 0 1 .326-1.275.75.75 0 0 1 .734.215l6.25 6.25a.75.75 0 0 1 0 1.06l-6.25 6.25a.75.75 0 0 1-1.06 0"/></svg></span> Разбор словоформы</a></p>
 </li>
 <li>
@@ -970,10 +995,10 @@
 <p><a href="cli/"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13.22 19.03a.75.75 0 0 1 0-1.06L18.19 13H3.75a.75.75 0 0 1 0-1.5h14.44l-4.97-4.97a.749.749 0 0 1 .326-1.275.75.75 0 0 1 .734.215l6.25 6.25a.75.75 0 0 1 0 1.06l-6.25 6.25a.75.75 0 0 1-1.06 0"/></svg></span> Команда rumorph</a></p>
 </li>
 <li>
-<p><span class="twemoji lg middle"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M22 14h-2v2h-6v-3h2v-2h-2V6a2 2 0 0 0-2-2H4V2H2v8h2V8h6v3H8v2h2v5a2 2 0 0 0 2 2h8v2h2"/></svg></span> <strong>spaCy</strong></p>
+<p><span class="twemoji lg middle"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19.5 17c-.14 0-.26 0-.39.04L17.5 13.8c.45-.45.75-1.09.75-1.8a2.5 2.5 0 0 0-2.5-2.5c-.14 0-.25 0-.4.04L13.74 6.3c.47-.46.76-1.09.76-1.8a2.5 2.5 0 0 0-5 0c0 .7.29 1.34.76 1.79L8.65 9.54c-.15-.04-.26-.04-.4-.04a2.5 2.5 0 0 0-2.5 2.5c0 .71.29 1.34.75 1.79l-1.61 3.25C4.76 17 4.64 17 4.5 17a2.5 2.5 0 0 0 0 5A2.5 2.5 0 0 0 7 19.5c0-.7-.29-1.34-.76-1.79l1.62-3.25c.14.04.26.04.39.04s.25 0 .38-.04l1.63 3.25c-.47.45-.76 1.09-.76 1.79a2.5 2.5 0 0 0 5 0A2.5 2.5 0 0 0 12 17c-.13 0-.26 0-.39.04L10 13.8c.45-.45.75-1.09.75-1.8 0-.7-.29-1.33-.75-1.79l1.61-3.25c.13.04.26.04.39.04s.26 0 .39-.04L14 10.21a2.5 2.5 0 0 0 1.75 4.29c.13 0 .25 0 .38-.04l1.63 3.25c-.47.45-.76 1.09-.76 1.79a2.5 2.5 0 0 0 5 0 2.5 2.5 0 0 0-2.5-2.5m-15 3.5c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1m8.5-1c0 .55-.45 1-1 1s-1-.45-1-1 .45-1 1-1 1 .45 1 1M7.25 12c0-.55.45-1 1-1s1 .45 1 1-.45 1-1 1-1-.45-1-1M11 4.5c0-.55.45-1 1-1s1 .45 1 1-.45 1-1 1-1-.45-1-1m3.75 7.5c0-.55.45-1 1-1s1 .45 1 1-.45 1-1 1-1-.45-1-1m4.75 8.5c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1"/></svg></span> <strong>Модели</strong></p>
 <hr />
-<p>Компонент конвейера spaCy: часть речи, признаки и лемма токенов вместо теггера, морфологизатора и лемматизатора</p>
-<p><a href="spacy/"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13.22 19.03a.75.75 0 0 1 0-1.06L18.19 13H3.75a.75.75 0 0 1 0-1.5h14.44l-4.97-4.97a.749.749 0 0 1 .326-1.275.75.75 0 0 1 .734.215l6.25 6.25a.75.75 0 0 1 0 1.06l-6.25 6.25a.75.75 0 0 1-1.06 0"/></svg></span> spaCy</a></p>
+<p>Контекстная модель, которая выбирает разбор по соседним словам, и модель разборов незнакомых слов: устройство, вероятности, обучение</p>
+<p><a href="models/"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13.22 19.03a.75.75 0 0 1 0-1.06L18.19 13H3.75a.75.75 0 0 1 0-1.5h14.44l-4.97-4.97a.749.749 0 0 1 .326-1.275.75.75 0 0 1 .734.215l6.25 6.25a.75.75 0 0 1 0 1.06l-6.25 6.25a.75.75 0 0 1-1.06 0"/></svg></span> Модели</a></p>
 </li>
 <li>
 <p><span class="twemoji lg middle"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m21 9-4-4v3h-7v2h7v3M7 11l-4 4 4 4v-3h7v-2H7z"/></svg></span> <strong>Переход с pymorphy</strong></p>
@@ -995,12 +1020,12 @@
 </li>
 </ul>
 </div>
-<h2 id="_2">Установка<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h2>
+<h2 id="_3">Установка<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h2>
 <p>Требуется Python 3.11 или новее.</p>
 <div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span>rumorph
 </code></pre></div>
 <p>Готовые колеса и сборка из исходников описаны на странице <a href="installation/">Установка</a>.</p>
-<h2 id="_3">Быстрый старт<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h2>
+<h2 id="_4">Быстрый старт<a class="headerlink" href="#_4" title="Permanent link">&para;</a></h2>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Код</label><label for="__tabbed_1_2">Результат</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">

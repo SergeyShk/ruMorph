@@ -16,7 +16,7 @@
         <link rel="prev" href="../inflection/">
       
       
-        <link rel="next" href="../spacy/">
+        <link rel="next" href="../models/">
       
       
         
@@ -26,7 +26,7 @@
         
       
       
-      <link rel="icon" href="../assets/images/favicon.png">
+      <link rel="icon" href="../img/favicon.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
     
     
@@ -355,13 +355,13 @@
   
   
     <li class="md-tabs__item">
-      <a href="../spacy/" class="md-tabs__link">
+      <a href="../models/" class="md-tabs__link">
         
   
   
     
   
-  spaCy
+  Модели
 
       </a>
     </li>
@@ -905,14 +905,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../spacy/" class="md-nav__link">
+      <a href="../models/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    spaCy
+    Модели
   
 
     
@@ -1150,7 +1150,7 @@
 2   стали   стать   VERB    _   Aspect=Perf|Mood=Ind|Number=Plur|Tense=Past|VerbForm=Fin|Voice=Act  0   root    _   _
 </code></pre></div>
 <h2 id="formats">Форматы вывода<a class="headerlink" href="#formats" title="Permanent link">&para;</a></h2>
-<p>Все форматы, кроме <code>jsonl</code>, берут первый разбор токена - выбранный контекстной моделью по соседним словам (предложение длиннее 256 токенов модель разбирает частями по 256, как <a href="../analyzer/#analyze_sentence"><code>analyze_sentence</code></a>), а с <code>--no-context</code> - самый вероятный по словарю; <code>jsonl</code> пишет все разборы в этом порядке.</p>
+<p>Все форматы, кроме <code>jsonl</code>, берут первый разбор токена - выбранный контекстной моделью по соседним словам (предложение длиннее 256 токенов модель разбирает частями по 256, как <a href="../analyzer/#analyze_sentence"><code>analyze_sentence</code></a>), а с <code>--no-context</code> - первый разбор <a href="../analyzer/#analyze"><code>analyze</code></a>; <code>jsonl</code> пишет все разборы в этом порядке.</p>
 <h3 id="lemmas">lemmas<a class="headerlink" href="#lemmas" title="Permanent link">&para;</a></h3>
 <p>Леммы через пробел, строка на предложение; абзацы разделяет пустая строка.</p>
 <h3 id="conllu">conllu<a class="headerlink" href="#conllu" title="Permanent link">&para;</a></h3>
@@ -1173,7 +1173,7 @@
 <div class="highlight"><pre><span></span><code><span class="nb">echo</span><span class="w"> </span><span class="s2">"Мы стали друзьями."</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>rumorph<span class="w"> </span>-f<span class="w"> </span>tsv
 </code></pre></div>
 <div class="highlight"><pre><span></span><code>Мы  мы  PRON    Case=Nom|Number=Plur|Person=1|PronType=Prs  1
-стали   стать   VERB    Aspect=Perf|Mood=Ind|Number=Plur|Tense=Past|VerbForm=Fin|Voice=Act  0.9999874958446247
+стали   стать   VERB    Aspect=Perf|Mood=Ind|Number=Plur|Tense=Past|VerbForm=Fin|Voice=Act  0.999999246871304
 друзьями    друг    NOUN    Animacy=Anim|Case=Ins|Gender=Masc|Number=Plur   1
 .   .   PUNCT   _   1
 </code></pre></div>
@@ -1190,9 +1190,9 @@
 <span class="w">    </span><span class="p">]},</span>
 <span class="w">    </span><span class="p">{</span><span class="nt">"word"</span><span class="p">:</span><span class="w"> </span><span class="s2">"стали"</span><span class="p">,</span><span class="w"> </span><span class="nt">"analyses"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
 <span class="w">      </span><span class="p">{</span><span class="nt">"lemma"</span><span class="p">:</span><span class="w"> </span><span class="s2">"стать"</span><span class="p">,</span><span class="w"> </span><span class="nt">"pos"</span><span class="p">:</span><span class="w"> </span><span class="s2">"VERB"</span><span class="p">,</span><span class="w"> </span><span class="nt">"feats"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"Aspect"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Perf"</span><span class="p">,</span><span class="w"> </span><span class="nt">"Mood"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Ind"</span><span class="p">,</span><span class="w"> </span><span class="nt">"Number"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Plur"</span><span class="p">,</span><span class="w"> </span><span class="nt">"Tense"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Past"</span><span class="p">,</span><span class="w"> </span><span class="nt">"VerbForm"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Fin"</span><span class="p">,</span><span class="w"> </span><span class="nt">"Voice"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Act"</span><span class="p">},</span>
-<span class="w">       </span><span class="nt">"labels"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"intr"</span><span class="p">],</span><span class="w"> </span><span class="nt">"prob"</span><span class="p">:</span><span class="w"> </span><span class="mf">0.9999986784404612</span><span class="p">,</span><span class="w"> </span><span class="nt">"source"</span><span class="p">:</span><span class="w"> </span><span class="s2">"dictionary"</span><span class="p">},</span>
-<span class="w">      </span><span class="p">{</span><span class="nt">"lemma"</span><span class="p">:</span><span class="w"> </span><span class="s2">"сталь"</span><span class="p">,</span><span class="w"> </span><span class="nt">"pos"</span><span class="p">:</span><span class="w"> </span><span class="s2">"NOUN"</span><span class="p">,</span><span class="w"> </span><span class="nt">"feats"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"Animacy"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Inan"</span><span class="p">,</span><span class="w"> </span><span class="nt">"Case"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Nom"</span><span class="p">,</span><span class="w"> </span><span class="nt">"Gender"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Fem"</span><span class="p">,</span><span class="w"> </span><span class="nt">"Number"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Plur"</span><span class="p">},</span>
-<span class="w">       </span><span class="nt">"labels"</span><span class="p">:</span><span class="w"> </span><span class="p">[],</span><span class="w"> </span><span class="nt">"prob"</span><span class="p">:</span><span class="w"> </span><span class="mf">0.0000012073413245274547</span><span class="p">,</span><span class="w"> </span><span class="nt">"source"</span><span class="p">:</span><span class="w"> </span><span class="s2">"dictionary"</span><span class="p">}</span>
+<span class="w">       </span><span class="nt">"labels"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"intr"</span><span class="p">],</span><span class="w"> </span><span class="nt">"prob"</span><span class="p">:</span><span class="w"> </span><span class="mf">0.9999998067807299</span><span class="p">,</span><span class="w"> </span><span class="nt">"source"</span><span class="p">:</span><span class="w"> </span><span class="s2">"dictionary"</span><span class="p">},</span>
+<span class="w">      </span><span class="p">{</span><span class="nt">"lemma"</span><span class="p">:</span><span class="w"> </span><span class="s2">"сталь"</span><span class="p">,</span><span class="w"> </span><span class="nt">"pos"</span><span class="p">:</span><span class="w"> </span><span class="s2">"NOUN"</span><span class="p">,</span><span class="w"> </span><span class="nt">"feats"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"Animacy"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Inan"</span><span class="p">,</span><span class="w"> </span><span class="nt">"Case"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Gen"</span><span class="p">,</span><span class="w"> </span><span class="nt">"Gender"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Fem"</span><span class="p">,</span><span class="w"> </span><span class="nt">"Number"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Sing"</span><span class="p">},</span>
+<span class="w">       </span><span class="nt">"labels"</span><span class="p">:</span><span class="w"> </span><span class="p">[],</span><span class="w"> </span><span class="nt">"prob"</span><span class="p">:</span><span class="w"> </span><span class="mf">0.00000011791805843300896</span><span class="p">,</span><span class="w"> </span><span class="nt">"source"</span><span class="p">:</span><span class="w"> </span><span class="s2">"dictionary"</span><span class="p">}</span>
 <span class="w">    </span><span class="p">]}</span>
 <span class="w">  </span><span class="p">]</span>
 <span class="p">}</span>

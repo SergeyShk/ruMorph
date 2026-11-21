@@ -26,7 +26,7 @@
         
       
       
-      <link rel="icon" href="../assets/images/favicon.png">
+      <link rel="icon" href="../img/favicon.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
     
     
@@ -355,13 +355,13 @@
   
   
     <li class="md-tabs__item">
-      <a href="../spacy/" class="md-tabs__link">
+      <a href="../models/" class="md-tabs__link">
         
   
   
     
   
-  spaCy
+  Модели
 
       </a>
     </li>
@@ -844,14 +844,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../spacy/" class="md-nav__link">
+      <a href="../models/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    spaCy
+    Модели
   
 
     
@@ -1039,7 +1039,7 @@
 <p>Если часть речи слова зависит от контекста, у него есть оба разбора: «есть» - <code>AUX</code> и <code>VERB</code> («у меня есть»), «бы» - <code>AUX</code> и <code>PART</code>, «это» - <code>PRON</code> и <code>PART</code> («это он сделал»), «один» - <code>NUM</code> и <code>DET</code> («одна женщина»), «друг» - <code>NOUN</code> и местоимение <code>PRON</code> с <code>PronType=Rcp</code> («друг друга»), «всё» - <code>PRON</code> и <code>PART</code> («всё ещё»), глагол на -ся - <code>Voice=Mid</code> и пассив <code>Voice=Pass</code> с невозвратной леммой («используется» - «использоваться» и «использовать»), «раньше», «лучше» - <code>ADJ</code> и <code>ADV</code> в сравнительной степени (леммы «ранний» и «рано», «хороший» и «хорошо»). У «двух», «двум», «двумя» - разборы всех трех родов.</p>
 <p>Признаки: падеж, число, род, одушевленность, лицо, время, вид, наклонение, залог, форма глагола, степень, краткая форма (<code>Variant=Short</code>), тип имени собственного (<code>NameType</code>), сокращение (<code>Abbr</code>), притяжательность (<code>Poss</code>), тип числительного (<code>NumType</code>) и его запись (<code>NumForm</code>), тип местоимения и местоименного наречия (<code>PronType</code>: «там» - <code>Dem</code>, «где» - <code>Rel</code>, «никогда» - <code>Neg</code>), возвратность (<code>Reflex</code>), несклоняемость (<code>InflClass=Ind</code>), отрицание (<code>Polarity=Neg</code>).</p>
 <p>Леммы тоже следуют SynTagRus: у женских фамилий и отчеств лемма в женском роде («Ивановой» - «иванова»), превосходная степень остается превосходной («важнейшей» - «важнейший»), «денег» - «деньги», у сокращений лемма - полное слово, если оно одно, как требует руководство UD («млн» - «миллион», «г.» - «год», «англ.» - «английский», «др.» - «другой»), а сокращение нескольких слов остается («т.е.»). У существительных, у которых есть только множественное число, род - по склонению, как в SynTagRus: «выборы» - мужской, «сутки» - женский, «ворота» - средний; у несклоняемых («СМИ») и склоняемых как прилагательные («данные») рода нет. Если несколько разборов OpenCorpora в UD совпадают (союз и наречие «так»), они объединены в один, их вероятности сложены.</p>
-<p>Пометы <code>labels</code> - граммемы <a href="https://opencorpora.org/dict.php?act=gram">OpenCorpora</a>, для которых в UD нет признака: стиль (<code>Infr</code>, <code>Slng</code>, <code>Arch</code>), качественное прилагательное (<code>Qual</code>), вводное слово (<code>Prnt</code> - у наречий, которые обычно вводные: «конечно», «кстати», «видимо»; глагол «кажется» и наречие «вообще» его не получают), переходность (<code>tran</code>, <code>intr</code>), включенность говорящего в повелительном наклонении (<code>incl</code> - «пойдемте», <code>excl</code> - «иди»), второй предложный падеж (<code>loc2</code> - «в лесу») и другие.</p>
+<p>Пометы <code>labels</code> - граммемы <a href="https://opencorpora.org/dict.php?act=gram">OpenCorpora</a>, для которых в UD нет признака: стиль (<code>Infr</code>, <code>Slng</code>, <code>Arch</code>), качественное прилагательное (<code>Qual</code>), вводное слово (<code>Prnt</code> - у наречий, которые обычно вводные: «конечно», «кстати», «видимо»; глагол «кажется» и наречие «вообще» его не получают; в предложении - <a href="../analyzer/#analyze_sentence"><code>analyze_sentence</code></a> и <a href="../cli/">команда rumorph</a> - у слов, которые часто не вводные, помета остается, только если рядом запятая или тире: «Однако, это так» - вводное, «Однако мы не стали», «промолвил он наконец» - нет), переходность (<code>tran</code>, <code>intr</code>), включенность говорящего в повелительном наклонении (<code>incl</code> - «пойдемте», <code>excl</code> - «иди»), второй предложный падеж (<code>loc2</code> - «в лесу») и другие.</p>
 <h2 id="rules">Токены вне словаря<a class="headerlink" href="#rules" title="Permanent link">&para;</a></h2>
 <p>Числа, знаки, латиницу и сокращения анализатор разбирает по правилам, <code>source</code> у таких разборов - <code>"rule"</code>:</p>
 <table>
@@ -1092,7 +1092,7 @@
 </tr>
 </tbody>
 </table>
-<p>Доли неоднозначных разборов взяты из частот в трибанках UD Taiga и GSD, доли имен собственных - с учетом регистра. Как в SynTagRus, «Земля», «Луна», «Солнце», «Кремль», «Дума» и несколько других нарицательных существительных с заглавной буквы - еще и имена собственные: «Земли» - прежде всего PROPN, «земли» - NOUN. Буквы «й» и «ё» в разложенной записи Unicode и неразрывный дефис приводятся к обычным, а знаки ударения (и в составленных буквах «ѐ», «ѝ»), управляющие (кроме пробельных) и невидимые символы (мягкий перенос, нулевой пробел U+200B, соединитель слов U+2060, BOM U+FEFF, метки направления текста) убираются: «Москва́» разбирается как «Москва», а <code>"при\u00adвет"</code> - как «привет». Латинские буквы, похожие на кириллические, в слове из кириллицы читаются как кириллица («cтали» с латинской «c» - «стали»), а кириллические в латинском слове - как латиница.</p>
+<p>Доли неоднозначных разборов взяты из частот в трибанках UD Taiga и GSD, доли имен собственных - с учетом регистра. Как в SynTagRus, «Земля», «Луна», «Солнце», «Кремль», «Дума» и несколько других нарицательных существительных с заглавной буквы - еще и имена собственные: «Земли» - прежде всего PROPN, «земли» - NOUN. Буквы «й» и «ё» в разложенной записи Unicode и неразрывный дефис приводятся к обычным, а знаки ударения (и в составленных буквах «ѐ», «ѝ»), управляющие (кроме пробельных) и невидимые символы (мягкий перенос, нулевой пробел U+200B, соединитель слов U+2060, BOM U+FEFF, метки направления текста) убираются: «Москва́» разбирается как «Москва», а <code>"при\u00adвет"</code> - как «привет». Латинские буквы, похожие на кириллические, в слове из кириллицы читаются как кириллица («cтали» с латинской «c» - «стали», «сáд» с латинской «á» - «сад», «ещë» с латинской «ë» - «ещё»), а кириллические в латинском слове - как латиница.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="2:2"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Код</label><label for="__tabbed_2_2">Результат</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
@@ -1108,20 +1108,22 @@
 </div>
 </div>
 <h2 id="guess">Незнакомые слова<a class="headerlink" href="#guess" title="Permanent link">&para;</a></h2>
-<p>Разборы слова кириллицей, которого нет в словаре, анализатор угадывает по окончанию: берет формы словарных слов с тем же окончанием - их часть речи, признаки и словоизменение. <code>source</code> у таких разборов - <code>"guess"</code>. Слово в нижнем регистре угадывается как нарицательное, слово с заглавной буквы - в основном как имя собственное: фамилия, имя, топоним, а слово на «-ский» - в основном как прилагательное. Аббревиатура с окончанием («МЭРТа») угадывается, как слово с заглавной. Слово в смешанном регистре с заглавными внутри строчного слова («прихАдите») или с суффиксом после аббревиатуры («КВНщиками», «ЗОЖное») угадывается как строчное, а слитное название («ЛайфНьюс») - как слово с заглавной. Строчное слово из одной-двух букв не угадывается: «ви» - <code>X</code>. Слово с заглавной буквы, которое есть в словаре только как редкое нарицательное существительное из Викисловаря, получает еще и угаданные разборы имени собственного: «Сенна» - прежде всего PROPN, «сенна» - NOUN.</p>
+<p>Разборы слова кириллицей, которого нет в словаре, анализатор угадывает: берет формы словарных слов с теми же окончаниями - их часть речи, признаки и словоизменение. Разборы слова в нижнем регистре выбирает среди этих форм модель, которая смотрит на все слово по буквам и обучена на самом словаре: «ноотропил» для нее существительное, а не прошедшее время глагола «ноотропить», «фрустрирующего» - причастие глагола «фрустрировать». Слово с заглавной буквы угадывается по самым частым формам с тем же окончанием. <code>source</code> у таких разборов - <code>"guess"</code>. Слово в нижнем регистре угадывается как нарицательное, слово с заглавной буквы - в основном как имя собственное: фамилия, имя, топоним, а слово на «-ский» - в основном как прилагательное. Аббревиатура с окончанием («МЭРТа») угадывается, как слово с заглавной. Слово в смешанном регистре с заглавными внутри строчного слова («прихАдите») или с суффиксом после аббревиатуры («КВНщиками», «ЗОЖное») угадывается как строчное, а слитное название («ЛайфНьюс») - как слово с заглавной. Строчное слово из одной-двух букв не угадывается: «ви» - <code>X</code>. Слово с заглавной буквы, которое есть в словаре только как редкое нарицательное существительное из Викисловаря, получает еще и угаданные разборы имени собственного: «Сенна» - прежде всего PROPN, «сенна» - NOUN.</p>
 <p>Слово через дефис разбирается по последней части: «крэш-тестов» - «крэш-тест», «IT-компании» - «it-компания»; если последняя часть - частица («сколь-нибудь»), то по первой. Слово с протяжкой или заиканием через дефис («Что-о», «не-е-ет», «Н-ну-у», «с-спасибо») получает разборы словарного слова без них, но без форм. Если изменяются обе части, лемма - из лемм частей: «стула-трансформера» - «стул-трансформер», форм у такого разбора нет. Слово с неизменяемым приложением «минимум», «максимум» или «люкс» разбирается по первой части, форм у такого разбора нет: «программы-минимум» - родительный падеж «программа-минимум». Слово с известной приставкой - «эко», «анти», «супер», «микро» и другими - разбирается по словарному слову без нее: «экодомов» - «экодом». Такие разборы тоже угаданные.</p>
 <p>У угаданного разбора есть формы, с ним работают <code>forms</code>, <code>inflect</code> и <code>agree</code>; формы сохраняют заглавные буквы: «Мак-Киннона» в дательном - «Мак-Киннону», «ПИН-КОДОВ» - «ПИН-КОДАМ». Слово с частицей изменяется по первой части: «смотри-ка» во множественном числе - «смотрите-ка».</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="3:2"><input checked="checked" id="__tabbed_3_1" name="__tabbed_3" type="radio" /><input id="__tabbed_3_2" name="__tabbed_3" type="radio" /><div class="tabbed-labels"><label for="__tabbed_3_1">Код</label><label for="__tabbed_3_2">Результат</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<div class="highlight"><pre><span></span><code><span class="p">[(</span><span class="n">a</span><span class="o">.</span><span class="n">lemma</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">pos</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">feats</span><span class="p">[</span><span class="s2">"Case"</span><span class="p">],</span> <span class="nb">round</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">prob</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"донатеру"</span><span class="p">)][:</span><span class="mi">2</span><span class="p">]</span>
+<div class="highlight"><pre><span></span><code><span class="p">[(</span><span class="n">a</span><span class="o">.</span><span class="n">lemma</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">pos</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">feats</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"Case"</span><span class="p">),</span> <span class="nb">round</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">prob</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"донатеру"</span><span class="p">)][:</span><span class="mi">2</span><span class="p">]</span>
+<span class="p">[</span><span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="n">word</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">lemma</span> <span class="k">for</span> <span class="n">word</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"ноотропил"</span><span class="p">,</span> <span class="s2">"фрустрирующего"</span><span class="p">)]</span>
 <span class="n">guess</span> <span class="o">=</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"Мартова"</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
 <span class="n">guess</span><span class="o">.</span><span class="n">lemma</span><span class="p">,</span> <span class="n">guess</span><span class="o">.</span><span class="n">pos</span><span class="p">,</span> <span class="n">guess</span><span class="o">.</span><span class="n">feats</span><span class="p">[</span><span class="s2">"NameType"</span><span class="p">],</span> <span class="n">guess</span><span class="o">.</span><span class="n">inflect</span><span class="p">(</span><span class="n">Case</span><span class="o">=</span><span class="s2">"Dat"</span><span class="p">)</span>
 <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"крэш-тестов"</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">lemma</span><span class="p">,</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"экодомов"</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">lemma</span>
 </code></pre></div>
 </div>
 <div class="tabbed-block">
-<div class="highlight"><pre><span></span><code>[('донатер', 'NOUN', 'Dat', 0.72), ('донатер', 'NOUN', 'Dat', 0.22)]
+<div class="highlight"><pre><span></span><code>[('донатер', 'NOUN', 'Dat', 0.67), ('донатер', 'NOUN', 'Dat', 0.25)]
+['ноотропил', 'фрустрировать']
 ('мартов', 'PROPN', 'Sur', 'Мартову')
 ('крэш-тест', 'экодом')
 </code></pre></div>

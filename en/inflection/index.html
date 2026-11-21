@@ -26,7 +26,7 @@
         
       
       
-      <link rel="icon" href="../../assets/images/favicon.png">
+      <link rel="icon" href="../../img/favicon.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
     
     
@@ -355,13 +355,13 @@
   
   
     <li class="md-tabs__item">
-      <a href="../spacy/" class="md-tabs__link">
+      <a href="../models/" class="md-tabs__link">
         
   
   
     
   
-  spaCy
+  Models
 
       </a>
     </li>
@@ -850,14 +850,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../spacy/" class="md-nav__link">
+      <a href="../models/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    spaCy
+    Models
   
 
     
@@ -975,7 +975,7 @@
 <p class="metric-meta"><code>forms</code> · <code>list[Analysis]</code></p>
 <div class="signature highlight"><pre><span></span><code><span class="n">forms</span><span class="p">()</span>
 </code></pre></div>
-<p>The forms of the lexeme in dictionary order - analyses like those of <code>analyze</code>, with probability 1. Form variants differ in labels: «кошкою» has <code>V-oy</code>, the second locative «в лесу» has <code>loc2</code> (its <code>Case=Loc</code> feature is the same as in «о лесе»): «лес» with <code>inflect(Case="Loc")</code> gives «лесе», and «лесу» is chosen from <code>forms()</code> by the <code>loc2</code> label.</p>
+<p>The forms of the lexeme in dictionary order - analyses like those of <code>analyze</code>, with probability 1. Form variants differ in labels: «кошкою» has <code>V-oy</code>, the second locative «в лесу» has <code>loc2</code> (its <code>Case=Loc</code> feature is the same as in «о лесе»): «лес» with <code>inflect(Case="Loc")</code> gives «лесе», and with <code>inflect(Case="Loc", labels={"loc2"})</code> - «лесу».</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Code</label><label for="__tabbed_1_2">Result</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
@@ -1011,9 +1011,9 @@
 <div class="metric-card">
 <h3 id="inflect">Form by features<a class="headerlink" href="#inflect" title="Permanent link">&para;</a></h3>
 <p class="metric-meta"><code>inflect</code> · <code>str</code></p>
-<div class="signature highlight"><pre><span></span><code><span class="n">inflect</span><span class="p">(</span><span class="o">**</span><span class="n">feats</span><span class="p">)</span>
+<div class="signature highlight"><pre><span></span><code><span class="n">inflect</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">labels</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">feats</span><span class="p">)</span>
 </code></pre></div>
-<p>The form of the lexeme with the given UD features. Features that are not given are kept where possible: «кошка» in the genitive is «кошки», not «кошек». The short form, the animate accusative («нового») and the inclusive imperative («сделаем») are chosen only when asked for: <code>Variant="Short"</code>, <code>Animacy="Anim"</code>, <code>Person="1"</code>. The future of «быть» is <code>Tense=Fut</code>: «быть» with <code>Tense="Fut", Person="1", Number="Sing"</code> is «буду».</p>
+<p>The form of the lexeme with the given UD features. Features that are not given are kept where possible: «кошка» in the genitive is «кошки», not «кошек». The short form, the animate accusative («нового») and the inclusive imperative («сделаем») are chosen only when asked for: <code>Variant="Short"</code>, <code>Animacy="Anim"</code>, <code>Person="1"</code>. The future of «быть» is <code>Tense=Fut</code>: «быть» with <code>Tense="Fut", Person="1", Number="Sing"</code> is «буду». The <code>labels</code> are preferred: among the forms that keep the other features of the analysis the one with them is chosen if there is one - «лес» with <code>Case="Loc", labels={"loc2"}</code> gives «лесу», «город» gives «городе», and the plural «леса» gives «лесах». A reflexive passive («строится» with the lemma «строить», <code>Voice=Pass</code>) has only passive forms: «строиться», «строилась».</p>
 <table>
 <thead>
 <tr>
@@ -1025,6 +1025,12 @@
 </thead>
 <tbody>
 <tr>
+<td style="text-align: left;"><code>labels</code></td>
+<td style="text-align: left;"><code>Iterable[str] \| None</code></td>
+<td style="text-align: left;"><code>None</code></td>
+<td style="text-align: left;">Preferred labels: <code>loc2</code> - the second locative, <code>V-oy</code> - the «-ою» ending and others from <code>Analysis.labels</code></td>
+</tr>
+<tr>
 <td style="text-align: left;"><code>**feats</code></td>
 <td style="text-align: left;"><code>str</code></td>
 <td style="text-align: left;">-</td>
@@ -1035,8 +1041,8 @@
 <p>Exceptions:</p>
 <ul>
 <li><code>FormNotFoundError</code> - the lexeme has no form with these features;</li>
-<li><code>ValueError</code> - the feature or the value is not in the dictionary (a typo like <code>Case="Genitive"</code>), the message lists the valid ones;</li>
-<li><code>TypeError</code> - a feature value that is not a string.</li>
+<li><code>ValueError</code> - the feature, the value or the label is not in the dictionary (a typo like <code>Case="Genitive"</code>), the message lists the valid ones;</li>
+<li><code>TypeError</code> - a feature value or a label that is not a string, or labels given as one string instead of a collection.</li>
 </ul>
 <div class="tabbed-set tabbed-alternate" data-tabs="2:2"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Code</label><label for="__tabbed_2_2">Result</label></div>
 <div class="tabbed-content">
@@ -1046,6 +1052,7 @@
 <span class="n">verb</span><span class="o">.</span><span class="n">inflect</span><span class="p">(</span><span class="n">Gender</span><span class="o">=</span><span class="s2">"Fem"</span><span class="p">),</span> <span class="n">verb</span><span class="o">.</span><span class="n">inflect</span><span class="p">(</span><span class="n">VerbForm</span><span class="o">=</span><span class="s2">"Inf"</span><span class="p">)</span>
 <span class="n">verb</span><span class="o">.</span><span class="n">inflect</span><span class="p">(</span><span class="n">Tense</span><span class="o">=</span><span class="s2">"Pres"</span><span class="p">,</span> <span class="n">Person</span><span class="o">=</span><span class="s2">"3"</span><span class="p">,</span> <span class="n">Number</span><span class="o">=</span><span class="s2">"Plur"</span><span class="p">)</span>
 <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"новый"</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">inflect</span><span class="p">(</span><span class="n">Degree</span><span class="o">=</span><span class="s2">"Cmp"</span><span class="p">)</span>
+<span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"лес"</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">inflect</span><span class="p">(</span><span class="n">Case</span><span class="o">=</span><span class="s2">"Loc"</span><span class="p">,</span> <span class="n">labels</span><span class="o">=</span><span class="p">{</span><span class="s2">"loc2"</span><span class="p">})</span>
 </code></pre></div>
 </div>
 <div class="tabbed-block">
@@ -1053,6 +1060,7 @@
 ('читала', 'читать')
 'читают'
 'новее'
+'лесу'
 </code></pre></div>
 </div>
 </div>

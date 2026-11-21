@@ -26,7 +26,7 @@
         
       
       
-      <link rel="icon" href="../assets/images/favicon.png">
+      <link rel="icon" href="../img/favicon.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
     
     
@@ -355,13 +355,13 @@
   
   
     <li class="md-tabs__item">
-      <a href="../spacy/" class="md-tabs__link">
+      <a href="../models/" class="md-tabs__link">
         
   
   
     
   
-  spaCy
+  Модели
 
       </a>
     </li>
@@ -850,14 +850,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../spacy/" class="md-nav__link">
+      <a href="../models/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    spaCy
+    Модели
   
 
     
@@ -975,7 +975,7 @@
 <p class="metric-meta"><code>forms</code> · <code>list[Analysis]</code></p>
 <div class="signature highlight"><pre><span></span><code><span class="n">forms</span><span class="p">()</span>
 </code></pre></div>
-<p>Формы лексемы в порядке словаря - такие же разборы, как у <code>analyze</code>, с вероятностью 1. Варианты форм отличаются пометами: «кошкою» - <code>V-oy</code>, второй предложный падеж «в лесу» - <code>loc2</code> (признак <code>Case=Loc</code> у него тот же, что у «о лесе»): «лес» с <code>inflect(Case="Loc")</code> дает «лесе», а «лесу» выбирается из <code>forms()</code> по помете <code>loc2</code>.</p>
+<p>Формы лексемы в порядке словаря - такие же разборы, как у <code>analyze</code>, с вероятностью 1. Варианты форм отличаются пометами: «кошкою» - <code>V-oy</code>, второй предложный падеж «в лесу» - <code>loc2</code> (признак <code>Case=Loc</code> у него тот же, что у «о лесе»): «лес» с <code>inflect(Case="Loc")</code> дает «лесе», а с <code>inflect(Case="Loc", labels={"loc2"})</code> - «лесу».</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Код</label><label for="__tabbed_1_2">Результат</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
@@ -1011,9 +1011,9 @@
 <div class="metric-card">
 <h3 id="inflect">Форма по признакам<a class="headerlink" href="#inflect" title="Permanent link">&para;</a></h3>
 <p class="metric-meta"><code>inflect</code> · <code>str</code></p>
-<div class="signature highlight"><pre><span></span><code><span class="n">inflect</span><span class="p">(</span><span class="o">**</span><span class="n">feats</span><span class="p">)</span>
+<div class="signature highlight"><pre><span></span><code><span class="n">inflect</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">labels</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">feats</span><span class="p">)</span>
 </code></pre></div>
-<p>Форма лексемы с заданными признаками UD. Признаки, которые не названы, по возможности сохраняются: «кошка» в родительном падеже - «кошки», а не «кошек». Краткая форма, одушевленный винительный («нового») и инклюзив повелительного наклонения («сделаем») берутся, только если их просят: <code>Variant="Short"</code>, <code>Animacy="Anim"</code>, <code>Person="1"</code>. Будущее время «быть» - <code>Tense=Fut</code>: «быть» с <code>Tense="Fut", Person="1", Number="Sing"</code> - «буду».</p>
+<p>Форма лексемы с заданными признаками UD. Признаки, которые не названы, по возможности сохраняются: «кошка» в родительном падеже - «кошки», а не «кошек». Краткая форма, одушевленный винительный («нового») и инклюзив повелительного наклонения («сделаем») берутся, только если их просят: <code>Variant="Short"</code>, <code>Animacy="Anim"</code>, <code>Person="1"</code>. Будущее время «быть» - <code>Tense=Fut</code>: «быть» с <code>Tense="Fut", Person="1", Number="Sing"</code> - «буду». Пометы <code>labels</code> желательны: из форм, которые сохраняют остальные признаки разбора, берется форма с ними, если такая есть - «лес» с <code>Case="Loc", labels={"loc2"}</code> дает «лесу», «город» - «городе», а «леса» во множественном - «лесах». У возвратного пассива («строится» - лемма «строить», <code>Voice=Pass</code>) формы - только пассивные: «строиться», «строилась».</p>
 <table>
 <thead>
 <tr>
@@ -1025,6 +1025,12 @@
 </thead>
 <tbody>
 <tr>
+<td style="text-align: left;"><code>labels</code></td>
+<td style="text-align: left;"><code>Iterable[str] \| None</code></td>
+<td style="text-align: left;"><code>None</code></td>
+<td style="text-align: left;">Желательные пометы: <code>loc2</code> - второй предложный падеж, <code>V-oy</code> - окончание «-ою» и другие из <code>Analysis.labels</code></td>
+</tr>
+<tr>
 <td style="text-align: left;"><code>**feats</code></td>
 <td style="text-align: left;"><code>str</code></td>
 <td style="text-align: left;">-</td>
@@ -1035,8 +1041,8 @@
 <p>Исключения:</p>
 <ul>
 <li><code>FormNotFoundError</code> - у лексемы нет формы с такими признаками;</li>
-<li><code>ValueError</code> - признака или значения нет в словаре (опечатка вроде <code>Case="Genitive"</code>), сообщение перечисляет допустимые;</li>
-<li><code>TypeError</code> - значение признака, которое не строка.</li>
+<li><code>ValueError</code> - признака, значения или пометы нет в словаре (опечатка вроде <code>Case="Genitive"</code>), сообщение перечисляет допустимые;</li>
+<li><code>TypeError</code> - значение признака или помета, которые не строка, или пометы одной строкой, а не набором.</li>
 </ul>
 <div class="tabbed-set tabbed-alternate" data-tabs="2:2"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Код</label><label for="__tabbed_2_2">Результат</label></div>
 <div class="tabbed-content">
@@ -1046,6 +1052,7 @@
 <span class="n">verb</span><span class="o">.</span><span class="n">inflect</span><span class="p">(</span><span class="n">Gender</span><span class="o">=</span><span class="s2">"Fem"</span><span class="p">),</span> <span class="n">verb</span><span class="o">.</span><span class="n">inflect</span><span class="p">(</span><span class="n">VerbForm</span><span class="o">=</span><span class="s2">"Inf"</span><span class="p">)</span>
 <span class="n">verb</span><span class="o">.</span><span class="n">inflect</span><span class="p">(</span><span class="n">Tense</span><span class="o">=</span><span class="s2">"Pres"</span><span class="p">,</span> <span class="n">Person</span><span class="o">=</span><span class="s2">"3"</span><span class="p">,</span> <span class="n">Number</span><span class="o">=</span><span class="s2">"Plur"</span><span class="p">)</span>
 <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"новый"</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">inflect</span><span class="p">(</span><span class="n">Degree</span><span class="o">=</span><span class="s2">"Cmp"</span><span class="p">)</span>
+<span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"лес"</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">inflect</span><span class="p">(</span><span class="n">Case</span><span class="o">=</span><span class="s2">"Loc"</span><span class="p">,</span> <span class="n">labels</span><span class="o">=</span><span class="p">{</span><span class="s2">"loc2"</span><span class="p">})</span>
 </code></pre></div>
 </div>
 <div class="tabbed-block">
@@ -1053,6 +1060,7 @@
 ('читала', 'читать')
 'читают'
 'новее'
+'лесу'
 </code></pre></div>
 </div>
 </div>

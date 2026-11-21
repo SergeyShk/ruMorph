@@ -26,7 +26,7 @@
         
       
       
-      <link rel="icon" href="../assets/images/favicon.png">
+      <link rel="icon" href="../img/favicon.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
     
     
@@ -355,13 +355,13 @@
   
   
     <li class="md-tabs__item">
-      <a href="../spacy/" class="md-tabs__link">
+      <a href="../models/" class="md-tabs__link">
         
   
   
     
   
-  spaCy
+  Модели
 
       </a>
     </li>
@@ -927,14 +927,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../spacy/" class="md-nav__link">
+      <a href="../models/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    spaCy
+    Модели
   
 
     
@@ -1177,20 +1177,22 @@
 </tr>
 </tbody>
 </table>
-<p>Объект хранит путь к словарю в <code>path</code> типа <code>Path</code>, только для чтения. Файл словаря отображается в память: процессы с одним файлом делят его память, поэтому каждый следующий процесс с анализатором занимает около 1,5 МБ. Пока анализатор существует, файл нельзя перезаписывать на месте, а заменить новым файлом можно; в Windows открытый файл не заменяется и не удаляется. Последний загруженный словарь остается открытым и после удаления анализаторов - до загрузки словаря из другого файла или выхода из процесса: чтобы освободить файл своего словаря, например перед его удалением в Windows, удалите его анализаторы и разборы и создайте анализатор со словарем пакета: <code>Analyzer()</code>. Загрузка проверяет контрольную сумму и строение таблиц словаря, но не каждый узел автоматов: специально подделанный файл с верной суммой загрузится и может уронить разбор. Словарь из ненадежного источника загружайте с <code>verify=True</code>: проверка занимает десятки миллисекунд и делается один раз на словарь; анализатор из pickle проверяет словарь так же.</p>
+<p>Объект хранит путь к словарю в <code>path</code> типа <code>Path</code>, только для чтения. Файл словаря отображается в память: процессы с одним файлом делят его память, поэтому каждый следующий процесс с анализатором занимает около 2,6 МБ. Пока анализатор существует, файл нельзя перезаписывать на месте, а заменить новым файлом можно; в Windows открытый файл не заменяется и не удаляется. Последний загруженный словарь остается открытым и после удаления анализаторов - до загрузки словаря из другого файла или выхода из процесса: чтобы освободить файл своего словаря, например перед его удалением в Windows, удалите его анализаторы и разборы и создайте анализатор со словарем пакета: <code>Analyzer()</code>. Загрузка проверяет контрольную сумму и строение таблиц словаря, но не каждый узел автоматов: специально подделанный файл с верной суммой загрузится и может уронить разбор. Словарь из ненадежного источника загружайте с <code>verify=True</code>: проверка занимает десятки миллисекунд и делается один раз на словарь; анализатор из pickle проверяет словарь так же.</p>
 <h2 id="words">Свои слова<a class="headerlink" href="#words" title="Permanent link">&para;</a></h2>
-<p>Слово, которого нет в словаре, можно добавить по образцу - словарному слову, которое изменяется так же: «вайбкодер» - как «геймер», «дрип» - как «пляж». Слово и образец пишутся в одной форме, обычно в начальной; знаки ударения, мягкие переносы и латинские буквы-двойники в них приводятся, как в запросе. Свое слово получает все формы образца со своей основой и дальше ведет себя как словарное: <code>source</code> - <code>"dictionary"</code>, <code>is_known</code> его находит, работают <code>forms</code>, <code>inflect</code> и <code>agree</code>. Если у образца лексемы разных частей речи («печь» - существительное и глагол), образец - пара с частью речи UD: <code>{"зечь": ("печь", "VERB")}</code>; иначе анализатор не создается. Образцом может быть и свое слово, стоящее раньше: <code>{"вайбкодер": "геймер", "промптер": "вайбкодер"}</code>. Свои слова есть только у этого анализатора, а pickle сохраняет их вместе с ним.</p>
-<p>Свои слова хранятся в копии словаря, около 3,5 КБ на слово (35 МБ на 10 тыс. слов). Отображенный в память словарь процессы делят, а копию каждый процесс собирает сам. Последняя собранная копия остается в памяти и после удаления анализаторов, пока не собрана другая или не загружен другой словарь: задачи пула процессов не собирают ее заново.</p>
+<p>Слово, которого нет в словаре, можно добавить по образцу - словарному слову, которое изменяется так же: «вайбкодер» - как «геймер», «дрип» - как «клип». Слово и образец пишутся в одной форме, обычно в начальной; знаки ударения, мягкие переносы и латинские буквы-двойники в них приводятся, как в запросе. Свое слово получает все формы образца со своей основой и дальше ведет себя как словарное: <code>source</code> - <code>"dictionary"</code>, <code>is_known</code> его находит, работают <code>forms</code>, <code>inflect</code> и <code>agree</code>. Если у образца лексемы разных частей речи («печь» - существительное и глагол), образец - пара с частью речи UD: <code>{"зечь": ("печь", "VERB")}</code>; иначе анализатор не создается. Образцом может быть и свое слово, стоящее раньше: <code>{"вайбкодер": "геймер", "промптер": "вайбкодер"}</code>. Свои слова есть только у этого анализатора, а pickle сохраняет их вместе с ним.</p>
+<p>Свои слова хранятся в копии словаря: около 5 МБ на 20 тыс. слов и 10 МБ на 100 тыс. На время добавления нужно больше - процесс вырастает примерно на 35 МБ на 20 тыс. слов (на 60 МБ, если это глаголы: у них больше форм) и на 140 МБ на 100 тыс. Отображенный в память словарь процессы делят, а копию каждый процесс собирает сам. Последняя собранная копия остается в памяти и после удаления анализаторов, пока не собрана другая или не загружен другой словарь: задачи пула процессов не собирают ее заново.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="2:2"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Код</label><label for="__tabbed_2_2">Результат</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<div class="highlight"><pre><span></span><code><span class="n">morph</span> <span class="o">=</span> <span class="n">Analyzer</span><span class="p">(</span><span class="n">words</span><span class="o">=</span><span class="p">{</span><span class="s2">"вайбкодер"</span><span class="p">:</span> <span class="s2">"геймер"</span><span class="p">,</span> <span class="s2">"дрип"</span><span class="p">:</span> <span class="s2">"пляж"</span><span class="p">})</span>
+<div class="highlight"><pre><span></span><code><span class="n">morph</span> <span class="o">=</span> <span class="n">Analyzer</span><span class="p">(</span><span class="n">words</span><span class="o">=</span><span class="p">{</span><span class="s2">"вайбкодер"</span><span class="p">:</span> <span class="s2">"геймер"</span><span class="p">,</span> <span class="s2">"дрип"</span><span class="p">:</span> <span class="s2">"клип"</span><span class="p">})</span>
 <span class="n">coder</span> <span class="o">=</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze</span><span class="p">(</span><span class="s2">"вайбкодерами"</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
-<span class="n">coder</span><span class="o">.</span><span class="n">lemma</span><span class="p">,</span> <span class="n">coder</span><span class="o">.</span><span class="n">inflect</span><span class="p">(</span><span class="n">Case</span><span class="o">=</span><span class="s2">"Dat"</span><span class="p">,</span> <span class="n">Number</span><span class="o">=</span><span class="s2">"Sing"</span><span class="p">),</span> <span class="n">morph</span><span class="o">.</span><span class="n">lemmatize</span><span class="p">([</span><span class="s2">"дрипом"</span><span class="p">])</span>
+<span class="n">coder</span><span class="o">.</span><span class="n">lemma</span><span class="p">,</span> <span class="n">coder</span><span class="o">.</span><span class="n">inflect</span><span class="p">(</span><span class="n">Case</span><span class="o">=</span><span class="s2">"Dat"</span><span class="p">,</span> <span class="n">Number</span><span class="o">=</span><span class="s2">"Sing"</span><span class="p">)</span>
+<span class="n">morph</span><span class="o">.</span><span class="n">lemmatize</span><span class="p">([</span><span class="s2">"дрипом"</span><span class="p">]),</span> <span class="n">morph</span><span class="o">.</span><span class="n">is_known</span><span class="p">(</span><span class="s2">"дрипом"</span><span class="p">)</span>
 </code></pre></div>
 </div>
 <div class="tabbed-block">
-<div class="highlight"><pre><span></span><code>('вайбкодер', 'вайбкодеру', ['дрип'])
+<div class="highlight"><pre><span></span><code>('вайбкодер', 'вайбкодеру')
+(['дрип'], True)
 </code></pre></div>
 </div>
 </div>
@@ -1201,7 +1203,7 @@
 <p class="metric-meta"><code>analyze</code> · <code>list[Analysis]</code></p>
 <div class="signature highlight"><pre><span></span><code><span class="n">analyze</span><span class="p">(</span><span class="n">word</span><span class="p">)</span>
 </code></pre></div>
-<p>Разборы словоформы по убыванию вероятности; сумма вероятностей равна 1. Регистр не важен для поиска, а буква «е» может обозначать «ё»: <code>analyze("ЕЖ")</code> возвращает разборы словоформы «ёж». Вероятности регистр учитывают: у строчного слова имена собственные идут последними («шаров» - «шар»), а у слова с заглавной буквы их доля выше («Шаров» - фамилия). Токен, которого нет в словаре, - число, знак, слово латиницей, сокращение - разбирается <a href="../analysis/#rules">по правилам</a>, а разборы незнакомого слова кириллицей <a href="../analysis/#guess">угадываются</a> по окончанию и по частям. Список разборов не бывает пустым: если ничего не подошло - а это и пустая строка, и строка из пробелов или невидимых символов, - токен получает <code>X</code> без признаков и лемму в нижнем регистре.</p>
+<p>Разборы словоформы по убыванию вероятности, у незнакомого слова - по лексемам: первой идет лексема с наибольшей суммой вероятностей; сумма вероятностей равна 1. Регистр не важен для поиска, а буква «е» может обозначать «ё»: <code>analyze("ЕЖ")</code> возвращает разборы словоформы «ёж». Вероятности регистр учитывают: у строчного слова имена собственные идут последними («шаров» - «шар»), а у слова с заглавной буквы их доля выше («Шаров» - фамилия). Токен, которого нет в словаре, - число, знак, слово латиницей, сокращение - разбирается <a href="../analysis/#rules">по правилам</a>, а разборы незнакомого слова кириллицей <a href="../analysis/#guess">угадываются</a> по окончанию и по частям. Список разборов не бывает пустым: если ничего не подошло - а это и пустая строка, и строка из пробелов или невидимых символов, - токен получает <code>X</code> без признаков и лемму в нижнем регистре.</p>
 <table>
 <thead>
 <tr>
@@ -1290,7 +1292,7 @@
 <p class="metric-meta"><code>analyze_sentence</code> · <code>list[list[Analysis]]</code></p>
 <div class="signature highlight"><pre><span></span><code><span class="n">analyze_sentence</span><span class="p">(</span><span class="n">words</span><span class="p">)</span>
 </code></pre></div>
-<p>Разборы слов предложения с учетом контекста: те же разборы, что у <a href="#analyze"><code>analyze</code></a>, упорядочивает контекстная модель - первым идет разбор, который она выбрала по соседним словам, а <code>prob</code> - ее оценка в этом предложении. Без контекста «книги» - в родительном падеже (так чаще), в «Я читаю книги» модель выбирает винительный, а «стали» в «Мост сделан из стали» - существительное «сталь», а не глагол «стать». С контекстом часть речи, лемма и признаки первого разбора верны у 82-94 % слов против 71-82 % без него (<a href="../performance/">Сравнение</a>). Слова - токены одного предложения по порядку; текст на предложения и токены делит сегментатор anySeg, а документ разбирает <a href="#annotate"><code>annotate</code></a>. Слово без соседей разбирается, как у <code>analyze</code>: без контекста модель выбирает хуже частот словаря. Предложение длиннее 256 слов модель разбирает частями по 256, чтобы ее память не росла с длиной входа. Модель обучена на трибанках <a href="https://github.com/UniversalDependencies/UD_Russian-Taiga">UD_Russian-Taiga</a>, <a href="https://github.com/UniversalDependencies/UD_Russian-GSD">UD_Russian-GSD</a> и корпусе <a href="https://opencorpora.org">OpenCorpora</a> и входит в словарь пакета. На процессорах с FMA (arm64, x86-64 с AVX2 и FMA) модель считает с ней быстрее, а <code>prob</code> может отличаться от процессора без FMA на миллионные доли.</p>
+<p>Разборы слов предложения с учетом контекста: те же разборы, что у <a href="#analyze"><code>analyze</code></a>, упорядочивает контекстная модель - первым идет разбор, который она выбрала по соседним словам, а <code>prob</code> - ее оценка в этом предложении. У слов, которые часто не вводные («однако», «наконец»), помета <code>Prnt</code> остается, только если рядом запятая или тире (<a href="../analysis/#ud">пометы</a>). Без контекста «книги» - в родительном падеже (так чаще), в «Я читаю книги» модель выбирает винительный, а «стали» в «Мост сделан из стали» - существительное «сталь», а не глагол «стать». С контекстом часть речи, лемма и признаки первого разбора верны у 82-94 % слов против 71-82 % без него (<a href="../performance/">Сравнение</a>). Слова - токены одного предложения по порядку; текст на предложения и токены делит сегментатор anySeg, а документ разбирает <a href="#annotate"><code>annotate</code></a>. Слово без соседей разбирается, как у <code>analyze</code>: без контекста модель выбирает хуже частот словаря. Предложение длиннее 256 слов модель разбирает частями по 256, чтобы ее память не росла с длиной входа. Модель обучена на трибанках <a href="https://github.com/UniversalDependencies/UD_Russian-Taiga">UD_Russian-Taiga</a>, <a href="https://github.com/UniversalDependencies/UD_Russian-GSD">UD_Russian-GSD</a>, <a href="https://github.com/UniversalDependencies/UD_Russian-Poetry">UD_Russian-Poetry</a> и корпусе <a href="https://opencorpora.org">OpenCorpora</a> и входит в словарь пакета. На процессорах с FMA (arm64, x86-64 с AVX2 и FMA) модель считает с ней быстрее, а <code>prob</code> может отличаться от процессора без FMA на миллионные доли.</p>
 <table>
 <thead>
 <tr>
@@ -1337,7 +1339,7 @@
 <p class="metric-meta"><code>annotate</code> · <code>None</code></p>
 <div class="signature highlight"><pre><span></span><code><span class="n">annotate</span><span class="p">(</span><span class="n">document</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">context</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </code></pre></div>
-<p>Разбор документа сегментатора <a href="https://github.com/SergeyShk/anySeg">anySeg</a> одним вызовом: столбцы <code>lemma</code>, <code>upos</code> и <code>feats</code> его слов получают самый вероятный разбор в контексте предложения, как у <a href="#analyze_sentence"><code>analyze_sentence</code></a>, или без контекста, как у <a href="#analyze"><code>analyze</code></a>, а прежние значения заменяются. Токены и предложения находит anySeg по соглашениям Universal Dependencies, на которых обучена контекстная модель. Размеченный документ записывается в CoNLL-U методом <code>to_conllu</code>. anySeg - отдельный пакет (<code>pip install anyseg</code>); подойдет и другой объект с методами <code>column("form")</code> и <code>set_columns</code> и предложениями <code>sentences</code>, у которых есть слова <code>words</code> с номером <code>index</code>.</p>
+<p>Разбор документа сегментатора <a href="https://github.com/SergeyShk/anySeg">anySeg</a> одним вызовом: столбцы <code>lemma</code>, <code>upos</code> и <code>feats</code> его слов получают первый разбор: в контексте предложения, как у <a href="#analyze_sentence"><code>analyze_sentence</code></a>, или без контекста, как у <a href="#analyze"><code>analyze</code></a>, а прежние значения заменяются. Токены и предложения находит anySeg по соглашениям Universal Dependencies, на которых обучена контекстная модель. Размеченный документ записывается в CoNLL-U методом <code>to_conllu</code>. anySeg - отдельный пакет (<code>pip install anyseg</code>); подойдет и другой объект с методами <code>column("form")</code> и <code>set_columns</code> и предложениями <code>sentences</code>, у которых есть слова <code>words</code> с номером <code>index</code>.</p>
 <table>
 <thead>
 <tr>
@@ -1392,7 +1394,7 @@
 <p class="metric-meta"><code>lemmatize</code> · <code>list[str]</code></p>
 <div class="signature highlight"><pre><span></span><code><span class="n">lemmatize</span><span class="p">(</span><span class="n">words</span><span class="p">)</span>
 </code></pre></div>
-<p>Леммы самых вероятных разборов словоформ.</p>
+<p>Леммы первых разборов словоформ, как у <a href="#analyze"><code>analyze</code></a>.</p>
 <table>
 <thead>
 <tr>
@@ -1471,7 +1473,7 @@
 </div>
 <h2 id="dictionary">Словарь<a class="headerlink" href="#dictionary" title="Permanent link">&para;</a></h2>
 <p>Словарь пакета собран из словаря <a href="https://opencorpora.org">OpenCorpora</a> и слов <a href="https://ru.wiktionary.org">Викисловаря</a>, которых в нем нет: существительных, имен собственных и прилагательных («зумер», «джун») - всего около 3,8 млн словоформ. Вероятности разборов взяты из корпуса OpenCorpora и уточнены по разметке трибанков Universal Dependencies <a href="https://github.com/UniversalDependencies/UD_Russian-Taiga">UD_Russian-Taiga</a> и <a href="https://github.com/UniversalDependencies/UD_Russian-GSD">UD_Russian-GSD</a>: так «ничего» чаще местоимение, чем наречие. У словоформ, которых нет ни в одном корпусе, разборы равновероятны. Словарь распространяется по лицензии <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>.</p>
-<p>Источники словаря описывает свойство <code>dictionary_info</code> - новый <code>dict</code> при каждом обращении: <code>source</code>, ревизии словаря и корпуса OpenCorpora (<code>opencorpora_revision</code>, <code>corpus_revision</code>), лексемы Викисловаря (<code>wiktionary</code>), релиз UD и трибанки частот (<code>frequencies</code>) и обучения контекстной модели (<code>context</code>), лицензия (<code>license</code>), число словоформ (<code>word_forms</code>) и контрольная сумма файла (<code>checksum</code>). У словаря, собранного не сборщиком ruMorph, - только два последних ключа. Тип значения для аннотаций - <code>rumorph.DictionaryInfo</code>.</p>
+<p>Источники словаря описывает свойство <code>dictionary_info</code> - новый <code>dict</code> при каждом обращении: <code>source</code>, ревизии словаря и корпуса OpenCorpora (<code>opencorpora_revision</code>, <code>corpus_revision</code>), лексемы Викисловаря (<code>wiktionary</code>), релиз UD и трибанки частот (<code>frequencies</code>) и обучения контекстной модели (<code>context</code>), обучение модели класса парадигмы (<code>paradigms</code>), лицензия (<code>license</code>), число словоформ (<code>word_forms</code>) и контрольная сумма файла (<code>checksum</code>). У словаря, собранного не сборщиком ruMorph, - только два последних ключа. Тип значения для аннотаций - <code>rumorph.DictionaryInfo</code>.</p>
 <h2 id="parallel">Потоки и процессы<a class="headerlink" href="#parallel" title="Permanent link">&para;</a></h2>
 <p>Один анализатор можно использовать из нескольких потоков: <code>analyze_many</code>, <code>lemmatize</code>, <code>analyze_sentence</code> и <code>annotate</code> отпускают GIL и разбирают списки и документы параллельно, а в Python без GIL (3.14t, 3.15t) параллельно работают и <code>analyze</code>, <code>is_known</code>, <code>inflect</code> и <code>agree</code>. Общий анализатор не медленнее отдельного на каждый поток, поэтому заводить анализатор на поток не нужно. Без GIL потоки упираются в удаление объектов разборов: <code>forms</code> в потоках почти не ускоряется, а <code>analyze_many</code> на длинных списках - слабо, поэтому такие списки лучше разбирать кусками по тысяче-другой слов. Анализатор и разборы сохраняются через pickle, поэтому работают с <code>multiprocessing</code> и joblib: процессы делят отображенный в память словарь, сколько бы разборов они ни получили (копию со <a href="#words">своими словами</a> каждый процесс собирает сам). pickle хранит путь к словарю: при распаковке берется анализатор с тем же путем, разборы которого есть в потоке, иначе словарь загружается по пути, а если файла уже нет - берется словарь, загруженный из него в процессе. Разбор, сохраненный со словарем другой версии, находится по написанию, лемме и тегу; если такого разбора в словаре нет, он восстанавливается как сохранен, но без других форм, а если в словаре нет и его тега - берется разбор слова с теми же леммой и частью речи, у которого совпало больше всего признаков (род «Нидерландов», будущее время «будет» из 0.3.0). Подынтерпретаторы Python 3.14 (<code>InterpreterPoolExecutor</code>) не поддерживаются: используйте потоки или процессы. Передача разборов между процессами дороже самого разбора, поэтому в процессах лучше получать леммы и поля разборов, а разборы - в потоках. Документ anySeg передается через pickle со столбцами, но <code>annotate</code> размечает его на месте и ничего не возвращает: <code>pool.map(morph.annotate, documents)</code> разметит в процессах копии документов, а документы родителя останутся пустыми. Задача процесса размечает документ и возвращает его, а еще дешевле - <code>to_conllu()</code> или нужные столбцы.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="9:2"><input checked="checked" id="__tabbed_9_1" name="__tabbed_9" type="radio" /><input id="__tabbed_9_2" name="__tabbed_9" type="radio" /><div class="tabbed-labels"><label for="__tabbed_9_1">Код</label><label for="__tabbed_9_2">Результат</label></div>
