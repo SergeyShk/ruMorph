@@ -473,6 +473,7 @@ impl Dictionary {
             first_person: code("Person", "1"),
             inclusive: self.ud.string_number("incl"),
             counting: self.ud.string_number("Coun"),
+            passive: code("Voice", "Pass"),
         };
         self.combined_numeral = code("NumForm", "Combi");
         self.proper_nouns = self.ud.iter().map(|tag| tag.pos() == "PROPN").collect();
@@ -767,9 +768,13 @@ impl Dictionary {
             Some(model) => model,
             None => {
                 let bytes = &self.storage.bytes()[self.layout.paradigm_model.clone()];
+                // Сообщение без префикса `Error::Format`: его добавляет ошибка ниже
                 let built = paradigm::Model::parse(bytes)
                     .map(|model| paradigm::Paradigms::new(model, &self.ud, &self.suffixes))
-                    .map_err(|err| err.to_string());
+                    .map_err(|err| match err {
+                        Error::Format(message) => message,
+                        other => other.to_string(),
+                    });
                 self.paradigms.get_or_init(move || built)
             }
         };
@@ -1429,12 +1434,13 @@ impl Dictionary {
             let lemma_form = lexeme.lemma_form(form);
             lemma_form == own || lexeme.affixes(lemma_form) == affixes
         };
-        let pass = |form: u16| self.feat(lexeme.ud(form), "Voice") == Some("Pass");
-        let passive = self.feat(analysis.ud, "Voice") == Some("Pass")
+        let voice = self.preferences.passive;
+        let pass = |form: u16| self.has_code(lexeme.ud(form), voice);
+        let passive = self.has_code(analysis.ud, voice)
             && (0..lexeme.cells.len() as u16).any(|form| {
                 same_lemma(form)
                     && pass(form)
-                    && self.feat(lexeme.ud(form), "VerbForm") == Some("Inf")
+                    && self.has_code(lexeme.ud(form), self.preferences.infinitive)
             });
         let forms = (0..lexeme.cells.len() as u16)
             .filter(|&form| same_lemma(form) && (!passive || pass(form)))
@@ -1843,6 +1849,7 @@ struct Preferences {
     first_person: Option<(usize, u16)>,
     inclusive: Option<u16>,
     counting: Option<u16>,
+    passive: Option<(usize, u16)>,
 }
 
 /// Слово в обычной записи: без невидимых символов (`visible`), знаки и буквы-двойники

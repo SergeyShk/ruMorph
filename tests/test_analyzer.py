@@ -78,6 +78,15 @@ def test_verify(morph, tmp_path):
         Analyzer(path, verify=True)
     # Отвергнутый словарь не держит файл открытым: его можно удалить и в Windows
     path.unlink()
+    # Испорченная модель класса парадигмы - одна ошибка формата
+    data = bytearray(Path(morph.path).read_bytes())
+    data[data.index(b"RUMPAR")] = ord("X")
+    data[12:16] = zlib.crc32(data[16:]).to_bytes(4, "little")
+    path.write_bytes(bytes(data))
+    with pytest.raises(ValueError, match="модель класса парадигмы") as error:
+        Analyzer(path, verify=True)
+    assert str(error.value).count("неверный формат словаря") == 1
+    path.unlink()
     # Анализатор с проверкой восстанавливается из pickle тоже с проверкой
     verified = Analyzer(morph.path, verify=True)
     _, args = verified.__reduce__()
@@ -1219,6 +1228,68 @@ def test_fork_while_loading(morph, tmp_path):
             pid = os.fork()
             if pid == 0:
                 os._exit(0 if Analyzer(path).lemmatize(["стали"]) == ["стать"] else 1)
+            deadline = time.monotonic() + 30
+            while (done := os.waitpid(pid, os.WNOHANG))[0] == 0 and time.monotonic() < deadline:
+                time.sleep(0.01)
+            if done[0] == 0:
+                os.kill(pid, 9)
+                os.waitpid(pid, 0)
+            assert done[0] == pid and os.waitstatus_to_exitcode(done[1]) == 0
+    finally:
+        stop.set()
+        thread.join()
+
+
+def test_own_words_in_threads():
+    # Анализаторы с одними своими словами, созданные одновременно, ждут одну копию словаря
+    words = {
+        f"вайбкодер{chr(ord('а') + i // 32)}{chr(ord('а') + i % 32)}": "геймер" for i in range(500)
+    }
+    barrier = threading.Barrier(8)
+
+    def make(_):
+        barrier.wait()
+        return Analyzer(words=words)
+
+    with ThreadPoolExecutor(8) as pool:
+        analyzers = list(pool.map(make, range(8)))
+    assert [m.lemmatize(["вайбкодербба"]) for m in analyzers] == [["вайбкодербб"]] * 8
+    # Строка своих слов в pickle - общая у анализаторов одной копии
+    assert len({id(m.__reduce__()[1][1]) for m in analyzers}) == 1
+
+
+@pytest.mark.skipif(not hasattr(os, "fork"), reason="нет fork")
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
+def test_fork_while_building_own_words(morph):
+    # Процесс, созданный fork, пока другой поток собирает копию со своими словами, не ждет ее:
+    # два набора слов по очереди - копия каждый раз собирается заново
+    sets = [
+        {
+            f"вайбкодер{letter}{chr(ord('а') + i // 32)}{chr(ord('а') + i % 32)}": "геймер"
+            for i in range(300)
+        }
+        for letter in "аб"
+    ]
+    stop = threading.Event()
+
+    def build():
+        number = 0
+        while not stop.is_set():
+            Analyzer(words=sets[number % 2])
+            number += 1
+
+    thread = threading.Thread(target=build)
+    thread.start()
+    try:
+        for _ in range(5):
+            time.sleep(0.02)
+            pid = os.fork()
+            if pid == 0:
+                lemmas = [
+                    Analyzer(words=w).lemmatize([f"вайбкодер{x}ааа"])
+                    for w, x in zip(sets, "аб", strict=True)
+                ]
+                os._exit(0 if lemmas == [["вайбкодерааа"], ["вайбкодербаа"]] else 1)
             deadline = time.monotonic() + 30
             while (done := os.waitpid(pid, os.WNOHANG))[0] == 0 and time.monotonic() < deadline:
                 time.sleep(0.01)

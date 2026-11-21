@@ -40,22 +40,24 @@ The object keeps the dictionary path in `path` of type `Path`, read-only. The di
 
 ## Own words { #words }
 
-A word that is not in the dictionary can be added after a sample - a dictionary word that inflects the same way: «вайбкодер» like «геймер», «дрип» like «пляж». The word and the sample are written in the same form, usually the initial one; stress marks, soft hyphens and look-alike Latin letters in them are normalized as in a query. The own word gets all forms of the sample with its own stem and then behaves like a dictionary word: `source` is `"dictionary"`, `is_known` finds it, `forms`, `inflect` and `agree` work. If the sample has lexemes of different parts of speech («печь» is a noun and a verb), the sample is a pair with the UD part of speech: `{"зечь": ("печь", "VERB")}`; otherwise the analyzer is not created. An own word listed earlier can be a sample too: `{"вайбкодер": "геймер", "промптер": "вайбкодер"}`. Own words belong to this analyzer only, and pickle saves them with it.
+A word that is not in the dictionary can be added after a sample - a dictionary word that inflects the same way: «вайбкодер» like «геймер», «дрип» like «клип». The word and the sample are written in the same form, usually the initial one; stress marks, soft hyphens and look-alike Latin letters in them are normalized as in a query. The own word gets all forms of the sample with its own stem and then behaves like a dictionary word: `source` is `"dictionary"`, `is_known` finds it, `forms`, `inflect` and `agree` work. If the sample has lexemes of different parts of speech («печь» is a noun and a verb), the sample is a pair with the UD part of speech: `{"зечь": ("печь", "VERB")}`; otherwise the analyzer is not created. An own word listed earlier can be a sample too: `{"вайбкодер": "геймер", "промптер": "вайбкодер"}`. Own words belong to this analyzer only, and pickle saves them with it.
 
 Own words are kept in a copy of the dictionary: about 5 MB for 20 thousand words and 10 MB for 100 thousand. Adding them takes more: the process grows by about 35 MB for 20 thousand words and by 140 MB for 100 thousand. Processes share the dictionary mapped into memory, but each process builds the copy itself. The last built copy stays in memory after the analyzers are deleted until another one is built or another dictionary is loaded: tasks of a process pool do not build it again.
 
 === "Code"
 
     ``` python
-    morph = Analyzer(words={"вайбкодер": "геймер", "дрип": "пляж"})
+    morph = Analyzer(words={"вайбкодер": "геймер", "дрип": "клип"})
     coder = morph.analyze("вайбкодерами")[0]
-    coder.lemma, coder.inflect(Case="Dat", Number="Sing"), morph.lemmatize(["дрипом"])
+    coder.lemma, coder.inflect(Case="Dat", Number="Sing")
+    morph.lemmatize(["дрипом"]), morph.is_known("дрипом")
     ```
 
 === "Result"
 
     ```
-    ('вайбкодер', 'вайбкодеру', ['дрип'])
+    ('вайбкодер', 'вайбкодеру')
+    (['дрип'], True)
     ```
 
 ## Methods
