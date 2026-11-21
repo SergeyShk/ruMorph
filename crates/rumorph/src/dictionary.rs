@@ -183,8 +183,8 @@ pub struct Dictionary {
     proper_nouns: Vec<bool>,
     /// Граммемы сокращения-существительного для `ABBREVIATION_LEMMAS`: по номеру тега OpenCorpora
     abbreviation_grammemes: Vec<u8>,
-    /// Свои слова (`with_words`) по ключу автомата
-    own_words: own::OwnWords,
+    /// Свои слова (`with_words`): копии словаря делят их, пока не добавят свои
+    own_words: Arc<own::OwnWords>,
     /// Контекстная модель секции словаря: читается при первом разборе предложения, копии ее делят
     context: Arc<OnceLock<Result<context::Context, String>>>,
     /// Модель класса парадигмы секции словаря: читается при первом угадывании, копии ее делят
@@ -379,7 +379,7 @@ impl Dictionary {
             combined_numeral: None,
             proper_nouns: Vec::new(),
             abbreviation_grammemes: Vec::new(),
-            own_words: own::OwnWords::default(),
+            own_words: Arc::default(),
             context: Arc::new(OnceLock::new()),
             paradigms: Arc::new(OnceLock::new()),
             without_prnt: Arc::new(OnceLock::new()),
