@@ -55,6 +55,11 @@ pub(super) struct OwnWords {
     keys: Map<Vec<u8>>,
     /// Лексемы с формами одного ключа в порядке добавления: длина группы и номера лексем
     groups: Vec<u32>,
+    /// Лексемы, которых еще нет в автомате, по ключам основ: поиск находит их до `index`, поэтому
+    /// образцом может быть свое слово того же вызова
+    pending: HashMap<Box<[u8]>, Vec<u32>>,
+    /// Номера ключей приставок форм образцов в `affixes`: с них поиск начинает основы в `pending`
+    prefixes: Vec<u32>,
 }
 
 /// Ключ приставки или окончания образца и места «ё» в нем
@@ -144,7 +149,9 @@ impl OwnWords {
                 (*rest == **suffix).then(|| OwnForm {
                     yo: prefix_yo
                         | lexeme.yo << prefix.len()
-                        | suffix_yo << (prefix.len() + stem.len()),
+                        | suffix_yo
+                            .checked_shl((prefix.len() + stem.len()) as u32)
+                            .unwrap_or(0),
                     entry: Entry {
                         table: sample.table,
                         form: form.form,
@@ -153,7 +160,7 @@ impl OwnWords {
             })
     }
 
-    /// Лексемы с формами ключа `bytes` в порядке добавления
+    /// Лексемы с формами ключа `bytes` в порядке добавления: из автомата и `pending`
     fn lexemes_of(&self, bytes: &[u8]) -> impl Iterator<Item = u32> + '_ {
         let (single, group) = match self.keys.get(bytes) {
             None => (None, &[][..]),
@@ -167,7 +174,25 @@ impl OwnWords {
                 )
             }
         };
-        single.into_iter().chain(group.iter().copied())
+        // Лексемы `pending` добавлены после всех лексем автомата
+        let mut pending = Vec::new();
+        if !self.pending.is_empty() {
+            for (prefix, _) in
+                (self.prefixes.iter()).filter_map(|&at| self.affixes.get(at as usize))
+            {
+                let Some(rest) = bytes.strip_prefix(&**prefix) else {
+                    continue;
+                };
+                for len in 1..=rest.len() {
+                    pending.extend(self.pending.get(&rest[..len]).into_iter().flatten());
+                }
+            }
+            pending.sort_unstable();
+            pending.dedup();
+        }
+        (single.into_iter())
+            .chain(group.iter().copied())
+            .chain(pending)
     }
 
     /// Формы своих слов с ключом `bytes`; форма двух лексем с одной таблицей и теми же местами «ё» -
@@ -241,12 +266,14 @@ impl OwnWords {
         }
         self.keys = builder.into_map();
         self.groups = groups;
+        self.pending = HashMap::new();
         // Векторы росли удвоением, а анализатор держит их, пока жив
         self.affixes.shrink_to_fit();
         self.samples.shrink_to_fit();
         self.stems.shrink_to_fit();
         self.lexemes.shrink_to_fit();
         self.groups.shrink_to_fit();
+        self.prefixes.shrink_to_fit();
         Ok(())
     }
 }
@@ -295,19 +322,8 @@ impl Dictionary {
         let mut lexemes: HashSet<(Box<[u8]>, u64, u32)> = (own.lexemes.iter())
             .map(|lexeme| (own.stem(lexeme).into(), lexeme.yo, lexeme.sample))
             .collect();
-        let mut prefixes: HashSet<u32> = (own.samples.iter())
-            .flat_map(|sample| sample.forms.iter().map(|form| form.prefix))
-            .collect();
-        // Лексемы вызова, которых еще нет в поиске, по ключам основ: если образец может быть
-        // формой одной из них, поиск строится заново до него
-        let mut fresh: HashMap<Box<[u8]>, Vec<u32>> = HashMap::new();
         for (word, sample) in words {
-            let sample = sample.into();
-            if !fresh.is_empty() && self.fresh_sample(sample.word, &fresh, &prefixes) {
-                Arc::make_mut(&mut self.own_words).index()?;
-                fresh.clear();
-            }
-            for spec in self.sample_forms(word, sample)? {
+            for spec in self.sample_forms(word, sample.into())? {
                 let forms: Vec<u16> = spec.forms.iter().map(|&(form, ..)| form).collect();
                 let id = (spec.table, Box::from(spec.like.as_str()), forms);
                 let sample = match samples.get(&id) {
@@ -338,7 +354,11 @@ impl Dictionary {
                                 suffix: number(suffix),
                             })
                             .collect();
-                        prefixes.extend(forms.iter().map(|form| form.prefix));
+                        for form in &forms {
+                            if !own.prefixes.contains(&form.prefix) {
+                                own.prefixes.push(form.prefix);
+                            }
+                        }
                         own.samples.push(SampleForms {
                             table: spec.table,
                             stem: id.1.clone(),
@@ -384,7 +404,7 @@ impl Dictionary {
                 if lexemes.insert((key.bytes().into(), key.yo, sample)) {
                     let own = Arc::make_mut(&mut self.own_words);
                     let number = own.lexemes.len() as u32;
-                    fresh.entry(key.bytes().into()).or_default().push(number);
+                    (own.pending.entry(key.bytes().into()).or_default()).push(number);
                     own.lexemes.push(OwnLexeme {
                         yo: key.yo,
                         stem: own.stems.len() as u32,
@@ -397,35 +417,6 @@ impl Dictionary {
         }
         Arc::make_mut(&mut self.own_words).index()?;
         Ok(self)
-    }
-
-    /// Может ли образец `sample` быть формой лексемы вызова, которой еще нет в поиске (`fresh` -
-    /// по ключам основ): после приставки образца в ключе - основа такой лексемы и окончание ее формы
-    fn fresh_sample(
-        &self,
-        sample: &str,
-        fresh: &HashMap<Box<[u8]>, Vec<u32>>,
-        prefixes: &HashSet<u32>,
-    ) -> bool {
-        let like = normalized_input(sample)
-            .unwrap_or_else(|| sample.to_owned())
-            .to_lowercase();
-        let Some(key) = self.alphabet.input_key(&like) else {
-            return false;
-        };
-        let bytes = key.bytes();
-        let own = &self.own_words;
-        (prefixes.iter())
-            .filter_map(|&prefix| own.affixes.get(prefix as usize))
-            .filter_map(|(prefix, _)| bytes.strip_prefix(&**prefix))
-            .any(|rest| {
-                (1..=rest.len()).any(|len| {
-                    (fresh.get(&rest[..len])).is_some_and(|lexemes| {
-                        (lexemes.iter())
-                            .any(|&lexeme| own.lexeme_forms(lexeme, bytes).next().is_some())
-                    })
-                })
-            })
     }
 
     /// Лексемы слова `word` по образцу `sample`: основа слова, таблица и основа образца и формы
