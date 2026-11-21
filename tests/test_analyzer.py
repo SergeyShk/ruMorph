@@ -1,11 +1,13 @@
 import copy
 import errno
+import faulthandler
 import json
 import math
 import os
 import pickle
 import re
 import shutil
+import signal
 import sys
 import threading
 import time
@@ -1208,6 +1210,21 @@ def test_pickle_with_many_own_words():
     assert pickle.loads(pickle.dumps(analyzer)).analyze("вайбкодербб")[0].source == "dictionary"
 
 
+def child_exit_code(pid: int) -> int | None:
+    # Код выхода процесса, созданного fork; если он не вышел за 30 с - стеки его потоков в stderr
+    # (faulthandler на SIGUSR1) и None
+    deadline = time.monotonic() + 30
+    while (done := os.waitpid(pid, os.WNOHANG))[0] == 0 and time.monotonic() < deadline:
+        time.sleep(0.01)
+    if done[0] == pid:
+        return os.waitstatus_to_exitcode(done[1])
+    os.kill(pid, signal.SIGUSR1)
+    time.sleep(1)
+    os.kill(pid, signal.SIGKILL)
+    os.waitpid(pid, 0)
+    return None
+
+
 @pytest.mark.skipif(not hasattr(os, "fork"), reason="нет fork")
 @pytest.mark.filterwarnings("ignore::DeprecationWarning")
 def test_fork_while_loading(morph, tmp_path):
@@ -1227,14 +1244,9 @@ def test_fork_while_loading(morph, tmp_path):
             time.sleep(0.02)
             pid = os.fork()
             if pid == 0:
+                faulthandler.register(signal.SIGUSR1, all_threads=True)
                 os._exit(0 if Analyzer(path).lemmatize(["стали"]) == ["стать"] else 1)
-            deadline = time.monotonic() + 30
-            while (done := os.waitpid(pid, os.WNOHANG))[0] == 0 and time.monotonic() < deadline:
-                time.sleep(0.01)
-            if done[0] == 0:
-                os.kill(pid, 9)
-                os.waitpid(pid, 0)
-            assert done[0] == pid and os.waitstatus_to_exitcode(done[1]) == 0
+            assert child_exit_code(pid) == 0
     finally:
         stop.set()
         thread.join()
@@ -1285,18 +1297,13 @@ def test_fork_while_building_own_words(morph):
             time.sleep(0.02)
             pid = os.fork()
             if pid == 0:
+                faulthandler.register(signal.SIGUSR1, all_threads=True)
                 lemmas = [
                     Analyzer(words=w).lemmatize([f"вайбкодер{x}ааа"])
                     for w, x in zip(sets, "аб", strict=True)
                 ]
                 os._exit(0 if lemmas == [["вайбкодерааа"], ["вайбкодербаа"]] else 1)
-            deadline = time.monotonic() + 30
-            while (done := os.waitpid(pid, os.WNOHANG))[0] == 0 and time.monotonic() < deadline:
-                time.sleep(0.01)
-            if done[0] == 0:
-                os.kill(pid, 9)
-                os.waitpid(pid, 0)
-            assert done[0] == pid and os.waitstatus_to_exitcode(done[1]) == 0
+            assert child_exit_code(pid) == 0
     finally:
         stop.set()
         thread.join()
@@ -1325,15 +1332,10 @@ def test_fork_while_building_context(morph, tmp_path):
             time.sleep(0.013)
             pid = os.fork()
             if pid == 0:
+                faulthandler.register(signal.SIGUSR1, all_threads=True)
                 sentences = [Analyzer(path).analyze_sentence(["Я", "читаю"]) for path in paths]
                 os._exit(0 if all(len(sentence) == 2 for sentence in sentences) else 1)
-            deadline = time.monotonic() + 30
-            while (done := os.waitpid(pid, os.WNOHANG))[0] == 0 and time.monotonic() < deadline:
-                time.sleep(0.01)
-            if done[0] == 0:
-                os.kill(pid, 9)
-                os.waitpid(pid, 0)
-            assert done[0] == pid and os.waitstatus_to_exitcode(done[1]) == 0
+            assert child_exit_code(pid) == 0
     finally:
         stop.set()
         thread.join()
