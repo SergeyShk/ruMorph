@@ -1,6 +1,7 @@
 //! Команда `rumorph`: морфологический анализ текста из файлов и стандартного ввода
 
 use std::borrow::Cow;
+use std::cell::Cell;
 use std::ffi::OsString;
 use std::fmt::Write as _;
 use std::fs::File;
@@ -378,8 +379,10 @@ fn load(path: Option<&Path>, verify: bool) -> Result<Dictionary, String> {
 }
 
 /// Свои слова из файлов `paths`: в строке слово, образец и, если нужно, часть речи образца через
-/// табуляцию; пустые строки и строки с «#» в начале пропускаются
-fn add_words(mut dictionary: Dictionary, paths: &[PathBuf]) -> Result<Dictionary, String> {
+/// табуляцию; пустые строки и строки с «#» в начале пропускаются. Слова всех файлов добавляются
+/// одним вызовом: каждый вызов `with_words` строит поиск своих слов заново
+fn add_words(dictionary: Dictionary, paths: &[PathBuf]) -> Result<Dictionary, String> {
+    let mut texts = Vec::with_capacity(paths.len());
     for path in paths {
         let name = path.display();
         let bytes = std::fs::read(path).map_err(|err| format!("{name}: {}", describe(&err)))?;
@@ -388,27 +391,44 @@ fn add_words(mut dictionary: Dictionary, paths: &[PathBuf]) -> Result<Dictionary
             let line = valid.iter().filter(|&&byte| byte == b'\n').count() + 1;
             format!("{name}: строка {line}: не UTF-8")
         })?;
-        let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
-        for (number, line) in text.lines().enumerate() {
-            if line.trim().is_empty() || line.trim_start().starts_with('#') {
-                continue;
-            }
-            let at = |message: &dyn std::fmt::Display| {
-                format!("{name}: строка {}: {message}", number + 1)
-            };
+        texts.push(text);
+    }
+    // Строка, которую разбирает итератор, и ошибка ее полей: на ней итератор останавливается
+    let at = Cell::new((0, 0));
+    let wrong = Cell::new(false);
+    let lines = texts.iter().enumerate().flat_map(|(file, text)| {
+        let text = text.strip_prefix('\u{feff}').unwrap_or(text);
+        text.lines()
+            .enumerate()
+            .map(move |(number, line)| (file, number, line))
+    });
+    let words = lines
+        .filter(|(_, _, line)| !(line.trim().is_empty() || line.trim_start().starts_with('#')))
+        .map_while(|(file, number, line)| {
+            at.set((file, number));
             // Пробелы по краям полей - от выравнивания столбцов, пустая часть речи - не задана
-            let word = match *line
-                .split('\t')
-                .map(str::trim)
-                .collect::<Vec<_>>()
-                .as_slice()
-            {
+            let fields: Vec<&str> = line.split('\t').map(str::trim).collect();
+            let word = match *fields.as_slice() {
                 [word, like] | [word, like, ""] => (word, Sample::from(like)),
                 [word, like, pos] => (word, Sample::from((like, pos))),
-                _ => return Err(at(&"нужны слово и образец через табуляцию")),
+                _ => {
+                    wrong.set(true);
+                    return None;
+                }
             };
-            dictionary = dictionary.with_words([word]).map_err(|err| at(&err))?;
-        }
+            Some(word)
+        });
+    let message = |message: &dyn std::fmt::Display| {
+        let (file, number) = at.get();
+        format!(
+            "{}: строка {}: {message}",
+            paths[file].display(),
+            number + 1
+        )
+    };
+    let dictionary = dictionary.with_words(words).map_err(|err| message(&err))?;
+    if wrong.get() {
+        return Err(message(&"нужны слово и образец через табуляцию"));
     }
     Ok(dictionary)
 }
@@ -1814,14 +1834,16 @@ mod tests {
         let words = dir.join("words.tsv");
         std::fs::write(
             &words,
-            "\u{feff}# свои слова\n\n  # с отступом\nпилить \tмыть\t\nкрама\t рама\tNOUN \n",
+            "\u{feff}# свои слова\n\n  # с отступом\nпилить \tмыть\t\nкрама\t рама\tNOUN \n\
+             выпилить\tпилить\n",
         )
         .unwrap();
         let path = words.to_str().unwrap();
-        let (code, out, error) = dict.run(&["-w", path], "пилила краму".as_bytes());
+        // Образец «выпилить» - свое слово из того же файла
+        let (code, out, error) = dict.run(&["-w", path], "пилила краму выпилила".as_bytes());
         assert_eq!(
             (code, out.as_str(), error.as_str()),
-            (0, "пилить крама\n", "")
+            (0, "пилить крама выпилить\n", "")
         );
         for (text, message) in [
             (
@@ -1835,6 +1857,10 @@ mod tests {
             (
                 "крама\tрама\nк т\tрама\n".as_bytes(),
                 "строка 2: Свое слово «к т» с пробелом не найдется в тексте",
+            ),
+            (
+                "крама\tрама\nпилить\n".as_bytes(),
+                "строка 2: нужны слово и образец через табуляцию",
             ),
             // «к», табуляция, «к», затем «ва» в cp1251
             (b"\xd0\xba\t\xd0\xba\n\xe2\xe0\n", "строка 2: не UTF-8"),
