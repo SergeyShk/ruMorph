@@ -137,7 +137,7 @@ impl Dictionary {
                     ..analysis
                 })
                 .collect();
-            return normalized(self.merge(analyses));
+            return self.normalized(self.merge(analyses));
         }
         // Протяжка («Что-о», «Да-а-а») - разбор слова без повторов последней буквы; в левой части
         // только кириллица, латиница и цифры, поэтому позиции в нижнем регистре те же
@@ -178,7 +178,7 @@ impl Dictionary {
                 })
                 .collect();
             if !analyses.is_empty() {
-                return normalized(self.merge(analyses));
+                return by_probability(self.merge(analyses));
             }
         }
         // Протяжка в середине слова и заикание вместе с протяжкой («не-е-ет», «Н-ну-у») - разборы
@@ -199,7 +199,7 @@ impl Dictionary {
                 })
                 .collect();
             if !analyses.is_empty() {
-                return normalized(analyses);
+                return by_probability(analyses);
             }
         }
         // Последняя часть - знаменательное слово, а не предлог или буква («К-за», «Коба-Т»)
@@ -248,7 +248,7 @@ impl Dictionary {
                 })
             })
             .collect();
-        normalized(self.merge(analyses))
+        self.normalized(self.merge(analyses))
     }
 
     /// Неизменяемое приложение из `APPOSITIONS` после существительного («программы-минимум»,
@@ -278,7 +278,7 @@ impl Dictionary {
                 ..head.clone()
             })
             .collect();
-        Some(normalized(self.merge(analyses)))
+        Some(self.normalized(self.merge(analyses)))
     }
 
     /// Первая часть слова через дефис изменяется вместе с последней: та же часть речи, падеж
@@ -369,16 +369,21 @@ impl Dictionary {
                 })
                 .collect();
             if !analyses.is_empty() {
-                return normalized(analyses);
+                return self.normalized(analyses);
             }
         }
         Vec::new()
     }
+
+    /// Разборы `by_probability` по лексемам, как угаданные (`by_lexemes`)
+    fn normalized(&self, analyses: Vec<Analysis>) -> Vec<Analysis> {
+        self.by_lexemes(by_probability(analyses))
+    }
 }
 
 /// Разборы с вероятностями, нормированными к единице (при нулевой сумме - поровну),
-/// по убыванию вероятности
-fn normalized(mut analyses: Vec<Analysis>) -> Vec<Analysis> {
+/// по убыванию вероятности: у слова с протяжкой - как у слова без нее
+fn by_probability(mut analyses: Vec<Analysis>) -> Vec<Analysis> {
     let total: f64 = analyses.iter().map(|analysis| analysis.prob).sum();
     let count = analyses.len() as f64;
     for analysis in &mut analyses {

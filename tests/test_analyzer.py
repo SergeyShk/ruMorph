@@ -336,6 +336,12 @@ def test_guess_lexeme_first(morph):
     assert morph.lemmatize(["манжетик", "сукол"]) == ["манжетик", "сукол"]
     first = morph.analyze("манжетик")[0]
     assert (first.lemma, first.source) == ("манжетик", "guess")
+    # Так же через дефис, с частицей и капсом
+    words = ["мини-манжетик", "манжетика-то", "АЛРОСОЙ"]
+    assert morph.lemmatize(words) == ["мини-манжетик", "манжетик-то", "алроса"]
+    # Формы лексем с равной суммой не перемешиваются
+    lexemes = [(a.lemma, a.pos) for a in morph.analyze("Аржантана")]
+    assert lexemes == sorted(lexemes, key=lexemes.index)
 
 
 def test_wiktionary_after_opencorpora(morph):
