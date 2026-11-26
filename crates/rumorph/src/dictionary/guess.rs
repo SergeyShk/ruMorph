@@ -463,11 +463,20 @@ impl Dictionary {
         lower: &str,
         exclude: &[Entry],
     ) -> Vec<Candidate> {
-        let bounds: Vec<usize> = lower.char_indices().map(|(at, _)| at).collect();
-        let mut candidates: Vec<Candidate> = Vec::new();
-        let mut list: Vec<(Entry, u32)> = Vec::new();
-        for length in (1..=GuessIndex::MAX_ENDING.min(bounds.len().saturating_sub(1))).rev() {
-            let ending = &lower[bounds[bounds.len() - length]..];
+        // Начала окончаний длины 1..=MAX_ENDING: окончание короче слова
+        let mut starts = [0; GuessIndex::MAX_ENDING];
+        let mut endings = 0;
+        for (at, _) in lower.char_indices().rev().take(GuessIndex::MAX_ENDING) {
+            if at == 0 {
+                break;
+            }
+            starts[endings] = at;
+            endings += 1;
+        }
+        let mut candidates: Vec<Candidate> = Vec::with_capacity(128);
+        let mut list: Vec<(Entry, u32)> = Vec::with_capacity(64);
+        for length in (1..=endings).rev() {
+            let ending = &lower[starts[length - 1]..];
             let Some(forms) = self
                 .alphabet
                 .key(index.byte(), ending)
@@ -494,18 +503,26 @@ impl Dictionary {
             }));
         }
         // Повтор формы из более короткого окончания отбрасывается: остается первое вхождение.
-        // Ключ - форма и место в списке одним числом: так сортировка дешевле
-        let mut keys: Vec<u64> = (candidates.iter().enumerate())
-            .map(|(at, candidate)| {
-                let Entry { table, form } = candidate.entry;
-                (u64::from(table) << 48) | (u64::from(form) << 32) | at as u64
-            })
-            .collect();
-        keys.sort_unstable();
-        keys.dedup_by_key(|key| *key >> 32);
-        let mut order: Vec<usize> = keys.iter().map(|&key| key as u32 as usize).collect();
-        order.sort_unstable();
-        order.into_iter().map(|at| candidates[at]).collect()
+        // Виденные формы - в открытой адресации на степень двойки не меньше двух чисел кандидатов
+        let mut seen = vec![0u64; (2 * candidates.len()).next_power_of_two()];
+        let mask = seen.len() - 1;
+        candidates.retain(|candidate| {
+            let Entry { table, form } = candidate.entry;
+            // Ноль - пустая ячейка
+            let key = ((u64::from(table) << 16) | u64::from(form)) + 1;
+            let mut at = (key.wrapping_mul(0x9E37_79B9_7F4A_7C15) >> 32) as usize & mask;
+            loop {
+                match seen[at] {
+                    0 => {
+                        seen[at] = key;
+                        return true;
+                    }
+                    known if known == key => return false,
+                    _ => at = (at + 1) & mask,
+                }
+            }
+        });
+        candidates
     }
 
     /// Примеры обучения модели класса парадигмы: кандидаты словарного слова в нижнем регистре
@@ -638,7 +655,7 @@ fn unpack(packed: u32) -> Entry {
 }
 
 fn vowel(c: char) -> bool {
-    "аеёиоуыэюя".contains(c)
+    matches!(c, 'а' | 'е' | 'ё' | 'и' | 'о' | 'у' | 'ы' | 'э' | 'ю' | 'я')
 }
 
 /// Слово на -ский, -цкий или их форму: у слова с заглавной буквы это чаще прилагательное
