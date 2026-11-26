@@ -275,7 +275,11 @@ fn outweighed(
             *plain.entry(key).or_default() += prior;
         }
     }
-    plain.values().all(|&share| abbreviated >= share)
+    // Без частот словаря доли равны по построению (группа сокращения - k долей 1/n/k), и сумма
+    // при округлении бывает чуть меньше 1/n: сравнение - с запасом
+    plain
+        .values()
+        .all(|&share| abbreviated >= share * (1.0 - 1e-9))
 }
 
 /// Доли словаря `priors` разборов `analyses` голого слова с сокращениями и обычными разборами,
@@ -393,9 +397,19 @@ mod tests {
     /// разбор; без частот словаря. У «к» и «в» - сокращение и обычные разборы с частотами: у «к»
     /// сокращение вероятнее каждого из них, у «в» - нет
     fn dictionary() -> Dictionary {
-        let tags = ["INFN", "VERB", "NOUN", "NOUN Abbr"]
-            .map(String::from)
-            .to_vec();
+        let tags = [
+            "INFN",
+            "VERB",
+            "NOUN",
+            "NOUN Abbr",
+            "NOUN Abbr gent",
+            "NOUN Abbr datv",
+            "NOUN Abbr accs",
+            "NOUN Abbr ablt",
+            "NOUN Abbr loct",
+        ]
+        .map(String::from)
+        .to_vec();
         let suffixes = ["", "ть", "ли", "ь", "и"].map(String::from).to_vec();
         let mut builder = Builder::new(tags, vec![String::new()], suffixes);
         let infinitive = builder.add_ud_tag("VERB", "VerbForm=Inf", &[]).unwrap();
@@ -457,6 +471,20 @@ mod tests {
                 builder.add_probability(word, tag, share).unwrap();
             }
         }
+        // «ан» без частот словаря: несклоняемое сокращение - шесть падежей одного разбора UD,
+        // и три обычных разбора; доля сокращения равна доле каждого из них
+        let cases = builder
+            .add_paradigm(&[3, 4, 5, 6, 7, 8].map(|tag| (0, tag, 0)))
+            .unwrap();
+        let uninflected = builder.add_table(cases, &[(0, abbreviation); 6]).unwrap();
+        let infinitive_table = bare(&mut builder, 0, infinitive);
+        let mut entries: Vec<Entry> = (0..6).map(|form| entry(uninflected, form)).collect();
+        entries.extend([
+            entry(noun_table, 0),
+            entry(verb_table, 0),
+            entry(infinitive_table, 0),
+        ]);
+        builder.add_word("ан", &entries).unwrap();
         Dictionary::from_bytes(&builder.build().unwrap()).unwrap()
     }
 
@@ -526,6 +554,27 @@ mod tests {
         assert_eq!(shares(0), [166_667, 333_333, 500_000]);
         // «с» без частот словаря - доли по счетчикам, как у слова без сокращений: (9 + 2,5) / 14 и 2,5 / 14
         assert_eq!(shares(1), [178_571, 821_429]);
+    }
+
+    #[test]
+    fn equal_shares_without_frequencies() {
+        // Сумма шести долей 1/24 сокращения «ан» при округлении меньше 1/4 - а доли все равно равны:
+        // счетчики глаголов (4,5 + 1,25 каждому) берутся, сокращение и существительное - доли словаря
+        let counts = read("ан\tVERB\tан\t9\t0\n").unwrap();
+        let lists = blend(&dictionary(), &counts);
+        assert_eq!(lists.len(), 1);
+        let mut shares: Vec<u32> = lists[0]
+            .1
+            .iter()
+            .map(|&(_, millionths)| millionths)
+            .collect();
+        shares.sort_unstable();
+        assert_eq!(
+            shares,
+            [
+                14_881, 14_881, 14_881, 14_881, 14_881, 14_881, 89_286, 410_714, 410_714
+            ]
+        );
     }
 
     /// «земли» и «воли» - нарицательные и имена собственные, без частот словаря; «земля» - из
