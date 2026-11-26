@@ -8,7 +8,7 @@ use std::collections::HashMap;
 
 use super::guess::GuessIndex;
 use super::ud::UdTags;
-use super::weights::{self, Entries, Lstm, MAX_DIM, Matrix, Tiled, add, dot, lstm};
+use super::weights::{self, Entries, Lstm, MAX_DIM, Matrix, Tiled, add, dot, lstm_steps};
 use crate::Error;
 use crate::format::Strings;
 
@@ -141,6 +141,8 @@ pub(crate) struct Paradigms {
     tags: Vec<f32>,
     /// Строка таблиц суффиксов модели по номеру суффикса словаря: 0 - суффикса не было при обучении
     suffix_rows: Vec<u32>,
+    /// Суммы входа ворот LSTM со смещением по строке таблицы букв
+    letters: Vec<f32>,
 }
 
 impl Paradigms {
@@ -166,10 +168,16 @@ impl Paradigms {
                     .unwrap_or(0)
             })
             .collect();
+        let mut letters = vec![0.0; model.char.rows * 4 * model.lstm.hidden.cols];
+        model
+            .lstm
+            .input
+            .apply_all(&model.char.data, &model.lstm.bias, &mut letters);
         Paradigms {
             model,
             tags,
             suffix_rows,
+            letters,
         }
     }
 
@@ -177,14 +185,14 @@ impl Paradigms {
     /// с конца, «ё» - как «е»
     pub fn word(&self, lower: &str) -> Word {
         let model = &self.model;
-        let dchar = model.char.cols;
-        let mut input = Vec::with_capacity(model.max_chars * dchar);
+        let width = 4 * model.lstm.hidden.cols;
+        let mut gates = Vec::with_capacity(model.max_chars * width);
         for letter in lower.chars().rev().take(model.max_chars) {
             let letter = if letter == 'ё' { 'е' } else { letter };
-            let row = model.chars.get(&letter).copied().unwrap_or(1);
-            input.extend_from_slice(model.char.row(row as usize));
+            let row = model.chars.get(&letter).copied().unwrap_or(1) as usize;
+            gates.extend_from_slice(&self.letters[row * width..(row + 1) * width]);
         }
-        let state = lstm(&model.lstm, &input, input.len() / dchar);
+        let state = lstm_steps(&model.lstm, &mut gates);
         let mut vector = vec![0.0; model.hidden.rows + 1];
         model.hidden.apply(&state, &mut vector[..model.hidden.rows]);
         for (value, bias) in vector.iter_mut().zip(&model.hidden_bias) {

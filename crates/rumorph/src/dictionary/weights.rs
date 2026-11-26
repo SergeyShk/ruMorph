@@ -478,11 +478,10 @@ pub(super) fn bilstm(layer: &[Lstm; 2], input: &[f32], n: usize, d: usize) -> Ve
     output
 }
 
-/// Слой LSTM одного направления: состояние после последнего из `n` входов
-pub(super) fn lstm(cell: &Lstm, input: &[f32], n: usize) -> Vec<f32> {
+/// Слой LSTM одного направления по суммам входа ворот со смещением `gates_input` (по `4 * hidden`
+/// на шаг): состояние после последнего шага
+pub(super) fn lstm_steps(cell: &Lstm, gates_input: &mut [f32]) -> Vec<f32> {
     let hidden = cell.hidden.cols;
-    let mut gates_input = vec![0.0f32; n * 4 * hidden];
-    cell.input.apply_all(input, &cell.bias, &mut gates_input);
     let (mut h, mut c) = (vec![0.0f32; hidden], vec![0.0f32; hidden]);
     for gates in gates_input.chunks_exact_mut(4 * hidden) {
         cell.hidden.apply_add(&h, gates);
@@ -597,7 +596,10 @@ pub(crate) mod tests {
         };
         let input: Vec<f32> = (0..10).map(|i| value(i + 5)).collect();
         let both = bilstm(&[cell(0), cell(3)], &input, 5, 6);
-        assert_eq!(lstm(&cell(0), &input, 5), both[4 * 6..4 * 6 + 3]);
+        let forward = cell(0);
+        let mut gates = vec![0.0; 5 * 12];
+        forward.input.apply_all(&input, &forward.bias, &mut gates);
+        assert_eq!(lstm_steps(&forward, &mut gates), both[4 * 6..4 * 6 + 3]);
     }
 
     #[test]
