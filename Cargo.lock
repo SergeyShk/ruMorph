@@ -167,6 +167,7 @@ dependencies = [
  "crc32fast",
  "fst",
  "memmap2",
+ "once_cell",
  "rumorph-dict-ru",
  "unicode-normalization",
 ]
@@ -190,6 +191,7 @@ dependencies = [
 name = "rumorph-py"
 version = "0.8.0-dev.2"
 dependencies = [
+ "once_cell",
  "pyo3",
  "rumorph",
 ]

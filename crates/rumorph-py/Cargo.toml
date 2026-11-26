@@ -14,5 +14,6 @@ name = "_rumorph"
 crate-type = ["cdylib"]
 
 [dependencies]
+once_cell = { version = "1.21.4", default-features = false, features = ["alloc"] }
 pyo3 = { version = "0.30.1", features = ["abi3-py311"] }
 rumorph = { path = "../rumorph", default-features = false, features = ["cli"] }
