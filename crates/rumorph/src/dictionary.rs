@@ -5,12 +5,13 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::ops::Range;
 use std::panic::AssertUnwindSafe;
 use std::path::Path;
-use std::sync::{Arc, Once, OnceLock};
+use std::sync::{Arc, Once};
 
 use fst::Map;
 
 use crate::Error;
 use crate::alphabet::{Alphabet, Key, yo_order};
+use crate::dictionary::once::BuildOnce;
 use crate::format::{
     self, ENTRY_KEYS, Layout, MAX_LIST, MAX_SPELLINGS, RARE_WORD, Slice, Storage, Strings,
     WordValue,
@@ -24,6 +25,7 @@ mod document;
 #[doc(hidden)]
 pub type Fields<'d> = (String, &'d str, Option<String>);
 mod guess;
+mod once;
 mod own;
 mod paradigm;
 mod parts;
@@ -186,11 +188,11 @@ pub struct Dictionary {
     /// Свои слова (`with_words`): копии словаря делят их, пока не добавят свои
     own_words: Arc<own::OwnWords>,
     /// Контекстная модель секции словаря: читается при первом разборе предложения, копии ее делят
-    context: Arc<OnceLock<Result<context::Context, String>>>,
+    context: Arc<BuildOnce<Result<context::Context, String>>>,
     /// Модель класса парадигмы секции словаря: читается при первом угадывании, копии ее делят
-    paradigms: Arc<OnceLock<Result<paradigm::Paradigms, String>>>,
+    paradigms: Arc<BuildOnce<Result<paradigm::Paradigms, String>>>,
     /// Тег без пометы Prnt по номеру тега с ней (`without_parenthetical`)
-    without_prnt: Arc<OnceLock<HashMap<u16, u16>>>,
+    without_prnt: Arc<BuildOnce<HashMap<u16, u16>>>,
     features: BTreeMap<String, BTreeSet<String>>,
     /// Пометы тегов UD словаря
     labels: BTreeSet<String>,
@@ -380,9 +382,9 @@ impl Dictionary {
             proper_nouns: Vec::new(),
             abbreviation_grammemes: Vec::new(),
             own_words: Arc::default(),
-            context: Arc::new(OnceLock::new()),
-            paradigms: Arc::new(OnceLock::new()),
-            without_prnt: Arc::new(OnceLock::new()),
+            context: Arc::new(BuildOnce::new()),
+            paradigms: Arc::new(BuildOnce::new()),
+            without_prnt: Arc::new(BuildOnce::new()),
             meta,
             alphabet,
             layout,
@@ -659,37 +661,35 @@ impl Dictionary {
 
     /// Тег без пометы Prnt по номеру тега с ней: строится при первом разборе предложения
     fn without_parenthetical(&self) -> &HashMap<u16, u16> {
-        if let Some(plain) = self.without_prnt.get() {
-            return plain;
-        }
-        // Строится вне ячейки, как контекстная модель: из-за fork
-        let mut plain = HashMap::new();
-        if let Some(prnt) = self.ud.string_number("Prnt") {
-            let count = self.ud.len() as u16;
-            let mut tags: HashMap<(u16, &[u16], Vec<u16>), u16> = HashMap::new();
-            for number in 0..count {
-                if let Some((pos, feats, labels)) = self.ud.numbers(number) {
-                    tags.entry((pos, feats, labels.to_vec())).or_insert(number);
+        self.without_prnt.get_or_build(|| {
+            let mut plain = HashMap::new();
+            if let Some(prnt) = self.ud.string_number("Prnt") {
+                let count = self.ud.len() as u16;
+                let mut tags: HashMap<(u16, &[u16], Vec<u16>), u16> = HashMap::new();
+                for number in 0..count {
+                    if let Some((pos, feats, labels)) = self.ud.numbers(number) {
+                        tags.entry((pos, feats, labels.to_vec())).or_insert(number);
+                    }
+                }
+                for number in 0..count {
+                    let Some((pos, feats, labels)) = self.ud.numbers(number) else {
+                        continue;
+                    };
+                    if !labels.contains(&prnt) {
+                        continue;
+                    }
+                    let rest: Vec<u16> = labels
+                        .iter()
+                        .copied()
+                        .filter(|&label| label != prnt)
+                        .collect();
+                    if let Some(&without) = tags.get(&(pos, feats, rest)) {
+                        plain.insert(number, without);
+                    }
                 }
             }
-            for number in 0..count {
-                let Some((pos, feats, labels)) = self.ud.numbers(number) else {
-                    continue;
-                };
-                if !labels.contains(&prnt) {
-                    continue;
-                }
-                let rest: Vec<u16> = labels
-                    .iter()
-                    .copied()
-                    .filter(|&label| label != prnt)
-                    .collect();
-                if let Some(&without) = tags.get(&(pos, feats, rest)) {
-                    plain.insert(number, without);
-                }
-            }
-        }
-        self.without_prnt.get_or_init(move || plain)
+            plain
+        })
     }
 
     /// Поля CoNLL-U первого разбора каждого слова предложения: лемма, часть речи
@@ -736,22 +736,16 @@ impl Dictionary {
 
     /// Контекстная модель словаря: читается один раз на словарь и его копии
     fn context(&self) -> Result<&context::Context, Error> {
-        // Модель строится вне ячейки: fork из другого потока, пока ячейка занята, оставил бы
-        // ребенка ждать ее вечно. Два потока могут построить ее одновременно - в ячейку попадет одна
-        let context = match self.context.get() {
-            Some(context) => context,
-            None => {
-                let bytes = &self.storage.bytes()[self.layout.context.clone()];
-                let built = if bytes.is_empty() {
-                    Err("В словаре нет контекстной модели: разбор предложения недоступен".into())
-                } else {
-                    context::Model::parse(bytes)
-                        .map(|model| context::Context::new(model, &self.ud))
-                        .map_err(|err| err.to_string())
-                };
-                self.context.get_or_init(move || built)
+        let context = self.context.get_or_build(|| {
+            let bytes = &self.storage.bytes()[self.layout.context.clone()];
+            if bytes.is_empty() {
+                Err("В словаре нет контекстной модели: разбор предложения недоступен".into())
+            } else {
+                context::Model::parse(bytes)
+                    .map(|model| context::Context::new(model, &self.ud))
+                    .map_err(|err| err.to_string())
             }
-        };
+        });
         context
             .as_ref()
             .map_err(|message| Error::Context(message.clone()))
@@ -763,21 +757,16 @@ impl Dictionary {
         if self.layout.paradigm_model.is_empty() {
             return Ok(None);
         }
-        // Модель строится вне ячейки, как контекстная: из-за fork
-        let model = match self.paradigms.get() {
-            Some(model) => model,
-            None => {
-                let bytes = &self.storage.bytes()[self.layout.paradigm_model.clone()];
-                // Сообщение без префикса `Error::Format`: его добавляет ошибка ниже
-                let built = paradigm::Model::parse(bytes)
-                    .map(|model| paradigm::Paradigms::new(model, &self.ud, &self.suffixes))
-                    .map_err(|err| match err {
-                        Error::Format(message) => message,
-                        other => other.to_string(),
-                    });
-                self.paradigms.get_or_init(move || built)
-            }
-        };
+        let model = self.paradigms.get_or_build(|| {
+            let bytes = &self.storage.bytes()[self.layout.paradigm_model.clone()];
+            // Сообщение без префикса `Error::Format`: его добавляет ошибка ниже
+            paradigm::Model::parse(bytes)
+                .map(|model| paradigm::Paradigms::new(model, &self.ud, &self.suffixes))
+                .map_err(|err| match err {
+                    Error::Format(message) => message,
+                    other => other.to_string(),
+                })
+        });
         model
             .as_ref()
             .map(Some)

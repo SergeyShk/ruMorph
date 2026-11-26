@@ -136,7 +136,7 @@ Lists of words are processed without the GIL, so several threads sharing one ana
 | Growth of process memory | 24.2 MB | 34.5 MB | 25.5 MB |
 | Every further process | 2.6 MB | 32.5 MB | 23.1 MB |
 
-The context model is read at the first sentence analysis: 4 ms and 5 MB of memory, the paradigm class model at the first guess of a lowercase word: 5 ms and 4 MB. Analyzers with the same dictionary file in a process share the dictionary and the model. The dictionary file is mapped into memory, so `multiprocessing` or joblib processes and web server workers share it too: every further process adds only the analyzer's own tables.
+The context model is read at the first sentence analysis: 4 ms and 5 MB of memory, the paradigm class model at the first guess of a lowercase word: 5 ms and 4 MB. Analyzers with the same dictionary file in a process share the dictionary and the models, and simultaneous first calls from several threads build a model once. The dictionary file is mapped into memory, so `multiprocessing` or joblib processes and web server workers share it too: every further process adds only the analyzer's own tables.
 
 ## How it was measured { #method }
 

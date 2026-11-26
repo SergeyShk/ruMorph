@@ -1318,9 +1318,9 @@ def test_fork_while_building_own_words(morph, fork_tracebacks):
 
 @pytest.mark.skipif(not hasattr(os, "fork"), reason="нет fork")
 @pytest.mark.filterwarnings("ignore::DeprecationWarning")
-def test_fork_while_building_context(morph, tmp_path, fork_tracebacks):
-    # Процесс, созданный fork, пока другой поток строит контекстную модель, не зависает на ней:
-    # два файла словаря по очереди - модель каждый раз строится заново
+def test_fork_while_building_models(morph, tmp_path, fork_tracebacks):
+    # Процесс, созданный fork, пока другой поток строит контекстную модель и модель класса
+    # парадигмы, не зависает на них: два файла словаря по очереди - модели каждый раз строятся заново
     paths = [tmp_path / f"{name}.dict" for name in "ab"]
     for path in paths:
         shutil.copy(morph.path, path)
@@ -1329,7 +1329,9 @@ def test_fork_while_building_context(morph, tmp_path, fork_tracebacks):
     def build():
         number = 0
         while not stop.is_set():
-            Analyzer(paths[number % 2]).analyze_sentence(["Я", "читаю"])
+            analyzer = Analyzer(paths[number % 2])
+            analyzer.analyze_sentence(["Я", "читаю"])
+            analyzer.analyze("зкчитать")
             number += 1
 
     thread = threading.Thread(target=build)
@@ -1339,8 +1341,14 @@ def test_fork_while_building_context(morph, tmp_path, fork_tracebacks):
             time.sleep(0.013)
             pid = os.fork()
             if pid == 0:
-                sentences = [Analyzer(path).analyze_sentence(["Я", "читаю"]) for path in paths]
-                os._exit(0 if all(len(sentence) == 2 for sentence in sentences) else 1)
+                analyzers = [Analyzer(path) for path in paths]
+                sentences = [analyzer.analyze_sentence(["Я", "читаю"]) for analyzer in analyzers]
+                guessed = [analyzer.analyze("зкчитать")[0].lemma for analyzer in analyzers]
+                ok = (
+                    all(len(sentence) == 2 for sentence in sentences)
+                    and guessed == ["зкчитать"] * 2
+                )
+                os._exit(0 if ok else 1)
             assert child_exit_code(pid) == 0
     finally:
         stop.set()

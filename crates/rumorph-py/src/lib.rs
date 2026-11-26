@@ -7,9 +7,10 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, OnceLock, PoisonError, Weak};
+use std::sync::{Arc, Mutex, PoisonError, Weak};
 use std::time::SystemTime;
 
+use once_cell::race::OnceBox;
 use pyo3::create_exception;
 use pyo3::exceptions::{
     PyAttributeError, PyFileNotFoundError, PyLookupError, PyOSError, PyOverflowError, PyTypeError,
@@ -156,8 +157,7 @@ impl Analysis {
             .shared
             .ud
             .get(usize::from(self.inner.ud))
-            .and_then(OnceLock::get)
-            .map(Box::as_ref)
+            .and_then(OnceBox::get)
             .ok_or_else(|| PyValueError::new_err("Нет тега UD"))
     }
 }
@@ -569,7 +569,7 @@ struct Shared {
     dictionary: rumorph::Dictionary,
     /// Объекты тегов UD создаются при первом разборе с тегом: в тексте встречается малая доля тегов,
     /// поэтому ячейка - указатель, а не сами объекты
-    ud: Vec<OnceLock<Box<UdObjects>>>,
+    ud: Vec<OnceBox<UdObjects>>,
     /// Путь, по которому словарь загружен
     path: PathBuf,
     /// Копии словаря со своими словами: последняя держится, пока жив сам словарь, поэтому разборы
@@ -615,7 +615,7 @@ enum CopyLookup {
 
 impl Shared {
     fn new(dictionary: rumorph::Dictionary, path: &Path) -> Self {
-        let ud = dictionary.ud_tags().map(|_| OnceLock::new()).collect();
+        let ud = dictionary.ud_tags().map(|_| OnceBox::new()).collect();
         Shared {
             dictionary,
             ud,
@@ -1780,7 +1780,6 @@ impl Analyzer {
                 py,
                 shared.dictionary.ud_tag(analysis.ud).ok_or_else(missing)?,
             )
-            .map(Box::new)
         })?;
         Ok(Analysis {
             inner: analysis,
@@ -1789,16 +1788,12 @@ impl Analyzer {
     }
 }
 
-/// Значение ячейки, созданное при первом обращении. Значение создается до записи в ячейку,
-/// и поток, в отличие от `PyOnceLock`, не ждет Python, заняв ее: fork, заставший такое ожидание,
-/// оставил бы ячейку занятой навсегда, и дочерний процесс завис бы на ней. Если два потока создали значение
-/// одновременно, лишнее освобождается здесь, в потоке Python
-fn once<T>(cell: &OnceLock<T>, init: impl FnOnce() -> PyResult<T>) -> PyResult<&T> {
-    if let Some(value) = cell.get() {
-        return Ok(value);
-    }
-    let value = init()?;
-    Ok(cell.get_or_init(move || value))
+/// Значение ячейки, созданное при первом обращении. Ячейка - указатель без состояния «занято»,
+/// и поток, в отличие от `OnceLock` и `PyOnceLock`, не ждет ни Python, ни другой поток: fork,
+/// заставший такое ожидание, оставил бы ячейку занятой навсегда, и дочерний процесс завис бы на ней.
+/// Если два потока создали значение одновременно, лишнее освобождается здесь, в потоке Python
+fn once<T>(cell: &OnceBox<T>, init: impl FnOnce() -> PyResult<T>) -> PyResult<&T> {
+    cell.get_or_try_init(|| init().map(Box::new))
 }
 
 fn join<'a>(values: impl IntoIterator<Item = &'a String>) -> String {
@@ -2021,7 +2016,7 @@ fn type_error(message: &str, value: &Bound<'_, PyAny>) -> PyErr {
 /// и Fraction. Согласование зависит от двух последних цифр и от того, меньше ли количество 5,
 /// поэтому числа больше u64 сводятся к 100-199
 fn count(number: &Bound<'_, PyAny>) -> PyResult<Option<u64>> {
-    static INDEX: OnceLock<Py<PyAny>> = OnceLock::new();
+    static INDEX: OnceBox<Py<PyAny>> = OnceBox::new();
     let py = number.py();
     let integer = if number.is_instance_of::<PyInt>() {
         number.clone()
@@ -2054,7 +2049,7 @@ fn count(number: &Bound<'_, PyAny>) -> PyResult<Option<u64>> {
 /// «21.0») и `Fraction` со знаменателем 1; `None` - дробное количество. Конечность проверяется
 /// без перевода в float: «1E+400» - конечное целое
 fn integral<'py>(number: &Bound<'py, PyAny>) -> PyResult<Option<Bound<'py, PyAny>>> {
-    static TYPES: OnceLock<(Py<PyAny>, Py<PyAny>, Py<PyAny>)> = OnceLock::new();
+    static TYPES: OnceBox<(Py<PyAny>, Py<PyAny>, Py<PyAny>)> = OnceBox::new();
     let py = number.py();
     let (decimal, rational, real) = once(&TYPES, || {
         let numbers = py.import("numbers")?;
