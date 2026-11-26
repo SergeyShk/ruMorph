@@ -107,11 +107,11 @@ jobs:
           cargo run --release --locked -p rumorph-build -- build/opencorpora build/ud python/rumorph/data/ru.dict data/ru-context.bin data/ru-paradigms.bin
           uv run --no-sync python -c "import hashlib; print(hashlib.sha256(open('python/rumorph/data/ru.dict', 'rb').read()).hexdigest())"
       - name: Check dictionary size
-        # Словарь едет на crates.io в архиве крейта rumorph-dict-ru, а там предел - 10 МиБ: PR, меняющий
-        # только скрипты словаря, проверяет его здесь, а не на релизном теге
+        # Словарь едет на crates.io сжатым zstd в крейте rumorph-dict-ru, а там предел - 10 МиБ: PR,
+        # меняющий только скрипты словаря, проверяет его здесь, а не на релизном теге
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
         run: |
-          size="$(gzip -9 -c python/rumorph/data/ru.dict | wc -c)"
+          size="$(zstd -19 -q -c python/rumorph/data/ru.dict | wc -c)"
           echo "ru.dict compressed: $size bytes"
           [ "$size" -lt 10420224 ] || { echo "The compressed dictionary does not fit the crates.io limit of 10 MiB"; exit 1; }
       - name: Run tests

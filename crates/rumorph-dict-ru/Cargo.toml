@@ -11,5 +11,8 @@ homepage = "https://sergeyshk.github.io/ruMorph/"
 readme = "README.md"
 keywords = ["russian", "dictionary", "morphology", "opencorpora", "nlp"]
 categories = ["text-processing"]
-# Файл словаря не хранится в git: перед публикацией его кладет сюда CI
-include = ["build.rs", "src/**", "README.md", "LICENSE-DICTIONARY.txt", "ru.dict"]
+# Файл словаря не хранится в git: перед публикацией CI кладет сюда сжатый ru.dict.zst
+include = ["build.rs", "src/**", "README.md", "LICENSE-DICTIONARY.txt", "ru.dict.zst"]
+
+[build-dependencies]
+ruzstd = { version = "0.9.1", default-features = false, features = ["std"] }

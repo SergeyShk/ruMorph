@@ -300,8 +300,9 @@ jobs:
       # feature: команда rumorph ставится из крейта (cargo install rumorph --features cli)
       - name: Package crates
         run: |
+          zstd -19 -q --rm crates/rumorph-dict-ru/ru.dict
           cargo package --locked --allow-dirty --all-features -p rumorph-dict-ru -p rumorph
-          cargo package --list --locked --allow-dirty -p rumorph-dict-ru | grep -qx ru.dict || { echo "No dictionary in rumorph-dict-ru"; exit 1; }
+          cargo package --list --locked --allow-dirty -p rumorph-dict-ru | grep -qx ru.dict.zst || { echo "No dictionary in rumorph-dict-ru"; exit 1; }
           size="$(stat -c %s target/package/rumorph-dict-ru-*.crate)"
           echo "rumorph-dict-ru: $size bytes"
           [ "$size" -lt 10485760 ] || { echo "rumorph-dict-ru exceeds the crates.io limit of 10 MiB"; exit 1; }
@@ -478,6 +479,7 @@ jobs:
       # после сбоя между крейтами допубликует оставшийся
       - name: Publish crates
         run: |
+          zstd -19 -q --rm crates/rumorph-dict-ru/ru.dict
           version="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "rumorph") | .version')"
           for crate in rumorph-dict-ru rumorph; do
             if curl -sf "https://index.crates.io/ru/mo/$crate" | grep -qF "\"vers\":\"$version\""; then
