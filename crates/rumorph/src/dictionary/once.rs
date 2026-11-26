@@ -29,7 +29,7 @@ impl<T> BuildOnce<T> {
         if let Some(value) = self.value.get() {
             return value;
         }
-        let process = std::process::id();
+        let process = process();
         loop {
             if let Some(value) = self.value.get() {
                 return value;
@@ -49,6 +49,11 @@ impl<T> BuildOnce<T> {
         let _release = Release(&self.builder);
         self.value.get_or_init(|| Box::new(build()))
     }
+}
+
+/// Номер процесса; на целях без процессов (wasm32, WASI) `std::process::id` паникует, а fork там нет
+fn process() -> u32 {
+    if cfg!(unix) { std::process::id() } else { 1 }
 }
 
 /// Снимает отметку сборщика и при панике сборки: иначе ждущие потоки ждали бы вечно
@@ -92,7 +97,7 @@ mod tests {
         // Так ячейку видит ребенок fork, заставшего сборку в родителе
         let cell = BuildOnce::new();
         cell.builder
-            .store(std::process::id().wrapping_add(1), Ordering::Relaxed);
+            .store(process().wrapping_add(1), Ordering::Relaxed);
         assert_eq!(*cell.get_or_build(|| 7), 7);
     }
 
