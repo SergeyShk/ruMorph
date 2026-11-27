@@ -4,8 +4,8 @@
 Описание:
     Скачивает обучающие части UD_Russian-Taiga и UD_Russian-GSD (CC BY-SA 4.0) закрепленного
     релиза UD, проверяет их контрольные суммы и пишет, сколько раз каждая словоформа (в нижнем
-    регистре, «ё» как «е») размечена каждой парой «часть речи, лемма» всего и с заглавной буквы
-    (counts.tsv; лемма - в нижнем регистре с «ё»: «все» и «всё» - разные леммы; разметка -
+    регистре, «ё» как «е») размечена каждой парой «часть речи, лемма» всего, с заглавной буквы
+    и с признаком Abbr=Yes (counts.tsv; лемма - в нижнем регистре с «ё»: «все» и «всё» - разные леммы; разметка -
     в соглашениях ruMorph, `conventions.py`), и описание
     источников (sources.json). Скачанные файлы хранятся в каталоге выгрузки и повторно не
     скачиваются.
@@ -69,6 +69,7 @@ def export(output: Path) -> None:
     raw.mkdir(parents=True, exist_ok=True)
     counts: Counter[tuple[str, str, str]] = Counter()
     capitalized: Counter[tuple[str, str, str]] = Counter()
+    abbreviated: Counter[tuple[str, str, str]] = Counter()
     for treebank, (commit, files) in SOURCES.items():
         for name, digest in files.items():
             path = raw / name
@@ -82,9 +83,13 @@ def export(output: Path) -> None:
                     key = normal(token.form), token.upos, token.lemma.lower()
                     counts[key] += 1
                     capitalized[key] += token.form[:1].isupper()
+                    abbreviated[key] += token.feats.get("Abbr") == "Yes"
     with (output / "counts.tsv").open("w", encoding="utf-8") as file:
-        for (word, pos, lemma), count in sorted(counts.items()):
-            file.write(f"{word}\t{pos}\t{lemma}\t{count}\t{capitalized[word, pos, lemma]}\n")
+        for key, count in sorted(counts.items()):
+            word, pos, lemma = key
+            file.write(
+                f"{word}\t{pos}\t{lemma}\t{count}\t{capitalized[key]}\t{abbreviated[key]}\n"
+            )
     sources = {
         "release": RELEASE,
         "treebanks": list(SOURCES),
