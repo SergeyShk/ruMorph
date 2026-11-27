@@ -12,7 +12,7 @@ The share of words whose first analysis has the right part of speech and lemma, 
 
 | System | SynTagRus | Taiga | GSD |
 | :----- | :-------- | :---- | :-- |
-| ruMorph | **94.1** (98.5) | **90.9** (96.0) | **92.3** (95.7) |
+| ruMorph | **94.1** (98.6) | **90.9** (96.0) | **92.3** (95.7) |
 | pymorphy3 | 84.8 (90.6) | 82.9 (88.9) | 84.3 (87.9) |
 | mystem | 81.9 (86.4) | 79.4 (83.8) | 79.9 (83.9) |
 
@@ -35,7 +35,7 @@ Taggers see the sentence and choose one analysis; ruMorph here is the analysis i
 
     | System | Part of speech | Lemma | Features |
     | :----- | :------------- | :---- | :------- |
-    | ruMorph in context | **95.0** | **96.9** | **93.9** |
+    | ruMorph in context | **95.0** | **97.0** | **93.9** |
     | Stanza | 94.5 | 94.9 | 90.3 |
     | spaCy ru_core_news_sm | 89.8 | 87.9 | 83.3 |
     | Slovnet (Natasha) | 88.2 | - | 81.1 |
@@ -59,8 +59,8 @@ The default Stanza model is trained on SynTagRus, so its test part is Stanza's o
 
         | System | Lemma | Part of speech | Case | Number | Features | All together |
         | :----- | :---- | :------------- | :--- | :----- | :------- | :----------- |
-        | ruMorph | 96.9 | 95.3 | 88.0 | 96.4 | 84.0 | 82.2 |
-        | ruMorph in context | 98.1 | 97.3 | 97.8 | 98.8 | 95.4 | 93.8 |
+        | ruMorph | 96.9 | 95.3 | 88.1 | 96.5 | 84.0 | 82.2 |
+        | ruMorph in context | 98.1 | 97.3 | 97.9 | 98.8 | 95.4 | 93.8 |
         | pymorphy3 | 94.1 | 87.0 | 87.0 | 94.8 | - | - |
         | mystem | 90.9 | 88.2 | 76.9 | 92.7 | - | - |
         | spaCy ru_core_news_sm | 90.7 | 94.1 | 95.6 | 97.3 | 87.9 | 82.0 |
@@ -72,7 +72,7 @@ The default Stanza model is trained on SynTagRus, so its test part is Stanza's o
         | System | Lemma | Part of speech | Case | Number | Features | All together |
         | :----- | :---- | :------------- | :--- | :----- | :------- | :----------- |
         | ruMorph | 95.8 | 92.4 | 86.8 | 95.5 | 82.1 | 78.2 |
-        | ruMorph in context | 96.9 | 95.0 | 97.2 | 98.1 | 93.9 | 90.5 |
+        | ruMorph in context | 97.0 | 95.0 | 97.2 | 98.1 | 93.9 | 90.6 |
         | pymorphy3 | 92.7 | 85.3 | 85.7 | 93.8 | - | - |
         | mystem | 90.5 | 85.2 | 77.0 | 91.7 | - | - |
         | spaCy ru_core_news_sm | 87.9 | 89.8 | 91.7 | 94.0 | 83.3 | 75.5 |
@@ -83,7 +83,7 @@ The default Stanza model is trained on SynTagRus, so its test part is Stanza's o
 
         | System | Lemma | Part of speech | Case | Number | Features | All together |
         | :----- | :---- | :------------- | :--- | :----- | :------- | :----------- |
-        | ruMorph | 96.5 | 93.9 | 80.9 | 93.2 | 73.1 | 71.4 |
+        | ruMorph | 96.5 | 94.0 | 80.9 | 93.2 | 73.1 | 71.4 |
         | ruMorph in context | 97.5 | 95.6 | 90.5 | 94.8 | 83.5 | 81.8 |
         | pymorphy3 | 94.5 | 86.1 | 79.7 | 92.3 | - | - |
         | mystem | 91.2 | 85.5 | 66.3 | 88.1 | - | - |
@@ -119,7 +119,7 @@ Thousands of words or analyses per second compared with pymorphy3, more is bette
 | :-------- | :------ | :-------- | :-------------- |
 | Analysis of a word form: `analyze` in a loop, `parse` | 654 | 20 | 104 |
 | Analysis of a list: `analyze_many` | 693 | - | - |
-| Unknown lowercase word: `analyze`, `parse` | 71 | 12 | 48 |
+| Unknown lowercase word: `analyze`, `parse` | 86 | 12 | 48 |
 | Lemmatization: `lemmatize`, `parse(word)[0].normal_form` | 1,296 | 22 | 169 |
 | Lemmatization in 4 threads: `lemmatize` | 4,086 | - | - |
 | Form by features: `inflect(Case="Gen")`, `inflect({"gent"})` | 1,425 | 76 | 76 |
@@ -141,6 +141,6 @@ The context model is read at the first sentence analysis: 4 ms and 5 MB of memor
 ## How it was measured { #method }
 
 - Quality and text analysis - the [`scripts/compare.py`](https://github.com/SergeyShk/ruMorph/blob/master/scripts/compare.py) script: `uv run --with rumorph==X.Y.Z scripts/compare.py build/compare --chart docs/img/speed.svg`, where `X.Y.Z` is the ruMorph version (without `--with`, the version from `scripts/compare.py.lock`; a path to a wheel works instead of the version). It installs the systems into a separate environment with the versions of all packages pinned in `scripts/compare.py.lock`, downloads the treebank test parts, the models and mystem with checksum verification before measuring and analyzes the gold tokens. The tables converting the parts of speech, case and number of pymorphy3 and mystem to UD are at the top of the script.
-- Versions: Python 3.11, ruMorph 0.7.0 (text analysis speed and the chart - 0.6.0.dev7, 0.7.0 is within the spread of measurements; the time of a short text with loading - 0.7.0, 1 ms more), pymorphy3 2.0.6 with the pymorphy3-dicts-ru 2.4.417150.4580142 dictionary, mystem 3.1 through pymystem3 0.2.0 without disambiguation (for quality, each word separately; the macOS binary is built for x86_64 and runs through Rosetta 2), spaCy 3.8.16 with the ru_core_news_sm 3.8.0 model, Stanza 1.15.0 with the default model on the CPU (torch 2.14.1), Slovnet 0.6.0 with the slovnet_morph_news_v1 and navec_news_v1 models. Computer - Apple M3 Pro, macOS 26.
+- Versions: Python 3.11, ruMorph 0.8.0 (text analysis speed and the chart - 0.6.0.dev7, 0.7.0 and 0.8.0 are within the spread of measurements; the time of a short text with loading - 0.7.0, 1 ms more), pymorphy3 2.0.6 with the pymorphy3-dicts-ru 2.4.417150.4580142 dictionary, mystem 3.1 through pymystem3 0.2.0 without disambiguation (for quality, each word separately; the macOS binary is built for x86_64 and runs through Rosetta 2), spaCy 3.8.16 with the ru_core_news_sm 3.8.0 model, Stanza 1.15.0 with the default model on the CPU (torch 2.14.1), Slovnet 0.6.0 with the slovnet_morph_news_v1 and navec_news_v1 models. Computer - Apple M3 Pro, macOS 26.
 - Text analysis speed - 157,706 tokens of the SynTagRus test part with punctuation in one thread: tokens per second - the best of two analyses of the whole part after loading, chart points - importing, loading and analyzing the first 10-100,000 tokens in a new process. Only the call of the system is measured: mystem gets a whole sentence, spaCy analyzes sentences with `nlp.pipe`, ruMorph in context - `analyze_sentence` per sentence.
-- Operations - ruMorph 0.5.0 (0.6.0 and 0.7.0 are within the spread of measurements), an unknown lowercase word and memory - ruMorph 0.7.0, pymorphy3 2.0.6, `pymorphy3[fast]` - the same with the C++ DAWG extension; 128,251 word forms of the SynTagRus test part without punctuation, the best of three runs in one thread, except for the row with threads. `inflect` - the genitive of the first analyses that have a case, `agree` - the first analyses of nouns with the number 5, `forms` - the first analyses of the first 20,000 words, an unknown lowercase word - 351 lowercase word forms of the test part that are not in the ruMorph dictionary. Memory - the growth of the resident memory of the process (`ps -o rss`) after importing and creating the analyzer, time - the import, creating the analyzer and the first analysis; a further process - the growth of the memory the process does not share with others (USS), in each of four `multiprocessing` processes.
+- Operations - ruMorph 0.5.0 (0.6.0-0.8.0 are within the spread of measurements), an unknown lowercase word - ruMorph 0.8.0, memory - ruMorph 0.7.0 (the same in 0.8.0), pymorphy3 2.0.6, `pymorphy3[fast]` - the same with the C++ DAWG extension; 128,251 word forms of the SynTagRus test part without punctuation, the best of three runs in one thread, except for the row with threads. `inflect` - the genitive of the first analyses that have a case, `agree` - the first analyses of nouns with the number 5, `forms` - the first analyses of the first 20,000 words, an unknown lowercase word - 307 lowercase word forms of the test part that ruMorph guesses. Memory - the growth of the resident memory of the process (`ps -o rss`) after importing and creating the analyzer, time - the import, creating the analyzer and the first analysis; a further process - the growth of the memory the process does not share with others (USS), in each of four `multiprocessing` processes.
