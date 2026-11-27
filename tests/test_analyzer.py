@@ -493,6 +493,9 @@ def test_surname_candidates(morph):
     # Строчное слово и слово с именем собственным в словаре не меняются
     assert all(a.pos != "PROPN" for a in morph.analyze("рогожин"))
     assert all(a.source == "dictionary" for a in morph.analyze("Иванов"))
+    # Фамилия - не первым разбором, и когда словарные разборы делят долю поровну
+    assert morph.lemmatize(["Рядовым", "Старшины"]) == ["рядовой", "старшина"]
+    assert any(a.pos == "PROPN" for a in morph.analyze("Рядовым"))
 
 
 def test_analyze_sentence_errors(morph, tmp_path):
