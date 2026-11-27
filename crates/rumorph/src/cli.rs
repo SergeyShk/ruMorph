@@ -950,15 +950,18 @@ impl Writer<'_> {
                 self.end_sentence().map_err(Failure::Write)?;
                 continue;
             }
+            // Текст jsonl - комментарий `# text` предложения, как он записан
+            let text = block.lines.iter().find_map(|line| {
+                let comment = line.strip_prefix('#')?;
+                comment.trim_start().strip_prefix("text = ")
+            });
             for sentence in 0..document.sentence_count() {
-                let span = document.sentence(sentence).span;
                 let words = document.sentence(sentence).words;
                 let tokens = words.map(|word| Token {
                     word: document.form(word),
                     after: None,
                 });
-                (self.write_tokens(Some(span.slice(document.text())), tokens.peekable()))
-                    .map_err(Failure::Write)?;
+                (self.write_tokens(text, tokens.peekable())).map_err(Failure::Write)?;
             }
         }
         Ok(())
@@ -1840,6 +1843,14 @@ mod tests {
         );
         let (_, jsonl, _) = dict.run(&["-i", "conllu", "-f", "jsonl"], conllu.as_bytes());
         assert!(jsonl.starts_with("{\"text\": \"Мама мыла\", \"tokens\": [{\"word\": \"Мама\""));
+        // Текст jsonl - только из `# text`, как на входе
+        let bare =
+            "1\tМама\t_\t_\t_\t_\t_\t_\t_\tSpacesAfter=\\n\n2\tмыла\t_\t_\t_\t_\t_\t_\t_\t_\n";
+        let (_, jsonl, _) = dict.run(&["-i", "conllu", "-f", "jsonl"], bare.as_bytes());
+        assert!(
+            jsonl.starts_with("{\"tokens\": [{\"word\": \"Мама\""),
+            "{jsonl}"
+        );
         let (code, _, error) = dict.run(&["-i", "conllu"], "1\tМама\n".as_bytes());
         assert_eq!(code, 1);
         assert_eq!(
