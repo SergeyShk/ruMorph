@@ -480,6 +480,21 @@ def test_analyze_sentence_line_starts(morph):
             morph.analyze_sentence(words, line_starts=[wrong])
 
 
+def test_surname_candidates(morph):
+    # Слово с заглавной без имени собственного в словаре - еще и фамилия, первым - словарный разбор
+    analyses = morph.analyze("Рогожин")
+    assert (analyses[0].lemma, analyses[0].pos) == ("рогожина", "NOUN")
+    surname = [a for a in analyses if a.pos == "PROPN"]
+    assert [(a.lemma, a.feats.get("NameType"), a.source) for a in surname] == [
+        ("рогожин", "Sur", "guess")
+    ]
+    assert sum(a.prob for a in surname) == pytest.approx(0.2)
+    assert morph.analyze_sentence(["Он", "увидел", "Рогожина"])[2][0].pos == "PROPN"
+    # Строчное слово и слово с именем собственным в словаре не меняются
+    assert all(a.pos != "PROPN" for a in morph.analyze("рогожин"))
+    assert all(a.source == "dictionary" for a in morph.analyze("Иванов"))
+
+
 def test_analyze_sentence_errors(morph, tmp_path):
     with pytest.raises(TypeError, match="набор слов"):
         morph.analyze_sentence("стол")

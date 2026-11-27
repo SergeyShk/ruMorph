@@ -831,6 +831,7 @@ impl Dictionary {
             self.reweight_numerals(&mut analyses);
             self.weigh_by_case(word, &mut analyses);
             self.add_rare_proper(word, &mut analyses);
+            self.add_surnames(word, &mut analyses);
             return analyses;
         }
         let analyses = self.rules(word);
@@ -3121,9 +3122,18 @@ pub(super) mod tests {
             ]
         );
         assert!((dict.analyze("Зумова")[0].prob - 0.91).abs() < 1e-12);
-        for word in ["зумова", "Мурова", "Кота"] {
+        for word in ["зумова", "мурова", "Кота"] {
             assert_eq!(summary(word).len(), 1, "{word}");
         }
+        // Обычное слово с заглавной, у которого угадывается фамилия, получает ее с долей 0,2
+        assert_eq!(
+            summary("Мурова"),
+            [
+                ("муров".into(), "NOUN", Source::Dictionary),
+                ("муров".into(), "PROPN", Source::Guess)
+            ]
+        );
+        assert!((dict.analyze("Мурова")[1].prob - 0.2).abs() < 1e-12);
     }
 
     #[test]

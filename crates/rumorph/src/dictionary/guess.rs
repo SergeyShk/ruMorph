@@ -96,6 +96,11 @@ const MIN_GUESSED_SHARE: f64 = 0.01;
 /// дорого стоят
 const MAX_GUESSED_LENGTH: usize = 100;
 
+/// Доля фамилий у слова с заглавной, в словаре которого нет имени собственного (`add_surnames`):
+/// в обучающих частях SynTagRus и Taiga такие слова - имена собственные в 22-25 % случаев; при
+/// большей доле фамилия чаще становится первым разбором слова в начале предложения («Один»)
+const SURNAME_SHARE: f64 = 0.2;
+
 /// Наименьшая длина слова в смешанном регистре, которое угадывается как строчное: короче - чаще
 /// единица измерения
 const MIN_MIXED_LENGTH: usize = 5;
@@ -148,6 +153,49 @@ impl Dictionary {
             prob: analysis.prob * share,
             ..analysis
         }));
+        analyses.sort_by(|a, b| b.prob.total_cmp(&a.prob));
+    }
+
+    /// Слово с заглавной буквы, у которого в словаре нет имени собственного, а угадываются
+    /// фамилии на -ов, -ев, -ин, -ын («Червяков», «Рогожина»), разбирается и как фамилия
+    pub(super) fn add_surnames(&self, word: &str, analyses: &mut Vec<Analysis>) {
+        let mut chars = word.chars();
+        let titlecase = chars.next().is_some_and(char::is_uppercase)
+            && chars.clone().next().is_some()
+            && chars.all(char::is_lowercase);
+        let proper = |analysis: &Analysis| {
+            self.proper_nouns
+                .get(usize::from(analysis.ud))
+                .is_some_and(|&proper| proper)
+        };
+        if !titlecase || analyses.iter().any(proper) {
+            return;
+        }
+        let lower = word.to_lowercase();
+        let surname = |analysis: &Analysis| {
+            let lemma = analysis.lemma.replace('ё', "е");
+            self.ud_tag(analysis.ud)
+                .is_some_and(|tag| tag.feat("NameType") == Some("Sur"))
+                && ["ов", "ев", "ин", "ын", "ова", "ева", "ина", "ына"]
+                    .iter()
+                    .any(|ending| lemma.ends_with(ending))
+        };
+        let mut guessed: Vec<Analysis> = self
+            .guess_with(&[(GuessIndex::Proper, 1.0)], word, &lower, None, false)
+            .into_iter()
+            .filter(surname)
+            .collect();
+        let total: f64 = guessed.iter().map(|analysis| analysis.prob).sum();
+        if guessed.is_empty() || total <= 0.0 {
+            return;
+        }
+        for analysis in analyses.iter_mut() {
+            analysis.prob *= 1.0 - SURNAME_SHARE;
+        }
+        for analysis in &mut guessed {
+            analysis.prob *= SURNAME_SHARE / total;
+        }
+        analyses.extend(guessed);
         analyses.sort_by(|a, b| b.prob.total_cmp(&a.prob));
     }
 
