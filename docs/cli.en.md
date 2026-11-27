@@ -35,7 +35,7 @@ In Windows PowerShell 5.1 the `>` redirection and a pipeline (`Get-Content text.
 
 - `text` - text: a blank line ends a paragraph. Tokens and sentences are found by the segmenter [anySeg](https://github.com/SergeyShk/anySeg) following the conventions of Universal Dependencies on which the context model is trained: hyphenated words by the UD guidelines («кто-то», «Ростова-на-Дону» is five tokens), numbers, dates and times («3,14», «12.10.2026», «12:30»), abbreviations and initials with their period («т. е.», «А. С.»), addresses, mentions and emoji; stress marks and soft hyphens stay in the token. A sentence may run across a line break: anySeg tells a line break inside a sentence from one of the author. A text without blank lines is analyzed in pieces of about 512 KB that end at a sentence boundary, and a line longer than a piece is split at a space: memory does not grow with the length of the input.
 - `tokens` - one token per line, an empty line separates sentences; spaces around the token and everything after a tab are ignored, so a table with the token in the first column works too. Analyze a list of separate words with `--no-context`: otherwise the model takes neighbouring words for a sentence.
-- `conllu` - [CoNLL-U](https://universaldependencies.org/format.html): the LEMMA, UPOS and FEATS columns are filled, while the other columns, comments, multiword tokens and empty nodes stay as they are.
+- `conllu` - [CoNLL-U](https://universaldependencies.org/format.html): the LEMMA, UPOS and FEATS columns are filled, while the other columns, comments, multiword tokens and empty nodes stay as they are. anySeg reads the CoNLL-U, as in the `anyseg` and `rusyntax` commands: a line of other than 10 columns, a wrong word number, a form missing from the `text` comment and a sentence without words are an error with the line number, and the sentences before it are analyzed.
 
 ``` bash
 printf '1\tМы\t_\t_\t_\t_\t2\tnsubj\t_\t_\n2\tстали\t_\t_\t_\t_\t0\troot\t_\t_\n' | rumorph -i conllu -f conllu
@@ -56,7 +56,7 @@ Lemmas separated by spaces, a line per sentence; paragraphs are separated by a b
 
 ### conllu
 
-CoNLL-U as anySeg writes it: the number, token, lemma, part of speech and features, the `sent_id` and `text` comments. For the `text` input a file starts with the `newdoc` comment and a paragraph with `newpar`; MISC has `SpaceAfter=No` on a token not followed by a space in its paragraph and `SpacesAfter` when the space is not a single one (`SpacesAfter=\n` is a line break). The `text` comment is built from the tokens and the spaces between them on one line, without invisible characters; for the `tokens` input it is the tokens separated by spaces. Tokens, lemmas and the text are in Unicode NFC, as CoNLL-U requires.
+CoNLL-U as anySeg writes it: the number, token, lemma, part of speech and features, the `sent_id` and `text` comments. For the `text` input a file starts with the `newdoc` comment and a paragraph with `newpar`; MISC has `SpaceAfter=No` on a token not followed by a space in its paragraph, `SpacesAfter` when the space is not a single one (`SpacesAfter=\n` is a line break) and `SpacesBefore` on the first token of an indented paragraph. The `text` comment is built from the tokens and the spaces between them on one line, without invisible characters; for the `tokens` input it is the tokens separated by spaces. Tokens, lemmas and the text are in Unicode NFC, as CoNLL-U requires.
 
 ``` bash
 echo "Мы стали друзьями в ковиде." | rumorph -f conllu

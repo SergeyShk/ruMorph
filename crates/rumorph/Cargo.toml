@@ -28,7 +28,7 @@ name = "rumorph"
 required-features = ["cli"]
 
 [dependencies]
-anyseg = { version = "0.3.1", optional = true, default-features = false, features = ["ru"] }
+anyseg = { version = "0.5.0", optional = true, default-features = false, features = ["ru"] }
 unicode-normalization = { version = "0.1.26", optional = true }
 bytemuck = "1.25.2"
 crc32fast = "1.5.3"

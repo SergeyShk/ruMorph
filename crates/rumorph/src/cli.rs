@@ -9,7 +9,7 @@ use std::io::{self, BufRead, BufReader, BufWriter, IsTerminal, Read, Write};
 use std::iter::Peekable;
 use std::path::{Path, PathBuf};
 
-use anyseg::{Document, Segmenter};
+use anyseg::{Column, ConlluError, ConlluWriter, Document, Segmenter, read_conllu};
 use unicode_normalization::{UnicodeNormalization, is_nfc};
 
 use crate::{Analysis, Dictionary, Sample};
@@ -292,14 +292,13 @@ fn execute(
         interactive: interactive && output_path.is_none(),
         pending: false,
         sentence: 0,
+        conllu: ConlluWriter::new(),
         context,
         segmenter: Segmenter::new("ru").expect("русский язык есть в anyseg с feature ru"),
         paragraphs: 0,
         text: String::new(),
         ready: 0,
         continued: false,
-        newdoc: false,
-        newpar: false,
         carry: Vec::new(),
     };
     let mut code = 0;
@@ -494,20 +493,12 @@ struct Token<'a> {
     after: Option<&'a str>,
 }
 
-/// Строка предложения CoNLL-U: комментарий или строка без разбора как есть либо слово -
-/// столбцы
-enum Line {
-    Raw(String),
-    Word(Vec<String>),
-}
-
-/// Предложение из токенов или CoNLL-U: текст и строки; токены - слова строк
+/// Предложение из токенов или строки предложения CoNLL-U и номер первой из них
 #[derive(Default)]
 struct Block {
-    /// Текст предложения: комментарий `# text` CoNLL-U
-    text: Option<String>,
     words: Vec<String>,
-    lines: Vec<Line>,
+    lines: Vec<String>,
+    start: usize,
 }
 
 struct Writer<'a> {
@@ -518,8 +509,11 @@ struct Writer<'a> {
     interactive: bool,
     /// Есть ли вывод после последнего сброса
     pending: bool,
-    /// Номер последнего предложения: `# sent_id` CoNLL-U
+    /// Номер последнего предложения: `# sent_id` CoNLL-U предложений из токенов
     sentence: usize,
+    /// Запись CoNLL-U текста, как в anySeg: `# newdoc` у файла, `# newpar` у абзаца, номера
+    /// предложений подряд по всем файлам
+    conllu: ConlluWriter,
     /// Разборы с контекстной моделью
     context: bool,
     segmenter: Segmenter,
@@ -531,9 +525,6 @@ struct Writer<'a> {
     ready: usize,
     /// Текст продолжает абзац, разрезанный по длине: его первый абзац - не новый
     continued: bool,
-    /// Перед следующим предложением CoNLL-U - `# newdoc` (начало файла) и `# newpar`
-    newdoc: bool,
-    newpar: bool,
     /// Конец строки длиннее PARAGRAPH, который отдаст следующее чтение
     carry: Vec<u8>,
 }
@@ -570,7 +561,9 @@ impl Writer<'_> {
         self.text.clear();
         self.carry.clear();
         (self.ready, self.continued) = (0, false);
-        (self.newdoc, self.newpar) = (input == Input::Text, false);
+        if input == Input::Text {
+            self.conllu.start_document();
+        }
         let mut end = false;
         // Строка текста длиннее PARAGRAPH читается кусками: `starts` - кусок начинает строку
         let limit = if input == Input::Text {
@@ -613,7 +606,7 @@ impl Writer<'_> {
             match input {
                 Input::Text => {}
                 _ if text.trim().is_empty() => {
-                    self.write_block(&block).map_err(Failure::Write)?;
+                    self.write_block(input, &block)?;
                     block = Block::default();
                 }
                 Input::Tokens => {
@@ -623,11 +616,15 @@ impl Writer<'_> {
                         block.words.push(token.to_owned());
                     }
                 }
-                Input::Conllu => conllu_line(&mut block, text)
-                    .map_err(|message| Failure::Input(number, message))?,
+                Input::Conllu => {
+                    if block.lines.is_empty() {
+                        block.start = number;
+                    }
+                    block.lines.push(text.to_owned());
+                }
             }
         }
-        self.write_block(&block).map_err(Failure::Write)?;
+        self.write_block(input, &block)?;
         self.ready = self.text.len();
         self.write_ready().map_err(Failure::Write)?;
         Ok(invalid)
@@ -668,11 +665,12 @@ impl Writer<'_> {
         let rest = self.text.split_off(self.ready);
         let ready = std::mem::replace(&mut self.text, rest);
         self.ready = 0;
-        let document = self.segmenter.segment(&ready);
+        let mut document = self.segmenter.segment(&ready);
         if self.format == Format::Text {
             return self.write_yo(&document, document.sentence_count(), ready.len());
         }
-        self.write_sentences(&document, document.sentence_count())?;
+        let count = document.sentence_count();
+        self.write_sentences(&mut document, count)?;
         self.continued = false;
         Ok(())
     }
@@ -682,7 +680,7 @@ impl Writer<'_> {
     /// а следующий кусок продолжает абзац. Одно предложение длиннее PARAGRAPH пишется целиком
     fn write_long(&mut self) -> io::Result<()> {
         let text = std::mem::take(&mut self.text);
-        let document = self.segmenter.segment(&text);
+        let mut document = self.segmenter.segment(&text);
         let (written, keep) = match document.sentence_count() {
             count @ 0..=1 => (count, text.len()),
             count => (count - 1, document.sentence(count - 1).span.start),
@@ -690,7 +688,7 @@ impl Writer<'_> {
         if self.format == Format::Text {
             self.write_yo(&document, written, keep)?;
         } else {
-            self.write_sentences(&document, written)?;
+            self.write_sentences(&mut document, written)?;
             // Остаток продолжает абзац, только если начало абзаца уже записано: последнее
             // предложение может само начинать абзац (после U+2029)
             self.continued = match document.sentence_count() {
@@ -708,8 +706,11 @@ impl Writer<'_> {
     }
 
     /// Первые `count` предложений документа по абзацам: в формате lemmas между абзацами -
-    /// пустая строка, в CoNLL-U абзац начинает `# newpar`
-    fn write_sentences(&mut self, document: &Document, count: usize) -> io::Result<()> {
+    /// пустая строка
+    fn write_sentences(&mut self, document: &mut Document, count: usize) -> io::Result<()> {
+        if self.format == Format::Conllu {
+            return self.write_conllu(document, count);
+        }
         for paragraph in 0..document.paragraph_count() {
             let sentences = document.paragraph(paragraph).sentences;
             if sentences.start >= count {
@@ -723,7 +724,6 @@ impl Writer<'_> {
                     writeln!(self.output)?;
                 }
                 self.paragraphs += 1;
-                self.newpar = true;
             }
             let end = document.sentence(sentences.end - 1).tokens.end;
             for sentence in sentences.start..sentences.end.min(count) {
@@ -736,6 +736,64 @@ impl Writer<'_> {
             }
         }
         Ok(())
+    }
+
+    /// Первые `count` предложений документа в CoNLL-U записью anySeg (`ConlluWriter`): абзац
+    /// начинает `# newpar`, пробелы между токенами и отступ абзаца - в MISC
+    fn write_conllu(&mut self, document: &mut Document, count: usize) -> io::Result<()> {
+        if count == 0 {
+            return Ok(());
+        }
+        let words = document.word_count();
+        let (mut lemmas, mut parts, mut feats) = (
+            Vec::with_capacity(words),
+            Vec::with_capacity(words),
+            Vec::with_capacity(words),
+        );
+        for sentence in 0..document.sentence_count() {
+            let forms: Vec<&str> = (document.sentence(sentence).words)
+                .map(|word| document.form(word))
+                .collect();
+            if sentence >= count {
+                lemmas.extend(forms.iter().map(|_| None));
+                parts.extend(forms.iter().map(|_| None));
+                feats.extend(forms.iter().map(|_| None));
+                continue;
+            }
+            for (lemma, pos, features) in self.fields(&forms) {
+                lemmas.push(Some(lemma));
+                parts.push(Some(pos.to_owned()));
+                feats.push(features);
+            }
+        }
+        let columns = vec![
+            (Column::Lemma, lemmas),
+            (Column::Upos, parts),
+            (Column::Feats, feats),
+        ];
+        document
+            .set_columns(columns, None)
+            .map_err(io::Error::other)?;
+        if std::mem::take(&mut self.continued) {
+            self.conllu.continue_paragraph();
+        }
+        let mut out = String::new();
+        for sentence in 0..count {
+            out.clear();
+            self.conllu
+                .write(document, sentence..sentence + 1, &mut out);
+            self.output.write_all(out.as_bytes())?;
+            self.end_sentence()?;
+        }
+        Ok(())
+    }
+
+    /// Поля CoNLL-U слов предложения (`Dictionary::sentence_fields`): с контекстной моделью,
+    /// если она есть в словаре
+    fn fields<'d>(&'d self, words: &[&str]) -> Vec<crate::dictionary::Fields<'d>> {
+        (self.dictionary.sentence_fields(words, self.context))
+            .or_else(|_| self.dictionary.sentence_fields(words, false))
+            .unwrap_or_default()
     }
 
     /// Текст документа до `end` как есть, только «е» токенов первых `count` предложений
@@ -843,13 +901,67 @@ impl Writer<'_> {
         Ok((!bytes.is_empty()).then_some(true))
     }
 
-    /// Предложение из токенов или CoNLL-U
-    fn write_block(&mut self, block: &Block) -> io::Result<()> {
-        if self.format == Format::Conllu && !block.lines.is_empty() {
-            return self.write_conllu_lines(block);
+    /// Предложение из токенов или CoNLL-U. Предложение CoNLL-U читает anySeg (`read_conllu`),
+    /// как команды `anyseg` и `rusyntax`, а в формате conllu оно записывается, как прочитано,
+    /// с заполненными LEMMA, UPOS и FEATS
+    fn write_block(&mut self, input: Input, block: &Block) -> Result<(), Failure> {
+        if input != Input::Conllu {
+            let tokens = block.words.iter().map(|word| Token { word, after: None });
+            return self
+                .write_tokens(None, tokens.peekable())
+                .map_err(Failure::Write);
         }
-        let tokens = block.words.iter().map(|word| Token { word, after: None });
-        self.write_tokens(block.text.as_deref(), tokens.peekable())
+        if block.lines.is_empty() {
+            return Ok(());
+        }
+        let mut text = block.lines.join("\n");
+        text.push_str("\n\n");
+        let mut documents = read_conllu(&text).map_err(|err| {
+            // Ошибку предложения целиком anySeg ставит на пустую строку после него
+            let line = if err.line > block.lines.len() {
+                0
+            } else {
+                err.line - 1
+            };
+            Failure::Input(block.start + line, conllu_message(&err))
+        })?;
+        for document in &mut documents {
+            if self.format == Format::Conllu {
+                let words: Vec<&str> = (0..document.word_count())
+                    .map(|word| document.form(word))
+                    .collect();
+                let fields = self.fields(&words);
+                let (mut lemmas, mut parts, mut feats) = (Vec::new(), Vec::new(), Vec::new());
+                for (lemma, pos, features) in fields {
+                    lemmas.push(Some(lemma));
+                    parts.push(Some(pos.to_owned()));
+                    feats.push(features);
+                }
+                let columns = vec![
+                    (Column::Lemma, lemmas),
+                    (Column::Upos, parts),
+                    (Column::Feats, feats),
+                ];
+                (document.set_columns(columns, None))
+                    .map_err(|err| Failure::Write(io::Error::other(err)))?;
+                self.output
+                    .write_all(document.to_conllu().as_bytes())
+                    .map_err(Failure::Write)?;
+                self.end_sentence().map_err(Failure::Write)?;
+                continue;
+            }
+            for sentence in 0..document.sentence_count() {
+                let span = document.sentence(sentence).span;
+                let words = document.sentence(sentence).words;
+                let tokens = words.map(|word| Token {
+                    word: document.form(word),
+                    after: None,
+                });
+                (self.write_tokens(Some(span.slice(document.text())), tokens.peekable()))
+                    .map_err(Failure::Write)?;
+            }
+        }
+        Ok(())
     }
 
     /// Разборы слов предложения: с контекстной моделью или каждого слова отдельно
@@ -882,12 +994,6 @@ impl Writer<'_> {
                 // и не несет переводов строки, пробелов по краям и невидимых разделителей
                 collected = tokens.collect();
                 self.sentence += 1;
-                if std::mem::take(&mut self.newdoc) {
-                    writeln!(self.output, "# newdoc")?;
-                }
-                if std::mem::take(&mut self.newpar) {
-                    writeln!(self.output, "# newpar")?;
-                }
                 writeln!(self.output, "# sent_id = {}", self.sentence)?;
                 writeln!(self.output, "# text = {}", sentence_text(&collected))?;
                 Box::new(collected.iter().copied())
@@ -973,36 +1079,6 @@ impl Writer<'_> {
                 self.output.write_all(piece.as_bytes())
             }
         }
-    }
-
-    /// Предложение CoNLL-U с заполненными LEMMA, UPOS и FEATS
-    fn write_conllu_lines(&mut self, block: &Block) -> io::Result<()> {
-        let mut words = block.words.iter().map(String::as_str);
-        let mut chunk = Vec::new().into_iter();
-        for line in &block.lines {
-            match line {
-                Line::Raw(text) => writeln!(self.output, "{text}")?,
-                Line::Word(columns) => {
-                    if chunk.len() == 0 {
-                        let next: Vec<&str> = words.by_ref().take(MAX_CHUNK).collect();
-                        chunk = self.analyze(&next).into_iter();
-                    }
-                    let analyses = chunk.next().unwrap_or_default();
-                    let (pos, feats, _) = first(self.dictionary, &analyses);
-                    let lemma = lemma(&analyses, &columns[1]);
-                    let [id, form, _, _, xpos, _, rest @ ..] = &columns[..] else {
-                        continue;
-                    };
-                    writeln!(
-                        self.output,
-                        "{id}\t{form}\t{lemma}\t{pos}\t{xpos}\t{feats}\t{}",
-                        rest.join("\t")
-                    )?;
-                }
-            }
-        }
-        writeln!(self.output)?;
-        self.end_sentence()
     }
 
     /// Конец предложения: в терминале вывод сбрасывается сразу
@@ -1255,30 +1331,45 @@ fn lemma<'a>(analyses: &'a [Analysis], word: &str) -> Cow<'a, str> {
     }
 }
 
-/// Строка CoNLL-U в предложение: комментарий, слово или многословный токен и пустой узел,
-/// которые остаются как есть
-fn conllu_line(block: &mut Block, line: &str) -> Result<(), String> {
-    if let Some(comment) = line.strip_prefix('#') {
-        if let Some(text) = comment.trim_start().strip_prefix("text = ") {
-            block.text = Some(text.to_owned());
+/// Ошибка чтения CoNLL-U anySeg по-русски, как у команды `rusyntax`; незнакомая - как есть
+fn conllu_message(err: &ConlluError) -> String {
+    let message = err.message.as_str();
+    let after = |prefix: &str| message.strip_prefix(prefix);
+    if let Some(count) = after("expected 10 tab-separated columns, got ") {
+        return format!("нужно 10 столбцов через табуляцию, а не {count}");
+    }
+    if let Some(id) = after("cannot read the ID ") {
+        return format!("неверный номер слова {id}");
+    }
+    if let Some(rest) = after("expected word ")
+        && let Some((number, id)) = rest.split_once(", got ")
+    {
+        return format!("ожидается слово {number}, а не {id}");
+    }
+    if let Some(head) = after("cannot read the head ") {
+        return format!("неверная вершина {head}");
+    }
+    if let Some(rest) = after("multiword token ")
+        && let Some((id, word)) = rest.split_once(" does not start at word ")
+    {
+        return format!("многословный токен {id} не начинается со слова {word}");
+    }
+    if let Some(form) = after("the form ")
+        .and_then(|rest| rest.strip_suffix(" does not match the text of the sentence"))
+    {
+        return format!("форма {form} не совпадает с текстом предложения");
+    }
+    match message {
+        "a multiword token without all its words" => "у многословного токена нет всех его слов",
+        "a sentence without words" => "в предложении нет слов",
+        "a comment after token lines" => "комментарий после строк токенов",
+        "the text of the sentence holds characters that no token has" => {
+            "в тексте предложения есть символы, которых нет ни в одном токене"
         }
-        block.lines.push(Line::Raw(line.to_owned()));
-        return Ok(());
+        "the values of a document exceed 2 GiB" => "значения документа больше 2 ГиБ",
+        _ => message,
     }
-    let columns: Vec<String> = line.split('\t').map(str::to_owned).collect();
-    if columns.len() != 10 {
-        return Err(format!(
-            "в строке CoNLL-U {} столбцов вместо 10",
-            columns.len()
-        ));
-    }
-    if columns[0].parse::<usize>().is_err() {
-        block.lines.push(Line::Raw(line.to_owned()));
-        return Ok(());
-    }
-    block.words.push(columns[1].clone());
-    block.lines.push(Line::Word(columns));
-    Ok(())
+    .to_owned()
 }
 
 /// Строка JSON с экранированием
@@ -1753,8 +1844,49 @@ mod tests {
         assert_eq!(code, 1);
         assert_eq!(
             error,
-            "rumorph: -: строка 1: в строке CoNLL-U 2 столбцов вместо 10\n"
+            "rumorph: -: строка 1: нужно 10 столбцов через табуляцию, а не 2\n"
         );
+    }
+
+    #[test]
+    fn reads_conllu_like_anyseg() {
+        let dict = TestDictionary::new();
+        // CoNLL-U читает anySeg: предложения до неверного разобраны, ошибка - с номером строки
+        // файла; `# text` не по формам и блок из одних комментариев - ошибки
+        let word = |id: &str, form: &str| format!("{id}\t{form}\t_\t_\t_\t_\t_\t_\t_\t_\n");
+        let good = format!("# text = Мама\n{}\n", word("1", "Мама"));
+        let input = format!(
+            "{good}# text = Мама мыла\n{}{}",
+            word("1", "Мама"),
+            word("2", "рама")
+        );
+        let (code, out, error) = dict.run(&["-i", "conllu", "-f", "conllu"], input.as_bytes());
+        assert_eq!(code, 1);
+        assert!(
+            out.starts_with("# text = Мама\n1\tМама\tмама\tNOUN"),
+            "{out}"
+        );
+        assert_eq!(
+            error,
+            "rumorph: -: строка 6: форма \"рама\" не совпадает с текстом предложения\n"
+        );
+        let (code, _, error) = dict.run(&["-i", "conllu"], "# newdoc\n\n".as_bytes());
+        assert_eq!(code, 1);
+        assert_eq!(error, "rumorph: -: строка 1: в предложении нет слов\n");
+    }
+
+    #[test]
+    fn writes_conllu_as_anyseg() {
+        let dict = TestDictionary::new();
+        // Запись - anySeg: отступ абзаца - SpacesBefore у первого токена, вывод - `to_conllu`
+        // документа с полями разбора
+        let text = "Мама мыла раму.\n\n  Мама мыла\nраму.";
+        let (_, conllu, _) = dict.run(&["-f", "conllu"], text.as_bytes());
+        assert!(conllu.contains("1\tМама\tмама\tNOUN\t_\tCase=Nom|Gender=Fem|Number=Sing\t_\t_\t_\tSpacesBefore=\\s\\s\n"), "{conllu}");
+        let dictionary = Dictionary::open(&dict.0).unwrap();
+        let mut document = Segmenter::new("ru").unwrap().segment(text);
+        dictionary.annotate(&mut document, false).unwrap();
+        assert_eq!(conllu, document.to_conllu());
     }
 
     #[test]
