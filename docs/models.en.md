@@ -6,7 +6,7 @@ The dictionary holds two small models: the context model chooses the analysis of
 
 It works in [`analyze_sentence`](analyzer.md#analyze_sentence), [`annotate`](analyzer.md#annotate) and the [rumorph command](cli.md): it orders the same analyses the dictionary gives by the neighbouring words, and the analysis chosen in context comes first.
 
-- **Word input** - the shape (lowercase or uppercase letters, a capital, digits, Latin script, the start of the sentence, a hyphen), the word itself (the 8 thousand most frequent words of the training data; lowercase, «ё» as «е»; the others are unknown), the endings of 1 to 4 letters and the dictionary analyses - the mean and the probability-weighted vector of their tags.
+- **Word input** - the shape (lowercase or uppercase letters, a capital, digits, Latin script, the start of the sentence or of a verse line, a hyphen), the word itself (the 8 thousand most frequent words of the training data; lowercase, «ё» as «е»; the others are unknown), the endings of 1 to 4 letters and the dictionary analyses - the mean and the probability-weighted vector of their tags.
 - **Encoder** - a bidirectional LSTM, one layer of 64 per direction: every word sees the whole sentence.
 - **Analysis score** - the dot product of the query vector of the word and the vector of the analysis: its UD tag (the part of speech, every feature and their combination), its source (the dictionary, a rule or a guess), its place among the analyses of the word and its share in the dictionary; the scores of the analyses of a word become probabilities. The model sees the first 32 analyses of a word, the rest follow them with probability 0.
 - **Weights** - 0.5 million parameters, int8 matrices by rows with a factor per row.

@@ -442,6 +442,59 @@ def test_analyze_sentence_input(morph):
     assert first(morph.analyze_sentence(words)) == first(chunks)
 
 
+def test_analyze_sentence_line_starts(morph):
+    def first(sentence):
+        return [(a[0].lemma, a[0].pos, a[0].feats, a[0].prob) for a in sentence]
+
+    # Заглавная в начале строки стиха - как в начале предложения, а не признак имени
+    words = [
+        "В",
+        "широкошумном",
+        "качается",
+        "море",
+        "Снова",
+        "со",
+        "мной",
+        "корабля",
+        "колыбель",
+        ".",
+    ]
+    assert morph.analyze_sentence(words)[4][0].pos == "PROPN"
+    lines = morph.analyze_sentence(words, line_starts=[4])
+    assert (lines[4][0].lemma, lines[4][0].pos) == ("снова", "ADV")
+    assert morph.analyze_sentence(words, line_starts=(i for i in [4])) == lines
+    for empty in (None, []):
+        assert first(morph.analyze_sentence(words, line_starts=empty)) == first(
+            morph.analyze_sentence(words)
+        )
+    # Номера - в целом предложении, и во втором куске из 256 слов тоже
+    long = ["Мы", "стали", "друзьями"] * 99 + words
+    tail = morph.analyze_sentence(long, line_starts=[297 + 4])[256:]
+    assert first(tail) == first(morph.analyze_sentence(long[256:], line_starts=[41 + 4]))
+    with pytest.raises(TypeError, match="line_starts должен быть набором"):
+        morph.analyze_sentence(words, line_starts=4)
+    with pytest.raises(TypeError, match="должен быть целым"):
+        morph.analyze_sentence(words, line_starts=["4"])
+    for wrong in (len(words), -1):
+        with pytest.raises(ValueError, match="вне предложения"):
+            morph.analyze_sentence(words, line_starts=[wrong])
+
+
+def test_surname_candidates(morph):
+    # Слово с заглавной без имени собственного в словаре - еще и фамилия, первым - словарный разбор
+    analyses = morph.analyze("Рогожин")
+    assert (analyses[0].lemma, analyses[0].pos) == ("рогожина", "NOUN")
+    surname = [a for a in analyses if a.pos == "PROPN"]
+    assert [(a.lemma, a.feats.get("NameType"), a.source) for a in surname] == [
+        ("рогожин", "Sur", "guess")
+    ]
+    assert sum(a.prob for a in surname) == pytest.approx(0.2)
+    assert morph.analyze_sentence(["Он", "увидел", "Рогожина"])[2][0].pos == "PROPN"
+    # Строчное слово и слово с именем собственным в словаре не меняются
+    assert all(a.pos != "PROPN" for a in morph.analyze("рогожин"))
+    assert all(a.source == "dictionary" for a in morph.analyze("Иванов"))
+
+
 def test_analyze_sentence_errors(morph, tmp_path):
     with pytest.raises(TypeError, match="набор слов"):
         morph.analyze_sentence("стол")

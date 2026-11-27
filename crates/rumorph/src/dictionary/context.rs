@@ -246,8 +246,14 @@ impl Context {
     }
 
     /// Разборы слов предложения по убыванию оценки модели; вероятность - доля в контексте.
-    /// Модель видит первые `kmax` разборов слова, остальные идут после них с вероятностью 0
-    pub fn rank(&self, words: &[&str], analyses: Vec<Vec<Analysis>>) -> Vec<Vec<Analysis>> {
+    /// Модель видит первые `kmax` разборов слова, остальные идут после них с вероятностью 0.
+    /// Слово с `starts` - начало строки: его запись - как у первого слова предложения
+    pub fn rank(
+        &self,
+        words: &[&str],
+        starts: &[bool],
+        analyses: Vec<Vec<Analysis>>,
+    ) -> Vec<Vec<Analysis>> {
         let model = &self.model;
         let n = words.len();
         if n == 0 {
@@ -263,7 +269,8 @@ impl Context {
             // слово, окончания
             let row = &mut x[t * din..(t + 1) * din];
             let (shape_row, rest) = row.split_at_mut(model.shape.cols);
-            shape_row.copy_from_slice(model.shape.row(shape(word, t == 0)));
+            let first = t == 0 || starts.get(t).copied().unwrap_or(false);
+            shape_row.copy_from_slice(model.shape.row(shape(word, first)));
             let (mean, rest) = rest.split_at_mut(dc);
             let (weighted, rest) = rest.split_at_mut(dc);
             let seen = &list[..list.len().min(model.kmax)];

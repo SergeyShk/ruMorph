@@ -578,9 +578,33 @@ impl Dictionary {
         &self,
         words: &[S],
     ) -> Result<Vec<Vec<Analysis>>, Error> {
+        self.analyze_lines(words, &[])
+    }
+
+    /// Разборы слов предложения, как у `analyze_sentence`, в котором с номеров слов `line_starts`
+    /// начинаются строки (стих, перенос строки внутри предложения): заглавная буква в начале
+    /// строки для модели - как в начале предложения («Снова» в начале строки - наречие, а не имя)
+    ///
+    /// ```
+    /// # #[cfg(feature = "bundled")] {
+    /// let dictionary = rumorph::Dictionary::bundled()?;
+    /// let words = "В широкошумном качается море Снова со мной корабля колыбель .";
+    /// let words: Vec<&str> = words.split(' ').collect();
+    /// let pos = |sentence: &[Vec<rumorph::Analysis>]| dictionary.ud_tag(sentence[4][0].ud).unwrap().pos();
+    /// assert_eq!(pos(&dictionary.analyze_sentence(&words)?), "PROPN");
+    /// assert_eq!(pos(&dictionary.analyze_lines(&words, &[4])?), "ADV");
+    /// # }
+    /// # Ok::<(), rumorph::Error>(())
+    /// ```
+    pub fn analyze_lines<S: AsRef<str>>(
+        &self,
+        words: &[S],
+        line_starts: &[usize],
+    ) -> Result<Vec<Vec<Analysis>>, Error> {
         let context = self.context()?;
         let mut sentence = Vec::with_capacity(words.len());
-        for chunk in words.chunks(SENTENCE_CHUNK) {
+        for (number, chunk) in words.chunks(SENTENCE_CHUNK).enumerate() {
+            let offset = number * SENTENCE_CHUNK;
             let mut analyses: Vec<Vec<Analysis>> = chunk
                 .iter()
                 .map(|word| self.analyze(word.as_ref()))
@@ -603,8 +627,12 @@ impl Dictionary {
                 })
                 .collect();
             let normal: Vec<&str> = normal.iter().map(AsRef::as_ref).collect();
+            let starts: Vec<bool> = (seen.iter())
+                .map(|&index| line_starts.contains(&(offset + index)))
+                .collect();
             let ranked = context.rank(
                 &normal,
+                &starts,
                 seen.iter()
                     .map(|&index| std::mem::take(&mut analyses[index]))
                     .collect(),
@@ -803,6 +831,7 @@ impl Dictionary {
             self.reweight_numerals(&mut analyses);
             self.weigh_by_case(word, &mut analyses);
             self.add_rare_proper(word, &mut analyses);
+            self.add_surnames(word, &mut analyses);
             return analyses;
         }
         let analyses = self.rules(word);
@@ -3093,9 +3122,18 @@ pub(super) mod tests {
             ]
         );
         assert!((dict.analyze("Зумова")[0].prob - 0.91).abs() < 1e-12);
-        for word in ["зумова", "Мурова", "Кота"] {
+        for word in ["зумова", "мурова", "Кота"] {
             assert_eq!(summary(word).len(), 1, "{word}");
         }
+        // Обычное слово с заглавной, у которого угадывается фамилия, получает ее с долей 0,2
+        assert_eq!(
+            summary("Мурова"),
+            [
+                ("муров".into(), "NOUN", Source::Dictionary),
+                ("муров".into(), "PROPN", Source::Guess)
+            ]
+        );
+        assert!((dict.analyze("Мурова")[1].prob - 0.2).abs() < 1e-12);
     }
 
     #[test]
