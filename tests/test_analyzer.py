@@ -498,6 +498,15 @@ def test_surname_candidates(morph):
     assert any(a.pos == "PROPN" for a in morph.analyze("Рядовым"))
 
 
+def test_particle_word_with_yo(morph):
+    # Первая часть слова с частицей - в написании словаря: по ней строятся формы
+    analysis = morph.analyze("белье-то")[0]
+    assert (analysis.word, analysis.lemma) == ("бельё-то", "бельё-то")
+    assert analysis.inflect(Case="Gen") == "белья-то"
+    assert len(analysis.forms()) == 6
+    assert morph.analyze("Белье-то")[0].word == "Бельё-то"
+
+
 def test_analyze_sentence_errors(morph, tmp_path):
     with pytest.raises(TypeError, match="набор слов"):
         morph.analyze_sentence("стол")

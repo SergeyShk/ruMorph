@@ -126,12 +126,13 @@ impl Dictionary {
             {
                 return Vec::new();
             }
-            // Разбор первой части с частицей: формы строятся по ней (`without_particle`)
+            // Разбор первой части с частицей: формы строятся по ней (`without_particle`), поэтому
+            // первая часть - в написании словаря («белье-то» - «бельё-то»)
             let analyses = self
                 .analyze(left)
                 .into_iter()
                 .map(|analysis| Analysis {
-                    word: word.to_owned(),
+                    word: format!("{}-{right}", with_yo(left, &analysis.word)),
                     lemma: format!("{}-{right_lower}", analysis.lemma),
                     source: Source::Guess,
                     ..analysis
