@@ -98,7 +98,8 @@ const MAX_GUESSED_LENGTH: usize = 100;
 
 /// Доля фамилий у слова с заглавной, в словаре которого нет имени собственного (`add_surnames`):
 /// в обучающих частях SynTagRus и Taiga такие слова - имена собственные в 22-25 % случаев; при
-/// большей доле фамилия чаще становится первым разбором слова в начале предложения («Один»)
+/// большей доле фамилия чаще становится первым разбором слова в начале предложения («Один»).
+/// Доля меньше, если иначе фамилия обогнала бы лучший словарный разбор
 const SURNAME_SHARE: f64 = 0.2;
 
 /// Окончания форм фамилии на -ов, -ев, -ин, -ын после основы: «Иванов», «Иванова», «Ивановым»,
@@ -205,11 +206,23 @@ impl Dictionary {
         if guessed.is_empty() || total <= 0.0 {
             return;
         }
+        // Фамилия - не первым разбором: ее лучший разбор не вероятнее лучшего словарного, даже
+        // когда словарные делят долю поровну («Рядовым» - три разбора «рядовой»)
+        let plain = analyses
+            .iter()
+            .map(|analysis| analysis.prob)
+            .fold(0.0, f64::max);
+        let best = guessed
+            .iter()
+            .map(|analysis| analysis.prob)
+            .fold(0.0, f64::max)
+            / total;
+        let share = SURNAME_SHARE.min(plain * (1.0 - 1e-9) / (best + plain));
         for analysis in analyses.iter_mut() {
-            analysis.prob *= 1.0 - SURNAME_SHARE;
+            analysis.prob *= 1.0 - share;
         }
         for analysis in &mut guessed {
-            analysis.prob *= SURNAME_SHARE / total;
+            analysis.prob *= share / total;
         }
         analyses.extend(guessed);
         analyses.sort_by(|a, b| b.prob.total_cmp(&a.prob));

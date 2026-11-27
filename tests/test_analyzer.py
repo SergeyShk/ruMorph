@@ -493,6 +493,18 @@ def test_surname_candidates(morph):
     # Строчное слово и слово с именем собственным в словаре не меняются
     assert all(a.pos != "PROPN" for a in morph.analyze("рогожин"))
     assert all(a.source == "dictionary" for a in morph.analyze("Иванов"))
+    # Фамилия - не первым разбором, и когда словарные разборы делят долю поровну
+    assert morph.lemmatize(["Рядовым", "Старшины"]) == ["рядовой", "старшина"]
+    assert any(a.pos == "PROPN" for a in morph.analyze("Рядовым"))
+
+
+def test_particle_word_with_yo(morph):
+    # Первая часть слова с частицей - в написании словаря: по ней строятся формы
+    analysis = morph.analyze("белье-то")[0]
+    assert (analysis.word, analysis.lemma) == ("бельё-то", "бельё-то")
+    assert analysis.inflect(Case="Gen") == "белья-то"
+    assert len(analysis.forms()) == 6
+    assert morph.analyze("Белье-то")[0].word == "Бельё-то"
 
 
 def test_analyze_sentence_errors(morph, tmp_path):

@@ -12,21 +12,23 @@ use crate::ud;
 /// SynTagRus train (часть речи и лемма первого разбора)
 const PRIOR_WEIGHT: f64 = 5.0;
 
-/// Счетчики разметок словоформы: часть речи, лемма, число всего и с заглавной буквы
-pub type Counts = BTreeMap<String, Vec<(String, String, u32, u32)>>;
+/// Счетчики разметок словоформы: часть речи, лемма, число всего, с заглавной буквы и с Abbr=Yes
+pub type Counts = BTreeMap<String, Vec<(String, String, u32, u32, u32)>>;
 
-/// Счетчики из `counts.tsv`: словоформа, часть речи, лемма, число всего и с заглавной буквы
+/// Счетчики из `counts.tsv`: словоформа, часть речи, лемма, число всего, с заглавной буквы
+/// и с Abbr=Yes
 pub fn read(text: &str) -> Result<Counts, String> {
     let mut counts = Counts::new();
     for (number, line) in text.lines().enumerate() {
         let invalid = || format!("counts.tsv:{}: неверная строка {line:?}", number + 1);
         let fields: Vec<&str> = line.split('\t').collect();
-        let [word, pos, lemma, count, capitalized] = fields.as_slice() else {
+        let [word, pos, lemma, count, capitalized, abbreviated] = fields.as_slice() else {
             return Err(invalid());
         };
         let count: u32 = count.parse().map_err(|_| invalid())?;
         let capitalized: u32 = capitalized.parse().map_err(|_| invalid())?;
-        if capitalized > count {
+        let abbreviated: u32 = abbreviated.parse().map_err(|_| invalid())?;
+        if capitalized > count || abbreviated > count {
             return Err(invalid());
         }
         counts.entry((*word).to_owned()).or_default().push((
@@ -34,6 +36,7 @@ pub fn read(text: &str) -> Result<Counts, String> {
             (*lemma).to_owned(),
             count,
             capitalized,
+            abbreviated,
         ));
     }
     Ok(counts)
@@ -58,11 +61,11 @@ pub fn blend(dictionary: &Dictionary, counts: &Counts) -> Vec<(String, Vec<(Entr
             _ => (key.clone(), false),
         };
         let word = &word;
-        let lowercase: Vec<(String, String, u32, u32)>;
+        let lowercase: Vec<(String, String, u32, u32, u32)>;
         let pairs = if dotted {
             lowercase = (pairs.iter())
-                .map(|(pos, lemma, count, capitalized)| {
-                    (pos.clone(), lemma.clone(), count - capitalized, 0)
+                .map(|(pos, lemma, count, capitalized, _)| {
+                    (pos.clone(), lemma.clone(), count - capitalized, 0, 0)
                 })
                 .collect();
             &lowercase
@@ -90,7 +93,7 @@ pub fn blend(dictionary: &Dictionary, counts: &Counts) -> Vec<(String, Vec<(Entr
 /// это слово в начале предложения - и у всех таких разметок вместе (для остальных частей речи)
 fn capitalized_rates(counts: &Counts) -> (HashMap<&str, f64>, f64) {
     let mut sums: HashMap<&str, (f64, f64)> = HashMap::new();
-    for (pos, _, count, capitalized) in counts.values().flatten() {
+    for (pos, _, count, capitalized, _) in counts.values().flatten() {
         if pos != "PROPN" && pos != "PUNCT" {
             let sum = sums.entry(pos.as_str()).or_default();
             sum.0 += f64::from(*capitalized);
@@ -110,7 +113,7 @@ fn capitalized_rates(counts: &Counts) -> (HashMap<&str, f64>, f64) {
 fn shares(
     dictionary: &Dictionary,
     word: &str,
-    pairs: &[(String, String, u32, u32)],
+    pairs: &[(String, String, u32, u32, u32)],
     rates: &(HashMap<&str, f64>, f64),
     dotted: bool,
 ) -> Option<Vec<(Entry, u32)>> {
@@ -159,10 +162,37 @@ fn shares(
             }
         })
         .collect();
-    let pairs: Vec<(String, String, f64)> = (pairs.iter())
-        .map(|(pos, lemma, count, _)| (pos.clone(), lemma.clone(), f64::from(*count)))
-        .collect();
-    let counts = attributed(&keys, &pairs);
+    // Разметки голого слова с Abbr=Yes («АН», «УК») достаются разборам-сокращениям с той же леммой:
+    // аббревиатура-название в трибанках - PROPN, в словаре - и NOUN
+    let nominal = |pos: &str| pos == "NOUN" || pos == "PROPN";
+    let mut plain_pairs: Vec<(String, String, f64)> = Vec::new();
+    let mut counts: HashMap<&(String, String), f64> = HashMap::new();
+    for (pos, lemma, count, _, abbreviated) in pairs {
+        let abbreviated = if dotted { 0 } else { *abbreviated };
+        plain_pairs.push((pos.clone(), lemma.clone(), f64::from(count - abbreviated)));
+        if abbreviated == 0 {
+            continue;
+        }
+        let mut matched: Vec<&(String, String)> = (keys.iter().zip(&analyses))
+            .filter(|(key, analysis)| {
+                abbreviation(analysis)
+                    && normal(key.1.trim_end_matches('.')) == normal(lemma)
+                    && (key.0 == *pos || (nominal(&key.0) && nominal(pos)))
+            })
+            .map(|(key, _)| key)
+            .collect();
+        matched.sort();
+        matched.dedup();
+        if matched.is_empty() {
+            plain_pairs.push((pos.clone(), lemma.clone(), f64::from(abbreviated)));
+        }
+        for key in &matched {
+            *counts.entry(key).or_default() += f64::from(abbreviated) / matched.len() as f64;
+        }
+    }
+    for (key, count) in attributed(&keys, &plain_pairs) {
+        *counts.entry(key).or_default() += count;
+    }
     let mut distinct: Vec<&(String, String)> = keys.iter().collect();
     distinct.sort();
     distinct.dedup();
@@ -492,7 +522,7 @@ mod tests {
     fn blends_counts_with_dictionary_shares() {
         let dictionary = dictionary();
         let counts = read(
-            "стали\tVERB\tстать\t9\t1\nстали\tNOUN\tсталь\t1\t0\nсталь\tNOUN\tсталь\t3\t0\nт\tNOUN\tт\t5\t0\n",
+            "стали\tVERB\tстать\t9\t1\t0\nстали\tNOUN\tсталь\t1\t0\t0\nсталь\tNOUN\tсталь\t3\t0\t0\nт\tNOUN\tт\t5\t0\t0\n",
         )
         .unwrap();
         let lists = blend(&dictionary, &counts);
@@ -504,14 +534,15 @@ mod tests {
         let mut shares: Vec<u32> = list.iter().map(|&(_, millionths)| millionths).collect();
         shares.sort_unstable();
         assert_eq!(shares, [233_333, 766_667]);
-        assert!(read("стали\tVERB\tстать\t9").is_err());
-        assert!(read("стали\tVERB\tстать\t1\t2").is_err());
+        assert!(read("стали\tVERB\tстать\t9\t0").is_err());
+        assert!(read("стали\tVERB\tстать\t1\t2\t0").is_err());
+        assert!(read("стали\tVERB\tстать\t1\t0\t2").is_err());
     }
 
     #[test]
     fn dotted_counts_for_abbreviations() {
         let counts =
-            read("п.\tADJ\tп\t9\t0\nп.\tNOUN\tп\t50\t50\nп\tNOUN\tп\t9\t0\nс.\tNOUN\tс\t9\t0\n")
+            read("п.\tADJ\tп\t9\t0\t0\nп.\tNOUN\tп\t50\t50\t0\nп\tNOUN\tп\t9\t0\t0\nс.\tNOUN\tс\t9\t0\t0\n")
                 .unwrap();
         // Доли «п» - по строчным разметкам «п.»: все его разборы сокращения; разметки «П.» с заглавной
         // (инициал) и голого «п» не учитываются, а у «с» есть разбор не сокращения
@@ -527,9 +558,10 @@ mod tests {
 
     #[test]
     fn bare_counts_decide_abbreviation_share() {
-        let counts =
-            read("с\tNOUN\tс\t9\t0\nк\tNOUN\tк\t9\t0\nк\tVERB\tк\t1\t0\nв\tNOUN\tв\t9\t0\n")
-                .unwrap();
+        let counts = read(
+            "с\tNOUN\tс\t9\t0\t0\nк\tNOUN\tк\t9\t0\t0\nк\tVERB\tк\t1\t0\t0\nв\tNOUN\tв\t9\t0\t0\n",
+        )
+        .unwrap();
         let mut lists = blend(&dictionary(), &counts);
         lists.sort_by(|a, b| a.0.cmp(&b.0));
         let shares = |at: usize| -> Vec<u32> {
@@ -557,10 +589,34 @@ mod tests {
     }
 
     #[test]
+    fn abbreviated_counts_go_to_abbreviations() {
+        // «С» в трибанке - PROPN с Abbr=Yes («АН»): разбора PROPN в словаре нет, разметки достаются
+        // сокращению NOUN с той же леммой, а не обычному разбору
+        let dictionary = dictionary();
+        let counts = read("с\tPROPN\tс\t9\t9\t9\n").unwrap();
+        let lists = blend(&dictionary, &counts);
+        let analyses = dictionary.candidate_analyses("с");
+        let abbreviation = |entry: Entry| {
+            analyses.iter().any(|analysis| {
+                analysis.entry == Some(entry)
+                    && dictionary
+                        .ud_tag(analysis.ud)
+                        .is_some_and(|tag| tag.feat("Abbr").is_some())
+            })
+        };
+        let mut shares: Vec<(bool, u32)> = (lists[0].1.iter())
+            .map(|&(entry, share)| (abbreviation(entry), share))
+            .collect();
+        shares.sort_unstable();
+        // Без частот словаря: (9 + 2,5) / 14 сокращению и 2,5 / 14 обычному разбору
+        assert_eq!(shares, [(false, 178_571), (true, 821_429)]);
+    }
+
+    #[test]
     fn equal_shares_without_frequencies() {
         // Сумма шести долей 1/24 сокращения «ан» при округлении меньше 1/4 - а доли все равно равны:
         // счетчики глаголов (4,5 + 1,25 каждому) берутся, сокращение и существительное - доли словаря
-        let counts = read("ан\tVERB\tан\t9\t0\n").unwrap();
+        let counts = read("ан\tVERB\tан\t9\t0\t0\n").unwrap();
         let lists = blend(&dictionary(), &counts);
         assert_eq!(lists.len(), 1);
         let mut shares: Vec<u32> = lists[0]
@@ -613,8 +669,10 @@ mod tests {
         let mut text = String::new();
         for lemma in ["земля", "воля"] {
             let stem = lemma.trim_end_matches('я');
-            text += &format!("{stem}и\tNOUN\t{lemma}\t221\t10\n{stem}и\tPROPN\t{lemma}\t36\t36\n");
-            text += &format!("{stem}ей\tNOUN\t{lemma}\t5\t0\n");
+            text += &format!(
+                "{stem}и\tNOUN\t{lemma}\t221\t10\t0\n{stem}и\tPROPN\t{lemma}\t36\t36\t0\n"
+            );
+            text += &format!("{stem}ей\tNOUN\t{lemma}\t5\t0\t0\n");
         }
         let counts = read(&text).unwrap();
         let lists: BTreeMap<String, Vec<(Entry, u32)>> =
