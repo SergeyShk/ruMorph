@@ -1089,7 +1089,7 @@
 <tbody>
 <tr>
 <td style="text-align: left;">ruMorph</td>
-<td style="text-align: left;"><strong>94.1</strong> (98.5)</td>
+<td style="text-align: left;"><strong>94.1</strong> (98.6)</td>
 <td style="text-align: left;"><strong>90.9</strong> (96.0)</td>
 <td style="text-align: left;"><strong>92.3</strong> (95.7)</td>
 </tr>
@@ -1164,7 +1164,7 @@
 <tr>
 <td style="text-align: left;">ruMorph in context</td>
 <td style="text-align: left;"><strong>95.0</strong></td>
-<td style="text-align: left;"><strong>96.9</strong></td>
+<td style="text-align: left;"><strong>97.0</strong></td>
 <td style="text-align: left;"><strong>93.9</strong></td>
 </tr>
 <tr>
@@ -1252,8 +1252,8 @@
 <td style="text-align: left;">ruMorph</td>
 <td style="text-align: left;">96.9</td>
 <td style="text-align: left;">95.3</td>
-<td style="text-align: left;">88.0</td>
-<td style="text-align: left;">96.4</td>
+<td style="text-align: left;">88.1</td>
+<td style="text-align: left;">96.5</td>
 <td style="text-align: left;">84.0</td>
 <td style="text-align: left;">82.2</td>
 </tr>
@@ -1261,7 +1261,7 @@
 <td style="text-align: left;">ruMorph in context</td>
 <td style="text-align: left;">98.1</td>
 <td style="text-align: left;">97.3</td>
-<td style="text-align: left;">97.8</td>
+<td style="text-align: left;">97.9</td>
 <td style="text-align: left;">98.8</td>
 <td style="text-align: left;">95.4</td>
 <td style="text-align: left;">93.8</td>
@@ -1339,12 +1339,12 @@
 </tr>
 <tr>
 <td style="text-align: left;">ruMorph in context</td>
-<td style="text-align: left;">96.9</td>
+<td style="text-align: left;">97.0</td>
 <td style="text-align: left;">95.0</td>
 <td style="text-align: left;">97.2</td>
 <td style="text-align: left;">98.1</td>
 <td style="text-align: left;">93.9</td>
-<td style="text-align: left;">90.5</td>
+<td style="text-align: left;">90.6</td>
 </tr>
 <tr>
 <td style="text-align: left;">pymorphy3</td>
@@ -1411,7 +1411,7 @@
 <tr>
 <td style="text-align: left;">ruMorph</td>
 <td style="text-align: left;">96.5</td>
-<td style="text-align: left;">93.9</td>
+<td style="text-align: left;">94.0</td>
 <td style="text-align: left;">80.9</td>
 <td style="text-align: left;">93.2</td>
 <td style="text-align: left;">73.1</td>
@@ -1546,7 +1546,7 @@
 </tr>
 <tr>
 <td style="text-align: left;">Unknown lowercase word: <code>analyze</code>, <code>parse</code></td>
-<td style="text-align: left;">71</td>
+<td style="text-align: left;">86</td>
 <td style="text-align: left;">12</td>
 <td style="text-align: left;">48</td>
 </tr>
@@ -1614,13 +1614,13 @@
 </tr>
 </tbody>
 </table>
-<p>The context model is read at the first sentence analysis: 4 ms and 5 MB of memory, the paradigm class model at the first guess of a lowercase word: 5 ms and 4 MB. Analyzers with the same dictionary file in a process share the dictionary and the model. The dictionary file is mapped into memory, so <code>multiprocessing</code> or joblib processes and web server workers share it too: every further process adds only the analyzer's own tables.</p>
+<p>The context model is read at the first sentence analysis: 4 ms and 5 MB of memory, the paradigm class model at the first guess of a lowercase word: 5 ms and 4 MB. Analyzers with the same dictionary file in a process share the dictionary and the models, and simultaneous first calls from several threads build a model once. The dictionary file is mapped into memory, so <code>multiprocessing</code> or joblib processes and web server workers share it too: every further process adds only the analyzer's own tables.</p>
 <h2 id="method">How it was measured<a class="headerlink" href="#method" title="Permanent link">&para;</a></h2>
 <ul>
 <li>Quality and text analysis - the <a href="https://github.com/SergeyShk/ruMorph/blob/master/scripts/compare.py"><code>scripts/compare.py</code></a> script: <code>uv run --with rumorph==X.Y.Z scripts/compare.py build/compare --chart docs/img/speed.svg</code>, where <code>X.Y.Z</code> is the ruMorph version (without <code>--with</code>, the version from <code>scripts/compare.py.lock</code>; a path to a wheel works instead of the version). It installs the systems into a separate environment with the versions of all packages pinned in <code>scripts/compare.py.lock</code>, downloads the treebank test parts, the models and mystem with checksum verification before measuring and analyzes the gold tokens. The tables converting the parts of speech, case and number of pymorphy3 and mystem to UD are at the top of the script.</li>
-<li>Versions: Python 3.11, ruMorph 0.7.0 (text analysis speed and the chart - 0.6.0.dev7, 0.7.0 is within the spread of measurements; the time of a short text with loading - 0.7.0, 1 ms more), pymorphy3 2.0.6 with the pymorphy3-dicts-ru 2.4.417150.4580142 dictionary, mystem 3.1 through pymystem3 0.2.0 without disambiguation (for quality, each word separately; the macOS binary is built for x86_64 and runs through Rosetta 2), spaCy 3.8.16 with the ru_core_news_sm 3.8.0 model, Stanza 1.15.0 with the default model on the CPU (torch 2.14.1), Slovnet 0.6.0 with the slovnet_morph_news_v1 and navec_news_v1 models. Computer - Apple M3 Pro, macOS 26.</li>
+<li>Versions: Python 3.11, ruMorph 0.8.0 (text analysis speed and the chart - 0.6.0.dev7, 0.7.0 and 0.8.0 are within the spread of measurements; the time of a short text with loading - 0.7.0, 1 ms more), pymorphy3 2.0.6 with the pymorphy3-dicts-ru 2.4.417150.4580142 dictionary, mystem 3.1 through pymystem3 0.2.0 without disambiguation (for quality, each word separately; the macOS binary is built for x86_64 and runs through Rosetta 2), spaCy 3.8.16 with the ru_core_news_sm 3.8.0 model, Stanza 1.15.0 with the default model on the CPU (torch 2.14.1), Slovnet 0.6.0 with the slovnet_morph_news_v1 and navec_news_v1 models. Computer - Apple M3 Pro, macOS 26.</li>
 <li>Text analysis speed - 157,706 tokens of the SynTagRus test part with punctuation in one thread: tokens per second - the best of two analyses of the whole part after loading, chart points - importing, loading and analyzing the first 10-100,000 tokens in a new process. Only the call of the system is measured: mystem gets a whole sentence, spaCy analyzes sentences with <code>nlp.pipe</code>, ruMorph in context - <code>analyze_sentence</code> per sentence.</li>
-<li>Operations - ruMorph 0.5.0 (0.6.0 and 0.7.0 are within the spread of measurements), an unknown lowercase word and memory - ruMorph 0.7.0, pymorphy3 2.0.6, <code>pymorphy3[fast]</code> - the same with the C++ DAWG extension; 128,251 word forms of the SynTagRus test part without punctuation, the best of three runs in one thread, except for the row with threads. <code>inflect</code> - the genitive of the first analyses that have a case, <code>agree</code> - the first analyses of nouns with the number 5, <code>forms</code> - the first analyses of the first 20,000 words, an unknown lowercase word - 351 lowercase word forms of the test part that are not in the ruMorph dictionary. Memory - the growth of the resident memory of the process (<code>ps -o rss</code>) after importing and creating the analyzer, time - the import, creating the analyzer and the first analysis; a further process - the growth of the memory the process does not share with others (USS), in each of four <code>multiprocessing</code> processes.</li>
+<li>Operations - ruMorph 0.5.0 (0.6.0-0.8.0 are within the spread of measurements), an unknown lowercase word - ruMorph 0.8.0, memory - ruMorph 0.7.0 (the same in 0.8.0), pymorphy3 2.0.6, <code>pymorphy3[fast]</code> - the same with the C++ DAWG extension; 128,251 word forms of the SynTagRus test part without punctuation, the best of three runs in one thread, except for the row with threads. <code>inflect</code> - the genitive of the first analyses that have a case, <code>agree</code> - the first analyses of nouns with the number 5, <code>forms</code> - the first analyses of the first 20,000 words, an unknown lowercase word - 307 lowercase word forms of the test part that ruMorph guesses. Memory - the growth of the resident memory of the process (<code>ps -o rss</code>) after importing and creating the analyzer, time - the import, creating the analyzer and the first analysis; a further process - the growth of the memory the process does not share with others (USS), in each of four <code>multiprocessing</code> processes.</li>
 </ul>
 
 

@@ -1290,9 +1290,9 @@
 <div class="metric-card">
 <h3 id="analyze_sentence">Sentence analysis<a class="headerlink" href="#analyze_sentence" title="Permanent link">&para;</a></h3>
 <p class="metric-meta"><code>analyze_sentence</code> · <code>list[list[Analysis]]</code></p>
-<div class="signature highlight"><pre><span></span><code><span class="n">analyze_sentence</span><span class="p">(</span><span class="n">words</span><span class="p">)</span>
+<div class="signature highlight"><pre><span></span><code><span class="n">analyze_sentence</span><span class="p">(</span><span class="n">words</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">line_starts</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
 </code></pre></div>
-<p>Analyses of the words of a sentence in context: the same analyses as with <a href="#analyze"><code>analyze</code></a> are ordered by the context model - the first one is the analysis it chose from the neighbouring words, and <code>prob</code> is its estimate in this sentence. Words that are often not parenthetical («однако», «наконец») keep the <code>Prnt</code> label only next to a comma or a dash (<a href="../analysis/#ud">labels</a>). Without context «книги» is in the genitive (it is more frequent), in «Я читаю книги» the model picks the accusative, and «стали» in «Мост сделан из стали» is the noun «сталь», not the verb «стать». With context the part of speech, lemma and features of the first analysis are right for 82-94 % of words against 71-82 % without it (<a href="../performance/">Comparison</a>). The words are the tokens of one sentence in order; the segmenter anySeg splits text into sentences and tokens, and <a href="#annotate"><code>annotate</code></a> analyzes a document. A word without neighbours is analyzed as with <code>analyze</code>: without context the model chooses worse than the dictionary frequencies. A sentence longer than 256 words is analyzed in parts of 256, so the memory of the model does not grow with the length of the input. The model is trained on the <a href="https://github.com/UniversalDependencies/UD_Russian-Taiga">UD_Russian-Taiga</a>, <a href="https://github.com/UniversalDependencies/UD_Russian-GSD">UD_Russian-GSD</a> and <a href="https://github.com/UniversalDependencies/UD_Russian-Poetry">UD_Russian-Poetry</a> treebanks and the <a href="https://opencorpora.org">OpenCorpora</a> corpus and ships with the package dictionary. On processors with FMA (arm64, x86-64 with AVX2 and FMA) the model computes faster with it, and <code>prob</code> may differ from a processor without FMA by millionths.</p>
+<p>Analyses of the words of a sentence in context: the same analyses as with <a href="#analyze"><code>analyze</code></a> are ordered by the context model - the first one is the analysis it chose from the neighbouring words, and <code>prob</code> is its estimate in this sentence. Words that are often not parenthetical («однако», «наконец») keep the <code>Prnt</code> label only next to a comma or a dash (<a href="../analysis/#ud">labels</a>). Without context «книги» is in the genitive (it is more frequent), in «Я читаю книги» the model picks the accusative, and «стали» in «Мост сделан из стали» is the noun «сталь», not the verb «стать». With context the part of speech, lemma and features of the first analysis are right for 82-94 % of words against 71-82 % without it (<a href="../performance/">Comparison</a>). The words are the tokens of one sentence in order; the segmenter anySeg splits text into sentences and tokens, and <a href="#annotate"><code>annotate</code></a> analyzes a document. A word without neighbours is analyzed as with <code>analyze</code>: without context the model chooses worse than the dictionary frequencies. A sentence longer than 256 words is analyzed in parts of 256, so the memory of the model does not grow with the length of the input. In verse a sentence runs over several lines, and each line starts with a capital letter: the numbers of the tokens that start lines go to <code>line_starts</code>, and a capital there is for the model as at the start of a sentence, not a sign of a proper noun («Снова» at the start of a line is an adverb, not a name). The model is trained on the <a href="https://github.com/UniversalDependencies/UD_Russian-Taiga">UD_Russian-Taiga</a>, <a href="https://github.com/UniversalDependencies/UD_Russian-GSD">UD_Russian-GSD</a> and <a href="https://github.com/UniversalDependencies/UD_Russian-Poetry">UD_Russian-Poetry</a> treebanks and the <a href="https://opencorpora.org">OpenCorpora</a> corpus and ships with the package dictionary. On processors with FMA (arm64, x86-64 with AVX2 and FMA) the model computes faster with it, and <code>prob</code> may differ from a processor without FMA by millionths.</p>
 <table>
 <thead>
 <tr>
@@ -1309,12 +1309,18 @@
 <td style="text-align: left;">-</td>
 <td style="text-align: left;">Tokens of a sentence: a list, a tuple, a generator</td>
 </tr>
+<tr>
+<td style="text-align: left;"><code>line_starts</code></td>
+<td style="text-align: left;"><code>Iterable[int] \| None</code></td>
+<td style="text-align: left;"><code>None</code></td>
+<td style="text-align: left;">Numbers of the tokens that start lines inside the sentence (verse)</td>
+</tr>
 </tbody>
 </table>
 <p>Exceptions:</p>
 <ul>
-<li><code>TypeError</code> - a string instead of a collection of words, a word that is not a string;</li>
-<li><code>ValueError</code> - the dictionary has no context model (a dictionary built without it).</li>
+<li><code>TypeError</code> - a string instead of a collection of words, a word that is not a string, a line number that is not an integer;</li>
+<li><code>ValueError</code> - the dictionary has no context model (a dictionary built without it), a line number outside the sentence.</li>
 </ul>
 <div class="tabbed-set tabbed-alternate" data-tabs="5:2"><input checked="checked" id="__tabbed_5_1" name="__tabbed_5" type="radio" /><input id="__tabbed_5_2" name="__tabbed_5" type="radio" /><div class="tabbed-labels"><label for="__tabbed_5_1">Code</label><label for="__tabbed_5_2">Result</label></div>
 <div class="tabbed-content">
@@ -1323,12 +1329,18 @@
 <span class="nb">print</span><span class="p">([</span><span class="n">analyses</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">feats</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"Case"</span><span class="p">)</span> <span class="k">for</span> <span class="n">analyses</span> <span class="ow">in</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze_many</span><span class="p">(</span><span class="n">words</span><span class="p">)])</span>
 <span class="nb">print</span><span class="p">([</span><span class="n">analyses</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">feats</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"Case"</span><span class="p">)</span> <span class="k">for</span> <span class="n">analyses</span> <span class="ow">in</span> <span class="n">morph</span><span class="o">.</span><span class="n">analyze_sentence</span><span class="p">(</span><span class="n">words</span><span class="p">)])</span>
 <span class="nb">print</span><span class="p">(</span><span class="n">morph</span><span class="o">.</span><span class="n">analyze_sentence</span><span class="p">([</span><span class="s2">"Мост"</span><span class="p">,</span> <span class="s2">"сделан"</span><span class="p">,</span> <span class="s2">"из"</span><span class="p">,</span> <span class="s2">"стали"</span><span class="p">])[</span><span class="mi">3</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">lemma</span><span class="p">)</span>
+<span class="n">verse</span> <span class="o">=</span> <span class="s2">"В широкошумном качается море Снова со мной корабля колыбель"</span><span class="o">.</span><span class="n">split</span><span class="p">()</span>
+<span class="nb">print</span><span class="p">(</span>
+    <span class="n">morph</span><span class="o">.</span><span class="n">analyze_sentence</span><span class="p">(</span><span class="n">verse</span><span class="p">)[</span><span class="mi">4</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">pos</span><span class="p">,</span>
+    <span class="n">morph</span><span class="o">.</span><span class="n">analyze_sentence</span><span class="p">(</span><span class="n">verse</span><span class="p">,</span> <span class="n">line_starts</span><span class="o">=</span><span class="p">[</span><span class="mi">4</span><span class="p">])[</span><span class="mi">4</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">pos</span><span class="p">,</span>
+<span class="p">)</span>
 </code></pre></div>
 </div>
 <div class="tabbed-block">
 <div class="highlight"><pre><span></span><code>['Nom', None, 'Gen']
 ['Nom', None, 'Acc']
 сталь
+PROPN ADV
 </code></pre></div>
 </div>
 </div>
