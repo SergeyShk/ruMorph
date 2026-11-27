@@ -1259,25 +1259,38 @@ impl Analyzer {
     ///
     /// Аргументы:
     ///     words (Iterable[str]): Токены предложения
+    ///     line_starts (Iterable[int] | None): Номера токенов, с которых начинается строка
+    ///         внутри предложения (стих): заглавная буква в начале строки - как в начале
+    ///         предложения, а не признак имени собственного
     ///
     /// Вывод:
     ///     list[list[Analysis]]: Разборы каждого токена
     ///
     /// Исключения:
-    ///     TypeError: Если передана строка, а не набор слов, или слово не строка
-    ///     ValueError: Если в словаре нет контекстной модели
+    ///     TypeError: Если передана строка, а не набор слов, слово не строка или номер строки
+    ///         не целое число
+    ///     ValueError: Если в словаре нет контекстной модели или номер строки вне предложения
     ///
     /// Пример использования:
     ///     >>> from rumorph import Analyzer
     ///     >>> sentence = Analyzer().analyze_sentence(["Я", "читаю", "книги"])
     ///     >>> [(analyses[0].lemma, analyses[0].feats.get("Case")) for analyses in sentence]
     ///     [('я', 'Nom'), ('читать', None), ('книга', 'Acc')]
+    #[pyo3(
+        signature = (words, *, line_starts = None),
+        text_signature = "($self, words, *, line_starts=None)"
+    )]
     fn analyze_sentence(
         slf: &Bound<'_, Self>,
         words: &Bound<'_, PyAny>,
+        line_starts: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<Vec<Vec<Analysis>>> {
         let (py, handle) = (slf.py(), Self::handle(slf));
         let words = collect_words(words)?;
+        let starts = match line_starts {
+            Some(starts) if !starts.is_none() => collect_line_starts(starts, words.len())?,
+            _ => Vec::new(),
+        };
         let dictionary = &slf.get().shared.dictionary;
         let mut sentence = Vec::with_capacity(words.len());
         // Пустое предложение тоже проверяет, есть ли в словаре модель
@@ -1287,9 +1300,14 @@ impl Analyzer {
                 .map_err(|err| PyValueError::new_err(err.to_string()))?;
         }
         // Части по SENTENCE_CHUNK слов, как в ядре: между ними срабатывает Ctrl+C
-        for chunk in words.chunks(rumorph::SENTENCE_CHUNK) {
+        for (number, chunk) in words.chunks(rumorph::SENTENCE_CHUNK).enumerate() {
+            let offset = number * rumorph::SENTENCE_CHUNK;
+            let chunk_starts: Vec<usize> = (starts.iter())
+                .filter_map(|&start| start.checked_sub(offset))
+                .filter(|&start| start < chunk.len())
+                .collect();
             let part = py
-                .detach(|| dictionary.analyze_sentence(chunk))
+                .detach(|| dictionary.analyze_lines(chunk, &chunk_starts))
                 .map_err(|err| PyValueError::new_err(err.to_string()))?;
             sentence.extend(part);
             py.check_signals()?;
@@ -1859,6 +1877,36 @@ fn collect_words(words: &Bound<'_, PyAny>) -> PyResult<Vec<String>> {
                 )));
             };
             lossy(word)
+        })
+        .collect()
+}
+
+/// Номера токенов-начал строк `analyze_sentence`: целые от 0 до `count - 1`
+fn collect_line_starts(starts: &Bound<'_, PyAny>, count: usize) -> PyResult<Vec<usize>> {
+    let iterator = starts.try_iter().map_err(|err| {
+        if err.is_instance_of::<PyTypeError>(starts.py()) {
+            type_error(
+                "Параметр line_starts должен быть набором номеров токенов",
+                starts,
+            )
+        } else {
+            err
+        }
+    })?;
+    iterator
+        .map(|start| {
+            let start = start?;
+            let number: i64 = start
+                .extract()
+                .map_err(|_| type_error("Номер токена в line_starts должен быть целым", &start))?;
+            usize::try_from(number)
+                .ok()
+                .filter(|&number| number < count)
+                .ok_or_else(|| {
+                    PyValueError::new_err(format!(
+                        "Номер токена {number} в line_starts вне предложения из {count} токенов"
+                    ))
+                })
         })
         .collect()
 }

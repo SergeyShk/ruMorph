@@ -147,19 +147,20 @@ Exceptions:
 { .metric-meta }
 
 ``` {.python .signature}
-analyze_sentence(words)
+analyze_sentence(words, *, line_starts=None)
 ```
 
-Analyses of the words of a sentence in context: the same analyses as with [`analyze`](#analyze) are ordered by the context model - the first one is the analysis it chose from the neighbouring words, and `prob` is its estimate in this sentence. Words that are often not parenthetical («однако», «наконец») keep the `Prnt` label only next to a comma or a dash ([labels](analysis.md#ud)). Without context «книги» is in the genitive (it is more frequent), in «Я читаю книги» the model picks the accusative, and «стали» in «Мост сделан из стали» is the noun «сталь», not the verb «стать». With context the part of speech, lemma and features of the first analysis are right for 82-94 % of words against 71-82 % without it ([Comparison](performance.md)). The words are the tokens of one sentence in order; the segmenter anySeg splits text into sentences and tokens, and [`annotate`](#annotate) analyzes a document. A word without neighbours is analyzed as with `analyze`: without context the model chooses worse than the dictionary frequencies. A sentence longer than 256 words is analyzed in parts of 256, so the memory of the model does not grow with the length of the input. The model is trained on the [UD_Russian-Taiga](https://github.com/UniversalDependencies/UD_Russian-Taiga), [UD_Russian-GSD](https://github.com/UniversalDependencies/UD_Russian-GSD) and [UD_Russian-Poetry](https://github.com/UniversalDependencies/UD_Russian-Poetry) treebanks and the [OpenCorpora](https://opencorpora.org) corpus and ships with the package dictionary. On processors with FMA (arm64, x86-64 with AVX2 and FMA) the model computes faster with it, and `prob` may differ from a processor without FMA by millionths.
+Analyses of the words of a sentence in context: the same analyses as with [`analyze`](#analyze) are ordered by the context model - the first one is the analysis it chose from the neighbouring words, and `prob` is its estimate in this sentence. Words that are often not parenthetical («однако», «наконец») keep the `Prnt` label only next to a comma or a dash ([labels](analysis.md#ud)). Without context «книги» is in the genitive (it is more frequent), in «Я читаю книги» the model picks the accusative, and «стали» in «Мост сделан из стали» is the noun «сталь», not the verb «стать». With context the part of speech, lemma and features of the first analysis are right for 82-94 % of words against 71-82 % without it ([Comparison](performance.md)). The words are the tokens of one sentence in order; the segmenter anySeg splits text into sentences and tokens, and [`annotate`](#annotate) analyzes a document. A word without neighbours is analyzed as with `analyze`: without context the model chooses worse than the dictionary frequencies. A sentence longer than 256 words is analyzed in parts of 256, so the memory of the model does not grow with the length of the input. In verse a sentence runs over several lines, and each line starts with a capital letter: the numbers of the tokens that start lines go to `line_starts`, and a capital there is for the model as at the start of a sentence, not a sign of a proper noun («Снова» at the start of a line is an adverb, not a name). The model is trained on the [UD_Russian-Taiga](https://github.com/UniversalDependencies/UD_Russian-Taiga), [UD_Russian-GSD](https://github.com/UniversalDependencies/UD_Russian-GSD) and [UD_Russian-Poetry](https://github.com/UniversalDependencies/UD_Russian-Poetry) treebanks and the [OpenCorpora](https://opencorpora.org) corpus and ships with the package dictionary. On processors with FMA (arm64, x86-64 with AVX2 and FMA) the model computes faster with it, and `prob` may differ from a processor without FMA by millionths.
 
 | Parameter | Type | Default | Description |
 | :-------- | :--- | :------ | :---------- |
 | `words` | `Iterable[str]` | - | Tokens of a sentence: a list, a tuple, a generator |
+| `line_starts` | `Iterable[int] \| None` | `None` | Numbers of the tokens that start lines inside the sentence (verse) |
 
 Exceptions:
 
-- `TypeError` - a string instead of a collection of words, a word that is not a string;
-- `ValueError` - the dictionary has no context model (a dictionary built without it).
+- `TypeError` - a string instead of a collection of words, a word that is not a string, a line number that is not an integer;
+- `ValueError` - the dictionary has no context model (a dictionary built without it), a line number outside the sentence.
 
 === "Code"
 
@@ -168,6 +169,11 @@ Exceptions:
     print([analyses[0].feats.get("Case") for analyses in morph.analyze_many(words)])
     print([analyses[0].feats.get("Case") for analyses in morph.analyze_sentence(words)])
     print(morph.analyze_sentence(["Мост", "сделан", "из", "стали"])[3][0].lemma)
+    verse = "В широкошумном качается море Снова со мной корабля колыбель".split()
+    print(
+        morph.analyze_sentence(verse)[4][0].pos,
+        morph.analyze_sentence(verse, line_starts=[4])[4][0].pos,
+    )
     ```
 
 === "Result"
@@ -176,6 +182,7 @@ Exceptions:
     ['Nom', None, 'Gen']
     ['Nom', None, 'Acc']
     сталь
+    PROPN ADV
     ```
 
 </div>
