@@ -119,7 +119,9 @@ fn shares(
         return None;
     }
     // Счетчики голого сокращения не говорят о сокращении с точкой: «т» в корпусе - буква, «т.» - «так».
-    // Счетчики токена с точкой - доли слова, все разборы которого сокращения: у «с.» есть и предлог «с»
+    // Счетчики токена с точкой - доли слова, все разборы которого сокращения: у «с.» есть и предлог «с».
+    // Сокращение с точкой берет разборы-сокращения и делит доли между ними, поэтому счетчики
+    // голого слова с обычными разборами («пол», «ум») решают, насколько оно сокращение без точки
     let abbreviation = |analysis: &Analysis| {
         dictionary
             .ud_tag(analysis.ud)
@@ -127,20 +129,34 @@ fn shares(
     };
     let abbreviated = match dotted {
         true => analyses.iter().all(abbreviation),
-        false => !analyses.iter().any(abbreviation),
+        false => !analyses.iter().all(abbreviation),
     };
     if !abbreviated {
         return None;
     }
+    let pair = |analysis: &Analysis| {
+        (
+            dictionary
+                .ud_tag(analysis.ud)
+                .map_or(String::new(), |tag| tag.pos().to_owned()),
+            analysis.lemma.to_lowercase(),
+        )
+    };
+    // Голое слово в трибанках - не сокращение с точкой: разметка с парой обычного разбора
+    // («пол» - NOUN «пол») ему не достается, ключ сокращения - с точкой
+    let plain: Vec<(String, String)> = (analyses.iter())
+        .filter(|analysis| !abbreviation(analysis))
+        .map(pair)
+        .collect();
     let keys: Vec<(String, String)> = analyses
         .iter()
         .map(|analysis| {
-            (
-                dictionary
-                    .ud_tag(analysis.ud)
-                    .map_or(String::new(), |tag| tag.pos().to_owned()),
-                analysis.lemma.to_lowercase(),
-            )
+            let (pos, lemma) = pair(analysis);
+            if !dotted && abbreviation(analysis) && plain.contains(&(pos.clone(), lemma.clone())) {
+                (pos, lemma + ".")
+            } else {
+                (pos, lemma)
+            }
         })
         .collect();
     let pairs: Vec<(String, String, f64)> = (pairs.iter())
@@ -154,6 +170,12 @@ fn shares(
         return None;
     }
     let priors = priors(dictionary, &analyses);
+    if !dotted
+        && analyses.iter().any(abbreviation)
+        && !outweighed(dictionary, &analyses, &priors, abbreviation)
+    {
+        return None;
+    }
     let mut mass: HashMap<&(String, String), (f64, usize)> = HashMap::new();
     for (key, prior) in keys.iter().zip(&priors) {
         let entry = mass.entry(key).or_default();
@@ -209,6 +231,11 @@ fn shares(
             None => shares.push((entry, share)),
         }
     }
+    // У слова с частотами словаря счетчики решают только долю сокращений, без частот - все доли
+    let frequencies = analyses.iter().any(|analysis| analysis.prob > 0.0);
+    if !dotted && frequencies && analyses.iter().any(abbreviation) {
+        shares = abbreviation_share(&shares, &analyses, &priors, abbreviation);
+    }
     let total: f64 = shares.iter().map(|(_, share)| share).sum();
     // Ненулевая доля у каждого разбора: нулевой разбор при загрузке не отличить от разбора без частот
     Some(
@@ -217,6 +244,90 @@ fn shares(
             .map(|(entry, share)| (entry, (share / total * 1e6).round().max(1.0) as u32))
             .collect(),
     )
+}
+
+/// Сокращения вместе не менее вероятны, чем самый вероятный обычный разбор (разборы с одной частью речи,
+/// признаками и леммой - вместе): так бывает, когда сглаживание частот словаря дает несклоняемому
+/// сокращению долю каждого падежа («пол», «быт»). Иначе доли словаря не меняются: на них учится
+/// контекстная модель. Имена собственные не сравниваются: их долю при разборе задает регистр слова
+/// («Пол» - имя, «пол» - нет)
+fn outweighed(
+    dictionary: &Dictionary,
+    analyses: &[Analysis],
+    priors: &[f64],
+    abbreviation: impl Fn(&Analysis) -> bool,
+) -> bool {
+    let mut abbreviated = 0.0;
+    let mut plain: HashMap<(Option<String>, Option<String>, String), f64> = HashMap::new();
+    for (analysis, &prior) in analyses.iter().zip(priors) {
+        let tag = dictionary.ud_tag(analysis.ud);
+        if tag.is_some_and(|tag| tag.pos() == "PROPN") {
+            continue;
+        }
+        if abbreviation(analysis) {
+            abbreviated += prior;
+        } else {
+            let key = (
+                tag.map(|tag| tag.pos().to_owned()),
+                tag.map(|tag| tag.feats_string()),
+                analysis.lemma.clone(),
+            );
+            *plain.entry(key).or_default() += prior;
+        }
+    }
+    // Без частот словаря доли равны по построению (группа сокращения - k долей 1/n/k), и сумма
+    // при округлении бывает чуть меньше 1/n: сравнение - с запасом
+    plain
+        .values()
+        .all(|&share| abbreviated >= share * (1.0 - 1e-9))
+}
+
+/// Доли словаря `priors` разборов `analyses` голого слова с сокращениями и обычными разборами,
+/// у которых общая доля сокращений - как в долях `blended` со счетчиками: счетчики решают только,
+/// насколько слово без точки - сокращение. Доли обычных разборов между собой остаются частотами
+/// словаря: на них учится контекстная модель («и» - CCONJ и PART)
+fn abbreviation_share(
+    blended: &[(Entry, f64)],
+    analyses: &[Analysis],
+    priors: &[f64],
+    abbreviation: impl Fn(&Analysis) -> bool,
+) -> Vec<(Entry, f64)> {
+    let mut rows: Vec<(Entry, f64, bool)> = Vec::new();
+    for (analysis, &prior) in analyses.iter().zip(priors) {
+        let Some(entry) = analysis.entry else {
+            continue;
+        };
+        match rows.iter_mut().find(|(known, ..)| *known == entry) {
+            Some((_, known, _)) => *known += prior,
+            None => rows.push((entry, prior, abbreviation(analysis))),
+        }
+    }
+    let fraction = |shares: &mut dyn Iterator<Item = (f64, bool)>| {
+        let (mut abbreviated, mut total) = (0.0, 0.0);
+        for (share, flag) in shares {
+            total += share;
+            if flag {
+                abbreviated += share;
+            }
+        }
+        abbreviated / total
+    };
+    let flag = |entry: Entry| rows.iter().any(|&(known, _, flag)| known == entry && flag);
+    let new = fraction(&mut blended.iter().map(|&(entry, share)| (share, flag(entry))));
+    let old = fraction(&mut rows.iter().map(|&(_, share, flag)| (share, flag)));
+    if !(old > 0.0 && old < 1.0) {
+        return blended.to_vec();
+    }
+    rows.iter()
+        .map(|&(entry, prior, flag)| {
+            let scale = if flag {
+                new / old
+            } else {
+                (1.0 - new) / (1.0 - old)
+            };
+            (entry, prior * scale)
+        })
+        .collect()
 }
 
 /// Разметки корпуса по парам «часть речи, лемма» разборов: лемма сравнивается точно, а если
@@ -283,11 +394,22 @@ mod tests {
     use super::*;
 
     /// «стали» - форма «стать» и «сталь», «т» и «п» - сокращения, у «с» - сокращение и другой
-    /// разбор; без частот словаря
+    /// разбор; без частот словаря. У «к» и «в» - сокращение и обычные разборы с частотами: у «к»
+    /// сокращение вероятнее каждого из них, у «в» - нет
     fn dictionary() -> Dictionary {
-        let tags = ["INFN", "VERB", "NOUN", "NOUN Abbr"]
-            .map(String::from)
-            .to_vec();
+        let tags = [
+            "INFN",
+            "VERB",
+            "NOUN",
+            "NOUN Abbr",
+            "NOUN Abbr gent",
+            "NOUN Abbr datv",
+            "NOUN Abbr accs",
+            "NOUN Abbr ablt",
+            "NOUN Abbr loct",
+        ]
+        .map(String::from)
+        .to_vec();
         let suffixes = ["", "ть", "ли", "ь", "и"].map(String::from).to_vec();
         let mut builder = Builder::new(tags, vec![String::new()], suffixes);
         let infinitive = builder.add_ud_tag("VERB", "VerbForm=Inf", &[]).unwrap();
@@ -326,6 +448,43 @@ mod tests {
         builder
             .add_word("с", &[entry(abbreviated, 0), entry(plain, 0)])
             .unwrap();
+        let bare = |builder: &mut Builder, tag: u16, ud: u16| {
+            let paradigm = builder.add_paradigm(&[(0, tag, 0)]).unwrap();
+            builder.add_table(paradigm, &[(0, ud)]).unwrap()
+        };
+        let (noun_table, verb_table) = (bare(&mut builder, 2, noun), bare(&mut builder, 1, past));
+        for (word, shares) in [
+            ("к", [500_000, 300_000, 200_000]),
+            ("в", [100_000, 800_000, 100_000]),
+        ] {
+            builder
+                .add_word(
+                    word,
+                    &[
+                        entry(abbreviated, 0),
+                        entry(noun_table, 0),
+                        entry(verb_table, 0),
+                    ],
+                )
+                .unwrap();
+            for (tag, share) in [3, 2, 1].into_iter().zip(shares) {
+                builder.add_probability(word, tag, share).unwrap();
+            }
+        }
+        // «ан» без частот словаря: несклоняемое сокращение - шесть падежей одного разбора UD,
+        // и три обычных разбора; доля сокращения равна доле каждого из них
+        let cases = builder
+            .add_paradigm(&[3, 4, 5, 6, 7, 8].map(|tag| (0, tag, 0)))
+            .unwrap();
+        let uninflected = builder.add_table(cases, &[(0, abbreviation); 6]).unwrap();
+        let infinitive_table = bare(&mut builder, 0, infinitive);
+        let mut entries: Vec<Entry> = (0..6).map(|form| entry(uninflected, form)).collect();
+        entries.extend([
+            entry(noun_table, 0),
+            entry(verb_table, 0),
+            entry(infinitive_table, 0),
+        ]);
+        builder.add_word("ан", &entries).unwrap();
         Dictionary::from_bytes(&builder.build().unwrap()).unwrap()
     }
 
@@ -364,6 +523,58 @@ mod tests {
         let mut shares: Vec<u32> = list.iter().map(|&(_, millionths)| millionths).collect();
         shares.sort_unstable();
         assert_eq!(shares, [178_571, 821_429]);
+    }
+
+    #[test]
+    fn bare_counts_decide_abbreviation_share() {
+        let counts =
+            read("с\tNOUN\tс\t9\t0\nк\tNOUN\tк\t9\t0\nк\tVERB\tк\t1\t0\nв\tNOUN\tв\t9\t0\n")
+                .unwrap();
+        let mut lists = blend(&dictionary(), &counts);
+        lists.sort_by(|a, b| a.0.cmp(&b.0));
+        let shares = |at: usize| -> Vec<u32> {
+            let mut shares: Vec<u32> = lists[at]
+                .1
+                .iter()
+                .map(|&(_, millionths)| millionths)
+                .collect();
+            shares.sort_unstable();
+            shares
+        };
+        // «в»: обычный разбор вероятнее сокращения - доли словаря не меняются
+        assert_eq!(
+            lists
+                .iter()
+                .map(|(word, _)| word.as_str())
+                .collect::<Vec<_>>(),
+            ["к", "с"]
+        );
+        // «к»: разметки NOUN «к» - обычного разбора, не сокращения; со счетчиками доля сокращения
+        // 2,5 / 15, обычные разборы делят остаток, как в словаре (3 : 2)
+        assert_eq!(shares(0), [166_667, 333_333, 500_000]);
+        // «с» без частот словаря - доли по счетчикам, как у слова без сокращений: (9 + 2,5) / 14 и 2,5 / 14
+        assert_eq!(shares(1), [178_571, 821_429]);
+    }
+
+    #[test]
+    fn equal_shares_without_frequencies() {
+        // Сумма шести долей 1/24 сокращения «ан» при округлении меньше 1/4 - а доли все равно равны:
+        // счетчики глаголов (4,5 + 1,25 каждому) берутся, сокращение и существительное - доли словаря
+        let counts = read("ан\tVERB\tан\t9\t0\n").unwrap();
+        let lists = blend(&dictionary(), &counts);
+        assert_eq!(lists.len(), 1);
+        let mut shares: Vec<u32> = lists[0]
+            .1
+            .iter()
+            .map(|&(_, millionths)| millionths)
+            .collect();
+        shares.sort_unstable();
+        assert_eq!(
+            shares,
+            [
+                14_881, 14_881, 14_881, 14_881, 14_881, 14_881, 89_286, 410_714, 410_714
+            ]
+        );
     }
 
     /// «земли» и «воли» - нарицательные и имена собственные, без частот словаря; «земля» - из
