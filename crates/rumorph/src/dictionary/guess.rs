@@ -101,6 +101,10 @@ const MAX_GUESSED_LENGTH: usize = 100;
 /// большей доле фамилия чаще становится первым разбором слова в начале предложения («Один»)
 const SURNAME_SHARE: f64 = 0.2;
 
+/// Окончания форм фамилии на -ов, -ев, -ин, -ын после основы: «Иванов», «Иванова», «Ивановым»,
+/// «Ивановой», «Ивановых», «Дарвином»
+const SURNAME_ENDINGS: [&str; 11] = ["", "а", "у", "ым", "ом", "е", "ы", "ой", "ою", "ых", "ыми"];
+
 /// Наименьшая длина слова в смешанном регистре, которое угадывается как строчное: короче - чаще
 /// единица измерения
 const MIN_MIXED_LENGTH: usize = 5;
@@ -172,6 +176,18 @@ impl Dictionary {
             return;
         }
         let lower = word.to_lowercase();
+        // Угадывание по индексу имен - только у слова с окончанием формы такой фамилии: оно дороже
+        // разбора словарного слова, а с заглавной в тексте - почти каждое первое слово предложения
+        let surname_form = SURNAME_ENDINGS.iter().any(|ending| {
+            lower.strip_suffix(ending).is_some_and(|stem| {
+                ["ов", "ев", "ёв", "ин", "ын"]
+                    .iter()
+                    .any(|base| stem.ends_with(base))
+            })
+        });
+        if !surname_form {
+            return;
+        }
         let surname = |analysis: &Analysis| {
             let lemma = analysis.lemma.replace('ё', "е");
             self.ud_tag(analysis.ud)
